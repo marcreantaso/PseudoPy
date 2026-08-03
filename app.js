@@ -39,12 +39,12 @@ const EX_PAGE_LIMIT = 20;
  * Sets the Python output panel code and triggers line number update.
  */
 function setPythonOutput(elementId, code) {
-    const el = document.getElementById(elementId);
+    const el = $id(elementId);
     if (!el) return;
     
     if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
         el.value = code;
-        el.dispatchEvent(new Event('input')); // trigger gutter update
+        el.dispatchEvent(new Event('input'));
     } else {
         el.textContent = code;
     }
@@ -54,13 +54,67 @@ function setPythonOutput(elementId, code) {
  * Retrieves the Python code from a panel.
  */
 function getPythonCode(elementId) {
-    const el = document.getElementById(elementId);
+    const el = $id(elementId);
     if (!el) return '';
     
     if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
         return el.value;
     }
     return el.textContent || '';
+}
+
+function $id(id) {
+    return document.getElementById(id);
+}
+
+function setText(id, value) {
+    const el = $id(id);
+    if (!el) return;
+    el.textContent = value;
+}
+
+function setHtml(id, html) {
+    const el = $id(id);
+    if (!el) return;
+    el.innerHTML = html;
+}
+
+function getValue(id) {
+    const el = $id(id);
+    if (!el || !('value' in el)) return '';
+    return el.value;
+}
+
+function setValue(id, value) {
+    const el = $id(id);
+    if (!el || !('value' in el)) return;
+    el.value = value;
+}
+
+function hide(id) {
+    const el = $id(id);
+    if (!el) return;
+    el.classList.add('hidden');
+}
+
+function show(id) {
+    const el = $id(id);
+    if (!el) return;
+    el.classList.remove('hidden');
+}
+
+function $qs(selector) {
+    return document.querySelector(selector);
+}
+
+function $qsa(selector) {
+    return Array.from(document.querySelectorAll(selector));
+}
+
+function toggleHidden(id, hidden) {
+    const el = $id(id);
+    if (!el) return;
+    el.classList.toggle('hidden', hidden);
 }
 
 /* ============================================================
@@ -96,26 +150,22 @@ async function init() {
     setInterval(updateClock, 60000);
 
     // Update line count on editor input and sync gutter
-    const editor = document.getElementById('pseudocode-editor');
+    const editor = $id('pseudocode-editor');
     if (editor) {
-        editor.addEventListener('input', () => {
-            const lines = editor.value.split('\n').length;
-            document.getElementById('line-count').textContent = lines + ' lines';
+        const syncEditorState = () => {
+            setText('line-count', editor.value.split('\n').length + ' lines');
             updateGutter();
-            
             exerciseState.isTranslated = false;
             exerciseState.isExecuted = false;
             exerciseState.outputMatched = false;
             updateExerciseStatus();
-        });
+        };
 
-        // Sync scrolling for gutter and highlights overlay
+        editor.addEventListener('input', syncEditorState);
         editor.addEventListener('scroll', () => {
-            const gutter = document.getElementById('editor-gutter');
-            if (gutter) {
-                gutter.scrollTop = editor.scrollTop;
-            }
-            const highlights = document.getElementById('editor-highlights');
+            const gutter = $id('editor-gutter');
+            const highlights = $id('editor-highlights');
+            if (gutter) gutter.scrollTop = editor.scrollTop;
             if (highlights) {
                 highlights.scrollTop = editor.scrollTop;
                 highlights.scrollLeft = editor.scrollLeft;
@@ -124,29 +174,26 @@ async function init() {
     }
 
     // Sync scrolling and update gutter for Python Editor
-    const pyEditor = document.getElementById('python-output');
+    const pyEditor = $id('python-output');
     if (pyEditor) {
-        pyEditor.addEventListener('input', () => {
+        const syncPythonState = () => {
             updatePythonGutter();
-            
             exerciseState.isExecuted = false;
             exerciseState.outputMatched = false;
             updateExerciseStatus();
-        });
+        };
 
+        pyEditor.addEventListener('input', syncPythonState);
         pyEditor.addEventListener('scroll', () => {
-            const gutter = document.getElementById('python-gutter');
-            if (gutter) {
-                gutter.scrollTop = pyEditor.scrollTop;
-            }
-            const highlights = document.getElementById('python-highlights');
+            const gutter = $id('python-gutter');
+            const highlights = $id('python-highlights');
+            if (gutter) gutter.scrollTop = pyEditor.scrollTop;
             if (highlights) {
                 highlights.scrollTop = pyEditor.scrollTop;
                 highlights.scrollLeft = pyEditor.scrollLeft;
             }
         });
 
-        // Initial setup
         updatePythonGutter();
     }
 
@@ -165,7 +212,7 @@ async function init() {
 }
 
 function updateClock() {
-    const el = document.getElementById('topbar-time');
+    const el = $id('topbar-time');
     if (el) {
         const now = new Date();
         el.textContent = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' +
@@ -199,7 +246,7 @@ async function refreshActivity() {
    ============================================================ */
 
 function showToast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
+    const container = $id('toast-container');
     const icons = { success: '✅', error: '❌', info: 'ℹ️' };
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
@@ -224,19 +271,17 @@ function toggleLoginHint(header) {
 }
 
 function fillLoginUser(username) {
-    document.getElementById('login-username').value = username;
-    // Clear password field so user must enter it themselves
-    document.getElementById('login-password').value = '';
-    // Close the hint after filling
-    const box = document.querySelector('.login-hint-box');
+    setValue('login-username', username);
+    setValue('login-password', '');
+    const box = $qs('.login-hint-box');
     if (box) box.classList.remove('open');
-    // Focus the password field
-    document.getElementById('login-password').focus();
+    const passwordField = $id('login-password');
+    if (passwordField) passwordField.focus();
 }
 
 async function handleLogin() {
-    const username = document.getElementById('login-username').value.trim();
-    const password = document.getElementById('login-password').value.trim();
+    const username = getValue('login-username').trim();
+    const password = getValue('login-password').trim();
 
     if (!username || !password) {
         showToast('Please enter your username and password.', 'error');
@@ -277,24 +322,27 @@ async function handleLogin() {
 
 function handleLogout() {
     currentUser = null;
-    document.getElementById('app-layout').classList.add('hidden');
-    document.getElementById('login-page').classList.remove('hidden');
+    hide('app-layout');
+    show('login-page');
     showToast('Signed out successfully.', 'info');
 }
 
+const ROLE_LABELS = { student: 'Student', instructor: 'Instructor', admin: 'Administrator' };
+const ROLE_BADGES = { student: 'badge-student', instructor: 'badge-instructor', admin: 'badge-admin' };
+
 function showApp() {
-    document.getElementById('login-page').classList.add('hidden');
-    document.getElementById('app-layout').classList.remove('hidden');
+    hide('login-page');
+    show('app-layout');
 
     // Update sidebar user info
-    document.getElementById('sidebar-avatar').textContent = currentUser.fullName.charAt(0).toUpperCase();
-    document.getElementById('sidebar-username').textContent = currentUser.fullName;
-    const roleLabels = { student: 'Student', instructor: 'Instructor', admin: 'Administrator' };
-    document.getElementById('sidebar-role').textContent = roleLabels[currentUser.role];
+    setText('sidebar-avatar', currentUser.fullName.charAt(0).toUpperCase());
+    setText('sidebar-username', currentUser.fullName);
+    setText('sidebar-role', ROLE_LABELS[currentUser.role]);
 
     // Show correct nav
-    document.querySelectorAll('.sidebar-nav > div').forEach(el => el.classList.add('hidden'));
-    document.getElementById(`nav-${currentUser.role}`).classList.remove('hidden');
+    $qsa('.sidebar-nav > div').forEach(el => el.classList.add('hidden'));
+    const roleNav = $id(`nav-${currentUser.role}`);
+    if (roleNav) roleNav.classList.remove('hidden');
 
     // Navigate to default page
     const defaults = {
@@ -304,7 +352,6 @@ function showApp() {
     };
     navigateTo(defaults[currentUser.role]);
 
-    // Update pending password requests badge for admin
     if (currentUser.role === 'admin') {
         updatePendingRequestsBadge();
     }
@@ -319,17 +366,13 @@ function navigateTo(pageId) {
     currentPage = pageId;
 
     // Hide all pages
-    document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
+    $qsa('.page-view').forEach(el => el.classList.add('hidden'));
 
-    // Show target page
-    const page = document.getElementById(`page-${pageId}`);
-    if (page) {
-        page.classList.remove('hidden');
-    }
+    const page = $id(`page-${pageId}`);
+    if (page) page.classList.remove('hidden');
 
-    // Update active nav item
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(item => {
+    $qsa('.nav-item').forEach(el => el.classList.remove('active'));
+    $qsa('.nav-item').forEach(item => {
         if (item.getAttribute('onclick')?.includes(pageId)) {
             item.classList.add('active');
         }
@@ -352,7 +395,7 @@ function navigateTo(pageId) {
         'password-requests': 'Password Requests',
         'compiler-metrics': 'Compiler Metrics & Evaluation'
     };
-    document.getElementById('topbar-title').textContent = titles[pageId] || 'Dashboard';
+    setText('topbar-title', titles[pageId] || 'Dashboard');
 
     // Load page-specific data (async)
     if (pageId === 'analytics') loadAnalytics();
@@ -377,9 +420,12 @@ function checkIncompleteExpression(lineText, lineNum, errors) {
     }
 }
 
-function translatePseudocode() {
+function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector, successToast, updateState) {
     try {
-        let input = document.getElementById('pseudocode-editor').value;
+        const inputEl = $id(inputId);
+        if (!inputEl) return;
+
+        let input = inputEl.value;
         if (!input.trim()) {
             showToast('Please write some pseudocode first.', 'error');
             return;
@@ -387,177 +433,109 @@ function translatePseudocode() {
 
         const cleanedInput = preprocessPseudocode(input);
         if (cleanedInput !== input) {
-            document.getElementById('pseudocode-editor').value = cleanedInput;
+            inputEl.value = cleanedInput;
             input = cleanedInput;
         }
 
         const validation = validatePseudocode(input);
-        const output = document.getElementById('console-output');
-        const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
+        const consoleEl = consoleId ? $id(consoleId) : null;
+        const runBtn = runBtnSelector ? $qs(runBtnSelector) : null;
 
         if (!validation.valid) {
-            // Display error in python output area
-            setPythonOutput('python-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
-
-            currentErrorLineNumbers = validation.errors.map(err => err.line);
-            output.className = 'output-content error';
-            output.innerHTML = renderHtmlErrors(validation.errors);
-
+            setPythonOutput(outputId, '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            if (consoleEl) {
+                consoleEl.innerHTML = renderHtmlErrors(validation.errors);
+                consoleEl.className = 'output-content error';
+            }
             if (runBtn) runBtn.disabled = true;
             showToast(`${validation.errors.length} syntax error(s) found. Check the console output.`, 'error');
-            updateGutter();
+            if (outputId === 'python-output') {
+                currentErrorLineNumbers = validation.errors.map(err => err.line);
+                updateGutter();
+            }
             return;
         }
 
-        currentErrorLineNumbers = [];
-        updateGutter();
+        if (outputId === 'python-output') {
+            currentErrorLineNumbers = [];
+            updateGutter();
+        }
+
         const result = pseudocodeToPython(input);
-        
         if (!result.valid) {
-            setPythonOutput('python-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
-            currentErrorLineNumbers = result.errors.map(err => err.line);
-            output.className = 'output-content error';
-            output.innerHTML = renderHtmlErrors(result.errors);
+            setPythonOutput(outputId, '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            if (consoleEl) {
+                consoleEl.innerHTML = renderHtmlErrors(result.errors);
+                consoleEl.className = 'output-content error';
+            }
             if (runBtn) runBtn.disabled = true;
             showToast(`${result.errors.length} syntax error(s) found. Check the console output.`, 'error');
-            updateGutter();
+            if (outputId === 'python-output') {
+                currentErrorLineNumbers = result.errors.map(err => err.line);
+                updateGutter();
+            }
             return;
         }
 
-        setPythonOutput('python-output', result.python);
-
-        output.className = 'output-content';
-        output.textContent = '✅ Pseudocode translated successfully! Click "Run Code" to execute.';
-
-        if (runBtn) runBtn.disabled = false;
-        showToast('Pseudocode translated to Python successfully!', 'success');
-        
-        exerciseState.isTranslated = true;
-        updateExerciseStatus();
-    } catch (e) {
-        console.error("Translation Engine Crash:", e);
-        const output = document.getElementById('console-output');
-        if (output) {
-            output.className = 'output-content error';
-            output.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
+        setPythonOutput(outputId, result.python);
+        if (consoleEl) {
+            consoleEl.textContent = successToast;
+            consoleEl.className = 'output-content';
         }
-        document.getElementById('python-output').textContent = `# System Error\n# ${e.message}`;
-        showToast("System Error. Check the console output.", 'error');
+        if (runBtn) runBtn.disabled = false;
+        showToast(successToast, 'success');
+        if (typeof updateState === 'function') updateState();
+    } catch (e) {
+        console.error('Translation Engine Crash:', e);
+        const consoleEl = consoleId ? $id(consoleId) : null;
+        if (consoleEl) {
+            consoleEl.className = 'output-content error';
+            consoleEl.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
+        }
+        const outputEl = $id(outputId);
+        if (outputEl) {
+            if (outputEl.tagName === 'TEXTAREA' || outputEl.tagName === 'INPUT') {
+                outputEl.value = `# System Error\n# ${e.message}`;
+            } else {
+                outputEl.textContent = `# System Error\n# ${e.message}`;
+            }
+        }
+        showToast('System Error. Check the output area.', 'error');
     }
+}
+
+function translatePseudocode() {
+    translatePseudocodeGeneric(
+        'pseudocode-editor',
+        'python-output',
+        'console-output',
+        '#page-write-pseudocode .btn-success',
+        'Pseudocode translated to Python successfully!',
+        () => {
+            exerciseState.isTranslated = true;
+            updateExerciseStatus();
+        }
+    );
 }
 
 function translateFromPage() {
-    try {
-        let input = document.getElementById('translate-input').value;
-        if (!input.trim()) {
-            showToast('Please write some pseudocode first.', 'error');
-            return;
-        }
-
-        const cleanedInput = preprocessPseudocode(input);
-        if (cleanedInput !== input) {
-            document.getElementById('translate-input').value = cleanedInput;
-            input = cleanedInput;
-        }
-
-        const validation = validatePseudocode(input);
-        const consoleEl = document.getElementById('translate-console');
-
-        if (!validation.valid) {
-            if (consoleEl) {
-                consoleEl.innerHTML = renderHtmlErrors(validation.errors);
-                consoleEl.className = 'output-content error';
-            }
-            setPythonOutput('translate-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
-            showToast(`${validation.errors.length} syntax error(s) found. Check the output area.`, 'error');
-            return;
-        }
-
-        const result = pseudocodeToPython(input);
-        
-        if (!result.valid) {
-            if (consoleEl) {
-                consoleEl.innerHTML = renderHtmlErrors(result.errors);
-                consoleEl.className = 'output-content error';
-            }
-            setPythonOutput('translate-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
-            showToast(`${result.errors.length} syntax error(s) found. Check the output area.`, 'error');
-            return;
-        }
-
-        if (consoleEl) {
-            consoleEl.textContent = '✅ Pseudocode translated successfully! Click "Run" to execute.';
-            consoleEl.className = 'output-content';
-        }
-        setPythonOutput('translate-output', result.python);
-        showToast('Translation complete!', 'success');
-    } catch (e) {
-        console.error("Translation Engine Crash:", e);
-        const consoleEl = document.getElementById('translate-console');
-        if (consoleEl) {
-            consoleEl.className = 'output-content error';
-            consoleEl.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
-        }
-        document.getElementById('translate-output').textContent = `# System Error\n# ${e.message}`;
-        showToast("System Error. Check the output area.", 'error');
-    }
+    translatePseudocodeGeneric(
+        'translate-input',
+        'translate-output',
+        'translate-console',
+        null,
+        'Translation complete!'
+    );
 }
 
 function instructorTranslate() {
-    try {
-        let input = document.getElementById('instructor-pseudo-input').value;
-        if (!input.trim()) {
-            showToast('Please write some pseudocode first.', 'error');
-            return;
-        }
-
-        const cleanedInput = preprocessPseudocode(input);
-        if (cleanedInput !== input) {
-            document.getElementById('instructor-pseudo-input').value = cleanedInput;
-            input = cleanedInput;
-        }
-
-        const validation = validatePseudocode(input);
-        const consoleEl = document.getElementById('instructor-console');
-
-        if (!validation.valid) {
-            if (consoleEl) {
-                consoleEl.innerHTML = renderHtmlErrors(validation.errors);
-                consoleEl.className = 'output-content error';
-            }
-            setPythonOutput('instructor-python-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
-            showToast(`${validation.errors.length} syntax error(s) found. Check the output area.`, 'error');
-            return;
-        }
-
-        const result = pseudocodeToPython(input);
-        
-        if (!result.valid) {
-            if (consoleEl) {
-                consoleEl.innerHTML = renderHtmlErrors(result.errors);
-                consoleEl.className = 'output-content error';
-            }
-            setPythonOutput('instructor-python-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
-            showToast(`${result.errors.length} syntax error(s) found. Check the output area.`, 'error');
-            return;
-        }
-
-        if (consoleEl) {
-            consoleEl.textContent = '✅ Pseudocode translated successfully! Click "Run" to execute.';
-            consoleEl.className = 'output-content';
-        }
-        setPythonOutput('instructor-python-output', result.python);
-        showToast('Python code generated!', 'success');
-    } catch (e) {
-        console.error("Translation Engine Crash:", e);
-        const consoleEl = document.getElementById('instructor-console');
-        if (consoleEl) {
-            consoleEl.className = 'output-content error';
-            consoleEl.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
-        }
-        document.getElementById('instructor-python-output').textContent = `# System Error\n# ${e.message}`;
-        showToast("System Error. Check the output area.", 'error');
-    }
+    translatePseudocodeGeneric(
+        'instructor-pseudo-input',
+        'instructor-python-output',
+        'instructor-console',
+        null,
+        'Python code generated!'
+    );
 }
 
 const compilerEngine = new PseudocodeCompiler();
@@ -571,12 +549,12 @@ async function handleFileUpload(event, targetEditorId) {
     const file = event.target.files[0];
     if (!file) return;
 
-    const editor = document.getElementById(targetEditorId);
+    const editor = $id(targetEditorId);
 
     try {
         if (file.type === 'text/plain' || file.name.endsWith('.txt') || file.name.endsWith('.pseudo')) {
             const text = await file.text();
-            editor.value = text;
+            if (editor) editor.value = text;
             showToast('Text file loaded successfully!', 'success');
         } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
             if (typeof pdfjsLib === 'undefined') {
@@ -672,37 +650,35 @@ if __name__ == "__main__":
    ============================================================ */
 
 function executePython() {
-    const code = getPythonCode('python-output');
-    if (!code.trim()) { showToast('No Python code to execute. Translate first!', 'error'); return; }
-    runPythonCode(code, 'console-output');
+    executeCode('python-output', 'console-output', 'No Python code to execute. Translate first!');
 }
 
 function executeFromTranslate() {
-    const code = getPythonCode('translate-output');
-    if (!code.trim()) { showToast('No Python code to execute.', 'error'); return; }
-    runPythonCode(code, 'translate-console');
+    executeCode('translate-output', 'translate-console', 'No Python code to execute.');
 }
 
 function executeFromExecPage() {
-    const code = document.getElementById('execute-editor').value;
-    if (!code.trim()) { showToast('Please enter some Python code.', 'error'); return; }
-    runPythonCode(code, 'execute-console');
+    executeCode('execute-editor', 'execute-console', 'Please enter some Python code.');
 }
 
 function instructorExecute() {
-    const code = getPythonCode('instructor-python-output');
-    if (!code.trim()) { showToast('No code to execute. Generate first!', 'error'); return; }
-    runPythonCode(code, 'instructor-console');
+    executeCode('instructor-python-output', 'instructor-console', 'No code to execute. Generate first!');
 }
 
 function adminExecute() {
-    const code = document.getElementById('admin-execute-editor').value;
-    if (!code.trim()) { showToast('Please enter Python code to execute.', 'error'); return; }
-    runPythonCode(code, 'admin-console');
+    executeCode('admin-execute-editor', 'admin-console', 'Please enter Python code to execute.');
+}
+
+function executeCode(sourceId, outputId, emptyMessage) {
+    const sourceEl = $id(sourceId);
+    const code = sourceEl ? (sourceEl.tagName === 'TEXTAREA' || sourceEl.tagName === 'INPUT' ? sourceEl.value : sourceEl.textContent || '') : '';
+    if (!code.trim()) { showToast(emptyMessage, 'error'); return; }
+    runPythonCode(code, outputId);
 }
 
 function runPythonCode(code, outputElementId) {
-    const outputEl = document.getElementById(outputElementId);
+    const outputEl = $id(outputElementId);
+    if (!outputEl) return;
     outputEl.innerHTML = '';
     outputEl.className = 'output-content';
 
@@ -865,7 +841,7 @@ function simulateExecution(code) {
    ============================================================ */
 
 function analyzePseudocode() {
-    const input = document.getElementById('feedback-input').value;
+    const input = getValue('feedback-input');
     if (!input.trim()) { showToast('Please paste some pseudocode to analyze.', 'error'); return; }
     renderFeedback(generateFeedback(input));
     showToast('Analysis complete!', 'success');
@@ -996,8 +972,8 @@ function generateFeedback(pseudocode) {
         }
     }
 
-    const logicCard = document.getElementById('logic-analysis-card');
-    const logicResults = document.getElementById('logic-analysis-results');
+    const logicCard = $id('logic-analysis-card');
+    const logicResults = $id('logic-analysis-results');
 
     if (activeSolution && logicCard && logicResults) {
         const logicAnalysis = metricsEngine.analyzeLogicGap(pseudocode, activeSolution);
@@ -1189,11 +1165,11 @@ function detectAlgorithmicPatterns(pseudocode, ast) {
 }
 
 function renderFeedback(feedback) {
-    document.getElementById('feedback-results').innerHTML = feedback.map(f => `
+    setHtml('feedback-results', feedback.map(f => `
     <div class="feedback-item ${f.type}">
       <span class="fb-icon">${f.icon}</span>
       <span class="fb-text">${f.text}</span>
-    </div>`).join('');
+    </div>`).join(''));
 }
 
 
@@ -1204,29 +1180,18 @@ function renderFeedback(feedback) {
 async function loadExercises(append = false) {
     if (!append) instructorExOffset = 0;
     const exercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, instructorExOffset);
-    const container = document.getElementById('exercises-list');
+    const container = $id('exercises-list');
 
+    if (!container) return;
     if (exercises.length === 0 && !append) {
         container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📋</div><h3>No Exercises Yet</h3><p>Create your first exercise to get started.</p></div>`;
         return;
     }
 
-    const html = exercises.map(ex => `
-    <div class="exercise-card">
-      <div class="ex-header">
-        <span class="ex-title">${ex.title}</span>
-        <span class="ex-difficulty ${ex.difficulty}">${ex.difficulty}</span>
-      </div>
-      <p class="ex-desc">${ex.description}</p>
-      <div class="ex-meta"><span>📅 ${ex.createdAt || 'N/A'}</span></div>
-      <div class="ex-actions">
-        <button class="btn btn-secondary btn-sm" onclick="editExercise('${ex._docId}')">✏️ Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteExercise('${ex._docId}')">🗑️ Delete</button>
-      </div>
-    </div>`).join('');
+    const html = exercises.map(buildInstructorExerciseCard).join('');
 
     if (append) {
-        const btn = document.getElementById('load-more-instructor');
+        const btn = $id('load-more-instructor');
         if (btn) btn.remove();
         container.innerHTML += html;
     } else {
@@ -1242,8 +1207,9 @@ async function loadExercises(append = false) {
 async function loadStudentExercises(append = false) {
     if (!append) studentExOffset = 0;
     const exercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, studentExOffset);
-    const container = document.getElementById('student-exercises-list');
+    const container = $id('student-exercises-list');
 
+    if (!container) return;
     if (exercises.length === 0 && !append) {
         container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📝</div><h3>No Exercises Available</h3><p>Your instructor hasn't created any exercises yet.</p></div>`;
         return;
@@ -1257,19 +1223,54 @@ async function loadStudentExercises(append = false) {
             .filter(a => a.student === studentName && a.status === 'Completed')
             .map(a => a.exercise)
     );
-    const totalCount = exercises.length;
-    const completedCount = exercises.filter(ex => completedIds.has(ex.title)).length;
+    const validExercises = exercises.filter(ex => ex && ex.title && ex.description && ex.difficulty);
+    const totalCount = validExercises.length;
+    const completedCount = validExercises.filter(ex => completedIds.has(ex.title)).length;
     
-    const totalEl = document.getElementById('student-total-count');
-    const compEl = document.getElementById('student-completed-count');
-    const fillEl = document.getElementById('student-progress-fill');
-    if (totalEl) totalEl.textContent = totalCount;
-    if (compEl) compEl.textContent = completedCount;
+    if (totalCount === 0 && !append) {
+        container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📝</div><h3>No Valid Exercises Available</h3><p>There are no properly defined exercises to display right now.</p></div>`;
+        return;
+    }
+
+    setText('student-total-count', totalCount);
+    setText('student-completed-count', completedCount);
+    const fillEl = $id('student-progress-fill');
     if (fillEl) fillEl.style.width = (totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0) + '%';
 
-    const html = exercises.map(ex => {
-        const isCompleted = completedIds.has(ex.title);
-        return `
+    const html = validExercises.map(ex => buildStudentExerciseCard(ex, completedIds.has(ex.title))).join('');
+
+    if (append) {
+        const btn = $id('load-more-student');
+        if (btn) btn.remove();
+        container.innerHTML += html;
+    } else {
+        container.innerHTML = html;
+    }
+
+    if (exercises.length === EX_PAGE_LIMIT) {
+        studentExOffset += EX_PAGE_LIMIT;
+        container.innerHTML += `<div id="load-more-student" style="grid-column:1/-1; text-align:center; padding: 1rem;"><button class="btn btn-secondary" onclick="loadStudentExercises(true)">Load More</button></div>`;
+    }
+}
+
+function buildInstructorExerciseCard(ex) {
+    return `
+    <div class="exercise-card">
+      <div class="ex-header">
+        <span class="ex-title">${ex.title}</span>
+        <span class="ex-difficulty ${ex.difficulty}">${ex.difficulty}</span>
+      </div>
+      <p class="ex-desc">${ex.description}</p>
+      <div class="ex-meta"><span>📅 ${ex.createdAt || 'N/A'}</span></div>
+      <div class="ex-actions">
+        <button class="btn btn-secondary btn-sm" onclick="editExercise('${ex._docId}')">✏️ Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteExercise('${ex._docId}')">🗑️ Delete</button>
+      </div>
+    </div>`;
+}
+
+function buildStudentExerciseCard(ex, isCompleted) {
+    return `
     <div class="exercise-card" ${isCompleted ? 'style="border-color: var(--success); opacity: 0.8;"' : ''}>
       <div class="ex-header">
         <span class="ex-title">${ex.title}</span>
@@ -1284,66 +1285,54 @@ async function loadStudentExercises(append = false) {
         }
       </div>
     </div>`;
-    }).join('');
-
-    if (append) {
-        const btn = document.getElementById('load-more-student');
-        if (btn) btn.remove();
-        container.innerHTML += html;
-    } else {
-        container.innerHTML = html;
-    }
-
-    if (exercises.length === EX_PAGE_LIMIT) {
-        studentExOffset += EX_PAGE_LIMIT;
-        container.innerHTML += `<div id="load-more-student" style="grid-column:1/-1; text-align:center; padding: 1rem;"><button class="btn btn-secondary" onclick="loadStudentExercises(true)">Load More</button></div>`;
-    }
 }
 
 async function attemptExercise(id) {
     const ex = await dbGet(exercisesRef, id);
     if (!ex) return;
-    
-    const pseudoEditor = document.getElementById('pseudocode-editor');
+
+    const pseudoEditor = $id('pseudocode-editor');
     if (pseudoEditor) {
         pseudoEditor.value = '';
         pseudoEditor.dispatchEvent(new Event('input'));
     }
-    
-    const pyOut = document.getElementById('python-output');
+
+    const pyOut = $id('python-output');
     if (pyOut) {
         pyOut.value = '';
         pyOut.dispatchEvent(new Event('input'));
     }
-    
+
     localStorage.setItem('pseudopy_active_exercise', id);
     renderActiveExercise(ex);
-    
+
     navigateTo('write-pseudocode');
     showToast(`Exercise loaded: ${ex.title}. Write your pseudocode!`, 'info');
 }
 
 function renderActiveExercise(ex) {
-    const panel = document.getElementById('active-exercise-panel');
+    const panel = $id('active-exercise-panel');
     if (!panel) return;
     
-    document.getElementById('active-ex-title').textContent = ex.title;
-    document.getElementById('active-ex-difficulty').textContent = (ex.difficulty || 'medium').charAt(0).toUpperCase() + (ex.difficulty || 'medium').slice(1);
-    document.getElementById('active-ex-desc').textContent = ex.description || 'No description provided.';
+    setText('active-ex-title', ex.title);
+    setText('active-ex-difficulty', (ex.difficulty || 'medium').charAt(0).toUpperCase() + (ex.difficulty || 'medium').slice(1));
+    setText('active-ex-desc', ex.description || 'No description provided.');
     
-    // Set badge color based on difficulty
-    const diffBadge = document.getElementById('active-ex-difficulty');
-    diffBadge.className = 'badge';
-    if (ex.difficulty === 'easy') diffBadge.classList.add('badge-success');
-    else if (ex.difficulty === 'hard') diffBadge.classList.add('badge-danger');
-    else diffBadge.classList.add('badge-warning');
+    const diffBadge = $id('active-ex-difficulty');
+    if (diffBadge) {
+        diffBadge.className = 'badge';
+        if (ex.difficulty === 'easy') diffBadge.classList.add('badge-success');
+        else if (ex.difficulty === 'hard') diffBadge.classList.add('badge-danger');
+        else diffBadge.classList.add('badge-warning');
+    }
     
     panel.classList.remove('hidden');
     
     // Ensure content is visible initially
-    const content = document.getElementById('active-ex-content');
-    content.classList.remove('hidden');
-    document.getElementById('btn-toggle-instructions').textContent = 'Hide Instructions';
+    const content = $id('active-ex-content');
+    if (content) content.classList.remove('hidden');
+    const toggleBtn = $id('btn-toggle-instructions');
+    if (toggleBtn) toggleBtn.textContent = 'Hide Instructions';
 
     // Set active state
     exerciseState.activeExercise = ex;
@@ -1381,8 +1370,8 @@ function computeExpectedOutput(code) {
 }
 
 function updateExerciseStatus() {
-    const statusEl = document.getElementById('active-ex-status');
-    const submitBtn = document.getElementById('btn-submit-exercise');
+    const statusEl = $id('active-ex-status');
+    const submitBtn = $id('btn-submit-exercise');
     if (!statusEl || !submitBtn || !exerciseState.activeExercise) return;
     
     const isCompleted = exerciseState.isTranslated && exerciseState.isExecuted && exerciseState.outputMatched;
@@ -1405,9 +1394,10 @@ function submitExercise() {
     if (!ex) return;
     if (!confirm('Are you sure you want to submit this exercise?')) return;
     
-    const pseudo = document.getElementById('pseudocode-editor').value;
+    const pseudo = getValue('pseudocode-editor');
     const py = getPythonCode('python-output');
-    const outText = document.getElementById('console-output').textContent;
+    const outTextEl = $id('console-output');
+    const outText = outTextEl ? outTextEl.textContent || '' : '';
     const now = new Date();
     
     const actRecord = {
@@ -1423,27 +1413,30 @@ function submitExercise() {
     };
     
     dbSet(activityRef, 'act_' + Date.now(), actRecord).then(() => {
-        const overlay = document.getElementById('submission-success-overlay');
-        const timeDisplay = document.getElementById('submission-time-display');
+        const overlay = $id('submission-success-overlay');
+        const timeDisplay = $id('submission-time-display');
         if (overlay && timeDisplay) {
             timeDisplay.innerHTML = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '<br>' + 
                                    now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
             overlay.classList.remove('hidden');
         }
         
-        document.getElementById('pseudocode-editor').readOnly = true;
-        document.getElementById('python-output').readOnly = true;
+        const pseudoEditor = $id('pseudocode-editor');
+        if (pseudoEditor) pseudoEditor.readOnly = true;
+        const pyOutput = $id('python-output');
+        if (pyOutput) pyOutput.readOnly = true;
         
         // Hide run button and translate button to lock UI
-        document.querySelector('#page-write-pseudocode .btn-primary').disabled = true;
-        const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
+        const translateBtn = $qs('#page-write-pseudocode .btn-primary');
+        if (translateBtn) translateBtn.disabled = true;
+        const runBtn = $qs('#page-write-pseudocode .btn-success');
         if (runBtn) runBtn.disabled = true;
     });
 }
 
 function changeExercise() {
     localStorage.removeItem('pseudopy_active_exercise');
-    const panel = document.getElementById('active-exercise-panel');
+    const panel = $id('active-exercise-panel');
     if (panel) panel.classList.add('hidden');
     
     // Reset exercise state
@@ -1454,26 +1447,27 @@ function changeExercise() {
     exerciseState.expectedOutput = '';
 
     // Unlock editor if previously locked after submission
-    const pseudoEditor = document.getElementById('pseudocode-editor');
+    const pseudoEditor = $id('pseudocode-editor');
     if (pseudoEditor) pseudoEditor.readOnly = false;
-    const pyOut = document.getElementById('python-output');
+    const pyOut = $id('python-output');
     if (pyOut) pyOut.readOnly = false;
     
-    const translateBtn = document.querySelector('#page-write-pseudocode .btn-primary');
+    const translateBtn = $qs('#page-write-pseudocode .btn-primary');
     if (translateBtn) translateBtn.disabled = false;
-    const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
+    const runBtn = $qs('#page-write-pseudocode .btn-success');
     if (runBtn) runBtn.disabled = false;
     
     // Hide submission overlay
-    const overlay = document.getElementById('submission-success-overlay');
+    const overlay = $id('submission-success-overlay');
     if (overlay) overlay.classList.add('hidden');
     
     navigateTo('exercises-student');
 }
 
 function toggleExerciseInstructions() {
-    const content = document.getElementById('active-ex-content');
-    const btn = document.getElementById('btn-toggle-instructions');
+    const content = $id('active-ex-content');
+    const btn = $id('btn-toggle-instructions');
+    if (!content || !btn) return;
     if (content.classList.contains('hidden')) {
         content.classList.remove('hidden');
         btn.textContent = 'Hide Instructions';
@@ -1485,38 +1479,40 @@ function toggleExerciseInstructions() {
 
 async function openExerciseModal(id = null) {
     editingExerciseId = id;
-    const modal = document.getElementById('exercise-modal');
-    const title = document.getElementById('exercise-modal-title');
+    const modal = $id('exercise-modal');
+    const title = $id('exercise-modal-title');
+    if (!modal || !title) return;
 
     if (id) {
         const ex = await dbGet(exercisesRef, id);
         if (ex) {
             title.textContent = 'Edit Exercise';
-            document.getElementById('ex-title').value = ex.title;
-            document.getElementById('ex-desc').value = ex.description;
-            document.getElementById('ex-difficulty').value = ex.difficulty;
-            document.getElementById('ex-solution').value = ex.solution || '';
+            setValue('ex-title', ex.title);
+            setValue('ex-desc', ex.description);
+            setValue('ex-difficulty', ex.difficulty);
+            setValue('ex-solution', ex.solution || '');
         }
     } else {
         title.textContent = 'New Exercise';
-        document.getElementById('ex-title').value = '';
-        document.getElementById('ex-desc').value = '';
-        document.getElementById('ex-difficulty').value = 'medium';
-        document.getElementById('ex-solution').value = '';
+        setValue('ex-title', '');
+        setValue('ex-desc', '');
+        setValue('ex-difficulty', 'medium');
+        setValue('ex-solution', '');
     }
     modal.classList.remove('hidden');
 }
 
 function closeExerciseModal() {
-    document.getElementById('exercise-modal').classList.add('hidden');
+    const modal = $id('exercise-modal');
+    if (modal) modal.classList.add('hidden');
     editingExerciseId = null;
 }
 
 async function saveExercise() {
-    const title = document.getElementById('ex-title').value.trim();
-    const desc = document.getElementById('ex-desc').value.trim();
-    const difficulty = document.getElementById('ex-difficulty').value;
-    const solution = document.getElementById('ex-solution').value.trim();
+    const title = getValue('ex-title').trim();
+    const desc = getValue('ex-desc').trim();
+    const difficulty = getValue('ex-difficulty');
+    const solution = getValue('ex-solution').trim();
 
     if (!title || !desc) { showToast('Please fill in the title and description.', 'error'); return; }
 
@@ -1562,15 +1558,13 @@ async function deleteExercise(id) {
 
 async function loadUsers() {
     const users = await refreshUsers();
-    const tbody = document.getElementById('users-table-body');
+    const tbody = $id('users-table-body');
+    if (!tbody) return;
 
-    document.getElementById('stat-total-users').textContent = users.length;
-    document.getElementById('stat-total-students').textContent = users.filter(u => u.role === 'student').length;
-    document.getElementById('stat-total-instructors').textContent = users.filter(u => u.role === 'instructor').length;
-    document.getElementById('stat-total-admins').textContent = users.filter(u => u.role === 'admin').length;
-
-    const badgeClasses = { student: 'badge-student', instructor: 'badge-instructor', admin: 'badge-admin' };
-    const roleLabels = { student: 'Student', instructor: 'Instructor', admin: 'Admin' };
+    setText('stat-total-users', users.length);
+    setText('stat-total-students', users.filter(u => u.role === 'student').length);
+    setText('stat-total-instructors', users.filter(u => u.role === 'instructor').length);
+    setText('stat-total-admins', users.filter(u => u.role === 'admin').length);
 
     tbody.innerHTML = users.map(u => `
     <tr>
@@ -1583,7 +1577,7 @@ async function loadUsers() {
           <button class="btn btn-ghost btn-icon" onclick="toggleUserPasswordVisibility('${u.id}')" style="font-size: 0.9rem; opacity: 0.7; padding: 2px;">👁️</button>
         </div>
       </td>
-      <td><span class="badge ${badgeClasses[u.role]}">${roleLabels[u.role]}</span></td>
+      <td><span class="badge ${ROLE_BADGES[u.role]}">${ROLE_LABELS[u.role]}</span></td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">
         <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">✏️</button>
@@ -1594,44 +1588,48 @@ async function loadUsers() {
 
 async function openUserModal(id = null) {
     editingUserId = id;
-    const modal = document.getElementById('user-modal');
-    const title = document.getElementById('user-modal-title');
+    const modal = $id('user-modal');
+    const title = $id('user-modal-title');
+    if (!modal || !title) return;
 
     if (id) {
         const users = cachedUsers.length ? cachedUsers : await refreshUsers();
         const user = users.find(u => u.id === id);
         if (user) {
             title.textContent = 'Edit User';
-            document.getElementById('user-fullname').value = user.fullName;
-            document.getElementById('user-username').value = user.username;
-            document.getElementById('user-email').value = user.email;
-            document.getElementById('user-password').value = user.password;
-            document.getElementById('user-role-select').value = user.role;
-            document.getElementById('user-password-group').classList.add('hidden');
+            setValue('user-fullname', user.fullName);
+            setValue('user-username', user.username);
+            setValue('user-email', user.email);
+            setValue('user-password', user.password);
+            setValue('user-role-select', user.role);
+            const pwGroup = $id('user-password-group');
+            if (pwGroup) pwGroup.classList.add('hidden');
         }
     } else {
         title.textContent = 'Add New User';
-        document.getElementById('user-fullname').value = '';
-        document.getElementById('user-username').value = '';
-        document.getElementById('user-email').value = '';
-        document.getElementById('user-password').value = '';
-        document.getElementById('user-role-select').value = 'student';
-        document.getElementById('user-password-group').classList.remove('hidden');
+        setValue('user-fullname', '');
+        setValue('user-username', '');
+        setValue('user-email', '');
+        setValue('user-password', '');
+        setValue('user-role-select', 'student');
+        const pwGroup = $id('user-password-group');
+        if (pwGroup) pwGroup.classList.remove('hidden');
     }
     modal.classList.remove('hidden');
 }
 
 function closeUserModal() {
-    document.getElementById('user-modal').classList.add('hidden');
+    const modal = $id('user-modal');
+    if (modal) modal.classList.add('hidden');
     editingUserId = null;
 }
 
 async function saveUser() {
-    const fullName = document.getElementById('user-fullname').value.trim();
-    const username = document.getElementById('user-username').value.trim();
-    const email = document.getElementById('user-email').value.trim();
-    const password = document.getElementById('user-password').value.trim();
-    const role = document.getElementById('user-role-select').value;
+    const fullName = getValue('user-fullname').trim();
+    const username = getValue('user-username').trim();
+    const email = getValue('user-email').trim();
+    const password = getValue('user-password').trim();
+    const role = getValue('user-role-select');
 
     if (!fullName || !username || !email || (!editingUserId && !password)) { showToast('Please fill in all required fields.', 'error'); return; }
 
@@ -1685,7 +1683,7 @@ async function loadAnalytics() {
 }
 
 function renderSubmissionsChart() {
-    const container = document.getElementById('chart-submissions');
+    const container = $id('chart-submissions');
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const values = [12, 19, 8, 25, 32, 15, 28];
     const max = Math.max(...values);
@@ -1694,7 +1692,7 @@ function renderSubmissionsChart() {
 }
 
 function renderErrorsChart() {
-    const container = document.getElementById('chart-errors');
+    const container = $id('chart-errors');
     const types = ['Syntax', 'Logic', 'Missing END', 'Indent', 'Type', 'Other'];
     const values = [35, 22, 18, 12, 8, 5];
     const max = Math.max(...values);
@@ -1703,7 +1701,7 @@ function renderErrorsChart() {
 }
 
 async function renderActivityTable() {
-    const tbody = document.getElementById('activity-table-body');
+    const tbody = $id('activity-table-body');
     const activity = await refreshActivity();
     const statusBadges = {
         'Completed': '<span class="badge badge-active">Completed</span>',
@@ -1740,17 +1738,18 @@ async function loadStudentSettings() {
     if (!currentUser) return;
 
     // Populate profile info
-    document.getElementById('settings-avatar').textContent = currentUser.fullName.charAt(0).toUpperCase();
-    document.getElementById('settings-fullname').textContent = currentUser.fullName;
-    document.getElementById('settings-username').textContent = '@' + currentUser.username;
-    document.getElementById('settings-email').textContent = currentUser.email;
-    document.getElementById('settings-role').textContent = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
-    document.getElementById('settings-status').textContent = (currentUser.status || 'active').charAt(0).toUpperCase() + (currentUser.status || 'active').slice(1);
+    setText('settings-avatar', currentUser.fullName.charAt(0).toUpperCase());
+    setText('settings-fullname', currentUser.fullName);
+    setText('settings-username', '@' + currentUser.username);
+    setText('settings-email', currentUser.email);
+    setText('settings-role', currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1));
+    setText('settings-status', (currentUser.status || 'active').charAt(0).toUpperCase() + (currentUser.status || 'active').slice(1));
 
-    const roleBadge = document.getElementById('settings-role-badge');
-    const badgeClasses = { student: 'badge-student', instructor: 'badge-instructor', admin: 'badge-admin' };
-    roleBadge.className = 'badge ' + (badgeClasses[currentUser.role] || 'badge-student');
-    roleBadge.textContent = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
+    const roleBadge = $id('settings-role-badge');
+    if (roleBadge) {
+        roleBadge.className = 'badge ' + (ROLE_BADGES[currentUser.role] || 'badge-student');
+        roleBadge.textContent = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
+    }
 
     // Check 30-day cooldown
     const history = await refreshPasswordHistory();
@@ -1759,8 +1758,8 @@ async function loadStudentSettings() {
         .sort((a, b) => (b.changedAt || '').localeCompare(a.changedAt || ''));
 
     const lastChange = myHistory[0];
-    const cooldownWarning = document.getElementById('password-cooldown-warning');
-    const submitBtn = document.getElementById('submit-password-request-btn');
+    const cooldownWarning = $id('password-cooldown-warning');
+    const submitBtn = $id('submit-password-request-btn');
 
     let cooldownActive = false;
 
@@ -1772,18 +1771,21 @@ async function loadStudentSettings() {
 
         if (remainingDays > 0) {
             cooldownActive = true;
-            cooldownWarning.classList.remove('hidden');
-            document.getElementById('cooldown-message').textContent =
-                `Your last password change was ${diffDays} day(s) ago. You can change your password again in ${remainingDays} day(s).`;
-            submitBtn.disabled = true;
-            submitBtn.textContent = '\u23f3 Cooldown Active (' + remainingDays + ' days remaining)';
+            if (cooldownWarning) cooldownWarning.classList.remove('hidden');
+            setText('cooldown-message', `Your last password change was ${diffDays} day(s) ago. You can change your password again in ${remainingDays} day(s).`);
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = '\u23f3 Cooldown Active (' + remainingDays + ' days remaining)';
+            }
         }
     }
 
     if (!cooldownActive) {
-        cooldownWarning.classList.add('hidden');
-        submitBtn.disabled = false;
-        submitBtn.textContent = '\ud83d\udd11 Change Password';
+        if (cooldownWarning) cooldownWarning.classList.add('hidden');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = '\ud83d\udd11 Change Password';
+        }
     }
 
     // Render change history
@@ -1791,7 +1793,8 @@ async function loadStudentSettings() {
 }
 
 function renderPasswordChangeHistory(history) {
-    const container = document.getElementById('password-request-history');
+    const container = $id('password-request-history');
+    if (!container) return;
 
     if (history.length === 0) {
         container.innerHTML = '<div class="empty-state"><div class="empty-icon">\ud83d\udcc4</div><h3>No Changes Yet</h3><p>You haven\'t changed your password yet.</p></div>';
@@ -1814,8 +1817,8 @@ function renderPasswordChangeHistory(history) {
  * Change the student's password directly
  */
 async function submitPasswordChangeRequest() {
-    const newPassword = document.getElementById('new-password').value.trim();
-    const confirmPassword = document.getElementById('confirm-new-password').value.trim();
+    const newPassword = getValue('new-password').trim();
+    const confirmPassword = getValue('confirm-new-password').trim();
 
     if (!newPassword || !confirmPassword) {
         showToast('Please fill in both password fields.', 'error');
@@ -1858,8 +1861,8 @@ async function submitPasswordChangeRequest() {
             changedAt: new Date().toISOString().split('T')[0]
         });
 
-        document.getElementById('new-password').value = '';
-        document.getElementById('confirm-new-password').value = '';
+        setValue('new-password', '');
+        setValue('confirm-new-password', '');
 
         await refreshUsers();
         showToast('Password changed successfully! Use your new password next time you log in.', 'success');
@@ -1882,9 +1885,9 @@ async function loadPasswordRequests() {
     const sorted = history.sort((a, b) => (b.changedAt || '').localeCompare(a.changedAt || ''));
 
     // Update stats
-    document.getElementById('stat-total-changes').textContent = sorted.length;
+    setText('stat-total-changes', sorted.length);
 
-    const tbody = document.getElementById('password-requests-body');
+    const tbody = $id('password-requests-body');
 
     if (sorted.length === 0) {
         tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">No password changes recorded yet.</td></tr>';
@@ -1913,7 +1916,8 @@ async function updatePendingRequestsBadge() {
  * Trigger the hidden file input to upload a pseudocode file
  */
 function uploadPseudocode() {
-    document.getElementById('pseudocode-file-input').click();
+    const fileInput = $id('pseudocode-file-input');
+    if (fileInput) fileInput.click();
 }
 
 /**
@@ -1926,11 +1930,12 @@ function handlePseudocodeUpload(event) {
     const reader = new FileReader();
     reader.onload = function (e) {
         const content = e.target.result;
-        document.getElementById('pseudocode-editor').value = content;
+        const editor = $id('pseudocode-editor');
+        if (editor) editor.value = content;
 
         // Update line count
         const lines = content.split('\n').length;
-        document.getElementById('line-count').textContent = lines + ' lines';
+        setText('line-count', lines + ' lines');
 
         showToast(`File "${file.name}" loaded successfully!`, 'success');
     };
@@ -1949,34 +1954,30 @@ function handlePseudocodeUpload(event) {
    ============================================================ */
 
 function clearEditor() {
-    document.getElementById('pseudocode-editor').value = '';
-    document.getElementById('python-output').innerHTML = '';
-    document.getElementById('console-output').textContent = 'Editor cleared. Ready for new pseudocode.';
-    document.getElementById('console-output').className = 'output-content';
-    document.getElementById('line-count').textContent = '0 lines';
+    setValue('pseudocode-editor', '');
+    setHtml('python-output', '');
+    setText('console-output', 'Editor cleared. Ready for new pseudocode.');
+    const consoleOutput = $id('console-output');
+    if (consoleOutput) consoleOutput.className = 'output-content';
+    setText('line-count', '0 lines');
     currentErrorLineNumbers = [];
     updateGutter();
 }
 
 function clearOutput() {
-    document.getElementById('console-output').textContent = 'Output cleared.';
-    document.getElementById('console-output').className = 'output-content';
+    const consoleOutput = $id('console-output');
+    if (consoleOutput) {
+        consoleOutput.textContent = 'Output cleared.';
+        consoleOutput.className = 'output-content';
+    }
 }
 
-function copyPython() {
-    const code = getPythonCode('python-output');
-    if (!code) { showToast('No code to copy.', 'error'); return; }
-    copyText(code);
-}
+function copyPython() { copyEditorCode('python-output'); }
+function copyTranslateOutput() { copyEditorCode('translate-output'); }
+function copyInstructorOutput() { copyEditorCode('instructor-python-output'); }
 
-function copyTranslateOutput() {
-    const code = getPythonCode('translate-output');
-    if (!code) { showToast('No code to copy.', 'error'); return; }
-    copyText(code);
-}
-
-function copyInstructorOutput() {
-    const code = getPythonCode('instructor-python-output');
+function copyEditorCode(elementId) {
+    const code = getPythonCode(elementId);
     if (!code) { showToast('No code to copy.', 'error'); return; }
     copyText(code);
 }
@@ -2091,12 +2092,6 @@ function preprocessPseudocode(code) {
  * Returns { valid: boolean, errors: [{ line: number, message: string, suggestion?: string }] }
  */
 function validatePseudocode(code) {
-    function preprocessPseudocode(c) {
-        if (!c) return '';
-        return c.split('\n').map(line => {
-            return line.replace(/^\s*\d+[.:)]?[ \t]?/, '');
-        }).join('\n');
-    }
     code = preprocessPseudocode(code);
     const lines = code.split('\n');
     const errors = [];
@@ -2319,19 +2314,6 @@ function checkIncompleteExpression(expr, lineNum, errors) {
 /**
  * Format validation errors as Python comments for the output panel.
  */
-function formatValidationErrors(errors) {
-    let output = '# ❌ Syntax Errors Found:\n#\n';
-    for (const err of errors) {
-        output += `# Line ${err.line}: ${err.message}\n`;
-        if (err.suggestion) {
-            output += `#   💡 Suggestion: ${err.suggestion}\n`;
-        }
-        output += '#\n';
-    }
-    output += '# Fix the pseudocode before translation.\n';
-    return output;
-}
-
 /**
  * Render validation errors into HTML for terminal-like console window formatting.
  */
@@ -2352,20 +2334,16 @@ function renderHtmlErrors(errors) {
  * Handle updating the visual editor gutter line numbers dynamically.
  */
 function updateGutter() {
-    const editor = document.getElementById('pseudocode-editor');
-    const gutter = document.getElementById('editor-gutter');
+    const editor = $id('pseudocode-editor');
+    const gutter = $id('editor-gutter');
     if (!editor || !gutter) return;
 
-    let linesCount = editor.value.split('\n').length;
-    // ensure at least one line is showing
-    if (linesCount === 0) linesCount = 1;
-
-    let html = '';
-    for (let i = 1; i <= linesCount; i++) {
-        const errorClass = currentErrorLineNumbers.includes(i) ? ' error-line' : '';
-        html += `<div class="gutter-num${errorClass}">${i}</div>`;
-    }
-    gutter.innerHTML = html;
+    const linesCount = Math.max(editor.value.split('\n').length, 1);
+    gutter.innerHTML = Array.from({ length: linesCount }, (_, index) => {
+        const lineNumber = index + 1;
+        const errorClass = currentErrorLineNumbers.includes(lineNumber) ? ' error-line' : '';
+        return `<div class="gutter-num${errorClass}">${lineNumber}</div>`;
+    }).join('');
 
     // Refresh highlights layer
     updateHighlights();
@@ -2375,23 +2353,17 @@ function updateGutter() {
  * Handle updating the visual editor code highlights overlay dynamically.
  */
 function updateHighlights() {
-    const editor = document.getElementById('pseudocode-editor');
-    const highlights = document.getElementById('editor-highlights');
+    const editor = $id('pseudocode-editor');
+    const highlights = $id('editor-highlights');
     if (!editor || !highlights) return;
 
-    const lines = editor.value.split('\n');
-    let html = '';
-    for (let i = 1; i <= lines.length; i++) {
-        const lineText = lines[i - 1];
-        // Use non-breaking space for empty lines so they take vertical space
+    highlights.innerHTML = editor.value.split('\n').map((lineText, index) => {
         const displayContainer = lineText === '' ? '&nbsp;' : escapeHtml(lineText);
-        const hasError = currentErrorLineNumbers.includes(i);
-        const errorClass = hasError ? ' error-highlight-line' : '';
-        html += `<div class="highlight-line${errorClass}">${displayContainer}</div>`;
-    }
-    highlights.innerHTML = html;
+        const lineNumber = index + 1;
+        const errorClass = currentErrorLineNumbers.includes(lineNumber) ? ' error-highlight-line' : '';
+        return `<div class="highlight-line${errorClass}">${displayContainer}</div>`;
+    }).join('');
 
-    // Sync scroll
     highlights.scrollTop = editor.scrollTop;
     highlights.scrollLeft = editor.scrollLeft;
 }
@@ -2400,21 +2372,13 @@ function updateHighlights() {
  * Handle updating the visual Python editor gutter line numbers dynamically.
  */
 function updatePythonGutter() {
-    const editor = document.getElementById('python-output');
-    const gutter = document.getElementById('python-gutter');
+    const editor = $id('python-output');
+    const gutter = $id('python-gutter');
     if (!editor || !gutter) return;
 
-    let linesCount = editor.value.split('\n').length;
-    // ensure at least one line is showing
-    if (linesCount === 0) linesCount = 1;
+    const linesCount = Math.max(editor.value.split('\n').length, 1);
+    gutter.innerHTML = Array.from({ length: linesCount }, (_, index) => `<div class="gutter-num">${index + 1}</div>`).join('');
 
-    let html = '';
-    for (let i = 1; i <= linesCount; i++) {
-        html += `<div class="gutter-num">${i}</div>`;
-    }
-    gutter.innerHTML = html;
-
-    // Refresh highlights layer
     updatePythonHighlights();
 }
 
@@ -2422,21 +2386,15 @@ function updatePythonGutter() {
  * Handle updating the visual Python editor code highlights overlay dynamically.
  */
 function updatePythonHighlights() {
-    const editor = document.getElementById('python-output');
-    const highlights = document.getElementById('python-highlights');
+    const editor = $id('python-output');
+    const highlights = $id('python-highlights');
     if (!editor || !highlights) return;
 
-    const lines = editor.value.split('\n');
-    let html = '';
-    for (let i = 1; i <= lines.length; i++) {
-        const lineText = lines[i - 1];
-        // Use non-breaking space for empty lines so they take vertical space
+    highlights.innerHTML = editor.value.split('\n').map(lineText => {
         const displayContainer = lineText === '' ? '&nbsp;' : escapeHtml(lineText);
-        html += `<div class="highlight-line">${displayContainer}</div>`;
-    }
-    highlights.innerHTML = html;
+        return `<div class="highlight-line">${displayContainer}</div>`;
+    }).join('');
 
-    // Sync scroll
     highlights.scrollTop = editor.scrollTop;
     highlights.scrollLeft = editor.scrollLeft;
 }
@@ -2445,39 +2403,11 @@ function updatePythonHighlights() {
  * Highlight error lines in the editor with a visual indicator.
  * Uses an overlay div to show error markers.
  */
-function highlightEditorErrors(editorId, errors) {
-    clearEditorErrors(editorId);
-    const editor = document.getElementById(editorId);
-    if (!editor) return;
-
-    // Add error class to the editor
-    editor.classList.add('has-errors');
-
-    // Create an error indicator panel below the editor
-    const panel = editor.closest('.editor-panel');
-    if (!panel) return;
-
-    let errorPanel = panel.querySelector('.validation-error-panel');
-    if (!errorPanel) {
-        errorPanel = document.createElement('div');
-        errorPanel.className = 'validation-error-panel';
-        panel.querySelector('.panel-body').appendChild(errorPanel);
-    }
-
-    errorPanel.innerHTML = errors.slice(0, 5).map(err =>
-        `<div class="validation-error-item">
-            <span class="error-line-num">Line ${err.line}</span>
-            <span class="error-msg">${err.message}</span>
-            ${err.suggestion ? `<span class="error-suggestion">💡 ${err.suggestion}</span>` : ''}
-        </div>`
-    ).join('') + (errors.length > 5 ? `<div class="validation-error-item"><span class="error-msg">...and ${errors.length - 5} more error(s)</span></div>` : '');
-}
-
 /**
  * Clear error highlighting from the editor.
  */
 function clearEditorErrors(editorId) {
-    const editor = document.getElementById(editorId);
+    const editor = $id(editorId);
     if (!editor) return;
     editor.classList.remove('has-errors');
 
@@ -2498,17 +2428,21 @@ function clearEditorErrors(editorId) {
  * New File — clears editor and inserts default template
  */
 function newFile() {
-    const editor = document.getElementById('pseudocode-editor');
-    editor.value = 'BEGIN\n    // Write your pseudocode here\nEND';
-    document.getElementById('python-output').innerHTML = '';
-    document.getElementById('console-output').textContent = 'New file created. Start writing your pseudocode.';
-    document.getElementById('console-output').className = 'output-content';
-    document.getElementById('line-count').textContent = '3 lines';
+    const editor = $id('pseudocode-editor');
+    if (editor) editor.value = 'BEGIN\n    // Write your pseudocode here\nEND';
+    const pyOutput = $id('python-output');
+    if (pyOutput) pyOutput.innerHTML = '';
+    const consoleOutput = $id('console-output');
+    if (consoleOutput) {
+        consoleOutput.textContent = 'New file created. Start writing your pseudocode.';
+        consoleOutput.className = 'output-content';
+    }
+    setText('line-count', '3 lines');
     currentErrorLineNumbers = [];
     clearEditorErrors('pseudocode-editor');
     updateGutter();
 
-    const runBtn = document.querySelector('#page-write-pseudocode .btn-success');
+    const runBtn = $qs('#page-write-pseudocode .btn-success');
     if (runBtn) runBtn.disabled = false;
 
     showToast('New file created with template.', 'info');
@@ -2518,7 +2452,7 @@ function newFile() {
  * Save pseudocode as a .txt file
  */
 function savePseudocodeAsFile() {
-    const code = document.getElementById('pseudocode-editor').value;
+    const code = getValue('pseudocode-editor');
     if (!code.trim()) { showToast('Nothing to save. Write some pseudocode first.', 'error'); return; }
     const blob = new Blob([code], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -2541,7 +2475,7 @@ function savePseudocodeAsFile() {
 let validationTimer = null;
 
 function setupRealtimeValidation() {
-    const editor = document.getElementById('pseudocode-editor');
+    const editor = $id('pseudocode-editor');
     if (!editor) return;
 
     // Real-time validation runs silently — errors only shown on Translate
@@ -2573,22 +2507,24 @@ function loadCompilerMetrics() {
     const session = metricsEngine.getSessionMetrics();
     const improvement = metricsEngine.getImprovementMetrics();
 
-    document.getElementById('metric-total-translations').textContent = session.totalTranslations;
-    document.getElementById('metric-compilation-rate').textContent = session.compilationSuccessRate + '%';
-    document.getElementById('metric-runtime-error-rate').textContent = session.runtimeErrorRate + '%';
-    document.getElementById('metric-avg-gen-time').textContent = session.avgGenerationTime + 'ms';
-    document.getElementById('metric-total-errors').textContent = session.totalErrors;
-    document.getElementById('metric-total-executions').textContent = session.totalExecutions;
+    setText('metric-total-translations', session.totalTranslations);
+    setText('metric-compilation-rate', session.compilationSuccessRate + '%');
+    setText('metric-runtime-error-rate', session.runtimeErrorRate + '%');
+    setText('metric-avg-gen-time', session.avgGenerationTime + 'ms');
+    setText('metric-total-errors', session.totalErrors);
+    setText('metric-total-executions', session.totalExecutions);
 
     // Error trend badge
-    const trendEl = document.getElementById('metric-error-trend');
+    const trendEl = $id('metric-error-trend');
     const trendIcons = { improving: '↑ Improving', declining: '↓ Declining', stable: '— Stable' };
     const trendClasses = { improving: 'positive', declining: 'negative', stable: '' };
-    trendEl.textContent = trendIcons[session.errorTrend] || '— Stable';
-    trendEl.className = 'stat-change ' + (trendClasses[session.errorTrend] || '');
+    if (trendEl) {
+        trendEl.textContent = trendIcons[session.errorTrend] || '— Stable';
+        trendEl.className = 'stat-change ' + (trendClasses[session.errorTrend] || '');
+    }
 
     // ── Improvement Section ──
-    const improvementEl = document.getElementById('metrics-improvement-section');
+    const improvementEl = $id('metrics-improvement-section');
     if (improvement.hasData) {
         improvementEl.innerHTML = `
         <div class="stats-grid" style="margin-bottom: 1rem;">
@@ -2632,7 +2568,7 @@ function loadCompilerMetrics() {
  */
 async function runBenchmarkTest() {
     showToast('Running benchmark...', 'info');
-    const btn = document.getElementById('run-benchmark-btn');
+    const btn = $id('run-benchmark-btn');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Running...'; }
 
     try {
@@ -2665,15 +2601,15 @@ async function runBenchmarkTest() {
  */
 function renderBenchmarkResults(results) {
     // ── Summary Cards ──
-    document.getElementById('benchmark-accuracy').textContent = results.accuracy + '%';
-    document.getElementById('benchmark-precision').textContent = results.avgPrecision + '%';
-    document.getElementById('benchmark-recall').textContent = results.avgRecall + '%';
-    document.getElementById('benchmark-f1').textContent = results.f1Score + '%';
-    document.getElementById('benchmark-compile-rate').textContent = results.compilationSuccessRate + '%';
-    document.getElementById('benchmark-avg-time').textContent = results.avgTimeMs + 'ms';
+    setText('benchmark-accuracy', results.accuracy + '%');
+    setText('benchmark-precision', results.avgPrecision + '%');
+    setText('benchmark-recall', results.avgRecall + '%');
+    setText('benchmark-f1', results.f1Score + '%');
+    setText('benchmark-compile-rate', results.compilationSuccessRate + '%');
+    setText('benchmark-avg-time', results.avgTimeMs + 'ms');
 
     // ── Detailed Results Table ──
-    const tbody = document.getElementById('benchmark-results-body');
+    const tbody = $id('benchmark-results-body');
     tbody.innerHTML = results.results.map(r => `
     <tr>
       <td style="font-weight:600;color:var(--text-primary)">${r.id}</td>
@@ -2690,7 +2626,7 @@ function renderBenchmarkResults(results) {
  * Render pipeline timing bar chart.
  */
 function renderPipelineTimingChart(timing) {
-    const container = document.getElementById('chart-pipeline-timing');
+    const container = $id('chart-pipeline-timing');
     if (!container) return;
 
     if (timing.count === 0) {
@@ -2726,16 +2662,18 @@ if (document.readyState === 'loading') {
    ============================================================ */
 
 function toggleMobileSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
+    const sidebar = $qs('.sidebar');
+    const overlay = $id('sidebar-overlay');
+    if (!sidebar || !overlay) return;
     sidebar.classList.toggle('mobile-open');
     overlay.classList.toggle('hidden');
     document.body.style.overflow = sidebar.classList.contains('mobile-open') ? 'hidden' : '';
 }
 
 function closeMobileSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
+    const sidebar = $qs('.sidebar');
+    const overlay = $id('sidebar-overlay');
+    if (!sidebar || !overlay) return;
     sidebar.classList.remove('mobile-open');
     overlay.classList.add('hidden');
     document.body.style.overflow = '';
@@ -2781,7 +2719,7 @@ if (window.navigator.standalone === true) {
  * @param {HTMLElement} btn The button element to update the icon
  */
 function togglePasswordVisibility(inputId, btn) {
-    const input = document.getElementById(inputId);
+    const input = $id(inputId);
     if (!input) return;
 
     if (input.type === 'password') {
@@ -2797,9 +2735,9 @@ window.togglePasswordVisibility = togglePasswordVisibility;
    ============================================================ */
 
 async function handleChangePassword() {
-    const currentParam = document.getElementById('cp-current-password').value;
-    const newParam = document.getElementById('cp-new-password').value;
-    const confirmParam = document.getElementById('cp-confirm-password').value;
+    const currentParam = getValue('cp-current-password');
+    const newParam = getValue('cp-new-password');
+    const confirmParam = getValue('cp-confirm-password');
 
     if (!currentParam || !newParam || !confirmParam) {
         showToast('Please fill in all fields.', 'error');
@@ -2837,9 +2775,9 @@ async function handleChangePassword() {
         showToast('Password updated successfully!', 'success');
 
         // Clear fields
-        document.getElementById('cp-current-password').value = '';
-        document.getElementById('cp-new-password').value = '';
-        document.getElementById('cp-confirm-password').value = '';
+        setValue('cp-current-password', '');
+        setValue('cp-new-password', '');
+        setValue('cp-confirm-password', '');
     } catch (err) {
         console.error('[Offline Database] Change password error:', err);
         showToast('Failed to update password.', 'error');
@@ -2847,8 +2785,8 @@ async function handleChangePassword() {
 }
 
 function toggleUserPasswordVisibility(userId) {
-    const masked = document.getElementById(`pwd-masked-${userId}`);
-    const real = document.getElementById(`pwd-real-${userId}`);
+    const masked = $id(`pwd-masked-${userId}`);
+    const real = $id(`pwd-real-${userId}`);
 
     if (masked && real) {
         if (masked.classList.contains('hidden')) {
@@ -2858,150 +2796,6 @@ function toggleUserPasswordVisibility(userId) {
             masked.classList.add('hidden');
             real.classList.remove('hidden');
         }
-    }
-}
-
-/* ============================================================
-   COMPILER METRICS (Panel 1 Requirement)
-   ============================================================ */
-
-function loadCompilerMetrics() {
-    if (typeof metricsEngine === 'undefined') return;
-
-    // Load Session Stats
-    const session = metricsEngine.getSessionMetrics();
-    document.getElementById('metric-total-translations').textContent = session.totalTranslations;
-    document.getElementById('metric-compilation-rate').textContent = session.compilationSuccessRate + '%';
-    document.getElementById('metric-runtime-error-rate').textContent = session.runtimeErrorRate + '%';
-    document.getElementById('metric-avg-gen-time').textContent = session.avgGenerationTime + 'ms';
-    document.getElementById('metric-total-errors').textContent = session.totalErrors;
-    document.getElementById('metric-total-executions').textContent = session.totalExecutions;
-
-    const trendEl = document.getElementById('metric-error-trend');
-    if (session.errorTrend === 'improving') {
-        trendEl.innerHTML = '↓ Improving';
-        trendEl.className = 'stat-change positive';
-    } else if (session.errorTrend === 'declining') {
-        trendEl.innerHTML = '↑ Declining';
-        trendEl.className = 'stat-change negative';
-    } else {
-        trendEl.innerHTML = '— Stable';
-        trendEl.className = 'stat-change';
-    }
-
-    // Load Improvement Tracking
-    const improvement = metricsEngine.getImprovementMetrics();
-    const impSection = document.getElementById('metrics-improvement-section');
-    if (improvement.hasData) {
-        impSection.innerHTML = `
-            <div style="display: flex; gap: 2rem; justify-content: space-around; padding: 1rem;">
-                <div style="text-align: center;">
-                    <div style="font-size: 2rem; font-weight: bold; color: ${improvement.correctnessImprovement > 0 ? 'var(--success)' : 'var(--danger)'}">
-                        ${improvement.correctnessImprovement > 0 ? '↓' : '↑'} ${Math.abs(improvement.correctnessImprovement)}%
-                    </div>
-                    <div style="color: var(--text-muted); font-size: 0.9rem;">Error Rate Change</div>
-                </div>
-                <div style="text-align: center;">
-                    <div style="font-size: 2rem; font-weight: bold; color: var(--success)">
-                        ${improvement.speedImprovement}%
-                    </div>
-                    <div style="color: var(--text-muted); font-size: 0.9rem;">Speed Improvement</div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Pipeline Timing
-    const timing = metricsEngine.getAveragePipelineTiming();
-    const timingSection = document.getElementById('chart-pipeline-timing');
-    if (timing.count > 0) {
-        const total = timing.avgTotalTime || 1;
-        timingSection.innerHTML = `
-            <div style="padding: 1rem;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span>Lexer</span>
-                    <span>${timing.avgLexTime}ms</span>
-                </div>
-                <div style="width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-bottom: 1rem;">
-                    <div style="width: ${(timing.avgLexTime / total) * 100}%; background: #3b82f6; height: 100%; border-radius: 4px;"></div>
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span>Parser</span>
-                    <span>${timing.avgParseTime}ms</span>
-                </div>
-                <div style="width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-bottom: 1rem;">
-                    <div style="width: ${(timing.avgParseTime / total) * 100}%; background: #8b5cf6; height: 100%; border-radius: 4px;"></div>
-                </div>
-
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span>Semantic Analyzer</span>
-                    <span>${timing.avgSemanticTime}ms</span>
-                </div>
-                <div style="width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-bottom: 1rem;">
-                    <div style="width: ${(timing.avgSemanticTime / total) * 100}%; background: #f59e0b; height: 100%; border-radius: 4px;"></div>
-                </div>
-
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span>Code Generator</span>
-                    <span>${timing.avgCodeGenTime}ms</span>
-                </div>
-                <div style="width: 100%; background: #eee; height: 8px; border-radius: 4px; margin-bottom: 1rem;">
-                    <div style="width: ${(timing.avgCodeGenTime / total) * 100}%; background: #10b981; height: 100%; border-radius: 4px;"></div>
-                </div>
-            </div>
-        `;
-    }
-}
-
-async function runBenchmarkTest() {
-    if (typeof metricsEngine === 'undefined') return;
-
-    showToast('Running benchmark tests...', 'info');
-
-    try {
-        // Use global constant from dataset.js instead of fetch() to avoid CORS/offline issues
-        if (typeof GROUND_TRUTH_DATASET === 'undefined') {
-            throw new Error("GROUND_TRUTH_DATASET not loaded.");
-        }
-
-        const compiler = new PseudocodeCompiler();
-        const results = metricsEngine.runBenchmark(GROUND_TRUTH_DATASET, compiler);
-
-        document.getElementById('benchmark-accuracy').textContent = results.accuracy + '%';
-        document.getElementById('benchmark-precision').textContent = results.avgPrecision + '%';
-        document.getElementById('benchmark-recall').textContent = results.avgRecall + '%';
-        document.getElementById('benchmark-f1').textContent = results.f1Score;
-        document.getElementById('benchmark-compile-rate').textContent = results.compilationSuccessRate + '%';
-        document.getElementById('benchmark-avg-time').textContent = results.avgTimeMs + 'ms';
-
-        // Detailed per-test results hidden to optimize UI for learning analytics
-        // (Mastery aggregation below provides more academic value)
-
-
-        // Render Concept Mastery
-        const mastery = metricsEngine.getConceptMastery();
-        const masteryBody = document.getElementById('concept-mastery-body');
-        masteryBody.innerHTML = mastery.map(m => {
-            let level = 'Beginner';
-            if (m.successRate > 90 && m.accuracy > 80) level = 'Expert';
-            else if (m.successRate > 70) level = 'Intermediate';
-
-            return `
-                <tr>
-                    <td style="font-weight:600">${m.concept}</td>
-                    <td>${m.successRate}%</td>
-                    <td>${m.accuracy}%</td>
-                    <td>${m.precision}%</td>
-                    <td><span class="badge ${level === 'Expert' ? 'badge-success' : (level === 'Intermediate' ? 'badge-info' : 'badge-warning')}">${level}</span></td>
-                </tr>
-            `;
-        }).join('');
-
-        showToast('Benchmark complete!', 'success');
-    } catch (e) {
-        console.error(e);
-        showToast('Failed to execute benchmark.', 'error');
     }
 }
 
@@ -3044,7 +2838,7 @@ function toggleTheme() {
  * Automatically formats pseudocode with consistent indentation
  */
 function autoFormatPseudocode() {
-    const editor = document.getElementById('pseudocode-editor');
+    const editor = $id('pseudocode-editor');
     if (!editor) return;
 
     const lines = editor.value.split('\n');
@@ -3078,3 +2872,4 @@ function autoFormatPseudocode() {
     updateGutter(); // Refresh line numbers
     showToast('Pseudocode formatted!', 'success');
 }
+

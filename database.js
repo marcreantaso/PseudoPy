@@ -164,6 +164,45 @@ const SEED_ACTIVITY = [
     { _docId: 'act2', student: 'Mikaella Daet', exercise: 'algo_2', status: 'In Progress', score: '—', time: '12 min ago' },
 ];
 
+const SEED_EXERCISES = [
+    {
+        _docId: 'seed_easy_1',
+        id: 'seed_easy_1',
+        title: 'Multiply Array Elements',
+        description: 'Multiply every element in an array by 4 and output the transformed list.',
+        difficulty: 'easy',
+        python_code: 'values = [8, 4, 1, 6, 4, 13, 6]\nfor i in range(len(values)):\n    values[i] = values[i] * 4\nprint(values)',
+        createdAt: new Date().toISOString().split('T')[0]
+    },
+    {
+        _docId: 'seed_medium_1',
+        id: 'seed_medium_1',
+        title: 'Sum Odd Numbers',
+        description: 'Calculate the sum of odd numbers less than 100 and print the result.',
+        difficulty: 'medium',
+        python_code: 'total = 0\ni = 1\nwhile i < 100:\n    total += i\n    i += 2\nprint(total)',
+        createdAt: new Date().toISOString().split('T')[0]
+    },
+    {
+        _docId: 'seed_medium_2',
+        id: 'seed_medium_2',
+        title: 'Count Multiples of 4 and 7',
+        description: 'Count numbers between 1 and 20 that are multiples of 4 or 7.',
+        difficulty: 'medium',
+        python_code: 'count = 0\nfor i in range(1, 21):\n    if i % 4 == 0 or i % 7 == 0:\n        count += 1\nprint(count)',
+        createdAt: new Date().toISOString().split('T')[0]
+    },
+    {
+        _docId: 'seed_hard_1',
+        id: 'seed_hard_1',
+        title: 'Factorial Computation',
+        description: 'Compute the factorial of 6 using a loop and print the final result.',
+        difficulty: 'hard',
+        python_code: 'result = 1\nfor i in range(1, 7):\n    result *= i\nprint(result)',
+        createdAt: new Date().toISOString().split('T')[0]
+    }
+];
+
 async function seedDatabase() {
     try {
         const db = await initDB();
@@ -187,6 +226,16 @@ async function seedDatabase() {
         const countReq = tx.objectStore(exercisesRef).count();
         
         countReq.onsuccess = async () => {
+            const needsSampleSeed = countReq.result < 4;
+            if (needsSampleSeed) {
+                console.log('[Database] Seeding sample exercises...');
+                const sampleTx = db.transaction(exercisesRef, 'readwrite');
+                const sampleStore = sampleTx.objectStore(exercisesRef);
+                SEED_EXERCISES.forEach(item => sampleStore.put(item));
+                sampleTx.oncomplete = () => console.log('[Database] Sample exercises seeded ✅');
+                sampleTx.onerror = (e) => console.error('[Database] Sample exercise seed failed:', e.target.error);
+            }
+
             if (countReq.result === 0) {
                 console.log('[Database] Fetching 10,000 exercises from dataset.json...');
                 try {
