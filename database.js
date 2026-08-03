@@ -264,3 +264,227 @@ async function seedDatabase() {
         console.error('[Database] Seed error:', err);
     }
 }
+
+// ════════════════════════════════════════
+// PSEUDOCODE-TO-PYTHON DATABASE
+// LocalStorage-based data persistence
+// ════════════════════════════════════════
+
+class Database {
+  constructor() {
+    this.storageKey = 'pseudopy_db';
+    this.initializeDatabase();
+  }
+
+  initializeDatabase() {
+    if (!localStorage.getItem(this.storageKey)) {
+      const defaultData = {
+        users: [
+          { id: 1, fullname: 'MB Autista', username: 'mbautista_admin', email: 'mbautista@university.edu.ph', password: 'admin123', role: 'admin', status: 'active' },
+          { id: 2, fullname: 'MR Eantaso', username: 'mreantaso_instructor', email: 'mreantaso@university.edu.ph', password: 'instructor123', role: 'instructor', status: 'active' },
+          { id: 3, fullname: 'E Miranda', username: 'emirandilla_student', email: 'emirandilla@university.edu.ph', password: 'student123', role: 'student', status: 'active' },
+          { id: 4, fullname: 'MD Daet', username: 'mdaet_student', email: 'mdaet@university.edu.ph', password: 'student123', role: 'student', status: 'active' }
+        ],
+        exercises: [
+          {
+            id: 1,
+            title: 'Count Elements Greater Than Threshold',
+            description: 'Counts the number of elements in an array that are strictly greater than 67.',
+            difficulty: 'easy',
+            solution: 'BEGIN\n  SET count TO 0\n  SET threshold TO 67\n  FOR EACH element IN array DO\n    IF element > threshold THEN\n      SET count TO count + 1\n    END IF\n  END FOR\n  DISPLAY count\nEND',
+            createdAt: new Date().toISOString()
+          },
+          {
+            id: 2,
+            title: 'Sum of Odd Numbers Less Than Limit',
+            description: 'Calculates the sum of odd numbers strictly less than 90.',
+            difficulty: 'medium',
+            solution: 'BEGIN\n  SET sum TO 0\n  SET limit TO 90\n  SET number TO 1\n  WHILE number < limit DO\n    IF number MOD 2 = 1 THEN\n      SET sum TO sum + number\n    END IF\n    SET number TO number + 1\n  END WHILE\n  DISPLAY sum\nEND',
+            createdAt: new Date().toISOString()
+          },
+          {
+            id: 3,
+            title: 'Find Multiples of 4 and 5 Up to 15',
+            description: 'Iterates to 15, identifying multiples of 4 and 5.',
+            difficulty: 'medium',
+            solution: 'BEGIN\n  SET limit TO 15\n  SET number TO 1\n  WHILE number <= limit DO\n    IF number MOD 4 = 0 OR number MOD 5 = 0 THEN\n      DISPLAY number\n    END IF\n    SET number TO number + 1\n  END WHILE\nEND',
+            createdAt: new Date().toISOString()
+          },
+          {
+            id: 4,
+            title: 'Factorial Calculation',
+            description: 'Computes the factorial value iteratively up to 4.',
+            difficulty: 'hard',
+            solution: 'BEGIN\n  SET number TO 4\n  SET factorial TO 1\n  SET i TO 1\n  WHILE i <= number DO\n    SET factorial TO factorial * i\n    SET i TO i + 1\n  END WHILE\n  DISPLAY factorial\nEND',
+            createdAt: new Date().toISOString()
+          }
+        ],
+        submissions: [],
+        passwordChangeHistory: [],
+        metrics: {
+          totalTranslations: 0,
+          successfulTranslations: 0,
+          failedTranslations: 0,
+          totalExecutions: 0,
+          errorLog: []
+        }
+      };
+      localStorage.setItem(this.storageKey, JSON.stringify(defaultData));
+    }
+  }
+
+  // ── Users ──
+  getUsers() {
+    return this.getData().users;
+  }
+
+  getUserByUsername(username) {
+    return this.getData().users.find(u => u.username === username);
+  }
+
+  addUser(user) {
+    const data = this.getData();
+    user.id = Math.max(...data.users.map(u => u.id), 0) + 1;
+    data.users.push(user);
+    this.saveData(data);
+    return user;
+  }
+
+  updateUser(userId, updates) {
+    const data = this.getData();
+    const user = data.users.find(u => u.id === userId);
+    if (user) {
+      Object.assign(user, updates);
+      this.saveData(data);
+    }
+    return user;
+  }
+
+  deleteUser(userId) {
+    const data = this.getData();
+    data.users = data.users.filter(u => u.id !== userId);
+    this.saveData(data);
+  }
+
+  // ── Exercises ──
+  getExercises() {
+    return this.getData().exercises;
+  }
+
+  getExerciseById(id) {
+    return this.getData().exercises.find(e => e.id === id);
+  }
+
+  addExercise(exercise) {
+    const data = this.getData();
+    exercise.id = Math.max(...data.exercises.map(e => e.id), 0) + 1;
+    exercise.createdAt = new Date().toISOString();
+    data.exercises.push(exercise);
+    this.saveData(data);
+    return exercise;
+  }
+
+  updateExercise(exerciseId, updates) {
+    const data = this.getData();
+    const exercise = data.exercises.find(e => e.id === exerciseId);
+    if (exercise) {
+      Object.assign(exercise, updates);
+      this.saveData(data);
+    }
+    return exercise;
+  }
+
+  deleteExercise(exerciseId) {
+    const data = this.getData();
+    data.exercises = data.exercises.filter(e => e.id !== exerciseId);
+    this.saveData(data);
+  }
+
+  // ── Submissions ──
+  getSubmissions() {
+    return this.getData().submissions;
+  }
+
+  addSubmission(submission) {
+    const data = this.getData();
+    submission.id = Math.max(...data.submissions.map(s => s.id), 0) + 1;
+    submission.submittedAt = new Date().toISOString();
+    data.submissions.push(submission);
+    this.saveData(data);
+    return submission;
+  }
+
+  getSubmissionsByStudent(studentId) {
+    return this.getData().submissions.filter(s => s.studentId === studentId);
+  }
+
+  getSubmissionsByExercise(exerciseId) {
+    return this.getData().submissions.filter(s => s.exerciseId === exerciseId);
+  }
+
+  // ── Password Change History ──
+  getPasswordChangeHistory() {
+    return this.getData().passwordChangeHistory;
+  }
+
+  addPasswordChangeRequest(request) {
+    const data = this.getData();
+    request.id = Math.max(...data.passwordChangeHistory.map(r => r.id), 0) + 1;
+    request.requestedAt = new Date().toISOString();
+    data.passwordChangeHistory.push(request);
+    this.saveData(data);
+    return request;
+  }
+
+  // ── Metrics ──
+  getMetrics() {
+    return this.getData().metrics;
+  }
+
+  updateMetrics(updates) {
+    const data = this.getData();
+    data.metrics = { ...data.metrics, ...updates };
+    this.saveData(data);
+  }
+
+  addErrorToLog(error) {
+    const data = this.getData();
+    data.metrics.errorLog.push({
+      timestamp: new Date().toISOString(),
+      error: error
+    });
+    this.saveData(data);
+  }
+
+  // ── Generic Data Methods ──
+  getData() {
+    return JSON.parse(localStorage.getItem(this.storageKey) || '{}');
+  }
+
+  saveData(data) {
+    localStorage.setItem(this.storageKey, JSON.stringify(data));
+  }
+
+  clearDatabase() {
+    localStorage.removeItem(this.storageKey);
+    this.initializeDatabase();
+  }
+
+  exportDatabase() {
+    return JSON.stringify(this.getData(), null, 2);
+  }
+
+  importDatabase(jsonData) {
+    try {
+      const data = JSON.parse(jsonData);
+      localStorage.setItem(this.storageKey, JSON.stringify(data));
+      return true;
+    } catch (e) {
+      console.error('Import failed:', e);
+      return false;
+    }
+  }
+}
+
+// ── Instantiate Global DB ──
+const db = new Database();
