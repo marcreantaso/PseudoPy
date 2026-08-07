@@ -267,7 +267,8 @@ class Parser {
 
         while (this.peek().type !== TOKEN_TYPES.EOF &&
             this.peek().type !== TOKEN_TYPES.NEWLINE) {
-            if (this.peek().type === TOKEN_TYPES.KEYWORD && stops.has(this.peek().value)) break;
+            // Fix: Check stops for any token value (case-insensitive), not just KEYWORDs.
+            if (stops.has(this.peek().value.toUpperCase())) break;
             collected.push(this.consume());
         }
         return { type: 'Expression', tokens: collected, line: line };
@@ -396,6 +397,7 @@ class Parser {
     }
 
     // ── SET x TO expr  →  x = expr ──
+    // Modified to detect array assignments (e.g. SET Numbers[j] = Numbers[j + 1])
     parseSet() {
         const kw = this.consume();
         const id = this.match(TOKEN_TYPES.IDENTIFIER);
@@ -403,6 +405,13 @@ class Parser {
             this.errors.push({ line: kw.line, message: 'Expected variable name after SET.', suggestion: 'Example: SET x TO 5' });
             return null;
         }
+
+        // Fix: Detect if the next token is an opening square bracket '[' indicating an array assignment.
+        if (this.peek().type === TOKEN_TYPES.OPERATOR && this.peek().value === '[') {
+            // Parse as an array assignment passing the pre-matched identifier token.
+            return this.parseArrayAssignment(id);
+        }
+
         if (!this.match(TOKEN_TYPES.KEYWORD, 'TO')) {
             if (!this.match(TOKEN_TYPES.OPERATOR, '=')) {
                 // Levenshtein: did they misspell TO?
@@ -431,12 +440,30 @@ class Parser {
     }
 
     // ── arr[i] = expr ──
-    parseArrayAssignment() {
-        const id = this.consume();
+    // Modified to support an optional pre-matched identifier (from SET array[index] = value)
+    // and match either '=' or 'TO' as the assignment operator.
+    parseArrayAssignment(preMatchedId) {
+        const id = preMatchedId || this.consume();
         this.consume(); // [
         const indexExpr = this.collectLineTokens([']']);
         if (this.peek().value === ']') this.consume();
-        this.consume(); // =
+        
+        // Support either '=' or 'TO' as the assignment operator
+        const assignOp = this.peek();
+        if (assignOp.type === TOKEN_TYPES.OPERATOR && assignOp.value === '=') {
+            this.consume(); // =
+        } else if (assignOp.type === TOKEN_TYPES.KEYWORD && assignOp.value === 'TO') {
+            this.consume(); // TO
+        } else {
+            this.errors.push({ 
+                line: id.line, 
+                message: "Expected '=' or 'TO' after array index.", 
+                suggestion: "Example: " + id.value + "[index] = value" 
+            });
+            if (assignOp.type === TOKEN_TYPES.OPERATOR || assignOp.type === TOKEN_TYPES.KEYWORD) {
+                this.consume();
+            }
+        }
         const valueExpr = this.collectLineTokens();
         return { type: 'ArrayAssignStatement', id: id.value, index: indexExpr, expr: valueExpr, line: id.line };
     }
@@ -995,6 +1022,9 @@ class CodeGenerator {
             const prev = j > 0 ? parts[j - 1] : '';
             // No leading space before comma or closing paren
             if (cur === ',' || cur === ')' || cur === ']') {
+                result += cur;
+            // No space before opening bracket if it follows an identifier or closing paren/bracket
+            } else if (cur === '[' && prev && /^[a-zA-Z0-9_)\]]+$/.test(prev)) {
                 result += cur;
             // No trailing space after opening paren/bracket
             } else if (prev === '(' || prev === '[') {

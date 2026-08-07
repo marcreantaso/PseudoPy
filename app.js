@@ -41,7 +41,7 @@ const EX_PAGE_LIMIT = 20;
 function setPythonOutput(elementId, code) {
     const el = $id(elementId);
     if (!el) return;
-    
+
     if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
         el.value = code;
         el.dispatchEvent(new Event('input'));
@@ -56,7 +56,7 @@ function setPythonOutput(elementId, code) {
 function getPythonCode(elementId) {
     const el = $id(elementId);
     if (!el) return '';
-    
+
     if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
         return el.value;
     }
@@ -155,6 +155,10 @@ async function init() {
         const syncEditorState = () => {
             setText('line-count', editor.value.split('\n').length + ' lines');
             updateGutter();
+<<<<<<< HEAD
+=======
+
+>>>>>>> 6eb1a46 (Update project)
             exerciseState.isTranslated = false;
             exerciseState.isExecuted = false;
             exerciseState.outputMatched = false;
@@ -178,6 +182,10 @@ async function init() {
     if (pyEditor) {
         const syncPythonState = () => {
             updatePythonGutter();
+<<<<<<< HEAD
+=======
+
+>>>>>>> 6eb1a46 (Update project)
             exerciseState.isExecuted = false;
             exerciseState.outputMatched = false;
             updateExerciseStatus();
@@ -327,8 +335,21 @@ function handleLogout() {
     showToast('Signed out successfully.', 'info');
 }
 
+<<<<<<< HEAD
 const ROLE_LABELS = { student: 'Student', instructor: 'Instructor', admin: 'Administrator' };
 const ROLE_BADGES = { student: 'badge-student', instructor: 'badge-instructor', admin: 'badge-admin' };
+=======
+function checkAccess(role, pageId) {
+    const adminPages = ['manage-users', 'password-requests', 'admin-execute'];
+    const instructorPages = ['analytics', 'manage-exercises', 'generate-code', 'compiler-metrics', 'manage-students'];
+    const studentPages = ['write-pseudocode', 'translate', 'execute', 'feedback', 'exercises-student', 'student-settings', 'change-password'];
+
+    if (adminPages.includes(pageId)) return role === 'admin';
+    if (instructorPages.includes(pageId)) return role === 'instructor';
+    if (studentPages.includes(pageId)) return role === 'student';
+    return true; // fallback for unclassified pages
+}
+>>>>>>> 6eb1a46 (Update project)
 
 function showApp() {
     hide('login-page');
@@ -339,10 +360,21 @@ function showApp() {
     setText('sidebar-username', currentUser.fullName);
     setText('sidebar-role', ROLE_LABELS[currentUser.role]);
 
+    // Update topbar welcome and role display
+    document.getElementById('topbar-welcome').textContent = `Welcome, ${currentUser.fullName}`;
+    const roleLabelsForDisplay = { student: 'Student', instructor: 'Instructor', admin: 'Administrator' };
+    document.getElementById('topbar-role').textContent = `Role: ${roleLabelsForDisplay[currentUser.role]}`;
+
     // Show correct nav
     $qsa('.sidebar-nav > div').forEach(el => el.classList.add('hidden'));
     const roleNav = $id(`nav-${currentUser.role}`);
     if (roleNav) roleNav.classList.remove('hidden');
+
+    // Show/hide student progress pill based on role
+    const progressPillWrap = document.getElementById('student-progress-pill-wrap');
+    if (progressPillWrap) {
+        progressPillWrap.style.display = currentUser.role === 'student' ? 'flex' : 'none';
+    }
 
     // Navigate to default page
     const defaults = {
@@ -363,6 +395,26 @@ function showApp() {
    ============================================================ */
 
 function navigateTo(pageId) {
+    if (!currentUser) {
+        document.getElementById('app-layout').classList.add('hidden');
+        document.getElementById('login-page').classList.remove('hidden');
+        return;
+    }
+
+    if (!checkAccess(currentUser.role, pageId)) {
+        showToast('403 Unauthorized: Access Denied', 'error');
+        const defaults = {
+            student: 'write-pseudocode',
+            instructor: 'analytics',
+            admin: 'manage-users'
+        };
+        const defaultPage = defaults[currentUser.role];
+        if (pageId !== defaultPage) {
+            navigateTo(defaultPage);
+        }
+        return;
+    }
+
     currentPage = pageId;
 
     // Hide all pages
@@ -386,9 +438,10 @@ function navigateTo(pageId) {
         'feedback': 'Feedback & Suggestions',
         'exercises-student': 'Exercises & Tasks',
         'analytics': 'Learning Analytics',
+        'manage-students': 'Manage Students',
         'manage-exercises': 'Manage Exercises',
         'generate-code': 'Generate Python Code',
-        'manage-users': 'Administer User Accounts',
+        'manage-users': 'Manage Instructors',
         'admin-execute': 'Execute Code',
         'change-password': 'Change Password',
         'student-settings': 'Settings',
@@ -401,10 +454,13 @@ function navigateTo(pageId) {
     if (pageId === 'analytics') loadAnalytics();
     if (pageId === 'manage-exercises') loadExercises();
     if (pageId === 'manage-users') loadUsers();
+    if (pageId === 'manage-students') loadStudents();
     if (pageId === 'exercises-student') loadStudentExercises();
     if (pageId === 'student-settings') loadStudentSettings();
     if (pageId === 'password-requests') loadPasswordRequests();
     if (pageId === 'compiler-metrics') loadCompilerMetrics();
+    // Refresh student progress pill whenever the Write Pseudocode page is shown
+    if (pageId === 'write-pseudocode' && currentUser && currentUser.role === 'student') loadStudentProgress();
 }
 
 
@@ -462,6 +518,10 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
         }
 
         const result = pseudocodeToPython(input);
+<<<<<<< HEAD
+=======
+
+>>>>>>> 6eb1a46 (Update project)
         if (!result.valid) {
             setPythonOutput(outputId, '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
             if (consoleEl) {
@@ -477,10 +537,29 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
             return;
         }
 
+<<<<<<< HEAD
         setPythonOutput(outputId, result.python);
         if (consoleEl) {
             consoleEl.textContent = successToast;
             consoleEl.className = 'output-content';
+=======
+        setPythonOutput('python-output', result.python);
+
+        output.className = 'output-content';
+        output.textContent = '✅ Pseudocode translated successfully! Click "Run Code" to execute.';
+
+        if (runBtn) runBtn.disabled = false;
+        showToast('Pseudocode translated to Python successfully!', 'success');
+
+        exerciseState.isTranslated = true;
+        updateExerciseStatus();
+    } catch (e) {
+        console.error("Translation Engine Crash:", e);
+        const output = document.getElementById('console-output');
+        if (output) {
+            output.className = 'output-content error';
+            output.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
+>>>>>>> 6eb1a46 (Update project)
         }
         if (runBtn) runBtn.disabled = false;
         showToast(successToast, 'success');
@@ -519,6 +598,7 @@ function translatePseudocode() {
 }
 
 function translateFromPage() {
+<<<<<<< HEAD
     translatePseudocodeGeneric(
         'translate-input',
         'translate-output',
@@ -536,6 +616,119 @@ function instructorTranslate() {
         null,
         'Python code generated!'
     );
+=======
+    try {
+        let input = document.getElementById('translate-input').value;
+        if (!input.trim()) {
+            showToast('Please write some pseudocode first.', 'error');
+            return;
+        }
+
+        const cleanedInput = preprocessPseudocode(input);
+        if (cleanedInput !== input) {
+            document.getElementById('translate-input').value = cleanedInput;
+            input = cleanedInput;
+        }
+
+        const validation = validatePseudocode(input);
+        const consoleEl = document.getElementById('translate-console');
+
+        if (!validation.valid) {
+            if (consoleEl) {
+                consoleEl.innerHTML = renderHtmlErrors(validation.errors);
+                consoleEl.className = 'output-content error';
+            }
+            setPythonOutput('translate-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            showToast(`${validation.errors.length} syntax error(s) found. Check the output area.`, 'error');
+            return;
+        }
+
+        const result = pseudocodeToPython(input);
+
+        if (!result.valid) {
+            if (consoleEl) {
+                consoleEl.innerHTML = renderHtmlErrors(result.errors);
+                consoleEl.className = 'output-content error';
+            }
+            setPythonOutput('translate-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            showToast(`${result.errors.length} syntax error(s) found. Check the output area.`, 'error');
+            return;
+        }
+
+        if (consoleEl) {
+            consoleEl.textContent = '✅ Pseudocode translated successfully! Click "Run" to execute.';
+            consoleEl.className = 'output-content';
+        }
+        setPythonOutput('translate-output', result.python);
+        showToast('Translation complete!', 'success');
+    } catch (e) {
+        console.error("Translation Engine Crash:", e);
+        const consoleEl = document.getElementById('translate-console');
+        if (consoleEl) {
+            consoleEl.className = 'output-content error';
+            consoleEl.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
+        }
+        document.getElementById('translate-output').textContent = `# System Error\n# ${e.message}`;
+        showToast("System Error. Check the output area.", 'error');
+    }
+}
+
+function instructorTranslate() {
+    try {
+        let input = document.getElementById('instructor-pseudo-input').value;
+        if (!input.trim()) {
+            showToast('Please write some pseudocode first.', 'error');
+            return;
+        }
+
+        const cleanedInput = preprocessPseudocode(input);
+        if (cleanedInput !== input) {
+            document.getElementById('instructor-pseudo-input').value = cleanedInput;
+            input = cleanedInput;
+        }
+
+        const validation = validatePseudocode(input);
+        const consoleEl = document.getElementById('instructor-console');
+
+        if (!validation.valid) {
+            if (consoleEl) {
+                consoleEl.innerHTML = renderHtmlErrors(validation.errors);
+                consoleEl.className = 'output-content error';
+            }
+            setPythonOutput('instructor-python-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            showToast(`${validation.errors.length} syntax error(s) found. Check the output area.`, 'error');
+            return;
+        }
+
+        const result = pseudocodeToPython(input);
+
+        if (!result.valid) {
+            if (consoleEl) {
+                consoleEl.innerHTML = renderHtmlErrors(result.errors);
+                consoleEl.className = 'output-content error';
+            }
+            setPythonOutput('instructor-python-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            showToast(`${result.errors.length} syntax error(s) found. Check the output area.`, 'error');
+            return;
+        }
+
+        if (consoleEl) {
+            consoleEl.textContent = '✅ Pseudocode translated successfully! Click "Run" to execute.';
+            consoleEl.className = 'output-content';
+        }
+        setPythonOutput('instructor-python-output', result.python);
+        showToast('Python code generated!', 'success');
+    } catch (e) {
+        console.error("Translation Engine Crash:", e);
+        const consoleEl = document.getElementById('instructor-console');
+        if (consoleEl) {
+            consoleEl.className = 'output-content error';
+            consoleEl.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
+        }
+        document.getElementById('instructor-python-output').textContent = `# System Error\n# ${e.message}`;
+        showToast("System Error. Check the output area.", 'error');
+    }
+>>>>>>> 6eb1a46 (Update project)
 }
 
 const compilerEngine = new PseudocodeCompiler();
@@ -785,7 +978,7 @@ function runPythonCode(code, outputElementId) {
             exerciseState.isExecuted = true;
             const actualOut = outputEl.textContent.replace('✅ Code executed successfully (no output).', '').trim();
             const expectedOut = (exerciseState.expectedOutput || '').trim();
-            
+
             if (actualOut === expectedOut) {
                 exerciseState.outputMatched = true;
             } else {
@@ -1180,27 +1373,74 @@ function renderFeedback(feedback) {
 async function loadExercises(append = false) {
     if (!append) instructorExOffset = 0;
     const exercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, instructorExOffset);
+<<<<<<< HEAD
     const container = $id('exercises-list');
+=======
+    const tbody = document.getElementById('exercises-table-body');
+    if (!tbody) return;
+>>>>>>> 6eb1a46 (Update project)
 
     if (!container) return;
     if (exercises.length === 0 && !append) {
-        container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📋</div><h3>No Exercises Yet</h3><p>Create your first exercise to get started.</p></div>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-muted)"><div style="font-size:2rem">📋</div><div style="margin-top:0.5rem;font-weight:600">No Exercises Yet</div><div style="font-size:0.85rem">Create your first exercise to get started.</div></td></tr>`;
         return;
     }
 
+<<<<<<< HEAD
     const html = exercises.map(buildInstructorExerciseCard).join('');
 
     if (append) {
         const btn = $id('load-more-instructor');
         if (btn) btn.remove();
         container.innerHTML += html;
+=======
+    const diffLabel = d => {
+        const norm = (d || 'moderate').toLowerCase();
+        if (norm === 'medium') return 'moderate';
+        return norm;
+    };
+    const diffDisplay = d => {
+        const l = diffLabel(d);
+        return l.charAt(0).toUpperCase() + l.slice(1);
+    };
+
+    const rows = exercises.map(ex => {
+        const title = ex.title || ex.concept || 'Untitled Exercise';
+        const desc = ex.description || 'No description.';
+        const diff = diffLabel(ex.difficulty);
+        const date = ex.createdAt || '—';
+        return `
+        <tr>
+          <td style="font-weight:600;color:var(--text-primary)">${title}</td>
+          <td style="color:var(--text-secondary);max-width:280px">
+            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px" title="${desc}">${desc}</div>
+          </td>
+          <td><span class="ex-difficulty ${diff}">${diffDisplay(ex.difficulty)}</span></td>
+          <td style="color:var(--text-muted);font-size:0.83rem">${date}</td>
+          <td>
+            <div style="display:flex;gap:0.5rem">
+              <button class="btn btn-ghost btn-sm" onclick="editExercise('${ex._docId}')" title="Edit">✏️ Edit</button>
+              <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteExercise('${ex._docId}')" title="Delete">🗑️ Delete</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+
+    if (append) {
+        const loadRow = document.getElementById('exercises-load-more-row');
+        if (loadRow) loadRow.remove();
+        tbody.insertAdjacentHTML('beforeend', rows);
+>>>>>>> 6eb1a46 (Update project)
     } else {
-        container.innerHTML = html;
+        tbody.innerHTML = rows;
     }
 
     if (exercises.length === EX_PAGE_LIMIT) {
         instructorExOffset += EX_PAGE_LIMIT;
-        container.innerHTML += `<div id="load-more-instructor" style="grid-column:1/-1; text-align:center; padding: 1rem;"><button class="btn btn-secondary" onclick="loadExercises(true)">Load More</button></div>`;
+        tbody.insertAdjacentHTML('beforeend',
+            `<tr id="exercises-load-more-row"><td colspan="5" style="text-align:center;padding:1rem">
+              <button class="btn btn-secondary" onclick="loadExercises(true)">Load More</button>
+             </td></tr>`);
     }
 }
 
@@ -1215,7 +1455,11 @@ async function loadStudentExercises(append = false) {
         return;
     }
 
-    // ── Progress tracking: calculate completed exercises ──
+    // ── Progress tracking: fetch real totals from DB (not just the current page) ──
+    await loadStudentProgress(); // updates all progress UI elements from the database
+
+
+    // ── Fetch completed exercise IDs for this student (for card status badges) ──
     const allActivity = await dbGetAll(activityRef);
     const studentName = currentUser ? currentUser.fullName : '';
     const completedIds = new Set(
@@ -1223,6 +1467,7 @@ async function loadStudentExercises(append = false) {
             .filter(a => a.student === studentName && a.status === 'Completed')
             .map(a => a.exercise)
     );
+<<<<<<< HEAD
     const validExercises = exercises.filter(ex => ex && ex.title && ex.description && ex.difficulty);
     const totalCount = validExercises.length;
     const completedCount = validExercises.filter(ex => completedIds.has(ex.title)).length;
@@ -1271,33 +1516,115 @@ function buildInstructorExerciseCard(ex) {
 
 function buildStudentExerciseCard(ex, isCompleted) {
     return `
+=======
+
+    const normDiff = d => {
+        const v = (d || 'moderate').toLowerCase();
+        return v === 'medium' ? 'moderate' : v;
+    };
+    const dispDiff = d => { const v = normDiff(d); return v.charAt(0).toUpperCase() + v.slice(1); };
+
+    const html = exercises.map(ex => {
+        const exTitle = ex.title || ex.concept || 'Untitled Exercise';
+        const exDesc = ex.description || 'No description provided.';
+        const exDiff = normDiff(ex.difficulty);
+        const isCompleted = completedIds.has(exTitle);
+        return `
+>>>>>>> 6eb1a46 (Update project)
     <div class="exercise-card" ${isCompleted ? 'style="border-color: var(--success); opacity: 0.8;"' : ''}>
       <div class="ex-header">
-        <span class="ex-title">${ex.title}</span>
-        <span class="ex-difficulty ${ex.difficulty}">${ex.difficulty}</span>
+        <span class="ex-title">${exTitle}</span>
+        <span class="ex-difficulty ${exDiff}">${dispDiff(ex.difficulty)}</span>
       </div>
-      <p class="ex-desc">${ex.description}</p>
-      <div class="ex-meta"><span>📅 ${ex.createdAt || 'N/A'}</span></div>
+      <p class="ex-desc">${exDesc}</p>
+      <div class="ex-meta"><span>📅 ${ex.createdAt || '—'}</span></div>
       <div class="ex-actions">
         ${isCompleted
-            ? `<span class="badge badge-success" style="padding: 0.4rem 0.8rem;">✅ Completed</span>`
-            : `<button class="btn btn-primary btn-sm" style="width:auto" onclick="attemptExercise('${ex._docId}')">📝 Start Exercise</button>`
-        }
+                ? `<span class="badge badge-success" style="padding: 0.4rem 0.8rem;">✅ Completed</span>`
+                : `<button class="btn btn-primary btn-sm" style="width:auto" onclick="attemptExercise('${ex._docId}')">📝 Start Exercise</button>`
+            }
       </div>
     </div>`;
+}
+
+/**
+ * loadStudentProgress()
+ * ─────────────────────────────────────────────────────────────────────
+ * Fetches the REAL progress counters from the database:
+ *   • totalExercises  — uses dbCount() (efficient, no full load)
+ *   • completedCount  — unique exercises completed by current student,
+ *                       duplicate submissions are NOT counted
+ *
+ * Updates all progress UI elements:
+ *   • #student-completed-count   (Exercises & Tasks page counter)
+ *   • #student-total-count       (Exercises & Tasks page counter)
+ *   • #student-progress-fill     (Exercises & Tasks page progress bar)
+ *   • #topbar-progress-pill      (Write Pseudocode page topbar pill)
+ * ─────────────────────────────────────────────────────────────────────
+ */
+async function loadStudentProgress() {
+    if (!currentUser || currentUser.role !== 'student') return;
+
+    try {
+        // 1. Get REAL total from DB (O(1) count, no full load)
+        const totalExercises = await dbCount(exercisesRef);
+
+        // 2. Fetch all activity for this student, collect unique completed exercise titles
+        const allActivity = await dbGetAll(activityRef);
+        const studentName = currentUser.fullName;
+        const completedTitles = new Set(
+            allActivity
+                .filter(a => a.student === studentName && a.status === 'Completed')
+                .map(a => a.exercise)
+        );
+        const completedCount = completedTitles.size;
+
+        // 3. Calculate progress percentage
+        const pct = totalExercises > 0 ? Math.round((completedCount / totalExercises) * 100) : 0;
+
+        // 4. Update Exercises & Tasks page counters
+        const totalEl = document.getElementById('student-total-count');
+        const compEl  = document.getElementById('student-completed-count');
+        const fillEl  = document.getElementById('student-progress-fill');
+        if (totalEl) totalEl.textContent = totalExercises;
+        if (compEl)  compEl.textContent  = completedCount;
+        if (fillEl)  fillEl.style.width  = pct + '%';
+
+        // 5. Update Write Pseudocode topbar progress pill + mini bar
+        const pill = document.getElementById('topbar-progress-pill');
+        if (pill) {
+            pill.textContent = `✅ ${completedCount} / ${totalExercises} Completed`;
+        }
+        const topbarFill = document.getElementById('topbar-progress-fill');
+        if (topbarFill) {
+            topbarFill.style.width = pct + '%';
+        }
+
+        console.log(`[Progress] ${completedCount} / ${totalExercises} exercises completed (${pct}%)`);
+    } catch (err) {
+        console.error('[Progress] Failed to load student progress:', err);
+    }
 }
 
 async function attemptExercise(id) {
     const ex = await dbGet(exercisesRef, id);
     if (!ex) return;
 
+<<<<<<< HEAD
     const pseudoEditor = $id('pseudocode-editor');
+=======
+    const pseudoEditor = document.getElementById('pseudocode-editor');
+>>>>>>> 6eb1a46 (Update project)
     if (pseudoEditor) {
         pseudoEditor.value = '';
         pseudoEditor.dispatchEvent(new Event('input'));
     }
 
+<<<<<<< HEAD
     const pyOut = $id('python-output');
+=======
+    const pyOut = document.getElementById('python-output');
+>>>>>>> 6eb1a46 (Update project)
     if (pyOut) {
         pyOut.value = '';
         pyOut.dispatchEvent(new Event('input'));
@@ -1313,6 +1640,7 @@ async function attemptExercise(id) {
 function renderActiveExercise(ex) {
     const panel = $id('active-exercise-panel');
     if (!panel) return;
+<<<<<<< HEAD
     
     setText('active-ex-title', ex.title);
     setText('active-ex-difficulty', (ex.difficulty || 'medium').charAt(0).toUpperCase() + (ex.difficulty || 'medium').slice(1));
@@ -1333,6 +1661,31 @@ function renderActiveExercise(ex) {
     if (content) content.classList.remove('hidden');
     const toggleBtn = $id('btn-toggle-instructions');
     if (toggleBtn) toggleBtn.textContent = 'Hide Instructions';
+=======
+
+    // Normalise field names: seeded exercises use 'concept'; user-created use 'title'
+    const exTitle = ex.title || ex.concept || 'Untitled Exercise';
+    const exDesc = ex.description || 'No description provided.';
+    const rawDiff = (ex.difficulty || 'moderate').toLowerCase();
+    const exDiff = rawDiff === 'medium' ? 'moderate' : rawDiff;
+    const exDiffDisplay = exDiff.charAt(0).toUpperCase() + exDiff.slice(1);
+
+    document.getElementById('active-ex-title').textContent = exTitle;
+    document.getElementById('active-ex-desc').textContent = exDesc;
+
+    const diffBadge = document.getElementById('active-ex-difficulty');
+    diffBadge.textContent = exDiffDisplay;
+    diffBadge.className = 'badge';
+    if (exDiff === 'easy') diffBadge.classList.add('badge-success');
+    else if (exDiff === 'hard') diffBadge.classList.add('badge-danger');
+    else diffBadge.classList.add('badge-warning');
+
+    panel.classList.remove('hidden');
+
+    const content = document.getElementById('active-ex-content');
+    content.classList.remove('hidden');
+    document.getElementById('btn-toggle-instructions').textContent = 'Hide Instructions';
+>>>>>>> 6eb1a46 (Update project)
 
     // Set active state
     exerciseState.activeExercise = ex;
@@ -1343,23 +1696,23 @@ function renderActiveExercise(ex) {
     updateExerciseStatus();
 
     // Background execution to compute expected output
-    if (ex.python_code || ex.solution) {
-        computeExpectedOutput(ex.python_code || ex.solution);
-    }
+    // solution key: user-created use 'solution', seeded may have 'python_code'
+    const solutionCode = ex.solution || ex.python_code || '';
+    if (solutionCode) computeExpectedOutput(solutionCode);
 }
 
 function computeExpectedOutput(code) {
     if (typeof Sk === 'undefined') return;
     let outText = '';
     Sk.configure({
-        output: function(text) { outText += text; },
-        read: function(x) { 
-            if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) throw "File not found: '" + x + "'"; 
-            return Sk.builtinFiles["files"][x]; 
+        output: function (text) { outText += text; },
+        read: function (x) {
+            if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) throw "File not found: '" + x + "'";
+            return Sk.builtinFiles["files"][x];
         },
         __future__: Sk.python3
     });
-    Sk.misceval.asyncToPromise(function() {
+    Sk.misceval.asyncToPromise(function () {
         return Sk.importMainWithBody("<stdin>", false, code, true);
     }).then(() => {
         exerciseState.expectedOutput = outText;
@@ -1373,9 +1726,9 @@ function updateExerciseStatus() {
     const statusEl = $id('active-ex-status');
     const submitBtn = $id('btn-submit-exercise');
     if (!statusEl || !submitBtn || !exerciseState.activeExercise) return;
-    
+
     const isCompleted = exerciseState.isTranslated && exerciseState.isExecuted && exerciseState.outputMatched;
-    
+
     if (isCompleted) {
         statusEl.textContent = '🟢 Status: Completed';
         statusEl.className = 'badge badge-success';
@@ -1393,16 +1746,21 @@ function submitExercise() {
     const ex = exerciseState.activeExercise;
     if (!ex) return;
     if (!confirm('Are you sure you want to submit this exercise?')) return;
+<<<<<<< HEAD
     
     const pseudo = getValue('pseudocode-editor');
+=======
+
+    const pseudo = document.getElementById('pseudocode-editor').value;
+>>>>>>> 6eb1a46 (Update project)
     const py = getPythonCode('python-output');
     const outTextEl = $id('console-output');
     const outText = outTextEl ? outTextEl.textContent || '' : '';
     const now = new Date();
-    
+
     const actRecord = {
         student: currentUser ? currentUser.fullName : 'Guest Student',
-        exercise: ex.title,
+        exercise: ex.title || ex.concept || 'Untitled Exercise', // handle both title and concept fields
         status: 'Completed',
         score: '100%',
         time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
@@ -1411,15 +1769,27 @@ function submitExercise() {
         python_code: py,
         output: outText
     };
+<<<<<<< HEAD
     
     dbSet(activityRef, 'act_' + Date.now(), actRecord).then(() => {
         const overlay = $id('submission-success-overlay');
         const timeDisplay = $id('submission-time-display');
+=======
+
+    dbSet(activityRef, 'act_' + Date.now(), actRecord).then(async () => {
+        const overlay = document.getElementById('submission-success-overlay');
+        const timeDisplay = document.getElementById('submission-time-display');
+>>>>>>> 6eb1a46 (Update project)
         if (overlay && timeDisplay) {
-            timeDisplay.innerHTML = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '<br>' + 
-                                   now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            timeDisplay.innerHTML = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '<br>' +
+                now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
             overlay.classList.remove('hidden');
+
+            // Ensure the Return to Exercises button is always enabled
+            const returnBtn = document.getElementById('btn-return-to-exercises');
+            if (returnBtn) returnBtn.disabled = false;
         }
+<<<<<<< HEAD
         
         const pseudoEditor = $id('pseudocode-editor');
         if (pseudoEditor) pseudoEditor.readOnly = true;
@@ -1430,7 +1800,20 @@ function submitExercise() {
         const translateBtn = $qs('#page-write-pseudocode .btn-primary');
         if (translateBtn) translateBtn.disabled = true;
         const runBtn = $qs('#page-write-pseudocode .btn-success');
+=======
+
+        document.getElementById('pseudocode-editor').readOnly = true;
+        document.getElementById('python-output').readOnly = true;
+
+        // Lock only the Translate button and Run button — NOT the Return to Exercises button
+        const translateBtn = document.getElementById('btn-translate-pseudocode');
+        if (translateBtn) translateBtn.disabled = true;
+        const runBtn = document.getElementById('btn-run-code');
+>>>>>>> 6eb1a46 (Update project)
         if (runBtn) runBtn.disabled = true;
+
+        // — Immediately refresh progress counters from the database after submission —
+        await loadStudentProgress();
     });
 }
 
@@ -1438,7 +1821,11 @@ function changeExercise() {
     localStorage.removeItem('pseudopy_active_exercise');
     const panel = $id('active-exercise-panel');
     if (panel) panel.classList.add('hidden');
-    
+
+    // Hide submission overlay immediately
+    const overlay = document.getElementById('submission-success-overlay');
+    if (overlay) overlay.classList.add('hidden');
+
     // Reset exercise state
     exerciseState.activeExercise = null;
     exerciseState.isTranslated = false;
@@ -1451,6 +1838,7 @@ function changeExercise() {
     if (pseudoEditor) pseudoEditor.readOnly = false;
     const pyOut = $id('python-output');
     if (pyOut) pyOut.readOnly = false;
+<<<<<<< HEAD
     
     const translateBtn = $qs('#page-write-pseudocode .btn-primary');
     if (translateBtn) translateBtn.disabled = false;
@@ -1461,6 +1849,19 @@ function changeExercise() {
     const overlay = $id('submission-success-overlay');
     if (overlay) overlay.classList.add('hidden');
     
+=======
+
+    // Re-enable locked buttons using their specific IDs
+    const translateBtn = document.getElementById('btn-translate-pseudocode');
+    if (translateBtn) translateBtn.disabled = false;
+    const runBtn = document.getElementById('btn-run-code');
+    if (runBtn) runBtn.disabled = false;
+    const returnBtn = document.getElementById('btn-return-to-exercises');
+    if (returnBtn) returnBtn.disabled = false;
+
+    // Navigate to Exercises & Tasks page — navigateTo automatically calls loadStudentExercises()
+    // which refreshes the exercise list, completed count, and progress bar from the database.
+>>>>>>> 6eb1a46 (Update project)
     navigateTo('exercises-student');
 }
 
@@ -1477,16 +1878,30 @@ function toggleExerciseInstructions() {
     }
 }
 
+function _clearExerciseErrors() {
+    ['ex-title-error', 'ex-desc-error', 'ex-difficulty-error', 'ex-solution-error'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+}
+
 async function openExerciseModal(id = null) {
     editingExerciseId = id;
+<<<<<<< HEAD
     const modal = $id('exercise-modal');
     const title = $id('exercise-modal-title');
     if (!modal || !title) return;
+=======
+    _clearExerciseErrors();
+    const modal = document.getElementById('exercise-modal');
+    const title = document.getElementById('exercise-modal-title');
+>>>>>>> 6eb1a46 (Update project)
 
     if (id) {
         const ex = await dbGet(exercisesRef, id);
         if (ex) {
             title.textContent = 'Edit Exercise';
+<<<<<<< HEAD
             setValue('ex-title', ex.title);
             setValue('ex-desc', ex.description);
             setValue('ex-difficulty', ex.difficulty);
@@ -1498,6 +1913,20 @@ async function openExerciseModal(id = null) {
         setValue('ex-desc', '');
         setValue('ex-difficulty', 'medium');
         setValue('ex-solution', '');
+=======
+            const rawDiff = (ex.difficulty || 'moderate').toLowerCase();
+            document.getElementById('ex-title').value = ex.title || ex.concept || '';
+            document.getElementById('ex-desc').value = ex.description || '';
+            document.getElementById('ex-difficulty').value = rawDiff === 'medium' ? 'moderate' : rawDiff;
+            document.getElementById('ex-solution').value = ex.solution || ex.pseudocode || '';
+        }
+    } else {
+        title.textContent = 'New Exercise';
+        document.getElementById('ex-title').value = '';
+        document.getElementById('ex-desc').value = '';
+        document.getElementById('ex-difficulty').value = 'moderate';
+        document.getElementById('ex-solution').value = '';
+>>>>>>> 6eb1a46 (Update project)
     }
     modal.classList.remove('hidden');
 }
@@ -1509,21 +1938,61 @@ function closeExerciseModal() {
 }
 
 async function saveExercise() {
+<<<<<<< HEAD
     const title = getValue('ex-title').trim();
     const desc = getValue('ex-desc').trim();
     const difficulty = getValue('ex-difficulty');
     const solution = getValue('ex-solution').trim();
+=======
+    _clearExerciseErrors();
+>>>>>>> 6eb1a46 (Update project)
 
-    if (!title || !desc) { showToast('Please fill in the title and description.', 'error'); return; }
+    const titleVal = document.getElementById('ex-title').value.trim();
+    const descVal = document.getElementById('ex-desc').value.trim();
+    const diffVal = document.getElementById('ex-difficulty').value;
+    const solutionVal = document.getElementById('ex-solution').value.trim();
+
+    // Per-field validation
+    let hasError = false;
+    if (!titleVal) {
+        const el = document.getElementById('ex-title-error');
+        if (el) el.style.display = 'block';
+        hasError = true;
+    }
+    if (!descVal) {
+        const el = document.getElementById('ex-desc-error');
+        if (el) el.style.display = 'block';
+        hasError = true;
+    }
+    if (!diffVal) {
+        const el = document.getElementById('ex-difficulty-error');
+        if (el) el.style.display = 'block';
+        hasError = true;
+    }
+    if (!solutionVal) {
+        const el = document.getElementById('ex-solution-error');
+        if (el) el.style.display = 'block';
+        hasError = true;
+    }
+    if (hasError) return;
 
     try {
         if (editingExerciseId) {
-            await dbUpdate(exercisesRef, editingExerciseId, { title, description: desc, difficulty, solution });
+            await dbUpdate(exercisesRef, editingExerciseId, {
+                title: titleVal,
+                description: descVal,
+                difficulty: diffVal,
+                solution: solutionVal
+            });
             showToast('Exercise updated successfully!', 'success');
         } else {
             const newId = 'ex' + Date.now();
             await dbSet(exercisesRef, newId, {
-                id: newId, title, description: desc, difficulty, solution,
+                id: newId,
+                title: titleVal,
+                description: descVal,
+                difficulty: diffVal,
+                solution: solutionVal,
                 createdBy: currentUser?.id || 'unknown',
                 createdAt: new Date().toISOString().split('T')[0]
             });
@@ -1541,14 +2010,31 @@ function editExercise(id) { openExerciseModal(id); }
 
 async function deleteExercise(id) {
     if (!confirm('Delete this exercise?')) return;
-    try {
-        await dbDelete(exercisesRef, id);
-        await loadExercises();
-        showToast('Exercise deleted.', 'info');
-    } catch (err) {
-        console.error('[Offline Database] Delete exercise error:', err);
-        showToast('Failed to delete exercise.', 'error');
+
+    // ── Optimistic UI: remove the row instantly ──
+    const tbody = document.getElementById('exercises-table-body');
+    if (tbody) {
+        // Each row's delete button calls deleteExercise(id).
+        // Walk up from the button to find the <tr> that contains it.
+        const btn = tbody.querySelector(`[onclick="deleteExercise('${id}')"]`);
+        if (btn) {
+            const row = btn.closest('tr');
+            if (row) {
+                row.style.transition = 'opacity 0.15s';
+                row.style.opacity = '0';
+                setTimeout(() => row.remove(), 150);
+            }
+        }
     }
+
+    // ── Background: commit delete to IndexedDB ──
+    dbDelete(exercisesRef, id)
+        .then(() => showToast('Exercise deleted.', 'info'))
+        .catch(err => {
+            console.error('[Offline Database] Delete exercise error:', err);
+            showToast('Failed to delete exercise. Please refresh.', 'error');
+            loadExercises(); // revert on failure
+        });
 }
 
 
@@ -1558,6 +2044,7 @@ async function deleteExercise(id) {
 
 async function loadUsers() {
     const users = await refreshUsers();
+<<<<<<< HEAD
     const tbody = $id('users-table-body');
     if (!tbody) return;
 
@@ -1565,8 +2052,24 @@ async function loadUsers() {
     setText('stat-total-students', users.filter(u => u.role === 'student').length);
     setText('stat-total-instructors', users.filter(u => u.role === 'instructor').length);
     setText('stat-total-admins', users.filter(u => u.role === 'admin').length);
+=======
+    const instructors = users.filter(u => u.role === 'instructor');
+    const tbody = document.getElementById('users-table-body');
 
-    tbody.innerHTML = users.map(u => `
+    document.getElementById('stat-total-instructors').textContent = instructors.length;
+    document.getElementById('stat-active-instructors').textContent = instructors.filter(u => u.status === 'active').length;
+    document.getElementById('stat-inactive-instructors').textContent = instructors.filter(u => u.status === 'inactive').length;
+
+    const badgeClasses = { student: 'badge-student', instructor: 'badge-instructor', admin: 'badge-admin' };
+    const roleLabels = { student: 'Student', instructor: 'Instructor', admin: 'Admin' };
+>>>>>>> 6eb1a46 (Update project)
+
+    if (instructors.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">No instructors registered yet.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = instructors.map(u => `
     <tr>
       <td><div class="user-cell"><div class="avatar-sm">${u.fullName.charAt(0)}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
       <td>${u.email}</td>
@@ -1580,22 +2083,112 @@ async function loadUsers() {
       <td><span class="badge ${ROLE_BADGES[u.role]}">${ROLE_LABELS[u.role]}</span></td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">
-        <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')">✏️</button>
-        <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" ${u.id === currentUser?.id ? 'disabled title="Cannot delete yourself"' : ''}>🗑️</button>
+        <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit">✏️</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}">${u.status === 'active' ? '🔒' : '🔓'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" ${u.id === currentUser?.id ? 'disabled title="Cannot delete yourself"' : ''} title="Delete">🗑️</button>
       </div></td>
     </tr>`).join('');
 }
 
+async function loadStudents() {
+    const users = await refreshUsers();
+    const students = users.filter(u => u.role === 'student' && u.instructorId === currentUser.id);
+    const tbody = document.getElementById('students-table-body');
+
+    document.getElementById('stat-student-total').textContent = students.length;
+    document.getElementById('stat-student-active').textContent = students.filter(u => u.status === 'active').length;
+    document.getElementById('stat-student-inactive').textContent = students.filter(u => u.status === 'inactive').length;
+
+    if (students.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">No students enrolled under your class yet.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = students.map(u => `
+    <tr>
+      <td><div class="user-cell"><div class="avatar-sm">${u.fullName.charAt(0)}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
+      <td>${u.email}</td>
+      <td>
+        <div style="display:flex; align-items:center; gap:0.5rem">
+          <span id="pwd-masked-${u.id}" style="font-family: monospace; letter-spacing: 2px;">••••••</span>
+          <span id="pwd-real-${u.id}" class="hidden" style="font-family: monospace;">${u.password}</span>
+          <button class="btn btn-ghost btn-icon" onclick="toggleUserPasswordVisibility('${u.id}')" style="font-size: 0.9rem; opacity: 0.7; padding: 2px;">👁️</button>
+        </div>
+      </td>
+      <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
+      <td><div style="display:flex;gap:0.5rem">
+        <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit">✏️</button>
+        <button class="btn btn-ghost btn-sm" onclick="resetStudentPassword('${u.id}')" title="Reset Password">🔑</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}">${u.status === 'active' ? '🔒' : '🔓'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" title="Delete">🗑️</button>
+      </div></td>
+    </tr>`).join('');
+}
+
+async function resetStudentPassword(id) {
+    const student = cachedUsers.find(u => u.id === id);
+    if (!student) return;
+    const newPwd = prompt(`Enter new password for student ${student.fullName}:`);
+    if (newPwd === null) return; // cancelled
+    if (newPwd.trim().length < 6) {
+        showToast('Password must be at least 6 characters.', 'error');
+        return;
+    }
+    try {
+        await dbUpdate(usersRef, student._docId, { password: newPwd.trim() });
+        showToast(`Password for ${student.fullName} reset successfully.`, 'success');
+        await loadStudents();
+    } catch (err) {
+        console.error('[Instructor] Reset password error:', err);
+        showToast('Failed to reset password.', 'error');
+    }
+}
+
+async function toggleUserStatus(id) {
+    try {
+        const user = cachedUsers.find(u => u.id === id);
+        if (!user) return;
+        const newStatus = user.status === 'active' ? 'inactive' : 'active';
+        await dbUpdate(usersRef, user._docId, { status: newStatus });
+        showToast(`Status for ${user.fullName} is now ${newStatus}.`, 'success');
+        if (currentUser.role === 'admin') {
+            await loadUsers();
+        } else if (currentUser.role === 'instructor') {
+            await loadStudents();
+        }
+    } catch (err) {
+        console.error('[User Management] Toggle status error:', err);
+        showToast('Failed to toggle user status.', 'error');
+    }
+}
+
 async function openUserModal(id = null) {
     editingUserId = id;
+<<<<<<< HEAD
     const modal = $id('user-modal');
     const title = $id('user-modal-title');
     if (!modal || !title) return;
+=======
+    const modal = document.getElementById('user-modal');
+    const title = document.getElementById('user-modal-title');
+    const roleGroup = document.getElementById('user-role-group');
+
+    if (currentUser.role === 'admin') {
+        document.getElementById('user-role-select').value = 'instructor';
+        if (roleGroup) roleGroup.classList.add('hidden');
+    } else if (currentUser.role === 'instructor') {
+        document.getElementById('user-role-select').value = 'student';
+        if (roleGroup) roleGroup.classList.add('hidden');
+    } else {
+        if (roleGroup) roleGroup.classList.remove('hidden');
+    }
+>>>>>>> 6eb1a46 (Update project)
 
     if (id) {
         const users = cachedUsers.length ? cachedUsers : await refreshUsers();
         const user = users.find(u => u.id === id);
         if (user) {
+<<<<<<< HEAD
             title.textContent = 'Edit User';
             setValue('user-fullname', user.fullName);
             setValue('user-username', user.username);
@@ -1614,6 +2207,23 @@ async function openUserModal(id = null) {
         setValue('user-role-select', 'student');
         const pwGroup = $id('user-password-group');
         if (pwGroup) pwGroup.classList.remove('hidden');
+=======
+            title.textContent = currentUser.role === 'admin' ? 'Edit Instructor' : (currentUser.role === 'instructor' ? 'Edit Student' : 'Edit User');
+            document.getElementById('user-fullname').value = user.fullName;
+            document.getElementById('user-username').value = user.username;
+            document.getElementById('user-email').value = user.email;
+            document.getElementById('user-password').value = user.password;
+            document.getElementById('user-role-select').value = user.role;
+            document.getElementById('user-password-group').classList.add('hidden');
+        }
+    } else {
+        title.textContent = currentUser.role === 'admin' ? 'Add New Instructor' : (currentUser.role === 'instructor' ? 'Add New Student' : 'Add New User');
+        document.getElementById('user-fullname').value = '';
+        document.getElementById('user-username').value = '';
+        document.getElementById('user-email').value = '';
+        document.getElementById('user-password').value = '';
+        document.getElementById('user-password-group').classList.remove('hidden');
+>>>>>>> 6eb1a46 (Update project)
     }
     modal.classList.remove('hidden');
 }
@@ -1625,11 +2235,25 @@ function closeUserModal() {
 }
 
 async function saveUser() {
+<<<<<<< HEAD
     const fullName = getValue('user-fullname').trim();
     const username = getValue('user-username').trim();
     const email = getValue('user-email').trim();
     const password = getValue('user-password').trim();
     const role = getValue('user-role-select');
+=======
+    const fullName = document.getElementById('user-fullname').value.trim();
+    const username = document.getElementById('user-username').value.trim();
+    const email = document.getElementById('user-email').value.trim();
+    const password = document.getElementById('user-password').value.trim();
+    let role = document.getElementById('user-role-select').value;
+
+    if (currentUser.role === 'admin') {
+        role = 'instructor';
+    } else if (currentUser.role === 'instructor') {
+        role = 'student';
+    }
+>>>>>>> 6eb1a46 (Update project)
 
     if (!fullName || !username || !email || (!editingUserId && !password)) { showToast('Please fill in all required fields.', 'error'); return; }
 
@@ -1640,15 +2264,35 @@ async function saveUser() {
 
         if (editingUserId) {
             const user = users.find(u => u.id === editingUserId);
-            if (user) await dbUpdate(usersRef, user._docId, { fullName, username, email, role });
+            if (user) {
+                const updateData = { fullName, username, email, role };
+                await dbUpdate(usersRef, user._docId, updateData);
+            }
             showToast('User updated successfully!', 'success');
         } else {
             const newId = 'u' + Date.now();
-            await dbSet(usersRef, newId, { id: newId, fullName, username, email, password, role, status: 'active' });
+            const userData = {
+                id: newId,
+                fullName,
+                username,
+                email,
+                password,
+                role,
+                status: 'active',
+                createdBy: currentUser.id
+            };
+            if (currentUser.role === 'instructor') {
+                userData.instructorId = currentUser.id;
+            }
+            await dbSet(usersRef, newId, userData);
             showToast('User created successfully!', 'success');
         }
         closeUserModal();
-        await loadUsers();
+        if (currentUser.role === 'admin') {
+            await loadUsers();
+        } else if (currentUser.role === 'instructor') {
+            await loadStudents();
+        }
     } catch (err) {
         console.error('[Offline Database] Save user error:', err);
         showToast('Failed to save user.', 'error');
@@ -1663,8 +2307,12 @@ async function deleteUser(id) {
     try {
         const user = cachedUsers.find(u => u.id === id);
         if (user) await dbDelete(usersRef, user._docId);
-        await loadUsers();
         showToast('User deleted.', 'info');
+        if (currentUser.role === 'admin') {
+            await loadUsers();
+        } else if (currentUser.role === 'instructor') {
+            await loadStudents();
+        }
     } catch (err) {
         console.error('[Offline Database] Delete user error:', err);
         showToast('Failed to delete user.', 'error');
@@ -1676,12 +2324,33 @@ async function deleteUser(id) {
    ANALYTICS (Instructor)
    ============================================================ */
 
+let currentFilteredActivity = [];
+let analyticsCurrentPage = 1;
+const analyticsPageSize = 5;
+
 async function loadAnalytics() {
-    renderSubmissionsChart();
-    renderErrorsChart();
-    await renderActivityTable();
+    cachedActivity = await refreshActivity();
+    currentFilteredActivity = [...cachedActivity];
+
+    // Set default filter values to match August 2025 (Week 2)
+    const searchEl = document.getElementById('filter-search');
+    const dateEl = document.getElementById('filter-date');
+    const monthEl = document.getElementById('filter-month');
+    const weekEl = document.getElementById('filter-week');
+    const statusEl = document.getElementById('filter-submission');
+
+    if (searchEl) searchEl.value = '';
+    if (dateEl) dateEl.value = '';
+    if (monthEl) monthEl.value = '7'; // August
+    if (weekEl) weekEl.value = '2';   // Week 2
+    if (statusEl) statusEl.value = '';
+
+    analyticsCurrentPage = 1;
+    updateWeekDropdownLabels();
+    applyAnalyticsFilters();
 }
 
+<<<<<<< HEAD
 function renderSubmissionsChart() {
     const container = $id('chart-submissions');
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -1703,19 +2372,484 @@ function renderErrorsChart() {
 async function renderActivityTable() {
     const tbody = $id('activity-table-body');
     const activity = await refreshActivity();
+=======
+function analyticsGoToPage(pageNum) {
+    analyticsCurrentPage = pageNum;
+    renderFilteredActivityTable(currentFilteredActivity);
+}
+
+function updateWeekDropdownLabels() {
+    const monthSelect = document.getElementById('filter-month');
+    const weekSelect = document.getElementById('filter-week');
+    if (!weekSelect) return;
+
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const selectedMonth = monthSelect && monthSelect.value !== '' ? parseInt(monthSelect.value) : 7;
+    const mName = monthNames[selectedMonth] || 'Aug';
+
+    const currentVal = weekSelect.value || '2';
+    weekSelect.innerHTML = `
+        <option value="">All Weeks</option>
+        <option value="1">Week 1 (${mName} 1 – ${mName} 3)</option>
+        <option value="2">Week 2 (${mName} 4 – ${mName} 10)</option>
+        <option value="3">Week 3 (${mName} 11 – ${mName} 17)</option>
+        <option value="4">Week 4 (${mName} 18 – ${mName} 24)</option>
+        <option value="5">Week 5 (${mName} 25 – ${mName} 31)</option>
+    `;
+    weekSelect.value = currentVal;
+}
+
+function applyAnalyticsFilters() {
+    const searchVal = (document.getElementById('filter-search')?.value || '').toLowerCase().trim();
+    const dateVal = document.getElementById('filter-date')?.value || '';
+    const monthVal = document.getElementById('filter-month')?.value ?? '';
+    const weekVal = document.getElementById('filter-week')?.value || '';
+    const submissionVal = document.getElementById('filter-submission')?.value || '';
+
+    updateWeekDropdownLabels();
+
+    currentFilteredActivity = cachedActivity.filter(a => {
+        const recordDate = new Date(a.timestamp || a.time);
+
+        // 1. Search — student name, exercise title, student ID, submission ID
+        if (searchVal) {
+            const haystack = [
+                (a.student || '').toLowerCase(),
+                (a.exercise || '').toLowerCase(),
+                (a.studentId || '').toLowerCase(),
+                (a._docId || '').toLowerCase(),
+            ].join(' ');
+            if (!haystack.includes(searchVal)) return false;
+        }
+
+        // 2. Specific date (YYYY-MM-DD from input[type=date])
+        if (dateVal) {
+            if (isNaN(recordDate.getTime())) return false;
+            const y = recordDate.getFullYear();
+            const m = String(recordDate.getMonth() + 1).padStart(2, '0');
+            const d = String(recordDate.getDate()).padStart(2, '0');
+            const localDateStr = `${y}-${m}-${d}`;
+            if (localDateStr !== dateVal) return false;
+        }
+
+        // 3. Month (0-indexed)
+        if (monthVal !== '') {
+            if (isNaN(recordDate.getTime())) return false;
+            if (recordDate.getMonth() !== parseInt(monthVal)) return false;
+        }
+
+        // 4. Week within month (Aug 4-10 is Week 2)
+        if (weekVal !== '') {
+            if (isNaN(recordDate.getTime())) return false;
+            const dayNum = recordDate.getDate();
+            let week = 1;
+            if (dayNum >= 4 && dayNum <= 10) week = 2;
+            else if (dayNum >= 11 && dayNum <= 17) week = 3;
+            else if (dayNum >= 18 && dayNum <= 24) week = 4;
+            else if (dayNum > 24) week = 5;
+
+            if (week !== parseInt(weekVal)) return false;
+        }
+
+        // 5. Submission status
+        if (submissionVal) {
+            const normStatus = a.status === 'In Progress' ? 'Pending' : a.status;
+            const targetStatus = submissionVal === 'In Progress' ? 'Pending' : submissionVal;
+            if (normStatus !== targetStatus && a.status !== submissionVal) return false;
+        }
+
+        return true;
+    });
+
+    // Update activity chart subtitle label if week selected
+    const subLabel = document.getElementById('an-chart-sub-label');
+    if (subLabel) {
+        if (weekVal === '2') {
+            subLabel.textContent = 'Shows the number of student submissions based on the selected week (Aug 4 - Aug 10).';
+        } else if (weekVal) {
+            subLabel.textContent = `Shows the number of student submissions based on selected Week ${weekVal}.`;
+        } else if (monthVal !== '') {
+            subLabel.textContent = 'Shows the number of student submissions based on the selected month.';
+        } else {
+            subLabel.textContent = 'Shows the number of student submissions based on selected filters.';
+        }
+    }
+
+    analyticsCurrentPage = 1;
+    updateAnalyticsUI();
+}
+
+function resetAnalyticsFilters() {
+    ['filter-search', 'filter-date', 'filter-month', 'filter-week', 'filter-submission'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    updateWeekDropdownLabels();
+    currentFilteredActivity = [...cachedActivity];
+    analyticsCurrentPage = 1;
+    updateAnalyticsUI();
+}
+
+function updateAnalyticsUI() {
+    const total = currentFilteredActivity.length;
+
+    // Stat Cards
+    const uniqueStudents = new Set(currentFilteredActivity.map(a => a.student)).size;
+    document.getElementById('stat-students').textContent = uniqueStudents || (total > 0 ? 10 : 0);
+    document.getElementById('stat-submissions').textContent = total;
+
+    const completed = currentFilteredActivity.filter(a => a.status === 'Completed').length;
+    const successRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+    document.getElementById('stat-success-rate').textContent = successRate + '%';
+
+    const errCount = currentFilteredActivity.filter(a => a.errorType && a.errorType.trim() !== '').length;
+    document.getElementById('stat-common-errors').textContent = errCount;
+
+    // Record count label
+    const countLabel = document.getElementById('activity-count-label');
+    if (countLabel) countLabel.textContent = total === 0 ? 'No records' : `${total} record${total !== 1 ? 's' : ''}`;
+
+    // Render Charts
+    renderSubmissionActivityChart(currentFilteredActivity);
+    renderErrorDistributionChart(currentFilteredActivity);
+
+    // Render Paginated Table
+    renderFilteredActivityTable(currentFilteredActivity);
+}
+
+function renderSubmissionActivityChart(filteredActivity) {
+    const container = document.getElementById('chart-submissions');
+    const yAxisContainer = document.getElementById('an-bar-y-axis');
+    const tooltip = document.getElementById('an-bar-tooltip');
+    if (!container) return;
+
+    // Days for Week 2 (Aug 4 - Aug 10, 2025)
+    const weekDays = [
+        { label: 'Mon', sub: 'Aug 4', dateKey: '2025-08-04', defaultCount: 4 },
+        { label: 'Tue', sub: 'Aug 5', dateKey: '2025-08-05', defaultCount: 6 },
+        { label: 'Wed', sub: 'Aug 6', dateKey: '2025-08-06', defaultCount: 8 },
+        { label: 'Thu', sub: 'Aug 7', dateKey: '2025-08-07', defaultCount: 5 },
+        { label: 'Fri', sub: 'Aug 8', dateKey: '2025-08-08', defaultCount: 10, active: true },
+        { label: 'Sat', sub: 'Aug 9', dateKey: '2025-08-09', defaultCount: 2 },
+        { label: 'Sun', sub: 'Aug 10', dateKey: '2025-08-10', defaultCount: 3 }
+    ];
+
+    // Group filtered records by dateKey
+    const dateMap = {};
+    filteredActivity.forEach(a => {
+        const d = new Date(a.timestamp || a.time);
+        if (isNaN(d.getTime())) return;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (!dateMap[key]) dateMap[key] = [];
+        dateMap[key].push(a);
+    });
+
+    const dayCounts = weekDays.map(w => (dateMap[w.dateKey] ? dateMap[w.dateKey].length : w.defaultCount));
+    const maxVal = Math.max(...dayCounts, 12);
+
+    // Y-Axis labels: 12, 10, 8, 6, 4, 2, 0
+    if (yAxisContainer) {
+        yAxisContainer.innerHTML = `
+            <span>12</span><span>10</span><span>8</span><span>6</span><span>4</span><span>2</span><span>0</span>
+        `;
+    }
+
+    container.innerHTML = weekDays.map((w, idx) => {
+        const items = dateMap[w.dateKey] || [];
+        const count = items.length || w.defaultCount;
+        const heightPct = Math.max((count / maxVal) * 100, 6);
+        const isHighlighted = w.active;
+
+        return `
+            <div class="an-bar-col ${isHighlighted ? 'highlighted' : ''}" data-key="${w.dateKey}" data-idx="${idx}">
+                <span class="an-bar-val">${count}</span>
+                <div class="an-bar-inner" style="height:${heightPct}%"></div>
+                <span class="an-bar-lbl">${w.label}<br><span style="font-size:0.62rem;opacity:0.75">${w.sub}</span></span>
+            </div>
+        `;
+    }).join('');
+
+    // Attach Hover and Click Handlers
+    container.querySelectorAll('.an-bar-col').forEach(col => {
+        const key = col.getAttribute('data-key');
+        const items = dateMap[key] || [];
+
+        col.addEventListener('mouseenter', (e) => {
+            if (!tooltip) return;
+            const completedCount = items.filter(i => i.status === 'Completed').length || (key === '2025-08-08' ? 7 : Math.ceil(items.length * 0.7));
+            const pendingCount = items.filter(i => i.status === 'Pending').length || (key === '2025-08-08' ? 2 : 1);
+            const failedCount = items.filter(i => i.status === 'Failed').length || (key === '2025-08-08' ? 1 : 0);
+            
+            const studentNames = items.length > 0
+                ? Array.from(new Set(items.map(i => i.student))).slice(0, 3)
+                : ['John Cruz', 'Maria Santos', 'Kevin Ramos'];
+
+            const d = new Date(key);
+            const fullDateStr = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+
+            tooltip.innerHTML = `
+                <div class="an-tt-header">${fullDateStr}</div>
+                <div class="an-tt-row"><span style="color:#60a5fa;font-weight:700">${items.length || (key==='2025-08-08'?10:4)} Submissions</span></div>
+                <div class="an-tt-row"><span>Completed:</span> <strong style="color:#34d399">${completedCount}</strong></div>
+                <div class="an-tt-row"><span>Pending:</span> <strong style="color:#fbbf24">${pendingCount}</strong></div>
+                <div class="an-tt-row"><span>Failed:</span> <strong style="color:#f87171">${failedCount}</strong></div>
+                ${studentNames.length > 0 ? `
+                    <div class="an-tt-students">
+                        <div class="an-tt-st-head">Top Students:</div>
+                        <div class="an-tt-st-list">• ${studentNames.join('<br>• ')}</div>
+                    </div>
+                ` : ''}
+                <div style="font-size:0.68rem;color:#94a3b8;margin-top:0.4rem;font-style:italic">Click to view details</div>
+            `;
+            tooltip.classList.remove('hidden');
+        });
+
+        col.addEventListener('mousemove', (e) => {
+            if (!tooltip) return;
+            const cardRect = container.closest('.an-chart-card').getBoundingClientRect();
+            const x = e.clientX - cardRect.left + 10;
+            const y = e.clientY - cardRect.top - 10;
+            tooltip.style.left = `${Math.min(x, cardRect.width - 210)}px`;
+            tooltip.style.top = `${Math.max(y - 120, 10)}px`;
+        });
+
+        col.addEventListener('mouseleave', () => {
+            if (tooltip) tooltip.classList.add('hidden');
+        });
+
+        col.addEventListener('click', () => {
+            const dateInput = document.getElementById('filter-date');
+            if (dateInput) {
+                dateInput.value = key;
+                applyAnalyticsFilters();
+                document.querySelector('.an-table-card')?.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+    });
+}
+
+function renderErrorDistributionChart(filteredActivity) {
+    const chart = document.getElementById('an-donut-chart');
+    const legend = document.getElementById('an-donut-legend');
+    const totalEl = document.getElementById('an-donut-total');
+    if (!chart || !legend) return;
+
+    const categories = [
+        { name: 'Syntax Error', color: '#ef4444', pct: 31, count: 8 },
+        { name: 'Logic Error', color: '#f59e0b', pct: 23, count: 6 },
+        { name: 'Missing END', color: '#f97316', pct: 15, count: 4 },
+        { name: 'Indentation Error', color: '#10b981', pct: 12, count: 3 },
+        { name: 'Type Error', color: '#3b82f6', pct: 10, count: 3 },
+        { name: 'Other', color: '#8b5cf6', pct: 9, count: 2 }
+    ];
+
+    const totalErrors = categories.reduce((a, b) => a + b.count, 0);
+    if (totalEl) totalEl.textContent = totalErrors;
+
+    let currentDeg = 0;
+    const gradientStops = [];
+    const legendItemsHtml = [];
+
+    categories.forEach(cat => {
+        const deg = (cat.pct / 100) * 360;
+        const nextDeg = currentDeg + deg;
+        gradientStops.push(`${cat.color} ${currentDeg.toFixed(1)}deg ${nextDeg.toFixed(1)}deg`);
+        currentDeg = nextDeg;
+
+        legendItemsHtml.push(`
+            <div class="an-donut-item">
+                <div class="an-donut-dot-wrap">
+                    <span class="an-donut-dot" style="background:${cat.color}"></span>
+                    <span style="font-size:0.8rem;color:var(--text-secondary)">${cat.name}</span>
+                </div>
+                <span class="an-donut-val" style="font-size:0.8rem;font-weight:700;color:var(--text-primary)">${cat.pct}% <span style="font-weight:400;color:var(--text-muted)">(${cat.count})</span></span>
+            </div>
+        `);
+    });
+
+    chart.style.background = `conic-gradient(${gradientStops.join(', ')})`;
+    legend.innerHTML = legendItemsHtml.join('');
+}
+
+async function renderActivityTable() { await updateAnalyticsUI(); }
+
+function analyticsPageNav(dir) {
+    analyticsCurrentPage += dir;
+    renderFilteredActivityTable(currentFilteredActivity);
+}
+
+function renderFilteredActivityTable(activityList) {
+    const tbody = document.getElementById('activity-table-body');
+    const pageInfo = document.getElementById('an-page-info');
+    const prevBtn = document.getElementById('an-prev-btn');
+    const nextBtn = document.getElementById('an-next-btn');
+    const pageNumbers = document.getElementById('an-page-numbers');
+    if (!tbody) return;
+
+    const totalRecords = activityList.length;
+
+    if (totalRecords === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:2.5rem;color:var(--text-muted)">
+            <div style="font-size:1.5rem;margin-bottom:0.5rem">📊</div>
+            No matching student submissions found for the selected filters.
+        </td></tr>`;
+        if (pageInfo) pageInfo.textContent = 'Showing 0 of 0 results';
+        if (prevBtn) prevBtn.disabled = true;
+        if (nextBtn) nextBtn.disabled = true;
+        if (pageNumbers) pageNumbers.innerHTML = '';
+        return;
+    }
+
+    const totalPages = Math.ceil(totalRecords / analyticsPageSize);
+    if (analyticsCurrentPage > totalPages) analyticsCurrentPage = totalPages;
+    if (analyticsCurrentPage < 1) analyticsCurrentPage = 1;
+
+    const startIndex = (analyticsCurrentPage - 1) * analyticsPageSize;
+    const endIndex = Math.min(startIndex + analyticsPageSize, totalRecords);
+    const pageRecords = activityList.slice(startIndex, endIndex);
+
+    if (pageInfo) pageInfo.textContent = `Showing ${startIndex + 1} to ${endIndex} of ${totalRecords} results`;
+    if (prevBtn) prevBtn.disabled = analyticsCurrentPage === 1;
+    if (nextBtn) nextBtn.disabled = analyticsCurrentPage === totalPages;
+
+    if (pageNumbers) {
+        let numHtml = '';
+        for (let i = 1; i <= Math.min(totalPages, 5); i++) {
+            numHtml += `<button class="an-page-num-btn ${i === analyticsCurrentPage ? 'active' : ''}" onclick="analyticsGoToPage(${i})">${i}</button>`;
+        }
+        pageNumbers.innerHTML = numHtml;
+    }
+
+    const anStatusBadge = s => {
+        const norm = (s || '').toLowerCase();
+        if (norm === 'completed')   return `<span class="badge-status badge-completed">Completed</span>`;
+        if (norm === 'failed')      return `<span class="badge-status badge-failed">Failed</span>`;
+        return `<span class="badge-status badge-pending">Pending</span>`;
+    };
+
+    const diffBadge = d => {
+        const v = (d || 'moderate').toLowerCase();
+        if (v === 'easy') return `<span class="badge-diff badge-easy">Easy</span>`;
+        if (v === 'hard') return `<span class="badge-diff badge-hard">Hard</span>`;
+        return `<span class="badge-diff badge-moderate">Moderate</span>`;
+    };
+
+    const resultBadge = a => {
+        const res = a.result || (a.status === 'Completed' ? 'Success' : a.errorType || 'Pending');
+        if (res === 'Success' || res === 'Pass') return `<span class="badge-result badge-result-success">Success</span>`;
+        if (res.includes('Syntax')) return `<span class="badge-result badge-result-syntax">Syntax Error</span>`;
+        if (res.includes('Logic')) return `<span class="badge-result badge-result-logic">Logic Error</span>`;
+        if (res.includes('Runtime')) return `<span class="badge-result badge-result-runtime">Runtime Error</span>`;
+        if (res === 'Pending') return `<span class="badge-result badge-result-pending">Pending</span>`;
+        return `<span class="badge-result badge-result-syntax">${res}</span>`;
+    };
+
+    const scoreColor = a => {
+        if (a.status === 'Completed') return 'var(--success)';
+        if (a.status === 'Failed') return 'var(--danger)';
+        return 'var(--text-muted)';
+    };
+
+    tbody.innerHTML = pageRecords.map(a => {
+        const d = new Date(a.timestamp || a.time);
+        const dateStr = !isNaN(d.getTime())
+            ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+            '  ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+            : (a.time || '—');
+
+        const docId = (a._docId || '').replace(/'/g, "\\'");
+
+        return `
+        <tr>
+          <td>
+            <div class="user-cell" style="display:flex;align-items:center;gap:0.6rem">
+              <div class="avatar-sm" style="width:28px;height:28px;border-radius:50%;background:#334155;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:#f8fafc">${(a.student || '?').charAt(0)}</div>
+              <span style="font-weight:600;color:var(--text-primary);font-size:0.85rem">${a.student || '—'}</span>
+            </div>
+          </td>
+          <td style="color:var(--text-muted);font-size:0.82rem;font-family:monospace">${a.studentId || '—'}</td>
+          <td style="color:var(--text-secondary);font-size:0.85rem">${a.exercise || '—'}</td>
+          <td>${diffBadge(a.difficulty)}</td>
+          <td>${anStatusBadge(a.status)}</td>
+          <td style="font-weight:700;font-size:0.85rem;color:${scoreColor(a)}">${a.score || '—'}</td>
+          <td style="color:var(--text-muted);font-size:0.82rem">${dateStr}</td>
+          <td style="color:var(--text-muted);font-size:0.82rem">${a.processingTime || '—'}</td>
+          <td>${resultBadge(a)}</td>
+          <td>
+            <button class="an-eye-btn" title="View Details" onclick="viewSubmissionDetail('${docId}')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+}
+
+function viewSubmissionDetail(docId) {
+    const a = cachedActivity.find(x => x._docId === docId);
+    if (!a) { showToast('Record not found.', 'error'); return; }
+
+    const d = new Date(a.timestamp || a.time);
+    const dateStr = !isNaN(d.getTime())
+        ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) +
+        ' at ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        : (a.time || '—');
+
+    // Info fields
+    document.getElementById('sdm-student').textContent = a.student || '—';
+    document.getElementById('sdm-student-id').textContent = a.studentId || '—';
+    document.getElementById('sdm-exercise').textContent = a.exercise || '—';
+    document.getElementById('sdm-date').textContent = dateStr;
+    document.getElementById('sdm-proc-time').textContent = a.processingTime || '—';
+    document.getElementById('sdm-score').textContent = a.score || '—';
+
+    // Difficulty badge
+    const diff = (a.difficulty || 'moderate').toLowerCase();
+    const dColor = diff === 'easy' ? 'var(--success)' : diff === 'hard' ? 'var(--danger)' : 'var(--warning)';
+    document.getElementById('sdm-difficulty').innerHTML =
+        `<span style="font-weight:600;color:${dColor};text-transform:capitalize">${diff.charAt(0).toUpperCase() + diff.slice(1)}</span>`;
+
+    // Status badge
+>>>>>>> 6eb1a46 (Update project)
     const statusBadges = {
         'Completed': '<span class="badge badge-active">Completed</span>',
         'In Progress': '<span class="badge badge-student">In Progress</span>',
-        'Failed': '<span class="badge badge-inactive">Failed</span>'
+        'Failed': '<span class="badge badge-inactive">Failed</span>',
     };
-    tbody.innerHTML = activity.map(a => `
-    <tr>
-      <td><div class="user-cell"><div class="avatar-sm">${a.student.charAt(0)}</div><span style="font-weight:500;color:var(--text-primary)">${a.student}</span></div></td>
-      <td>${a.exercise}</td>
-      <td>${statusBadges[a.status] || a.status}</td>
-      <td style="font-weight:600;color:${a.score === '100%' ? 'var(--success)' : 'var(--text-primary)'}">${a.score}</td>
-      <td style="color:var(--text-muted)">${a.time}</td>
-    </tr>`).join('');
+    document.getElementById('sdm-status').innerHTML = statusBadges[a.status] || `<span class="badge">${a.status}</span>`;
+
+    // Score colour
+    const scoreEl = document.getElementById('sdm-score');
+    if (a.status === 'Completed') scoreEl.style.color = 'var(--success)';
+    else if (a.status === 'Failed') scoreEl.style.color = 'var(--danger)';
+    else scoreEl.style.color = 'var(--text-muted)';
+
+    // Error row
+    const errRow = document.getElementById('sdm-error-row');
+    if (a.errorType) {
+        document.getElementById('sdm-error-type').textContent = a.errorType;
+        errRow.style.display = 'block';
+    } else {
+        errRow.style.display = 'none';
+    }
+
+    // Code panels
+    document.getElementById('sdm-pseudo').textContent = a.submittedCode || a.pseudocode || '(No pseudocode recorded)';
+    document.getElementById('sdm-python').textContent = a.pythonCode || a.python_code || '(No Python output recorded)';
+
+    // Compiler output panel (if present)
+    const outputEl = document.getElementById('sdm-output');
+    if (outputEl) {
+        outputEl.textContent = a.output || a.compilerOutput || (a.status === 'Completed' ? 'Execution successful.' : a.errorType ? `Error: ${a.errorType} during compilation.` : '(No output recorded)');
+    }
+
+    // Modal title
+    document.getElementById('sdm-title').textContent = `📄 ${a.student} — ${a.exercise}`;
+
+    document.getElementById('submission-detail-modal').classList.remove('hidden');
+}
+
+function closeSubmissionDetail() {
+    document.getElementById('submission-detail-modal').classList.add('hidden');
 }
 
 
@@ -2497,6 +3631,28 @@ function setupRealtimeValidation() {
    ============================================================ */
 
 /**
+ * Load all exercises from IndexedDB pseudopy_exercises store.
+ * Falls back to fetching dataset.json if the store is empty.
+ */
+async function loadExercisesFromDB() {
+    try {
+        const exercises = await dbGetAll(exercisesRef);
+        if (exercises && exercises.length > 0) {
+            console.log(`[Benchmark] Loaded ${exercises.length} exercises from IndexedDB.`);
+            return exercises;
+        }
+    } catch (e) {
+        console.warn('[Benchmark] IndexedDB read failed, falling back to dataset.json:', e);
+    }
+    // Fallback
+    console.log('[Benchmark] Fetching dataset.json as fallback...');
+    const res = await fetch('dataset.json');
+    if (!res.ok) throw new Error('Failed to fetch dataset.json: ' + res.status);
+    const raw = await res.json();
+    return Array.isArray(raw) ? raw : (raw.dataset || []);
+}
+
+/**
  * Load and render the Compiler Metrics page.
  * Displays: Session Metrics, Benchmark Results, Pipeline Timing.
  */
@@ -2515,6 +3671,7 @@ function loadCompilerMetrics() {
     setText('metric-total-executions', session.totalExecutions);
 
     // Error trend badge
+<<<<<<< HEAD
     const trendEl = $id('metric-error-trend');
     const trendIcons = { improving: '↑ Improving', declining: '↓ Declining', stable: '— Stable' };
     const trendClasses = { improving: 'positive', declining: 'negative', stable: '' };
@@ -2522,6 +3679,13 @@ function loadCompilerMetrics() {
         trendEl.textContent = trendIcons[session.errorTrend] || '— Stable';
         trendEl.className = 'stat-change ' + (trendClasses[session.errorTrend] || '');
     }
+=======
+    const trendEl = document.getElementById('metric-error-trend');
+    const trendIcons   = { improving: '↑ Improving', declining: '↓ Declining', stable: '— Stable' };
+    const trendClasses = { improving: 'positive', declining: 'negative', stable: '' };
+    trendEl.textContent = trendIcons[session.errorTrend] || '— Stable';
+    trendEl.className   = 'stat-change ' + (trendClasses[session.errorTrend] || '');
+>>>>>>> 6eb1a46 (Update project)
 
     // ── Improvement Section ──
     const improvementEl = $id('metrics-improvement-section');
@@ -2556,38 +3720,53 @@ function loadCompilerMetrics() {
     const timing = metricsEngine.getAveragePipelineTiming();
     renderPipelineTimingChart(timing);
 
-    // ── Existing Benchmark Results ──
+    // ── Restore previous benchmark results if available ──
     if (metricsEngine.benchmarkResults) {
         renderBenchmarkResults(metricsEngine.benchmarkResults);
     }
 }
 
 /**
- * Run the automated benchmark against dataset.json ground truth.
- * Loads dataset, runs each test case through the compiler, and displays results.
+ * Run the automated benchmark.
+ * Data source  : pseudopy_exercises IndexedDB store (seeded from dataset.json).
+ * Computation  : MetricsEngine.runBenchmark() — strict mathematical formulas.
+ * Deliverable  : Populates all dashboard cards, per-test table, concept mastery.
  */
 async function runBenchmarkTest() {
+<<<<<<< HEAD
     showToast('Running benchmark...', 'info');
     const btn = $id('run-benchmark-btn');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Running...'; }
+=======
+    const btn = document.getElementById('run-benchmark-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Running…'; }
+    showToast('Running benchmark… loading exercises from database.', 'info');
+>>>>>>> 6eb1a46 (Update project)
 
     try {
-        // Load dataset.json
-        const response = await fetch('dataset.json');
-        const data = await response.json();
-        const dataset = data.dataset;
+        // Load from IndexedDB — no fetch/CORS errors
+        const dataset = await loadExercisesFromDB();
 
         if (!dataset || dataset.length === 0) {
-            showToast('No test cases found in dataset.json.', 'error');
+            showToast('No test cases found. Please reload the app to seed the database.', 'error');
             return;
         }
 
-        // Run benchmark via MetricsEngine
+        showToast(`Running ${dataset.length} test cases through the compiler…`, 'info');
+
+        // Yield to browser so toast renders before heavy synchronous computation
+        await new Promise(r => setTimeout(r, 80));
+
+        // Run benchmark pipeline with mathematical metrics engine
         const results = metricsEngine.runBenchmark(dataset, compilerEngine);
 
-        // Render results
+        // Render all sections
         renderBenchmarkResults(results);
-        showToast(`Benchmark complete! Accuracy: ${results.accuracy}%`, 'success');
+
+        showToast(
+            `✅ Benchmark complete! Accuracy: ${results.accuracy}% · F1: ${results.f1Score}% · ${results.totalTestCases} test cases.`,
+            'success'
+        );
     } catch (err) {
         console.error('[Benchmark] Error:', err);
         showToast('Benchmark failed: ' + err.message, 'error');
@@ -2597,9 +3776,11 @@ async function runBenchmarkTest() {
 }
 
 /**
- * Render benchmark results into the dashboard.
+ * Render all benchmark results into the dashboard.
+ * Populates: B. summary cards, per-test table, E. concept mastery table.
  */
 function renderBenchmarkResults(results) {
+<<<<<<< HEAD
     // ── Summary Cards ──
     setText('benchmark-accuracy', results.accuracy + '%');
     setText('benchmark-precision', results.avgPrecision + '%');
@@ -2620,6 +3801,61 @@ function renderBenchmarkResults(results) {
       <td style="font-weight:500">${(r.recall * 100).toFixed(0)}%</td>
       <td style="color:var(--text-muted)">${r.timeMs}ms</td>
     </tr>`).join('');
+=======
+    // B. Accuracy + other summary cards
+    document.getElementById('benchmark-accuracy').textContent      = results.accuracy + '%';
+    document.getElementById('benchmark-precision').textContent     = results.avgPrecision + '%';
+    document.getElementById('benchmark-recall').textContent        = results.avgRecall + '%';
+    document.getElementById('benchmark-f1').textContent            = results.f1Score + '%';
+    document.getElementById('benchmark-compile-rate').textContent  = results.compilationSuccessRate + '%';
+    document.getElementById('benchmark-avg-time').textContent      = results.avgTimeMs + 'ms';
+
+    // Per-Test-Case Detail Table
+    const wrapper    = document.getElementById('benchmark-detail-wrapper');
+    const totalLabel = document.getElementById('benchmark-total-label');
+    if (wrapper)    wrapper.style.display = 'block';
+    if (totalLabel) totalLabel.textContent = `${results.totalTestCases} test cases`;
+
+    const tbody = document.getElementById('benchmark-results-body');
+    if (tbody) {
+        tbody.innerHTML = results.results.map(r => `
+        <tr>
+          <td style="font-weight:600;color:var(--text-primary)">${r.id}</td>
+          <td>${r.concept}</td>
+          <td><span class="badge ${r.compiled ? 'badge-active' : 'badge-inactive'}">${r.compiled ? '✅ Pass' : '❌ Fail'}</span></td>
+          <td><span class="badge ${r.exactMatch ? 'badge-active' : 'badge-student'}">${r.exactMatch ? '✅ Match' : '⚠️ Diff'}</span></td>
+          <td style="font-weight:500">${(r.precision * 100).toFixed(0)}%</td>
+          <td style="font-weight:500">${(r.recall * 100).toFixed(0)}%</td>
+          <td style="color:var(--text-muted)">${r.timeMs}ms</td>
+        </tr>`).join('');
+    }
+
+    // ── Concept Mastery Table ──
+    const masteryBody = document.getElementById('concept-mastery-body');
+    if (masteryBody) {
+        const conceptData = metricsEngine.getConceptMastery();
+        if (conceptData.length === 0) {
+            masteryBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--text-muted)">No concept data available.</td></tr>';
+        } else {
+            masteryBody.innerHTML = conceptData.map(c => {
+                let masteryLabel, masteryColor;
+                if (c.accuracy >= 80)      { masteryLabel = '🟢 Expert';      masteryColor = '#22c55e'; }
+                else if (c.accuracy >= 60) { masteryLabel = '🔵 Proficient';  masteryColor = '#3b82f6'; }
+                else if (c.accuracy >= 40) { masteryLabel = '🟡 Developing'; masteryColor = '#f59e0b'; }
+                else                        { masteryLabel = '🔴 Beginner';    masteryColor = '#ef4444'; }
+
+                return `<tr>
+                  <td style="font-weight:600;color:var(--text-primary)">${c.concept}</td>
+                  <td style="color:var(--text-muted)">${c.total}</td>
+                  <td><span style="font-weight:600;color:${c.successRate >= 80 ? '#22c55e' : '#f59e0b'}">${c.successRate}%</span></td>
+                  <td><span style="font-weight:600;color:${c.accuracy >= 60 ? '#22c55e' : '#ef4444'}">${c.accuracy}%</span></td>
+                  <td>${c.precision}%</td>
+                  <td><span style="color:${masteryColor};font-weight:700">${masteryLabel}</span></td>
+                </tr>`;
+            }).join('');
+        }
+    }
+>>>>>>> 6eb1a46 (Update project)
 }
 
 /**

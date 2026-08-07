@@ -6,56 +6,47 @@
 console.log('[Database] Initializing IndexedDB (Offline Mode)');
 
 // ── Collection References (Keys) ──
-const usersRef = "pseudopy_users";
-const exercisesRef = "pseudopy_exercises";
-const activityRef = "pseudopy_activity";
-const passwordRequestsRef = "pseudopy_passwordRequests";
+const usersRef             = "pseudopy_users";
+const exercisesRef         = "pseudopy_exercises";
+const activityRef          = "pseudopy_activity";
+const passwordRequestsRef  = "pseudopy_passwordRequests";
 
 let dbInstance = null;
 
 function initDB() {
     return new Promise((resolve, reject) => {
         if (dbInstance) return resolve(dbInstance);
-        
-        const request = indexedDB.open('pseudopy_db', 2);
-        
+
+        const request = indexedDB.open('pseudopy_db', 7);
+
         request.onupgradeneeded = (e) => {
             const db = e.target.result;
             const oldVersion = e.oldVersion;
 
-            // v1 → v2: clear users store so new usernames are re-seeded
-            if (oldVersion < 2 && db.objectStoreNames.contains(usersRef)) {
-                db.deleteObjectStore(usersRef);
+            // Upgrade to v6: clear users & activity to re-seed with 30 students and 100 submissions
+            if (oldVersion < 6) {
+                if (db.objectStoreNames.contains(usersRef))    db.deleteObjectStore(usersRef);
+                if (db.objectStoreNames.contains(activityRef)) db.deleteObjectStore(activityRef);
             }
 
-            if (!db.objectStoreNames.contains(usersRef)) {
-                db.createObjectStore(usersRef, { keyPath: '_docId' });
+            // Upgrade to v7: clear exercises store to re-seed with only 30 exercises
+            if (oldVersion < 7) {
+                if (db.objectStoreNames.contains(exercisesRef)) db.deleteObjectStore(exercisesRef);
             }
-            if (!db.objectStoreNames.contains(exercisesRef)) {
-                db.createObjectStore(exercisesRef, { keyPath: '_docId' });
-            }
-            if (!db.objectStoreNames.contains(activityRef)) {
-                db.createObjectStore(activityRef, { keyPath: '_docId' });
-            }
-            if (!db.objectStoreNames.contains(passwordRequestsRef)) {
-                db.createObjectStore(passwordRequestsRef, { keyPath: '_docId' });
-            }
+
+            if (!db.objectStoreNames.contains(usersRef))            db.createObjectStore(usersRef,            { keyPath: '_docId' });
+            if (!db.objectStoreNames.contains(exercisesRef))        db.createObjectStore(exercisesRef,        { keyPath: '_docId' });
+            if (!db.objectStoreNames.contains(activityRef))         db.createObjectStore(activityRef,         { keyPath: '_docId' });
+            if (!db.objectStoreNames.contains(passwordRequestsRef)) db.createObjectStore(passwordRequestsRef, { keyPath: '_docId' });
         };
 
-        request.onsuccess = (e) => {
-            dbInstance = e.target.result;
-            resolve(dbInstance);
-        };
-
-        request.onerror = (e) => {
-            console.error('[Database] IndexedDB init error:', e.target.error);
-            reject(e.target.error);
-        };
+        request.onsuccess = (e) => { dbInstance = e.target.result; resolve(dbInstance); };
+        request.onerror   = (e) => { console.error('[Database] IndexedDB init error:', e.target.error); reject(e.target.error); };
     });
 }
 
 // ══════════════════════════════════════════════════════════════
-//  INDEXEDDB HELPER FUNCTIONS (API matches old Firestore API)
+//  INDEXEDDB HELPER FUNCTIONS
 // ══════════════════════════════════════════════════════════════
 
 async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
@@ -67,10 +58,25 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
 
         request.onsuccess = () => {
             let results = request.result;
-            
-            if (limitCount !== null) {
-                results = results.slice(offsetCount, offsetCount + limitCount);
+
+            if (ref === "pseudopy_exercises") {
+                results.sort((a, b) => {
+                    const aIsNew = a._docId.startsWith('ex');
+                    const bIsNew = b._docId.startsWith('ex');
+                    if (aIsNew && !bIsNew) return -1;
+                    if (!aIsNew && bIsNew) return 1;
+                    if (aIsNew && bIsNew) return b._docId.localeCompare(a._docId);
+                    const aNum = parseInt(a._docId.replace('algo_', '')) || 0;
+                    const bNum = parseInt(b._docId.replace('algo_', '')) || 0;
+                    return aNum - bNum;
+                });
             }
+
+            if (ref === "pseudopy_activity") {
+                results.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            }
+
+            if (limitCount !== null) results = results.slice(offsetCount, offsetCount + limitCount);
             resolve(results);
         };
         request.onerror = () => reject(request.error);
@@ -83,9 +89,8 @@ async function dbGet(ref, docId) {
         const transaction = db.transaction(ref, 'readonly');
         const store = transaction.objectStore(ref);
         const request = store.get(docId);
-        
         request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
+        request.onerror   = () => reject(request.error);
     });
 }
 
@@ -93,28 +98,26 @@ async function dbAdd(ref, data) {
     const db = await initDB();
     const docId = 'doc_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     const finalData = { _docId: docId, ...data };
-    
     return new Promise((resolve, reject) => {
         const transaction = db.transaction(ref, 'readwrite');
         const store = transaction.objectStore(ref);
         const request = store.add(finalData);
-
         request.onsuccess = () => resolve(docId);
-        request.onerror = () => reject(request.error);
+        request.onerror   = () => reject(request.error);
     });
 }
 
 async function dbSet(ref, docId, data) {
     const db = await initDB();
     const finalData = { _docId: docId, ...data };
-    
     return new Promise((resolve, reject) => {
         const transaction = db.transaction(ref, 'readwrite');
         const store = transaction.objectStore(ref);
         const request = store.put(finalData);
-
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
+        request.onerror       = () => reject(request.error);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror    = () => reject(transaction.error);
+        transaction.onabort    = () => reject(transaction.error || new Error('Transaction aborted'));
     });
 }
 
@@ -123,16 +126,17 @@ async function dbUpdate(ref, docId, data) {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction(ref, 'readwrite');
         const store = transaction.objectStore(ref);
-        
         const getReq = store.get(docId);
         getReq.onsuccess = () => {
             if (!getReq.result) return resolve();
             const updated = { ...getReq.result, ...data, _docId: docId };
             const putReq = store.put(updated);
-            putReq.onsuccess = () => resolve();
             putReq.onerror = () => reject(putReq.error);
         };
         getReq.onerror = () => reject(getReq.error);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror    = () => reject(transaction.error);
+        transaction.onabort    = () => reject(transaction.error || new Error('Transaction aborted'));
     });
 }
 
@@ -142,28 +146,47 @@ async function dbDelete(ref, docId) {
         const transaction = db.transaction(ref, 'readwrite');
         const store = transaction.objectStore(ref);
         const request = store.delete(docId);
-        
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
+        request.onerror       = () => reject(request.error);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror    = () => reject(transaction.error);
+        transaction.onabort    = () => reject(transaction.error || new Error('Transaction aborted'));
+    });
+}
+
+/**
+ * Efficiently counts all records in a store without loading them into memory.
+ * Uses IndexedDB's native count() — O(1) operation.
+ */
+async function dbCount(ref) {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(ref, 'readonly');
+        const store = transaction.objectStore(ref);
+        const request = store.count();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror   = () => reject(request.error);
     });
 }
 
 // ══════════════════════════════════════════════════════════════
-//  SEED DATABASE (Runs on initialization)
+//  SEED DATA
 // ══════════════════════════════════════════════════════════════
 
+  const FILIPINO_NAMES = [
+    "John Cruz", "Maria Santos", "Kevin Ramos", "Anna Reyes", "Joshua Garcia",
+    "Carlo Mendoza", "Patricia Flores", "Mark Bautista", "Nicole Dela Cruz", "Michael Reyes",
+    "Christian Alde", "Jessica Pascual", "Aldrin Castro", "Kenneth Santos", "Jasmine Aquino",
+    "Justin Ferrer", "Bianca De Leon", "Aaron Dizon", "Camille Valenzuela", "Dominic Ramos",
+    "Ella Salvador", "Adrian Tolentino", "Sofia Corpuz", "Patrick Hernandez", "Hazel Gonzales",
+    "Gabriel Santiago", "Abigail Ramos", "Ryan Ocampo", "Megan Custodio", "Kyle Dela Rosa"
+];
+
 const SEED_USERS = [
-    { _docId: 'u1', id: 'u1', fullName: 'Mark Bautista', username: 'mbautista_admin', email: 'bautista@university.edu.ph', password: 'admin123', role: 'admin', status: 'active' },
-    { _docId: 'u2', id: 'u2', fullName: 'Marc Reantaso', username: 'mreantaso_instructor', email: 'reantaso@university.edu.ph', password: 'pass123', role: 'instructor', status: 'active' },
-    { _docId: 'u3', id: 'u3', fullName: 'Eduard Mirandilla', username: 'emirandilla_student', email: 'mirandilla@student.edu.ph', password: 'pass123', role: 'student', status: 'active' },
-    { _docId: 'u4', id: 'u4', fullName: 'Mikaella Daet', username: 'mdaet_student', email: 'daet@student.edu.ph', password: 'pass123', role: 'student', status: 'active' },
+    { _docId: 'u1', id: 'u1', fullName: 'Mark Bautista',       username: 'mbautista_admin',       email: 'bautista@university.edu.ph',   password: 'admin123', role: 'admin',      status: 'active' },
+    { _docId: 'u2', id: 'u2', fullName: 'Marc Reantaso',        username: 'mreantaso_instructor',   email: 'reantaso@university.edu.ph',    password: 'pass123',  role: 'instructor', status: 'active', createdBy: 'u1' },
 ];
 
-const SEED_ACTIVITY = [
-    { _docId: 'act1', student: 'Eduard Mirandilla', exercise: 'algo_1', status: 'Completed', score: '95%', time: '5 min ago' },
-    { _docId: 'act2', student: 'Mikaella Daet', exercise: 'algo_2', status: 'In Progress', score: '—', time: '12 min ago' },
-];
-
+<<<<<<< HEAD
 const SEED_EXERCISES = [
     {
         _docId: 'seed_easy_1',
@@ -203,10 +226,181 @@ const SEED_EXERCISES = [
     }
 ];
 
+=======
+// Generate 30 student accounts
+FILIPINO_NAMES.forEach((name, index) => {
+    const idNum = String(index + 1).padStart(3, '0');
+    // Ensure John Cruz, Maria Santos, Kevin Ramos, Anna Reyes, Joshua Garcia get STU-2024-XXX or 2024-XXX IDs
+    const studentId = `2024-${idNum}`;
+    const cleanName = name.toLowerCase().replace(/\s+/g, '');
+    const username = `${cleanName}_student`;
+    const email = `${cleanName.split(' ')[0]}@student.edu.ph`;
+    
+    SEED_USERS.push({
+        _docId: `u_stu_${index + 3}`,
+        id: `u_stu_${index + 3}`,
+        studentId: studentId,
+        fullName: name,
+        username: username,
+        email: email,
+        password: 'pass123',
+        role: 'student',
+        status: 'active',
+        instructorId: 'u2',
+        createdBy: 'u2',
+        section: ['BSCS-3A', 'BSCS-3B', 'BSIT-3A', 'BSIT-3B'][index % 4]
+    });
+});
+
+// Helper to build a rich activity record
+function act(id, student, studentId, exercise, difficulty, status, score, dateStr, errorType, processingTime, submittedCode, result) {
+    const ts = new Date(dateStr).getTime();
+    return {
+        _docId: id,
+        student,
+        studentId,
+        exercise,
+        difficulty: difficulty || 'moderate',
+        status,
+        score,
+        time: dateStr,
+        timestamp: ts,
+        errorType: errorType || null,
+        processingTime: processingTime || '0.0s',
+        submittedCode: submittedCode || 'BEGIN\n  PRINT "Hello World"\nEND',
+        pseudocode: submittedCode || 'BEGIN\n  PRINT "Hello World"\nEND',
+        pythonCode: 'print("Hello World")',
+        python_code: 'print("Hello World")',
+        result: result || (status === 'Completed' ? 'Pass' : status === 'Failed' ? 'Fail' : 'Pending'),
+        output: status === 'Failed' ? `Error: ${errorType} during compilation` : 'Execution successful.\n'
+    };
+}
+
+// Deterministically generate 100 activity records matching August 2025 (Week 2: Aug 4 - Aug 10, 2025)
+const SEED_ACTIVITY = [
+    // Top records matching screenshot table exactly
+    act('act_sp_1', 'John Cruz', '2024-001', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T10:15:00', null, '0.85s', 
+        'BEGIN\n  DECLARE sum AS INTEGER\n  sum = 0\n  FOR i FROM 1 TO 10 DO\n    IF i MOD 2 == 0 THEN\n      sum = sum + i\n    END IF\n  END FOR\n  PRINT sum\nEND', 'Success'),
+    act('act_sp_2', 'Maria Santos', '2024-002', 'Factorial Calculation', 'hard', 'Completed', '85%', '2025-08-08T10:32:00', null, '1.21s', 
+        'BEGIN\n  INPUT n\n  DECLARE f AS INTEGER\n  f = 1\n  FOR i FROM 1 TO n DO\n    f = f * i\n  END FOR\n  PRINT f\nEND', 'Success'),
+    act('act_sp_3', 'Kevin Ramos', '2024-003', 'Array Sum', 'easy', 'Failed', '0%', '2025-08-08T11:05:00', 'Syntax Error', '0.65s', 
+        'BEGIN\n  DECLARE arr AS ARRAY\n  arr = [1, 2, 3]\n  DECLARE sum AS INTEGER\n  sum = 0\n  FOR i FROM 0 TO 2 DO\n    sum = sum + arr[i]\n  END FOR\n  PRINT sum\nEND', 'Syntax Error'),
+    act('act_sp_4', 'Anna Reyes', '2024-004', 'Prime Number Checker', 'moderate', 'Pending', '—', '2025-08-08T11:20:00', null, '—', 
+        'BEGIN\n  INPUT n\n  DECLARE isPrime AS BOOLEAN\n  isPrime = TRUE\n  FOR i FROM 2 TO n-1 DO\n    IF n MOD i == 0 THEN\n      isPrime = FALSE\n    END IF\n  END FOR\n  PRINT isPrime\nEND', 'Pending'),
+    act('act_sp_5', 'Joshua Garcia', '2024-005', 'String Reversal', 'easy', 'Completed', '90%', '2025-08-08T11:45:00', null, '0.42s', 
+        'BEGIN\n  INPUT s\n  PRINT s\nEND', 'Success')
+];
+
+const EXERCISES_POOL = [
+    { title: "Sum of Even Numbers", difficulty: "moderate" },
+    { title: "Factorial Calculation", difficulty: "hard" },
+    { title: "Array Sum", difficulty: "easy" },
+    { title: "Prime Number Checker", difficulty: "moderate" },
+    { title: "String Reversal", difficulty: "easy" },
+    { title: "Odd or Even Checker", difficulty: "easy" },
+    { title: "Fibonacci Sequence", difficulty: "moderate" },
+    { title: "GCD Calculator", difficulty: "moderate" },
+    { title: "Bubble Sort", difficulty: "hard" },
+    { title: "Binary Search", difficulty: "hard" }
+];
+
+const ERROR_TYPES = ["Syntax Error", "Logic Error", "Missing END", "Indentation Error", "Type Error", "Other"];
+
+// Deterministic generator for 95 additional items (total 100 items)
+let seed = 12345;
+const week2Days = [
+    { day: 4, count: 4 },  // Mon Aug 4
+    { day: 5, count: 6 },  // Tue Aug 5
+    { day: 6, count: 8 },  // Wed Aug 6
+    { day: 7, count: 5 },  // Thu Aug 7
+    { day: 8, count: 5 },  // Fri Aug 8 (already 5 added above = 10 total)
+    { day: 9, count: 2 },  // Sat Aug 9
+    { day: 10, count: 3 }  // Sun Aug 10
+];
+
+let itemIndex = 6;
+week2Days.forEach(w => {
+    for (let c = 0; c < w.count; c++) {
+        const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280.0; };
+        const stuIdx = Math.floor(rand() * 10);
+        const studentName = FILIPINO_NAMES[stuIdx];
+        const studentId = `2024-${String(stuIdx + 1).padStart(3, '0')}`;
+        const ex = EXERCISES_POOL[Math.floor(rand() * EXERCISES_POOL.length)];
+        const hour = 8 + Math.floor(rand() * 9);
+        const min = Math.floor(rand() * 60);
+        const dateStr = `2025-08-${String(w.day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
+        
+        const statusRand = rand();
+        let status = "Completed";
+        let score = "85%";
+        let errorType = null;
+        let result = "Success";
+        if (statusRand < 0.65) {
+            status = "Completed";
+            score = `${Math.floor(rand() * 21) + 80}%`;
+            result = "Success";
+        } else if (statusRand < 0.85) {
+            status = "Failed";
+            score = "0%";
+            errorType = ERROR_TYPES[Math.floor(rand() * ERROR_TYPES.length)];
+            result = errorType;
+        } else {
+            status = "Pending";
+            score = "—";
+            result = "Pending";
+        }
+
+        const procTime = status === "Pending" ? "—" : `${(rand() * 1.5 + 0.3).toFixed(2)}s`;
+        const codeStr = `BEGIN\n  PRINT "Solution for ${ex.title}"\nEND`;
+
+        SEED_ACTIVITY.push(act(`act_gen_${itemIndex++}`, studentName, studentId, ex.title, ex.difficulty, status, score, dateStr, errorType, procTime, codeStr, result));
+    }
+});
+
+// Generate remaining items to reach exactly 100 items spread across June, July, August 2025
+while (SEED_ACTIVITY.length < 100) {
+    const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280.0; };
+    const stuIdx = Math.floor(rand() * 30);
+    const studentName = FILIPINO_NAMES[stuIdx];
+    const studentId = `2024-${String(stuIdx + 1).padStart(3, '0')}`;
+    const ex = EXERCISES_POOL[Math.floor(rand() * EXERCISES_POOL.length)];
+    const month = [6, 7, 8][Math.floor(rand() * 3)];
+    const day = Math.floor(rand() * 28) + 1;
+    const hour = 8 + Math.floor(rand() * 10);
+    const min = Math.floor(rand() * 60);
+    const dateStr = `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
+
+    const statusRand = rand();
+    let status = "Completed";
+    let score = "90%";
+    let errorType = null;
+    let result = "Success";
+    if (statusRand < 0.7) {
+        status = "Completed";
+        score = `${Math.floor(rand() * 21) + 80}%`;
+        result = "Success";
+    } else if (statusRand < 0.88) {
+        status = "Failed";
+        score = "0%";
+        errorType = ERROR_TYPES[Math.floor(rand() * ERROR_TYPES.length)];
+        result = errorType;
+    } else {
+        status = "Pending";
+        score = "—";
+        result = "Pending";
+    }
+
+    const procTime = status === "Pending" ? "—" : `${(rand() * 1.5 + 0.3).toFixed(2)}s`;
+    const codeStr = `BEGIN\n  PRINT "Solution for ${ex.title}"\nEND`;
+
+    SEED_ACTIVITY.push(act(`act_gen_${itemIndex++}`, studentName, studentId, ex.title, ex.difficulty, status, score, dateStr, errorType, procTime, codeStr, result));
+}
+
+>>>>>>> 6eb1a46 (Update project)
 async function seedDatabase() {
     try {
         const db = await initDB();
-        
+
         // Seed Users
         const users = await dbGetAll(usersRef);
         if (users.length === 0) {
@@ -217,14 +411,15 @@ async function seedDatabase() {
         // Seed Activity
         const acts = await dbGetAll(activityRef);
         if (acts.length === 0) {
-            console.log('[Database] Seeding activity...');
+            console.log('[Database] Seeding activity records...');
             for (const act of SEED_ACTIVITY) await dbSet(activityRef, act._docId, act);
+            console.log(`[Database] ${SEED_ACTIVITY.length} activity records seeded ✅`);
         }
 
-        // ── Seed 10,000 Exercises from dataset.json ──
+        // ── Seed 30 Exercises from dataset.json ──
         const tx = db.transaction(exercisesRef, 'readonly');
         const countReq = tx.objectStore(exercisesRef).count();
-        
+
         countReq.onsuccess = async () => {
             const needsSampleSeed = countReq.result < 4;
             if (needsSampleSeed) {
@@ -237,23 +432,19 @@ async function seedDatabase() {
             }
 
             if (countReq.result === 0) {
-                console.log('[Database] Fetching 10,000 exercises from dataset.json...');
+                console.log('[Database] Fetching exercises from dataset.json (limit: 30)...');
                 try {
                     const res = await fetch('dataset.json');
                     const allData = await res.json();
-                    
-                    console.log(`[Database] Bulk inserting ${allData.length} exercises into IndexedDB...`);
-                    
+                    const first30 = allData.slice(0, 30); // Only insert 30 exercises
+                    console.log(`[Database] Bulk inserting ${first30.length} exercises into IndexedDB...`);
                     const writeTx = db.transaction(exercisesRef, 'readwrite');
                     const store = writeTx.objectStore(exercisesRef);
-                    
-                    // Bulk insert 10k items
-                    allData.forEach(item => store.put({ _docId: item.id, ...item }));
-                    
-                    writeTx.oncomplete = () => console.log('[Database] Exercises seeded ✅');
+                    first30.forEach(item => store.put({ _docId: item.id, ...item }));
+                    writeTx.oncomplete = () => console.log('[Database] 30 exercises seeded ✅');
                     writeTx.onerror = (e) => console.error('[Database] Sync error:', e.target.error);
                 } catch (fetchErr) {
-                    console.warn('[Database] Failed to load dataset.json. Ensure it exists or you are online.', fetchErr);
+                    console.warn('[Database] Failed to load dataset.json.', fetchErr);
                 }
             } else {
                 console.log(`[Database] Found ${countReq.result} exercises. Ready ✅`);

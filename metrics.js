@@ -1,41 +1,59 @@
 /* ============================================================
-   PSEUDOPY — METRICS ENGINE (metrics.js)
+   PSEUDOPY — METRICS ENGINE  (metrics.js)
    ────────────────────────────────────────────────────────────
-   Formal Evaluation & Testing Module for Panel 1 Metrics:
+   Formal Evaluation Module — Mathematical Metrics Pipeline
 
-     1. Accuracy            — exact-match against dataset.json
-     2. Precision / Recall  — line-level overlap analysis
-     3. Compilation Success  — % of inputs producing valid Python
-     4. Runtime Error Rate   — errors / total_executions × 100
-     5. Execution Time       — per-stage performance.now() timing
-     6. % Improvement        — session-over-session comparison
-     7. Error Reduction      — cumulative error trend tracking
+   Formulas implemented (as specified):
 
-   Constraint: Fully offline. Uses localStorage for persistence.
+   A. CODE NORMALIZATION (pre-processing)
+      • Strip trailing whitespace from each line
+      • Unify indentation to 4 spaces (expand tabs, normalise leading spaces)
+      • Remove empty lines
+      (Applied to both generated_python and expected_python before any comparison)
+
+   B. EXACT-MATCH ACCURACY
+      Accuracy = (Total Exact Code Matches / Total Test Submissions) × 100%
+
+   C. LINE-LEVEL PRECISION, RECALL, F1
+      Precision = Matching Lines / Total Lines in Generated Code
+      Recall    = Matching Lines / Total Lines in Ground Truth
+      F1 Score  = 2 × (Precision × Recall) / (Precision + Recall)
+      Edge-case: if Precision + Recall = 0  →  F1 = 0.0  (no division-by-zero)
+
+   D. COMPILATION & RUNTIME SUCCESS RATES
+      Compile Rate      = % of translations that pass AST/Syntax parsing without errors
+      Runtime Error Rate = % of compiled scripts that crash during execution
+
+   E. CONCEPT MASTERY ANALYTICS (Constructivism Model)
+      Group by programming concept, assign Mastery Level by accuracy:
+        Expert      : Accuracy ≥ 80%
+        Proficient  : 65% ≤ Accuracy < 80%
+        Developing  : 40% ≤ Accuracy < 65%
+        Beginner    : Accuracy < 40%
+
+   Constraint: Fully offline. localStorage for persistence.
    ============================================================ */
 
 class MetricsEngine {
     constructor() {
-        // ── Session State ──
-        this.sessionId = 'session_' + Date.now();
-        this.translations = [];      // per-translation records
-        this.executions = [];        // per-execution records
-        this.benchmarkResults = null; // latest benchmark run
+        this.sessionId         = 'session_' + Date.now();
+        this.translations      = [];     // per-translation records (live session)
+        this.executions        = [];     // per-execution records   (live session)
+        this.benchmarkResults  = null;   // latest benchmark run
 
-        // ── Load persisted history from localStorage ──
+        // Load persisted history
         this.history = this._loadHistory();
     }
 
     // ══════════════════════════════════════════════════════════════
-    // PERSISTENCE — localStorage Read/Write
+    // PERSISTENCE
     // ══════════════════════════════════════════════════════════════
 
     _loadHistory() {
         try {
             const raw = localStorage.getItem('pseudopy_metrics_history');
             return raw ? JSON.parse(raw) : { sessions: [], benchmarks: [] };
-        } catch (e) {
-            console.warn('[Metrics] Failed to load history:', e);
+        } catch {
             return { sessions: [], benchmarks: [] };
         }
     }
@@ -49,98 +67,73 @@ class MetricsEngine {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // TRANSLATION RECORDING
-    // Called after every compile() invocation
+    // TRANSLATION RECORDING  (called after every compile())
     // ══════════════════════════════════════════════════════════════
 
-    /**
-     * Record a translation attempt with its metrics.
-     * @param {object} compileResult — { valid, python, errors, warnings, metrics }
-     * @param {string} inputCode — original pseudocode
-     */
     recordTranslation(compileResult, inputCode) {
         const record = {
-            timestamp: Date.now(),
-            sessionId: this.sessionId,
-            inputLength: inputCode.length,
-            inputLines: inputCode.split('\n').length,
-            valid: compileResult.valid,
-            errorCount: compileResult.errors.length,
-            warningCount: compileResult.warnings.length,
-            outputLength: compileResult.python ? compileResult.python.length : 0,
-            outputLines: compileResult.python ? compileResult.python.split('\n').length : 0,
-            timing: compileResult.metrics || null,
-            errors: compileResult.errors.map(e => ({
-                line: e.line,
-                message: e.message
-            }))
+            timestamp:     Date.now(),
+            sessionId:     this.sessionId,
+            inputLength:   inputCode.length,
+            inputLines:    inputCode.split('\n').length,
+            valid:         compileResult.valid,
+            errorCount:    compileResult.errors.length,
+            warningCount:  compileResult.warnings.length,
+            outputLength:  compileResult.python ? compileResult.python.length : 0,
+            outputLines:   compileResult.python ? compileResult.python.split('\n').length : 0,
+            timing:        compileResult.metrics || null,
+            errors:        compileResult.errors.map(e => ({ line: e.line, message: e.message }))
         };
-
         this.translations.push(record);
         this._saveHistory();
         return record;
     }
 
     // ══════════════════════════════════════════════════════════════
-    // EXECUTION RECORDING
-    // Called after every Skulpt execution
+    // EXECUTION RECORDING  (called after every Skulpt execution)
     // ══════════════════════════════════════════════════════════════
 
-    /**
-     * Record a code execution outcome.
-     * @param {boolean} success — true if Skulpt ran without errors
-     * @param {string|null} errorMessage — runtime error message if any
-     */
     recordExecution(success, errorMessage = null) {
         const record = {
             timestamp: Date.now(),
             sessionId: this.sessionId,
-            success: success,
+            success,
             error: errorMessage
         };
-
         this.executions.push(record);
         this._saveHistory();
         return record;
     }
 
     // ══════════════════════════════════════════════════════════════
-    // SESSION METRICS — Aggregated Current Session Stats
+    // SESSION METRICS  (live, current session)
     // ══════════════════════════════════════════════════════════════
 
-    /**
-     * Get aggregated metrics for the current session.
-     * @returns {object} session stats
-     */
     getSessionMetrics() {
-        const totalTranslations = this.translations.length;
-        const successfulTranslations = this.translations.filter(t => t.valid).length;
-        const failedTranslations = totalTranslations - successfulTranslations;
-        const compilationSuccessRate = totalTranslations > 0
+        const totalTranslations       = this.translations.length;
+        const successfulTranslations  = this.translations.filter(t => t.valid).length;
+        const compilationSuccessRate  = totalTranslations > 0
             ? ((successfulTranslations / totalTranslations) * 100).toFixed(1)
             : '0.0';
 
-        const totalExecutions = this.executions.length;
-        const successfulExecutions = this.executions.filter(e => e.success).length;
-        const failedExecutions = totalExecutions - successfulExecutions;
-        const runtimeErrorRate = totalExecutions > 0
+        const totalExecutions    = this.executions.length;
+        const failedExecutions   = this.executions.filter(e => !e.success).length;
+        // D. Runtime Error Rate = compiled scripts that crash during execution / total executions
+        const runtimeErrorRate   = totalExecutions > 0
             ? ((failedExecutions / totalExecutions) * 100).toFixed(1)
             : '0.0';
 
-        // Average generation time
-        const timedTranslations = this.translations.filter(t => t.timing && t.timing.totalTime);
-        const avgGenerationTime = timedTranslations.length > 0
-            ? (timedTranslations.reduce((sum, t) => sum + t.timing.totalTime, 0) / timedTranslations.length).toFixed(2)
+        const timedTranslations  = this.translations.filter(t => t.timing && t.timing.totalTime);
+        const avgGenerationTime  = timedTranslations.length > 0
+            ? (timedTranslations.reduce((s, t) => s + t.timing.totalTime, 0) / timedTranslations.length).toFixed(2)
             : '0.00';
 
-        // Total errors across all translations
-        const totalErrors = this.translations.reduce((sum, t) => sum + t.errorCount, 0);
-        const totalWarnings = this.translations.reduce((sum, t) => sum + t.warningCount, 0);
+        const totalErrors        = this.translations.reduce((s, t) => s + t.errorCount, 0);
 
-        // Error trend: compare first half vs second half of translations
+        // Error trend: compare first half vs second half
         let errorTrend = 'stable';
         if (totalTranslations >= 4) {
-            const mid = Math.floor(totalTranslations / 2);
+            const mid             = Math.floor(totalTranslations / 2);
             const firstHalfErrors = this.translations.slice(0, mid).reduce((s, t) => s + t.errorCount, 0);
             const secondHalfErrors = this.translations.slice(mid).reduce((s, t) => s + t.errorCount, 0);
             if (secondHalfErrors < firstHalfErrors) errorTrend = 'improving';
@@ -151,164 +144,167 @@ class MetricsEngine {
             sessionId: this.sessionId,
             totalTranslations,
             successfulTranslations,
-            failedTranslations,
+            failedTranslations: totalTranslations - successfulTranslations,
             compilationSuccessRate: parseFloat(compilationSuccessRate),
             totalExecutions,
-            successfulExecutions,
+            successfulExecutions: totalExecutions - failedExecutions,
             failedExecutions,
             runtimeErrorRate: parseFloat(runtimeErrorRate),
             avgGenerationTime: parseFloat(avgGenerationTime),
             totalErrors,
-            totalWarnings,
+            totalWarnings: this.translations.reduce((s, t) => s + t.warningCount, 0),
             errorTrend
         };
     }
 
     // ══════════════════════════════════════════════════════════════
     // IMPROVEMENT TRACKING
-    // Compares first translation vs latest to show progress
     // ══════════════════════════════════════════════════════════════
 
-    /**
-     * Calculate improvement metrics over the session.
-     * @returns {object} improvement data
-     */
     getImprovementMetrics() {
         if (this.translations.length < 2) {
-            return {
-                hasData: false,
-                message: 'Need at least 2 translations to calculate improvement.'
-            };
+            return { hasData: false, message: 'Need at least 2 translations to calculate improvement.' };
         }
 
-        const first = this.translations[0];
+        const first  = this.translations[0];
         const latest = this.translations[this.translations.length - 1];
 
-        // Correctness improvement: fewer errors = better
-        const firstErrors = first.errorCount;
-        const latestErrors = latest.errorCount;
         let correctnessImprovement = 0;
-        if (firstErrors > 0) {
-            correctnessImprovement = ((firstErrors - latestErrors) / firstErrors * 100).toFixed(1);
-        } else if (latestErrors === 0) {
+        if (first.errorCount > 0) {
+            correctnessImprovement = ((first.errorCount - latest.errorCount) / first.errorCount * 100).toFixed(1);
+        } else if (latest.errorCount === 0) {
             correctnessImprovement = 100;
         }
 
-        // Generation speed improvement
         let speedImprovement = 0;
         if (first.timing && latest.timing && first.timing.totalTime > 0) {
             speedImprovement = ((first.timing.totalTime - latest.timing.totalTime) / first.timing.totalTime * 100).toFixed(1);
         }
 
-        // Error rate reduction across the session
         const successfulTranslations = this.translations.filter(t => t.valid).length;
-        const totalTranslations = this.translations.length;
-        const overallSuccessRate = ((successfulTranslations / totalTranslations) * 100).toFixed(1);
+        const overallSuccessRate = ((successfulTranslations / this.translations.length) * 100).toFixed(1);
 
         return {
             hasData: true,
-            firstErrors,
-            latestErrors,
-            correctnessImprovement: parseFloat(correctnessImprovement),
-            speedImprovement: parseFloat(speedImprovement),
-            overallSuccessRate: parseFloat(overallSuccessRate),
-            translationCount: totalTranslations
+            firstErrors:              first.errorCount,
+            latestErrors:             latest.errorCount,
+            correctnessImprovement:   parseFloat(correctnessImprovement),
+            speedImprovement:         parseFloat(speedImprovement),
+            overallSuccessRate:       parseFloat(overallSuccessRate),
+            translationCount:         this.translations.length
         };
     }
 
     // ══════════════════════════════════════════════════════════════
     // BENCHMARK RUNNER
-    // Runs automated tests against dataset.json ground truth
+    // Runs automated tests against an array of ground-truth test cases.
+    // Each test case must have: { id, concept, pseudocode, python_code }
     // ══════════════════════════════════════════════════════════════
 
-    /**
-     * Run full benchmark against the dataset ground truth.
-     * @param {Array} dataset — array of { pseudocode, python_code } from dataset.json
-     * @param {PseudocodeCompiler} compiler — compiler instance
-     * @returns {object} benchmark results with accuracy, precision, recall
-     */
     runBenchmark(dataset, compiler) {
-        const results = [];
-        let exactMatches = 0;
-        let totalPrecision = 0;
-        let totalRecall = 0;
+        const results          = [];
+        let exactMatches       = 0;
+        let totalPrecision     = 0;
+        let totalRecall        = 0;
         let compilationSuccesses = 0;
-        let totalTimingMs = 0;
+        let totalTimingMs      = 0;
+        let n                  = 0;
 
         for (const testCase of dataset) {
-            const startTime = performance.now();
-            const compileResult = compiler.compile(testCase.pseudocode);
-            const endTime = performance.now();
-            const elapsed = endTime - startTime;
-            totalTimingMs += elapsed;
+            // Skip records without usable ground truth
+            const expected = testCase.python_code || testCase.pythonCode || '';
+            const pseudocode = testCase.pseudocode || '';
+            if (!pseudocode || !expected) continue;
+
+            n++;
+
+            const t0            = performance.now();
+            const compileResult = compiler.compile(pseudocode);
+            const elapsed       = performance.now() - t0;
+            totalTimingMs      += elapsed;
 
             const generated = compileResult.python || '';
-            const expected = testCase.python_code || '';
 
-            // ── Compilation Success ──
+            // D. Compilation success = passed AST/Syntax parsing without errors
             const compiled = compileResult.valid;
             if (compiled) compilationSuccesses++;
 
-            // ── Exact Match Accuracy ──
-            const normalizedGenerated = this._normalizeCode(generated);
-            const normalizedExpected = this._normalizeCode(expected);
-            const exactMatch = normalizedGenerated === normalizedExpected;
+            // A → B. Normalize both sides, then exact-match
+            const normGenerated = this._normalizeCode(generated);
+            const normExpected  = this._normalizeCode(expected);
+            const exactMatch    = (normGenerated === normExpected);
             if (exactMatch) exactMatches++;
 
-            // ── Line-Level Precision & Recall ──
-            const { precision, recall } = this._calculatePrecisionRecall(generated, expected);
+            // C. Line-level Precision, Recall, F1
+            const { precision, recall, f1 } = this._calculatePRF(normGenerated, normExpected);
             totalPrecision += precision;
-            totalRecall += recall;
+            totalRecall    += recall;
 
             results.push({
-                id: testCase.id,
-                concept: testCase.concept,
+                id:         testCase.id || testCase._docId || `test_${n}`,
+                concept:    testCase.concept || 'General',
+                difficulty: testCase.difficulty || 'medium',
                 compiled,
                 exactMatch,
-                precision: parseFloat(precision.toFixed(3)),
-                recall: parseFloat(recall.toFixed(3)),
-                timeMs: parseFloat(elapsed.toFixed(2)),
+                precision:  parseFloat(precision.toFixed(4)),
+                recall:     parseFloat(recall.toFixed(4)),
+                f1:         parseFloat(f1.toFixed(4)),
+                timeMs:     parseFloat(elapsed.toFixed(2)),
                 errorCount: compileResult.errors.length,
-                warningCount: compileResult.warnings.length,
-                generated: generated,
-                expected: expected
+                generated,
+                expected
             });
         }
 
-        const n = dataset.length;
-        const benchmarkData = {
-            timestamp: Date.now(),
-            dateString: new Date().toISOString().split('T')[0],
-            totalTestCases: n,
-            accuracy: parseFloat(((exactMatches / n) * 100).toFixed(1)),
-            compilationSuccessRate: parseFloat(((compilationSuccesses / n) * 100).toFixed(1)),
-            avgPrecision: parseFloat(((totalPrecision / n) * 100).toFixed(1)),
-            avgRecall: parseFloat(((totalRecall / n) * 100).toFixed(1)),
-            avgTimeMs: parseFloat((totalTimingMs / n).toFixed(2)),
-            totalTimeMs: parseFloat(totalTimingMs.toFixed(2)),
-            f1Score: 0,
-            results
-        };
+        if (n === 0) {
+            return {
+                totalTestCases: 0, accuracy: 0, compilationSuccessRate: 0,
+                avgPrecision: 0, avgRecall: 0, f1Score: 0, avgTimeMs: 0, results: []
+            };
+        }
 
-        // ── F1 Score ──
-        if (benchmarkData.avgPrecision + benchmarkData.avgRecall > 0) {
-            benchmarkData.f1Score = parseFloat(
-                ((2 * benchmarkData.avgPrecision * benchmarkData.avgRecall) /
-                 (benchmarkData.avgPrecision + benchmarkData.avgRecall)).toFixed(1)
+        // B. Accuracy = (exact matches / total) × 100
+        const accuracy               = parseFloat(((exactMatches / n) * 100).toFixed(1));
+        // D. Compile Rate = % passing AST/Syntax
+        const compilationSuccessRate = parseFloat(((compilationSuccesses / n) * 100).toFixed(1));
+
+        const avgPrecision = parseFloat(((totalPrecision / n) * 100).toFixed(1));
+        const avgRecall    = parseFloat(((totalRecall    / n) * 100).toFixed(1));
+        const avgTimeMs    = parseFloat((totalTimingMs   / n).toFixed(2));
+
+        // C. Overall F1 using averaged P & R (with edge-case guard)
+        let f1Score = 0.0;
+        if (avgPrecision + avgRecall > 0) {
+            f1Score = parseFloat(
+                ((2 * avgPrecision * avgRecall) / (avgPrecision + avgRecall)).toFixed(1)
             );
         }
 
+        const benchmarkData = {
+            timestamp:            Date.now(),
+            dateString:           new Date().toISOString().split('T')[0],
+            totalTestCases:       n,
+            accuracy,
+            compilationSuccessRate,
+            avgPrecision,
+            avgRecall,
+            f1Score,
+            avgTimeMs,
+            totalTimeMs:          parseFloat(totalTimingMs.toFixed(2)),
+            results
+        };
+
         this.benchmarkResults = benchmarkData;
 
-        // ── Persist to history ──
+        // Persist summary to history
         this.history.benchmarks.push({
-            timestamp: benchmarkData.timestamp,
-            accuracy: benchmarkData.accuracy,
+            timestamp:            benchmarkData.timestamp,
+            accuracy:             benchmarkData.accuracy,
             compilationSuccessRate: benchmarkData.compilationSuccessRate,
-            avgPrecision: benchmarkData.avgPrecision,
-            avgRecall: benchmarkData.avgRecall,
-            f1Score: benchmarkData.f1Score,
-            avgTimeMs: benchmarkData.avgTimeMs
+            avgPrecision:         benchmarkData.avgPrecision,
+            avgRecall:            benchmarkData.avgRecall,
+            f1Score:              benchmarkData.f1Score,
+            avgTimeMs:            benchmarkData.avgTimeMs
         });
         this._saveHistory();
 
@@ -316,212 +312,203 @@ class MetricsEngine {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // PRECISION & RECALL — Line-Level Overlap Analysis
+    // A. CODE NORMALIZATION  (pre-processing)
+    //   • Strip trailing whitespace from every line
+    //   • Unify indentation to 4 spaces (expand tabs, normalise leading spaces)
+    //   • Remove empty lines
     // ══════════════════════════════════════════════════════════════
 
-    /**
-     * Calculate line-level precision and recall.
-     *
-     * Precision = |relevant ∩ generated| / |generated|
-     *   "Of the lines we generated, how many are correct?"
-     *
-     * Recall = |relevant ∩ generated| / |relevant|
-     *   "Of the expected lines, how many did we generate?"
-     *
-     * @param {string} generated — generated Python code
-     * @param {string} expected — expected Python code from ground truth
-     * @returns {{ precision: number, recall: number }}
-     */
-    _calculatePrecisionRecall(generated, expected) {
-        const genLines = this._getCodeLines(generated);
-        const expLines = this._getCodeLines(expected);
+    _normalizeCode(code) {
+        if (!code) return '';
+        return code
+            .split('\n')
+            .map(line => line.replace(/\t/g, '    '))  // expand tabs → 4 spaces
+            .map(line => {
+                // Preserve leading spaces (indentation) but strip trailing whitespace
+                const stripped = line.trimEnd();
+                // Normalise indentation: round to nearest 4-space boundary
+                const match = stripped.match(/^(\s*)(.*)/);
+                if (!match) return stripped;
+                const [, leading, rest] = match;
+                const spaces = leading.length;
+                const normalSpaces = Math.round(spaces / 4) * 4;
+                return ' '.repeat(normalSpaces) + rest;
+            })
+            .filter(line => line.trim().length > 0)  // remove empty / whitespace-only lines
+            .join('\n')
+            .trimEnd();
+    }
 
-        if (genLines.length === 0 && expLines.length === 0) return { precision: 1, recall: 1 };
-        if (genLines.length === 0) return { precision: 0, recall: 0 };
-        if (expLines.length === 0) return { precision: 0, recall: 0 };
+    // ══════════════════════════════════════════════════════════════
+    // C. LINE-LEVEL PRECISION, RECALL, F1
+    // Uses the normalised code from _normalizeCode().
+    // ══════════════════════════════════════════════════════════════
 
-        // Count matches using normalized line comparison
+    _calculatePRF(normGenerated, normExpected) {
+        const genLines = normGenerated.split('\n').filter(l => l.trim().length > 0);
+        const expLines = normExpected.split('\n').filter(l => l.trim().length > 0);
+
+        if (genLines.length === 0 && expLines.length === 0) return { precision: 1, recall: 1, f1: 1 };
+        if (genLines.length === 0 || expLines.length === 0) return { precision: 0, recall: 0, f1: 0 };
+
         const expSet = new Set(expLines);
         const genSet = new Set(genLines);
 
-        let relevantInGenerated = 0;
+        // Matching lines in generated that exist in expected
+        let matchingInGen = 0;
         for (const line of genLines) {
-            if (expSet.has(line)) relevantInGenerated++;
+            if (expSet.has(line)) matchingInGen++;
         }
 
-        let relevantInExpected = 0;
+        // Matching lines in expected that exist in generated
+        let matchingInExp = 0;
         for (const line of expLines) {
-            if (genSet.has(line)) relevantInExpected++;
+            if (genSet.has(line)) matchingInExp++;
         }
 
-        const precision = genLines.length > 0 ? relevantInGenerated / genLines.length : 0;
-        const recall = expLines.length > 0 ? relevantInExpected / expLines.length : 0;
+        // Precision = Matching Lines / Total Lines in Generated Code
+        const precision = matchingInGen / genLines.length;
 
+        // Recall = Matching Lines / Total Lines in Ground Truth
+        const recall = matchingInExp / expLines.length;
+
+        // F1 Score = 2 × (Precision × Recall) / (Precision + Recall)
+        // Edge-case: if Precision + Recall = 0, return F1 = 0.0
+        const f1 = (precision + recall > 0)
+            ? (2 * precision * recall) / (precision + recall)
+            : 0.0;
+
+        return { precision, recall, f1 };
+    }
+
+    // (Legacy alias for existing callers)
+    _calculatePrecisionRecall(generated, expected) {
+        const normG = this._normalizeCode(generated);
+        const normE = this._normalizeCode(expected);
+        const { precision, recall } = this._calculatePRF(normG, normE);
         return { precision, recall };
     }
 
     // ══════════════════════════════════════════════════════════════
-    // NORMALIZATION UTILITIES
-    // ══════════════════════════════════════════════════════════════
-
-    /**
-     * Normalize code for comparison: strip comments, normalize whitespace.
-     */
-    _normalizeCode(code) {
-        return code
-            .split('\n')
-            .map(line => line.replace(/#.*$/, '').trim())  // strip comments
-            .filter(line => line.length > 0)               // remove empties
-            .join('\n')
-            .replace(/\s+/g, ' ')                          // normalize whitespace
-            .trim();
-    }
-
-    /**
-     * Extract meaningful code lines (trimmed, no empties, no comments).
-     */
-    _getCodeLines(code) {
-        return code
-            .split('\n')
-            .map(line => line.replace(/#.*$/, '').trim())
-            .filter(line => line.length > 0);
-    }
-
-    // ══════════════════════════════════════════════════════════════
     // PIPELINE TIMING SUMMARY
-    // Aggregates timing data across all recorded translations
     // ══════════════════════════════════════════════════════════════
 
-    /**
-     * Get average pipeline timing across all timed translations.
-     * @returns {object} avg timing per stage
-     */
     getAveragePipelineTiming() {
         const timed = this.translations.filter(t => t.timing);
         if (timed.length === 0) {
-            return {
-                count: 0,
-                avgLexTime: 0,
-                avgParseTime: 0,
-                avgSemanticTime: 0,
-                avgCodeGenTime: 0,
-                avgTotalTime: 0
-            };
+            return { count: 0, avgLexTime: 0, avgParseTime: 0, avgSemanticTime: 0, avgCodeGenTime: 0, avgTotalTime: 0 };
         }
-
         const n = timed.length;
         return {
-            count: n,
-            avgLexTime: parseFloat((timed.reduce((s, t) => s + (t.timing.lexTime || 0), 0) / n).toFixed(3)),
-            avgParseTime: parseFloat((timed.reduce((s, t) => s + (t.timing.parseTime || 0), 0) / n).toFixed(3)),
+            count:           n,
+            avgLexTime:      parseFloat((timed.reduce((s, t) => s + (t.timing.lexTime      || 0), 0) / n).toFixed(3)),
+            avgParseTime:    parseFloat((timed.reduce((s, t) => s + (t.timing.parseTime    || 0), 0) / n).toFixed(3)),
             avgSemanticTime: parseFloat((timed.reduce((s, t) => s + (t.timing.semanticTime || 0), 0) / n).toFixed(3)),
-            avgCodeGenTime: parseFloat((timed.reduce((s, t) => s + (t.timing.codeGenTime || 0), 0) / n).toFixed(3)),
-            avgTotalTime: parseFloat((timed.reduce((s, t) => s + (t.timing.totalTime || 0), 0) / n).toFixed(3))
+            avgCodeGenTime:  parseFloat((timed.reduce((s, t) => s + (t.timing.codeGenTime  || 0), 0) / n).toFixed(3)),
+            avgTotalTime:    parseFloat((timed.reduce((s, t) => s + (t.timing.totalTime    || 0), 0) / n).toFixed(3))
         };
     }
 
     // ══════════════════════════════════════════════════════════════
-    // HISTORICAL BENCHMARK TRENDS
+    // E. CONCEPT MASTERY ANALYTICS (Constructivism Model)
+    //    Group by concept, assign mastery level by exact-match accuracy.
+    //
+    //    Thresholds (as specified):
+    //      Expert      : Accuracy ≥ 80%
+    //      Proficient  : 65% ≤ Accuracy < 80%
+    //      Developing  : 40% ≤ Accuracy < 65%
+    //      Beginner    : Accuracy < 40%
     // ══════════════════════════════════════════════════════════════
 
-    /**
-     * Compare student pseudocode against instructor solution.
-     * Performs structural logic analysis and identifies "Root Cause" of differences.
-     * @param {string} studentCode — student's pseudocode
-     * @param {string} solutionCode — instructor's ground-truth solution
-     */
+    getConceptMastery() {
+        if (!this.benchmarkResults || !this.benchmarkResults.results) return [];
+
+        const conceptMap = {};
+        for (const r of this.benchmarkResults.results) {
+            const key = r.concept || 'General';
+            if (!conceptMap[key]) {
+                conceptMap[key] = { concept: key, total: 0, compiled: 0, exact: 0, totalPrecision: 0, totalRecall: 0 };
+            }
+            const c = conceptMap[key];
+            c.total++;
+            if (r.compiled)   c.compiled++;
+            if (r.exactMatch) c.exact++;
+            c.totalPrecision += r.precision;
+            c.totalRecall    += r.recall;
+        }
+
+        return Object.values(conceptMap).map(c => {
+            const accuracy    = parseFloat(((c.exact    / c.total) * 100).toFixed(1));
+            const successRate = parseFloat(((c.compiled / c.total) * 100).toFixed(1));
+            const avgPrecision = parseFloat(((c.totalPrecision / c.total) * 100).toFixed(1));
+            const avgRecall    = parseFloat(((c.totalRecall    / c.total) * 100).toFixed(1));
+
+            // C. F1 per concept (edge-case guard)
+            let f1 = 0;
+            if (avgPrecision + avgRecall > 0) {
+                f1 = parseFloat(((2 * avgPrecision * avgRecall) / (avgPrecision + avgRecall)).toFixed(1));
+            }
+
+            // E. Mastery Level by exact-match accuracy thresholds
+            let mastery;
+            if      (accuracy >= 80) mastery = 'Expert';
+            else if (accuracy >= 65) mastery = 'Proficient';
+            else if (accuracy >= 40) mastery = 'Developing';
+            else                     mastery = 'Beginner';
+
+            return { concept: c.concept, total: c.total, compiled: c.compiled, exact: c.exact, successRate, accuracy, avgPrecision, avgRecall, f1, mastery };
+        }).sort((a, b) => b.accuracy - a.accuracy);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // LOGIC GAP ANALYSIS  (student vs instructor solution)
+    // ══════════════════════════════════════════════════════════════
+
     analyzeLogicGap(studentCode, solutionCode) {
-        if (!solutionCode) return { match: true, reason: "No ground truth provided for this exercise." };
+        if (!solutionCode) return { match: true, reason: 'No ground truth provided for this exercise.' };
 
-        const studentTokens = this._tokenize(studentCode);
+        const studentTokens  = this._tokenize(studentCode);
         const solutionTokens = this._tokenize(solutionCode);
-
-        // 1. Keyword Frequency Analysis (Structural Logic)
-        const studentKeywords = this._getKeywordCounts(studentTokens);
+        const studentKeywords  = this._getKeywordCounts(studentTokens);
         const solutionKeywords = this._getKeywordCounts(solutionTokens);
 
         const gaps = [];
-
-        // Check for missing/extra logic structures
         const importantKeywords = ['IF', 'WHILE', 'FOR', 'BEGIN', 'END'];
         for (const kw of importantKeywords) {
-            const studentCount = studentKeywords[kw] || 0;
-            const solutionCount = solutionKeywords[kw] || 0;
-            const diff = studentCount - solutionCount;
-            
+            const sc = studentKeywords[kw]  || 0;
+            const ex = solutionKeywords[kw] || 0;
+            const diff = sc - ex;
             if (diff < 0) {
-                gaps.push({
-                    type: 'Missing Structure',
-                    concept: kw,
-                    message: `Missing ${Math.abs(diff)} '${kw}' block(s).`,
-                    rootCause: `The instructor's solution uses ${solutionCount} ${kw} structure(s) to handle the problem's logic. Your attempt only uses ${studentCount}.`
-                });
+                gaps.push({ type: 'Missing Structure', concept: kw, message: `Missing ${Math.abs(diff)} '${kw}' block(s).`, rootCause: `Instructor's solution uses ${ex} ${kw} structure(s); yours uses ${sc}.` });
             } else if (diff > 0) {
-                gaps.push({
-                    type: 'Extra Complexity',
-                    concept: kw,
-                    message: `Redundant '${kw}' block(s) detected.`,
-                    rootCause: `The problem can be solved with only ${solutionCount} ${kw} structure(s). Adding ${diff} extra block(s) increases cognitive load and potential for errors.`
-                });
+                gaps.push({ type: 'Extra Complexity', concept: kw, message: `Redundant '${kw}' block(s) detected.`, rootCause: `Problem needs only ${ex} ${kw} structure(s). You added ${diff} extra.` });
             }
         }
 
-        // 2. Concept Analysis
-        return {
-            match: gaps.length === 0,
-            gaps: gaps,
-            summary: gaps.length === 0 ? "Logical alignment: Excellent" : "Logic Analysis Required"
-        };
-    }
-
-    /**
-     * Aggregate benchmark results by concept to show "Concept Mastery".
-     */
-    getConceptMastery() {
-        if (!this.benchmarkResults) return [];
-        
-        const conceptMap = {};
-        for (const r of this.benchmarkResults.results) {
-            if (!conceptMap[r.concept]) {
-                conceptMap[r.concept] = { concept: r.concept, total: 0, compiled: 0, exact: 0, avgPrecision: 0 };
-            }
-            const c = conceptMap[r.concept];
-            c.total++;
-            if (r.compiled) c.compiled++;
-            if (r.exactMatch) c.exact++;
-            c.avgPrecision += r.precision;
-        }
-
-        return Object.values(conceptMap).map(c => ({
-            ...c,
-            successRate: parseFloat(((c.compiled / c.total) * 100).toFixed(1)),
-            accuracy: parseFloat(((c.exact / c.total) * 100).toFixed(1)),
-            precision: parseFloat(((c.avgPrecision / c.total) * 100).toFixed(1))
-        }));
+        return { match: gaps.length === 0, gaps, summary: gaps.length === 0 ? 'Logical alignment: Excellent' : 'Logic Analysis Required' };
     }
 
     // ── Internal Helpers ──
 
     _tokenize(code) {
-        // Simple regex-based tokenizer for logic analysis
         return code.match(/\b[A-Z]+\b|\w+|[^\s\w]/g) || [];
     }
 
     _getKeywordCounts(tokens) {
-        const counts = {};
+        const counts   = {};
         const keywords = ['BEGIN', 'END', 'IF', 'THEN', 'ELSE', 'WHILE', 'DO', 'FOR', 'SET', 'INPUT', 'DISPLAY', 'PRINT'];
         for (const token of tokens) {
             const upper = token.toUpperCase();
-            if (keywords.includes(upper)) {
-                counts[upper] = (counts[upper] || 0) + 1;
-            }
+            if (keywords.includes(upper)) counts[upper] = (counts[upper] || 0) + 1;
         }
         return counts;
     }
 
-    /**
-     * Clear all historical data.
-     */
+    // Legacy line extractor (kept for compatibility)
+    _getCodeLines(code) {
+        return this._normalizeCode(code).split('\n').filter(l => l.trim().length > 0);
+    }
+
     clearHistory() {
         this.history = { sessions: [], benchmarks: [] };
         this._saveHistory();
@@ -530,4 +517,4 @@ class MetricsEngine {
 
 // ── Global Instance ──
 const metricsEngine = new MetricsEngine();
-console.log('[Metrics] MetricsEngine initialized. Session:', metricsEngine.sessionId);
+console.log('[Metrics] MetricsEngine v2 initialized. Session:', metricsEngine.sessionId);
