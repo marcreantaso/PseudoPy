@@ -3326,4 +3326,256 @@ select.form-input {
   transform: scale(1.05);
   box-shadow: 0 4px 10px rgba(37, 99, 235, 0.4);
 }
+
+/* ============================================================
+   RESPONSIVE DESIGN SYSTEM — BREAKPOINTS & MOBILE OPTIMIZATIONS
+   ============================================================ */
+
+/* ── Hamburger Button (Hidden on Desktop) ── */
+.hamburger-btn {
+  display: none;
+  width: 44px;
+  height: 44px;
+  font-size: 1.3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+/* ── Table Container Scoped Scroll ── */
+.data-table-container,
+.table-responsive,
+.analytics-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.data-table {
+  min-width: 600px;
+}
+
+/* ── Responsive Grid Helpers ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+/* ── Media Query: Large Desktop (1440px+) ── */
+@media (min-width: 1440px) {
+  .main-content {
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+}
+
+/* ── Media Query: Tablet & Mobile (< 1024px) ── */
+@media (max-width: 1023px) {
+  /* Layout Transformation */
+  .app-layout {
+    display: block;
+    width: 100vw;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Hamburger & Topbar */
+  .hamburger-btn {
+    display: inline-flex;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    padding: 0.6rem 0.85rem;
+    padding-top: calc(0.6rem + env(safe-area-inset-top, 0px));
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .topbar-title {
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+  }
+
+  .topbar-actions {
+    gap: 0.4rem;
+  }
+
+  #topbar-user-info {
+    max-width: 110px;
+    overflow: hidden;
+  }
+
+  #topbar-welcome {
+    font-size: 0.78rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+
+  #topbar-role {
+    font-size: 0.68rem;
+  }
+
+  #topbar-time {
+    display: none;
+  }
+
+  /* Off-Canvas Sidebar Drawer */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    max-width: 85vw;
+    z-index: 1100;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+    padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 1090;
+  }
+
+  /* Main Content Area */
+  .main-content {
+    padding: 0.85rem;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  /* Pseudocode & Editor Layout Stack */
+  .editor-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    gap: 1rem;
+  }
+
+  .editor-panel {
+    min-height: 350px;
+    height: auto;
+  }
+
+  .panel-footer {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .panel-footer .btn {
+    flex: 1 1 auto;
+    min-height: 40px;
+  }
+
+  /* Learning Analytics Charts & Filters */
+  .analytics-charts-grid,
+  div[style*="grid-template-columns: 1fr 1fr"],
+  div[style*="grid-template-columns: 2fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .analytics-filters-bar,
+  #analytics-filters-wrap {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}
+
+/* ── Media Query: Mobile Devices (< 768px) ── */
+@media (max-width: 767px) {
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.25rem; }
+  h3 { font-size: 1.0rem; }
+
+  /* Touch targets minimum height */
+  .btn, .nav-item, select, input, button {
+    min-height: 42px;
+  }
+
+  /* Stats Cards Grid Stack */
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Modals on Mobile */
+  .modal {
+    width: 95vw !important;
+    max-width: 100% !important;
+    max-height: 88vh !important;
+    margin: 0 auto;
+    border-radius: var(--radius-lg) !important;
+  }
+
+  .modal-footer {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .modal-footer .btn {
+    width: 100% !important;
+  }
+
+  /* Active exercise header controls stack */
+  #active-exercise-panel .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  /* Search & Filter Inputs Stack */
+  .filter-input, select.form-input, input.form-input {
+    width: 100% !important;
+  }
+
+  /* Mobile Submit Solution Button */
+  #btn-submit-exercise, #btn-translate-pseudocode {
+    width: 100% !important;
+    justify-content: center;
+  }
+}
+
+/* ── Media Query: Small Mobile (< 430px) ── */
+@media (max-width: 429px) {
+  .topbar-title {
+    max-width: 130px;
+    font-size: 0.88rem;
+  }
+
+  #topbar-welcome {
+    display: none;
+  }
+
+  .modal-header h3 {
+    font-size: 0.95rem;
+  }
+
+  .sidebar {
+    width: 100vw;
+    max-width: 100vw;
+  }
+}
+
 

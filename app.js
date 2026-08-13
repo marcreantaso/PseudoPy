@@ -423,6 +423,8 @@ function navigateTo(pageId) {
     if (page) page.classList.hidden = false;
     if (page) page.classList.remove('hidden');
 
+    closeMobileSidebar();
+
     $qsa('.nav-item').forEach(el => el.classList.remove('active'));
     $qsa('.nav-item').forEach(item => {
         if (item.getAttribute('onclick')?.includes(pageId)) {
@@ -462,6 +464,37 @@ function navigateTo(pageId) {
     // Refresh student progress pill whenever the Write Pseudocode page is shown
     if (pageId === 'write-pseudocode' && currentUser && currentUser.role === 'student') loadStudentProgress();
 }
+
+/* ============================================================
+   MOBILE NAVIGATION HANDLERS
+   ============================================================ */
+
+function toggleMobileSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (!sidebar) return;
+    const isOpen = sidebar.classList.contains('open');
+    if (isOpen) {
+        sidebar.classList.remove('open');
+        if (overlay) overlay.classList.add('hidden');
+    } else {
+        sidebar.classList.add('open');
+        if (overlay) overlay.classList.remove('hidden');
+    }
+}
+
+function closeMobileSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) sidebar.classList.remove('open');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+window.addEventListener('resize', () => {
+    if (window.innerWidth >= 1024) {
+        closeMobileSidebar();
+    }
+});
 
 
 /* ============================================================
