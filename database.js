@@ -182,11 +182,12 @@ async function dbCount(ref) {
 ];
 
 const SEED_USERS = [
-    { _docId: 'u1', id: 'u1', fullName: 'Mark Bautista',       username: 'mbautista_admin',       email: 'bautista@university.edu.ph',   password: 'admin123', role: 'admin',      status: 'active' },
-    { _docId: 'u2', id: 'u2', fullName: 'Marc Reantaso',        username: 'mreantaso_instructor',   email: 'reantaso@university.edu.ph',    password: 'pass123',  role: 'instructor', status: 'active', createdBy: 'u1' },
+    { _docId: 'u1', id: 'u1', fullName: 'Mark Bautista',       username: 'mbautista_admin',       email: 'bautista@university.edu.ph',   password: 'admin123', role: 'admin',      status: 'active', createdAt: '2025-07-01T08:00:00.000Z' },
+    { _docId: 'u2', id: 'u2', fullName: 'Marc Reantaso',        username: 'mreantaso_instructor',   email: 'reantaso@university.edu.ph',    password: 'pass123',  role: 'instructor', status: 'active', createdBy: 'u1', createdAt: '2025-08-10T14:15:00.000Z' },
+    { _docId: 'u_stu_emirandilla', id: 'u_stu_emirandilla', studentId: '2024-031', fullName: 'Eduard John Mirandilla', username: 'emirandilla_student', email: 'mirandilla@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:30:00.000Z' },
+    { _docId: 'u_stu_mdaet', id: 'u_stu_mdaet', studentId: '2024-032', fullName: 'Mikaella Daet', username: 'mdaet_student', email: 'daet@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:35:00.000Z' },
 ];
 
-<<<<<<< HEAD
 const SEED_EXERCISES = [
     {
         _docId: 'seed_easy_1',
@@ -202,7 +203,7 @@ const SEED_EXERCISES = [
         id: 'seed_medium_1',
         title: 'Sum Odd Numbers',
         description: 'Calculate the sum of odd numbers less than 100 and print the result.',
-        difficulty: 'medium',
+        difficulty: 'moderate',
         python_code: 'total = 0\ni = 1\nwhile i < 100:\n    total += i\n    i += 2\nprint(total)',
         createdAt: new Date().toISOString().split('T')[0]
     },
@@ -211,7 +212,7 @@ const SEED_EXERCISES = [
         id: 'seed_medium_2',
         title: 'Count Multiples of 4 and 7',
         description: 'Count numbers between 1 and 20 that are multiples of 4 or 7.',
-        difficulty: 'medium',
+        difficulty: 'moderate',
         python_code: 'count = 0\nfor i in range(1, 21):\n    if i % 4 == 0 or i % 7 == 0:\n        count += 1\nprint(count)',
         createdAt: new Date().toISOString().split('T')[0]
     },
@@ -226,7 +227,6 @@ const SEED_EXERCISES = [
     }
 ];
 
-=======
 // Generate 30 student accounts
 FILIPINO_NAMES.forEach((name, index) => {
     const idNum = String(index + 1).padStart(3, '0');
@@ -395,8 +395,6 @@ while (SEED_ACTIVITY.length < 100) {
 
     SEED_ACTIVITY.push(act(`act_gen_${itemIndex++}`, studentName, studentId, ex.title, ex.difficulty, status, score, dateStr, errorType, procTime, codeStr, result));
 }
-
->>>>>>> 6eb1a46 (Update project)
 async function seedDatabase() {
     try {
         const db = await initDB();
@@ -408,12 +406,45 @@ async function seedDatabase() {
             for (const u of SEED_USERS) await dbSet(usersRef, u.id, u);
         }
 
+        // Ensure specific student accounts requested exist
+        const emUser = {
+            _docId: 'u_stu_emirandilla', id: 'u_stu_emirandilla', studentId: '2024-031',
+            fullName: 'Eduard John Mirandilla', username: 'emirandilla_student',
+            email: 'mirandilla@gmail.com', password: 'pass123', role: 'student',
+            status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A'
+        };
+        const mdUser = {
+            _docId: 'u_stu_mdaet', id: 'u_stu_mdaet', studentId: '2024-032',
+            fullName: 'Mikaella Daet', username: 'mdaet_student',
+            email: 'daet@gmail.com', password: 'pass123', role: 'student',
+            status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A'
+        };
+        await dbSet(usersRef, emUser._docId, emUser);
+        await dbSet(usersRef, mdUser._docId, mdUser);
+
         // Seed Activity
         const acts = await dbGetAll(activityRef);
         if (acts.length === 0) {
             console.log('[Database] Seeding activity records...');
-            for (const act of SEED_ACTIVITY) await dbSet(activityRef, act._docId, act);
+            for (const actItem of SEED_ACTIVITY) await dbSet(activityRef, actItem._docId, actItem);
             console.log(`[Database] ${SEED_ACTIVITY.length} activity records seeded ✅`);
+        }
+
+        // Ensure task submissions for Eduard John Mirandilla & Mikaella Daet exist
+        const emActs = acts.filter(a => a.studentId === '2024-031' || (a.student && a.student.toLowerCase().includes('mirandilla')));
+        if (emActs.length === 0) {
+            await dbSet(activityRef, 'act_sp_em1', act('act_sp_em1', 'Eduard John Mirandilla', '2024-031', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T14:20:00', null, '0.78s', 
+                'BEGIN\n  DECLARE sum AS INTEGER\n  sum = 0\n  FOR i FROM 1 TO 10 DO\n    IF i MOD 2 == 0 THEN\n      sum = sum + i\n    END IF\n  END FOR\n  PRINT sum\nEND', 'Success'));
+            await dbSet(activityRef, 'act_sp_em2', act('act_sp_em2', 'Eduard John Mirandilla', '2024-031', 'Factorial Calculation', 'hard', 'Completed', '95%', '2025-08-07T16:10:00', null, '1.10s', 
+                'BEGIN\n  INPUT n\n  DECLARE f AS INTEGER\n  f = 1\n  FOR i FROM 1 TO n DO\n    f = f * i\n  END FOR\n  PRINT f\nEND', 'Success'));
+        }
+
+        const mdActs = acts.filter(a => a.studentId === '2024-032' || (a.student && a.student.toLowerCase().includes('daet')));
+        if (mdActs.length === 0) {
+            await dbSet(activityRef, 'act_sp_md1', act('act_sp_md1', 'Mikaella Daet', '2024-032', 'Array Sum', 'easy', 'Completed', '90%', '2025-08-08T15:00:00', null, '0.52s', 
+                'BEGIN\n  DECLARE arr AS ARRAY\n  arr = [5, 10, 15]\n  DECLARE sum AS INTEGER\n  sum = 0\n  FOR i FROM 0 TO 2 DO\n    sum = sum + arr[i]\n  END FOR\n  PRINT sum\nEND', 'Success'));
+            await dbSet(activityRef, 'act_sp_md2', act('act_sp_md2', 'Mikaella Daet', '2024-032', 'Prime Number Checker', 'moderate', 'Completed', '100%', '2025-08-06T11:30:00', null, '0.89s', 
+                'BEGIN\n  INPUT n\n  DECLARE isPrime AS BOOLEAN\n  isPrime = TRUE\n  FOR i FROM 2 TO n-1 DO\n    IF n MOD i == 0 THEN\n      isPrime = FALSE\n    END IF\n  END FOR\n  PRINT isPrime\nEND', 'Success'));
         }
 
         // ── Seed 30 Exercises from dataset.json ──
@@ -473,8 +504,8 @@ class Database {
         users: [
           { id: 1, fullname: 'MB Autista', username: 'mbautista_admin', email: 'mbautista@university.edu.ph', password: 'admin123', role: 'admin', status: 'active' },
           { id: 2, fullname: 'MR Eantaso', username: 'mreantaso_instructor', email: 'mreantaso@university.edu.ph', password: 'instructor123', role: 'instructor', status: 'active' },
-          { id: 3, fullname: 'E Miranda', username: 'emirandilla_student', email: 'emirandilla@university.edu.ph', password: 'student123', role: 'student', status: 'active' },
-          { id: 4, fullname: 'MD Daet', username: 'mdaet_student', email: 'mdaet@university.edu.ph', password: 'student123', role: 'student', status: 'active' }
+          { id: 3, fullname: 'Eduard John Mirandilla', username: 'emirandilla_student', email: 'mirandilla@gmail.com', password: 'pass123', role: 'student', status: 'active' },
+          { id: 4, fullname: 'Mikaella Daet', username: 'mdaet_student', email: 'daet@gmail.com', password: 'pass123', role: 'student', status: 'active' }
         ],
         exercises: [
           {

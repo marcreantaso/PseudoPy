@@ -937,13 +937,40 @@
         <div class="page-header">
           <div>
             <h2>📋 Manage Exercises & Tasks</h2>
-            <p>Create, edit, and manage pseudocode exercises for students.</p>
+            <p>Create, edit, and manage pseudocode exercises for students. Click <strong>Add Exercise</strong> to get started.</p>
           </div>
           <button class="btn btn-primary" style="width:auto" onclick="openExerciseModal()">
-            ➕ New Exercise
+            ➕ Add Exercise
           </button>
         </div>
-        <div class="data-table-container" style="margin-top:1rem">
+        <div class="stats-grid" style="margin-bottom:1.5rem">
+          <div class="stat-card">
+            <div class="stat-icon">📋</div>
+            <div class="stat-value" id="stat-exercise-total">0</div>
+            <div class="stat-label">Total Exercises</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">🟢</div>
+            <div class="stat-value" id="stat-exercise-easy">0</div>
+            <div class="stat-label">Easy Exercises</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">🟡</div>
+            <div class="stat-value" id="stat-exercise-moderate">0</div>
+            <div class="stat-label">Moderate Exercises</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">🔴</div>
+            <div class="stat-value" id="stat-exercise-hard">0</div>
+            <div class="stat-label">Hard Exercises</div>
+          </div>
+        </div>
+
+        <div class="data-table-container">
+          <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">
+            <h3>Exercise List</h3>
+            <span id="stat-exercise-count-label" style="font-size:0.8rem;color:var(--text-muted)"></span>
+          </div>
           <table class="data-table" id="exercises-table">
             <thead>
               <tr>
@@ -1291,57 +1318,160 @@
       <!-- ═══════════════════════════════════
            PAGE: Manage Users (Admin)
            ═══════════════════════════════════ -->
+      <!-- ═══════════════════════════════════
+           PAGE: Manage Instructors (Admin)
+           ═══════════════════════════════════ -->
       <div id="page-manage-users" class="page-view hidden">
         <div class="page-header">
           <div>
             <h2>👥 Manage Instructors</h2>
             <p>Create, edit, and manage instructor accounts.</p>
           </div>
-          <div style="display: flex; gap: 0.5rem;">
+          <div style="display: flex; gap: 0.75rem;">
             <button class="btn btn-secondary" style="width:auto" onclick="exportData('users')">
               📥 Export Instructors
             </button>
-            <button class="btn btn-primary" style="width:auto" onclick="openUserModal()">
+            <button class="btn btn-primary" style="width:auto" onclick="openInstructorAddModal()">
               ➕ Add Instructor
             </button>
           </div>
         </div>
 
-        <div class="stats-grid" style="margin-bottom:1.5rem">
-          <div class="stat-card">
-            <div class="stat-icon">👨‍🏫</div>
-            <div class="stat-value" id="stat-total-instructors">0</div>
-            <div class="stat-label">Total Instructors</div>
+        <!-- KPI Summary Cards -->
+        <div class="an-kpi-grid" style="margin-bottom:1.5rem">
+          <div class="an-kpi-card">
+            <div class="an-kpi-icon-wrap" style="background:#2e1065">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+            <div class="an-kpi-body">
+              <div class="an-kpi-value" id="stat-total-instructors">0</div>
+              <div class="an-kpi-label">Total Instructors</div>
+              <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem">All registered instructor accounts</div>
+            </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-icon">🟢</div>
-            <div class="stat-value" id="stat-active-instructors">0</div>
-            <div class="stat-label">Active Instructors</div>
+
+          <div class="an-kpi-card">
+            <div class="an-kpi-icon-wrap" style="background:#064e3b">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+            </div>
+            <div class="an-kpi-body">
+              <div class="an-kpi-value" id="stat-active-instructors">0</div>
+              <div class="an-kpi-label">Active Instructors</div>
+              <div class="an-kpi-trend positive" style="margin-top:0.2rem">
+                <span>Currently active and can login</span>
+                <svg width="40" height="16" viewBox="0 0 50 20" fill="none" style="vertical-align:middle;margin-left:auto">
+                  <path d="M2 15 L 12 12 L 22 14 L 32 8 L 42 10 L 48 4" stroke="#10b981" stroke-width="2" fill="none" />
+                </svg>
+              </div>
+            </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-icon">🔴</div>
-            <div class="stat-value" id="stat-inactive-instructors">0</div>
-            <div class="stat-label">Inactive Instructors</div>
+
+          <div class="an-kpi-card">
+            <div class="an-kpi-icon-wrap" style="background:#450a0a">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            </div>
+            <div class="an-kpi-body">
+              <div class="an-kpi-value" id="stat-inactive-instructors">0</div>
+              <div class="an-kpi-label">Inactive Instructors</div>
+              <div class="an-kpi-trend negative" style="margin-top:0.2rem">
+                <span>Deactivated or inactive accounts</span>
+                <svg width="40" height="16" viewBox="0 0 50 20" fill="none" style="vertical-align:middle;margin-left:auto">
+                  <path d="M2 5 L 12 8 L 22 6 L 32 14 L 42 11 L 48 16" stroke="#ef4444" stroke-width="2" fill="none" />
+                </svg>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="data-table-container">
-          <div class="panel-header">
-            <h3>All Users</h3>
+        <!-- Filter & Search Bar -->
+        <div class="an-filter-bar" style="margin-bottom:1.5rem">
+          <div class="an-filter-item an-filter-search" style="flex:1">
+            <span class="an-filter-label">🔍 SEARCH</span>
+            <div class="an-search-wrap">
+              <svg class="an-search-icon" viewBox="0 0 20 20" fill="none">
+                <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.6" />
+                <path d="M13 13l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              </svg>
+              <input type="text" id="instructor-search" class="an-input"
+                placeholder="Search instructor by name, username, or email..." oninput="applyInstructorFilters()">
+            </div>
           </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Email</th>
-                <th>Password</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="users-table-body"></tbody>
-          </table>
+
+          <div class="an-filter-item" style="width:160px">
+            <span class="an-filter-label">✔ STATUS</span>
+            <select id="instructor-filter-status" class="an-input" onchange="applyInstructorFilters()">
+              <option value="" selected>All Statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+          <div class="an-filter-item" style="width:200px">
+            <span class="an-filter-label">↕ SORT BY</span>
+            <select id="instructor-sort" class="an-input" onchange="applyInstructorFilters()">
+              <option value="newest" selected>Date Added (Newest)</option>
+              <option value="oldest">Date Added (Oldest)</option>
+              <option value="name">Name (A-Z)</option>
+            </select>
+          </div>
+
+          <button class="btn btn-secondary an-reset-btn" onclick="loadUsers()" style="margin-top:auto;height:38px">
+            🔄 Refresh
+          </button>
+        </div>
+
+        <!-- Data Table Container -->
+        <div class="data-table-container">
+          <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">
+            <div style="display:flex;align-items:center;gap:0.5rem">
+              <span style="font-size:1.1rem">👥</span>
+              <h3 style="margin:0">All Instructors</h3>
+            </div>
+            <span id="instructor-count-label" style="font-size:0.8rem;color:var(--text-muted)"></span>
+          </div>
+
+          <div style="overflow-x:auto">
+            <table class="data-table" id="instructors-table">
+              <thead>
+                <tr>
+                  <th>Instructor</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Date Added <span style="font-size:0.75rem">↓</span></th>
+                  <th>Last Login</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body">
+                <tr>
+                  <td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">Loading instructors...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination Row -->
+          <div class="an-pagination-row" style="padding:1rem 1.5rem">
+            <span id="instructor-page-info" class="an-page-info">Showing 0 of 0 results</span>
+            <div class="an-page-controls">
+              <button id="instructor-prev-btn" class="an-page-btn" onclick="instructorPageNav(-1)">‹ Previous</button>
+              <span id="instructor-page-numbers" class="an-page-numbers"></span>
+              <button id="instructor-next-btn" class="an-page-btn" onclick="instructorPageNav(1)">Next ›</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1588,7 +1718,7 @@
   <div id="exercise-modal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
-        <h3 id="exercise-modal-title">New Exercise</h3>
+        <h3 id="exercise-modal-title">Add Exercise</h3>
         <button class="btn btn-ghost btn-icon" onclick="closeExerciseModal()">✕</button>
       </div>
       <div class="modal-body">
@@ -1628,7 +1758,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeExerciseModal()">Cancel</button>
-        <button class="btn btn-primary" style="width:auto" onclick="saveExercise()">💾 Save Exercise</button>
+        <button id="exercise-save-btn" class="btn btn-primary" style="width:auto" onclick="saveExercise()">➕ Add Exercise</button>
       </div>
     </div>
   </div>
@@ -1677,6 +1807,147 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
         <button class="btn btn-primary" style="width:auto" onclick="saveUser()">💾 Save User</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Instructor Modal -->
+  <div id="instructor-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:540px;width:95%">
+      <div class="modal-header">
+        <h3 id="instructor-modal-title" class="modal-title">➕ Add Instructor</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeInstructorModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+          <div class="form-group">
+            <label>Full Name <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="inst-fullname" class="form-input" placeholder="Enter full name">
+          </div>
+
+          <div class="form-group">
+            <label>Username <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="inst-username" class="form-input" placeholder="Choose username">
+          </div>
+
+          <div class="form-group" style="grid-column:1/-1">
+            <label>Email <span style="color:var(--danger)">*</span></label>
+            <input type="email" id="inst-email" class="form-input" placeholder="Enter email address">
+          </div>
+
+          <div class="form-group" id="inst-password-group">
+            <label>Password <span style="color:var(--danger)">*</span></label>
+            <div style="position: relative; display: flex; align-items: center;">
+              <input type="password" id="inst-password" class="form-input" placeholder="Enter password" style="padding-right: 2.5rem; width: 100%;">
+              <button type="button" class="btn btn-ghost btn-icon" onclick="togglePasswordVisibility('inst-password', this)" style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">👁️</button>
+            </div>
+          </div>
+
+          <div class="form-group" id="inst-confirm-password-group">
+            <label>Confirm Password <span style="color:var(--danger)">*</span></label>
+            <input type="password" id="inst-confirm-password" class="form-input" placeholder="Confirm password">
+          </div>
+
+          <div class="form-group" style="grid-column:1/-1">
+            <label>Status <span style="color:var(--danger)">*</span></label>
+            <select id="inst-status" class="form-input">
+              <option value="active" selected>Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="inst-form-alert" class="hidden" style="padding:0.75rem;border-radius:var(--radius-sm);background:rgba(239,68,68,0.15);color:var(--danger);font-size:0.83rem;margin-top:0.5rem"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeInstructorModal()">Cancel</button>
+        <button id="inst-save-btn" class="btn btn-primary" style="width:auto" onclick="saveInstructor()">➕ Add Instructor</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Instructor Details Right-Side Drawer Panel -->
+  <div id="instructor-detail-modal" class="drawer-overlay hidden" onclick="if(event.target===this)closeInstructorDetailModal()">
+    <div class="drawer-panel">
+      <div class="drawer-header">
+        <h3 id="idm-title" style="margin:0;font-size:1.1rem;font-weight:700">Instructor Details</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeInstructorDetailModal()" style="font-size:1.1rem">✕</button>
+      </div>
+
+      <div class="drawer-body">
+        <!-- Avatar & Name Header -->
+        <div style="text-align:center;padding:0.75rem 0 1.25rem;border-bottom:1px solid var(--border);margin-bottom:1rem">
+          <div class="avatar-lg" id="idm-avatar" style="width:68px;height:68px;border-radius:50%;background:#8b5cf6;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:700;margin:0 auto 0.6rem;box-shadow:0 0 20px rgba(139,92,246,0.3)">M</div>
+          <h3 id="idm-name" style="margin-bottom:0.15rem;color:var(--text-primary);font-size:1.2rem">Marc Reantaso</h3>
+          <div id="idm-username" style="font-size:0.85rem;color:var(--text-muted);font-family:monospace">@mreantaso_instructor</div>
+        </div>
+
+        <!-- Detail List Items matching screenshot -->
+        <div style="display:flex;flex-direction:column;gap:0.75rem">
+          <div>
+            <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
+              <span>✉️</span> Email
+            </div>
+            <div id="idm-email" style="font-size:0.88rem;color:var(--text-primary);word-break:break-all;padding-left:1.5rem">reantaso@university.edu.ph</div>
+          </div>
+
+          <div>
+            <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
+              <span>🎭</span> Role
+            </div>
+            <div id="idm-role" style="padding-left:1.5rem">
+              <span class="badge badge-instructor" style="font-size:0.75rem;padding:0.2rem 0.6rem">INSTRUCTOR</span>
+            </div>
+          </div>
+
+          <div>
+            <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
+              <span>⚡</span> Status
+            </div>
+            <div id="idm-status" style="padding-left:1.5rem">
+              <span class="badge badge-active" style="font-size:0.75rem;padding:0.2rem 0.6rem">ACTIVE</span>
+            </div>
+          </div>
+
+          <div>
+            <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
+              <span>📅</span> Date Added
+            </div>
+            <div id="idm-date-added" style="font-size:0.88rem;color:var(--text-secondary);padding-left:1.5rem">Aug 10, 2025 02:15 PM</div>
+          </div>
+
+          <div>
+            <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
+              <span>🕒</span> Last Login
+            </div>
+            <div id="idm-last-login" style="font-size:0.88rem;color:var(--text-secondary);padding-left:1.5rem">Aug 12, 2025 08:20 PM</div>
+          </div>
+
+          <div>
+            <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
+              <span>👥</span> Total Students
+            </div>
+            <div id="idm-students" style="font-size:1.1rem;font-weight:700;color:var(--text-primary);padding-left:1.5rem">12</div>
+          </div>
+
+          <div>
+            <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
+              <span>📋</span> Total Exercises
+            </div>
+            <div id="idm-exercises" style="font-size:1.1rem;font-weight:700;color:var(--text-primary);padding-left:1.5rem">8</div>
+          </div>
+
+          <div>
+            <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
+              <span>📝</span> Total Submissions
+            </div>
+            <div id="idm-submissions" style="font-size:1.1rem;font-weight:700;color:var(--text-primary);padding-left:1.5rem">85</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="drawer-footer">
+        <button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="closeInstructorDetailModal()">Close</button>
       </div>
     </div>
   </div>

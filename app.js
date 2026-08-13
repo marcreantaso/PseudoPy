@@ -155,10 +155,7 @@ async function init() {
         const syncEditorState = () => {
             setText('line-count', editor.value.split('\n').length + ' lines');
             updateGutter();
-<<<<<<< HEAD
-=======
 
->>>>>>> 6eb1a46 (Update project)
             exerciseState.isTranslated = false;
             exerciseState.isExecuted = false;
             exerciseState.outputMatched = false;
@@ -182,10 +179,7 @@ async function init() {
     if (pyEditor) {
         const syncPythonState = () => {
             updatePythonGutter();
-<<<<<<< HEAD
-=======
 
->>>>>>> 6eb1a46 (Update project)
             exerciseState.isExecuted = false;
             exerciseState.outputMatched = false;
             updateExerciseStatus();
@@ -319,6 +313,13 @@ async function handleLogin() {
 
         // Step 3: Role is auto-detected from the database record
         currentUser = userByUsername;
+
+        // Record last login timestamp
+        try {
+            await dbUpdate(usersRef, currentUser._docId || currentUser.id, { lastLogin: new Date().toISOString() });
+            currentUser.lastLogin = new Date().toISOString();
+        } catch (e) { /* non-critical */ }
+
         showToast(`Welcome back, ${currentUser.fullName}!`, 'success');
         showApp();
     } catch (err) {
@@ -335,10 +336,9 @@ function handleLogout() {
     showToast('Signed out successfully.', 'info');
 }
 
-<<<<<<< HEAD
 const ROLE_LABELS = { student: 'Student', instructor: 'Instructor', admin: 'Administrator' };
 const ROLE_BADGES = { student: 'badge-student', instructor: 'badge-instructor', admin: 'badge-admin' };
-=======
+
 function checkAccess(role, pageId) {
     const adminPages = ['manage-users', 'password-requests', 'admin-execute'];
     const instructorPages = ['analytics', 'manage-exercises', 'generate-code', 'compiler-metrics', 'manage-students'];
@@ -349,7 +349,6 @@ function checkAccess(role, pageId) {
     if (studentPages.includes(pageId)) return role === 'student';
     return true; // fallback for unclassified pages
 }
->>>>>>> 6eb1a46 (Update project)
 
 function showApp() {
     hide('login-page');
@@ -361,17 +360,17 @@ function showApp() {
     setText('sidebar-role', ROLE_LABELS[currentUser.role]);
 
     // Update topbar welcome and role display
-    document.getElementById('topbar-welcome').textContent = `Welcome, ${currentUser.fullName}`;
+    setText('topbar-welcome', 'Welcome, ' + currentUser.fullName);
     const roleLabelsForDisplay = { student: 'Student', instructor: 'Instructor', admin: 'Administrator' };
-    document.getElementById('topbar-role').textContent = `Role: ${roleLabelsForDisplay[currentUser.role]}`;
+    setText('topbar-role', 'Role: ' + roleLabelsForDisplay[currentUser.role]);
 
     // Show correct nav
     $qsa('.sidebar-nav > div').forEach(el => el.classList.add('hidden'));
-    const roleNav = $id(`nav-${currentUser.role}`);
+    const roleNav = $id('nav-' + currentUser.role);
     if (roleNav) roleNav.classList.remove('hidden');
 
     // Show/hide student progress pill based on role
-    const progressPillWrap = document.getElementById('student-progress-pill-wrap');
+    const progressPillWrap = $id('student-progress-pill-wrap');
     if (progressPillWrap) {
         progressPillWrap.style.display = currentUser.role === 'student' ? 'flex' : 'none';
     }
@@ -396,8 +395,8 @@ function showApp() {
 
 function navigateTo(pageId) {
     if (!currentUser) {
-        document.getElementById('app-layout').classList.add('hidden');
-        document.getElementById('login-page').classList.remove('hidden');
+        hide('app-layout');
+        show('login-page');
         return;
     }
 
@@ -421,6 +420,7 @@ function navigateTo(pageId) {
     $qsa('.page-view').forEach(el => el.classList.add('hidden'));
 
     const page = $id(`page-${pageId}`);
+    if (page) page.classList.hidden = false;
     if (page) page.classList.remove('hidden');
 
     $qsa('.nav-item').forEach(el => el.classList.remove('active'));
@@ -518,10 +518,7 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
         }
 
         const result = pseudocodeToPython(input);
-<<<<<<< HEAD
-=======
 
->>>>>>> 6eb1a46 (Update project)
         if (!result.valid) {
             setPythonOutput(outputId, '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
             if (consoleEl) {
@@ -537,29 +534,10 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
             return;
         }
 
-<<<<<<< HEAD
         setPythonOutput(outputId, result.python);
         if (consoleEl) {
             consoleEl.textContent = successToast;
             consoleEl.className = 'output-content';
-=======
-        setPythonOutput('python-output', result.python);
-
-        output.className = 'output-content';
-        output.textContent = '✅ Pseudocode translated successfully! Click "Run Code" to execute.';
-
-        if (runBtn) runBtn.disabled = false;
-        showToast('Pseudocode translated to Python successfully!', 'success');
-
-        exerciseState.isTranslated = true;
-        updateExerciseStatus();
-    } catch (e) {
-        console.error("Translation Engine Crash:", e);
-        const output = document.getElementById('console-output');
-        if (output) {
-            output.className = 'output-content error';
-            output.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
->>>>>>> 6eb1a46 (Update project)
         }
         if (runBtn) runBtn.disabled = false;
         showToast(successToast, 'success');
@@ -598,7 +576,6 @@ function translatePseudocode() {
 }
 
 function translateFromPage() {
-<<<<<<< HEAD
     translatePseudocodeGeneric(
         'translate-input',
         'translate-output',
@@ -616,119 +593,6 @@ function instructorTranslate() {
         null,
         'Python code generated!'
     );
-=======
-    try {
-        let input = document.getElementById('translate-input').value;
-        if (!input.trim()) {
-            showToast('Please write some pseudocode first.', 'error');
-            return;
-        }
-
-        const cleanedInput = preprocessPseudocode(input);
-        if (cleanedInput !== input) {
-            document.getElementById('translate-input').value = cleanedInput;
-            input = cleanedInput;
-        }
-
-        const validation = validatePseudocode(input);
-        const consoleEl = document.getElementById('translate-console');
-
-        if (!validation.valid) {
-            if (consoleEl) {
-                consoleEl.innerHTML = renderHtmlErrors(validation.errors);
-                consoleEl.className = 'output-content error';
-            }
-            setPythonOutput('translate-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
-            showToast(`${validation.errors.length} syntax error(s) found. Check the output area.`, 'error');
-            return;
-        }
-
-        const result = pseudocodeToPython(input);
-
-        if (!result.valid) {
-            if (consoleEl) {
-                consoleEl.innerHTML = renderHtmlErrors(result.errors);
-                consoleEl.className = 'output-content error';
-            }
-            setPythonOutput('translate-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
-            showToast(`${result.errors.length} syntax error(s) found. Check the output area.`, 'error');
-            return;
-        }
-
-        if (consoleEl) {
-            consoleEl.textContent = '✅ Pseudocode translated successfully! Click "Run" to execute.';
-            consoleEl.className = 'output-content';
-        }
-        setPythonOutput('translate-output', result.python);
-        showToast('Translation complete!', 'success');
-    } catch (e) {
-        console.error("Translation Engine Crash:", e);
-        const consoleEl = document.getElementById('translate-console');
-        if (consoleEl) {
-            consoleEl.className = 'output-content error';
-            consoleEl.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
-        }
-        document.getElementById('translate-output').textContent = `# System Error\n# ${e.message}`;
-        showToast("System Error. Check the output area.", 'error');
-    }
-}
-
-function instructorTranslate() {
-    try {
-        let input = document.getElementById('instructor-pseudo-input').value;
-        if (!input.trim()) {
-            showToast('Please write some pseudocode first.', 'error');
-            return;
-        }
-
-        const cleanedInput = preprocessPseudocode(input);
-        if (cleanedInput !== input) {
-            document.getElementById('instructor-pseudo-input').value = cleanedInput;
-            input = cleanedInput;
-        }
-
-        const validation = validatePseudocode(input);
-        const consoleEl = document.getElementById('instructor-console');
-
-        if (!validation.valid) {
-            if (consoleEl) {
-                consoleEl.innerHTML = renderHtmlErrors(validation.errors);
-                consoleEl.className = 'output-content error';
-            }
-            setPythonOutput('instructor-python-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
-            showToast(`${validation.errors.length} syntax error(s) found. Check the output area.`, 'error');
-            return;
-        }
-
-        const result = pseudocodeToPython(input);
-
-        if (!result.valid) {
-            if (consoleEl) {
-                consoleEl.innerHTML = renderHtmlErrors(result.errors);
-                consoleEl.className = 'output-content error';
-            }
-            setPythonOutput('instructor-python-output', '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
-            showToast(`${result.errors.length} syntax error(s) found. Check the output area.`, 'error');
-            return;
-        }
-
-        if (consoleEl) {
-            consoleEl.textContent = '✅ Pseudocode translated successfully! Click "Run" to execute.';
-            consoleEl.className = 'output-content';
-        }
-        setPythonOutput('instructor-python-output', result.python);
-        showToast('Python code generated!', 'success');
-    } catch (e) {
-        console.error("Translation Engine Crash:", e);
-        const consoleEl = document.getElementById('instructor-console');
-        if (consoleEl) {
-            consoleEl.className = 'output-content error';
-            consoleEl.innerHTML = `<span class="error-text"># ❌ System Error during translation: ${e.message}</span>`;
-        }
-        document.getElementById('instructor-python-output').textContent = `# System Error\n# ${e.message}`;
-        showToast("System Error. Check the output area.", 'error');
-    }
->>>>>>> 6eb1a46 (Update project)
 }
 
 const compilerEngine = new PseudocodeCompiler();
@@ -1372,28 +1236,29 @@ function renderFeedback(feedback) {
 
 async function loadExercises(append = false) {
     if (!append) instructorExOffset = 0;
+    const allExercises = await refreshExercises();
     const exercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, instructorExOffset);
-<<<<<<< HEAD
-    const container = $id('exercises-list');
-=======
-    const tbody = document.getElementById('exercises-table-body');
-    if (!tbody) return;
->>>>>>> 6eb1a46 (Update project)
+    const tbody = $id('exercises-table-body');
 
-    if (!container) return;
+    // Update Exercise Stat Cards
+    const totalCount = allExercises.length;
+    const easyCount = allExercises.filter(e => (e.difficulty || '').toLowerCase() === 'easy').length;
+    const modCount = allExercises.filter(e => ['moderate', 'medium'].includes((e.difficulty || '').toLowerCase())).length;
+    const hardCount = allExercises.filter(e => (e.difficulty || '').toLowerCase() === 'hard').length;
+
+    setText('stat-exercise-total', String(totalCount));
+    setText('stat-exercise-easy', String(easyCount));
+    setText('stat-exercise-moderate', String(modCount));
+    setText('stat-exercise-hard', String(hardCount));
+    setText('stat-exercise-count-label', totalCount === 0 ? 'No exercises' : `${totalCount} exercise${totalCount !== 1 ? 's' : ''}`);
+
+    if (!tbody) return;
+
     if (exercises.length === 0 && !append) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-muted)"><div style="font-size:2rem">📋</div><div style="margin-top:0.5rem;font-weight:600">No Exercises Yet</div><div style="font-size:0.85rem">Create your first exercise to get started.</div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-muted)"><div style="font-size:2rem">📋</div><div style="margin-top:0.5rem;font-weight:600">No Exercises Yet</div><div style="font-size:0.85rem">Click <strong>Add Exercise</strong> to get started.</div></td></tr>`;
         return;
     }
 
-<<<<<<< HEAD
-    const html = exercises.map(buildInstructorExerciseCard).join('');
-
-    if (append) {
-        const btn = $id('load-more-instructor');
-        if (btn) btn.remove();
-        container.innerHTML += html;
-=======
     const diffLabel = d => {
         const norm = (d || 'moderate').toLowerCase();
         if (norm === 'medium') return 'moderate';
@@ -1427,10 +1292,9 @@ async function loadExercises(append = false) {
     }).join('');
 
     if (append) {
-        const loadRow = document.getElementById('exercises-load-more-row');
+        const loadRow = $id('exercises-load-more-row');
         if (loadRow) loadRow.remove();
         tbody.insertAdjacentHTML('beforeend', rows);
->>>>>>> 6eb1a46 (Update project)
     } else {
         tbody.innerHTML = rows;
     }
@@ -1467,22 +1331,34 @@ async function loadStudentExercises(append = false) {
             .filter(a => a.student === studentName && a.status === 'Completed')
             .map(a => a.exercise)
     );
-<<<<<<< HEAD
-    const validExercises = exercises.filter(ex => ex && ex.title && ex.description && ex.difficulty);
-    const totalCount = validExercises.length;
-    const completedCount = validExercises.filter(ex => completedIds.has(ex.title)).length;
-    
-    if (totalCount === 0 && !append) {
-        container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📝</div><h3>No Valid Exercises Available</h3><p>There are no properly defined exercises to display right now.</p></div>`;
-        return;
-    }
 
-    setText('student-total-count', totalCount);
-    setText('student-completed-count', completedCount);
-    const fillEl = $id('student-progress-fill');
-    if (fillEl) fillEl.style.width = (totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0) + '%';
+    const normDiff = d => {
+        const v = (d || 'moderate').toLowerCase();
+        return v === 'medium' ? 'moderate' : v;
+    };
+    const dispDiff = d => { const v = normDiff(d); return v.charAt(0).toUpperCase() + v.slice(1); };
 
-    const html = validExercises.map(ex => buildStudentExerciseCard(ex, completedIds.has(ex.title))).join('');
+    const html = exercises.map(ex => {
+        const exTitle = ex.title || ex.concept || 'Untitled Exercise';
+        const exDesc = ex.description || 'No description provided.';
+        const exDiff = normDiff(ex.difficulty);
+        const isCompleted = completedIds.has(exTitle);
+        return `
+    <div class="exercise-card" ${isCompleted ? 'style="border-color: var(--success); opacity: 0.8;"' : ''}>
+      <div class="ex-header">
+        <span class="ex-title">${exTitle}</span>
+        <span class="ex-difficulty ${exDiff}">${dispDiff(ex.difficulty)}</span>
+      </div>
+      <p class="ex-desc">${exDesc}</p>
+      <div class="ex-meta"><span>📅 ${ex.createdAt || '—'}</span></div>
+      <div class="ex-actions">
+        ${isCompleted
+                ? `<span class="badge badge-success" style="padding: 0.4rem 0.8rem;">✅ Completed</span>`
+                : `<button class="btn btn-primary btn-sm" style="width:auto" onclick="attemptExercise('${ex._docId}')">📝 Start Exercise</button>`
+            }
+      </div>
+    </div>`;
+    }).join('');
 
     if (append) {
         const btn = $id('load-more-student');
@@ -1498,54 +1374,6 @@ async function loadStudentExercises(append = false) {
     }
 }
 
-function buildInstructorExerciseCard(ex) {
-    return `
-    <div class="exercise-card">
-      <div class="ex-header">
-        <span class="ex-title">${ex.title}</span>
-        <span class="ex-difficulty ${ex.difficulty}">${ex.difficulty}</span>
-      </div>
-      <p class="ex-desc">${ex.description}</p>
-      <div class="ex-meta"><span>📅 ${ex.createdAt || 'N/A'}</span></div>
-      <div class="ex-actions">
-        <button class="btn btn-secondary btn-sm" onclick="editExercise('${ex._docId}')">✏️ Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteExercise('${ex._docId}')">🗑️ Delete</button>
-      </div>
-    </div>`;
-}
-
-function buildStudentExerciseCard(ex, isCompleted) {
-    return `
-=======
-
-    const normDiff = d => {
-        const v = (d || 'moderate').toLowerCase();
-        return v === 'medium' ? 'moderate' : v;
-    };
-    const dispDiff = d => { const v = normDiff(d); return v.charAt(0).toUpperCase() + v.slice(1); };
-
-    const html = exercises.map(ex => {
-        const exTitle = ex.title || ex.concept || 'Untitled Exercise';
-        const exDesc = ex.description || 'No description provided.';
-        const exDiff = normDiff(ex.difficulty);
-        const isCompleted = completedIds.has(exTitle);
-        return `
->>>>>>> 6eb1a46 (Update project)
-    <div class="exercise-card" ${isCompleted ? 'style="border-color: var(--success); opacity: 0.8;"' : ''}>
-      <div class="ex-header">
-        <span class="ex-title">${exTitle}</span>
-        <span class="ex-difficulty ${exDiff}">${dispDiff(ex.difficulty)}</span>
-      </div>
-      <p class="ex-desc">${exDesc}</p>
-      <div class="ex-meta"><span>📅 ${ex.createdAt || '—'}</span></div>
-      <div class="ex-actions">
-        ${isCompleted
-                ? `<span class="badge badge-success" style="padding: 0.4rem 0.8rem;">✅ Completed</span>`
-                : `<button class="btn btn-primary btn-sm" style="width:auto" onclick="attemptExercise('${ex._docId}')">📝 Start Exercise</button>`
-            }
-      </div>
-    </div>`;
-}
 
 /**
  * loadStudentProgress()
@@ -1583,19 +1411,19 @@ async function loadStudentProgress() {
         const pct = totalExercises > 0 ? Math.round((completedCount / totalExercises) * 100) : 0;
 
         // 4. Update Exercises & Tasks page counters
-        const totalEl = document.getElementById('student-total-count');
-        const compEl  = document.getElementById('student-completed-count');
-        const fillEl  = document.getElementById('student-progress-fill');
+        const totalEl = $id('student-total-count');
+        const compEl  = $id('student-completed-count');
+        const fillEl  = $id('student-progress-fill');
         if (totalEl) totalEl.textContent = totalExercises;
         if (compEl)  compEl.textContent  = completedCount;
         if (fillEl)  fillEl.style.width  = pct + '%';
 
         // 5. Update Write Pseudocode topbar progress pill + mini bar
-        const pill = document.getElementById('topbar-progress-pill');
+        const pill = $id('topbar-progress-pill');
         if (pill) {
             pill.textContent = `✅ ${completedCount} / ${totalExercises} Completed`;
         }
-        const topbarFill = document.getElementById('topbar-progress-fill');
+        const topbarFill = $id('topbar-progress-fill');
         if (topbarFill) {
             topbarFill.style.width = pct + '%';
         }
@@ -1610,21 +1438,13 @@ async function attemptExercise(id) {
     const ex = await dbGet(exercisesRef, id);
     if (!ex) return;
 
-<<<<<<< HEAD
     const pseudoEditor = $id('pseudocode-editor');
-=======
-    const pseudoEditor = document.getElementById('pseudocode-editor');
->>>>>>> 6eb1a46 (Update project)
     if (pseudoEditor) {
         pseudoEditor.value = '';
         pseudoEditor.dispatchEvent(new Event('input'));
     }
 
-<<<<<<< HEAD
     const pyOut = $id('python-output');
-=======
-    const pyOut = document.getElementById('python-output');
->>>>>>> 6eb1a46 (Update project)
     if (pyOut) {
         pyOut.value = '';
         pyOut.dispatchEvent(new Event('input'));
@@ -1634,58 +1454,36 @@ async function attemptExercise(id) {
     renderActiveExercise(ex);
 
     navigateTo('write-pseudocode');
-    showToast(`Exercise loaded: ${ex.title}. Write your pseudocode!`, 'info');
+    showToast(`Exercise loaded: ${ex.title || ex.concept || 'Exercise'}. Write your pseudocode!`, 'info');
 }
 
 function renderActiveExercise(ex) {
     const panel = $id('active-exercise-panel');
     if (!panel) return;
-<<<<<<< HEAD
-    
-    setText('active-ex-title', ex.title);
-    setText('active-ex-difficulty', (ex.difficulty || 'medium').charAt(0).toUpperCase() + (ex.difficulty || 'medium').slice(1));
-    setText('active-ex-desc', ex.description || 'No description provided.');
-    
-    const diffBadge = $id('active-ex-difficulty');
-    if (diffBadge) {
-        diffBadge.className = 'badge';
-        if (ex.difficulty === 'easy') diffBadge.classList.add('badge-success');
-        else if (ex.difficulty === 'hard') diffBadge.classList.add('badge-danger');
-        else diffBadge.classList.add('badge-warning');
-    }
-    
-    panel.classList.remove('hidden');
-    
-    // Ensure content is visible initially
-    const content = $id('active-ex-content');
-    if (content) content.classList.remove('hidden');
-    const toggleBtn = $id('btn-toggle-instructions');
-    if (toggleBtn) toggleBtn.textContent = 'Hide Instructions';
-=======
 
-    // Normalise field names: seeded exercises use 'concept'; user-created use 'title'
     const exTitle = ex.title || ex.concept || 'Untitled Exercise';
     const exDesc = ex.description || 'No description provided.';
     const rawDiff = (ex.difficulty || 'moderate').toLowerCase();
     const exDiff = rawDiff === 'medium' ? 'moderate' : rawDiff;
     const exDiffDisplay = exDiff.charAt(0).toUpperCase() + exDiff.slice(1);
 
-    document.getElementById('active-ex-title').textContent = exTitle;
-    document.getElementById('active-ex-desc').textContent = exDesc;
+    setText('active-ex-title', exTitle);
+    setText('active-ex-desc', exDesc);
 
-    const diffBadge = document.getElementById('active-ex-difficulty');
-    diffBadge.textContent = exDiffDisplay;
-    diffBadge.className = 'badge';
-    if (exDiff === 'easy') diffBadge.classList.add('badge-success');
-    else if (exDiff === 'hard') diffBadge.classList.add('badge-danger');
-    else diffBadge.classList.add('badge-warning');
+    const diffBadge = $id('active-ex-difficulty');
+    if (diffBadge) {
+        diffBadge.textContent = exDiffDisplay;
+        diffBadge.className = 'badge';
+        if (exDiff === 'easy') diffBadge.classList.add('badge-success');
+        else if (exDiff === 'hard') diffBadge.classList.add('badge-danger');
+        else diffBadge.classList.add('badge-warning');
+    }
 
     panel.classList.remove('hidden');
 
-    const content = document.getElementById('active-ex-content');
-    content.classList.remove('hidden');
-    document.getElementById('btn-toggle-instructions').textContent = 'Hide Instructions';
->>>>>>> 6eb1a46 (Update project)
+    const content = $id('active-ex-content');
+    if (content) content.classList.remove('hidden');
+    setText('btn-toggle-instructions', 'Hide Instructions');
 
     // Set active state
     exerciseState.activeExercise = ex;
@@ -1746,13 +1544,8 @@ function submitExercise() {
     const ex = exerciseState.activeExercise;
     if (!ex) return;
     if (!confirm('Are you sure you want to submit this exercise?')) return;
-<<<<<<< HEAD
-    
-    const pseudo = getValue('pseudocode-editor');
-=======
 
-    const pseudo = document.getElementById('pseudocode-editor').value;
->>>>>>> 6eb1a46 (Update project)
+    const pseudo = getValue('pseudocode-editor');
     const py = getPythonCode('python-output');
     const outTextEl = $id('console-output');
     const outText = outTextEl ? outTextEl.textContent || '' : '';
@@ -1760,7 +1553,7 @@ function submitExercise() {
 
     const actRecord = {
         student: currentUser ? currentUser.fullName : 'Guest Student',
-        exercise: ex.title || ex.concept || 'Untitled Exercise', // handle both title and concept fields
+        exercise: ex.title || ex.concept || 'Untitled Exercise',
         status: 'Completed',
         score: '100%',
         time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
@@ -1769,50 +1562,29 @@ function submitExercise() {
         python_code: py,
         output: outText
     };
-<<<<<<< HEAD
-    
-    dbSet(activityRef, 'act_' + Date.now(), actRecord).then(() => {
-        const overlay = $id('submission-success-overlay');
-        const timeDisplay = $id('submission-time-display');
-=======
 
     dbSet(activityRef, 'act_' + Date.now(), actRecord).then(async () => {
-        const overlay = document.getElementById('submission-success-overlay');
-        const timeDisplay = document.getElementById('submission-time-display');
->>>>>>> 6eb1a46 (Update project)
+        const overlay = $id('submission-success-overlay');
+        const timeDisplay = $id('submission-time-display');
         if (overlay && timeDisplay) {
             timeDisplay.innerHTML = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '<br>' +
                 now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
             overlay.classList.remove('hidden');
 
-            // Ensure the Return to Exercises button is always enabled
-            const returnBtn = document.getElementById('btn-return-to-exercises');
+            const returnBtn = $id('btn-return-to-exercises');
             if (returnBtn) returnBtn.disabled = false;
         }
-<<<<<<< HEAD
-        
+
         const pseudoEditor = $id('pseudocode-editor');
         if (pseudoEditor) pseudoEditor.readOnly = true;
         const pyOutput = $id('python-output');
         if (pyOutput) pyOutput.readOnly = true;
-        
-        // Hide run button and translate button to lock UI
-        const translateBtn = $qs('#page-write-pseudocode .btn-primary');
-        if (translateBtn) translateBtn.disabled = true;
-        const runBtn = $qs('#page-write-pseudocode .btn-success');
-=======
 
-        document.getElementById('pseudocode-editor').readOnly = true;
-        document.getElementById('python-output').readOnly = true;
-
-        // Lock only the Translate button and Run button — NOT the Return to Exercises button
-        const translateBtn = document.getElementById('btn-translate-pseudocode');
+        const translateBtn = $id('btn-translate-pseudocode');
         if (translateBtn) translateBtn.disabled = true;
-        const runBtn = document.getElementById('btn-run-code');
->>>>>>> 6eb1a46 (Update project)
+        const runBtn = $id('btn-run-code');
         if (runBtn) runBtn.disabled = true;
 
-        // — Immediately refresh progress counters from the database after submission —
         await loadStudentProgress();
     });
 }
@@ -1822,46 +1594,27 @@ function changeExercise() {
     const panel = $id('active-exercise-panel');
     if (panel) panel.classList.add('hidden');
 
-    // Hide submission overlay immediately
-    const overlay = document.getElementById('submission-success-overlay');
+    const overlay = $id('submission-success-overlay');
     if (overlay) overlay.classList.add('hidden');
 
-    // Reset exercise state
     exerciseState.activeExercise = null;
     exerciseState.isTranslated = false;
     exerciseState.isExecuted = false;
     exerciseState.outputMatched = false;
     exerciseState.expectedOutput = '';
 
-    // Unlock editor if previously locked after submission
     const pseudoEditor = $id('pseudocode-editor');
     if (pseudoEditor) pseudoEditor.readOnly = false;
     const pyOut = $id('python-output');
     if (pyOut) pyOut.readOnly = false;
-<<<<<<< HEAD
-    
-    const translateBtn = $qs('#page-write-pseudocode .btn-primary');
-    if (translateBtn) translateBtn.disabled = false;
-    const runBtn = $qs('#page-write-pseudocode .btn-success');
-    if (runBtn) runBtn.disabled = false;
-    
-    // Hide submission overlay
-    const overlay = $id('submission-success-overlay');
-    if (overlay) overlay.classList.add('hidden');
-    
-=======
 
-    // Re-enable locked buttons using their specific IDs
-    const translateBtn = document.getElementById('btn-translate-pseudocode');
+    const translateBtn = $id('btn-translate-pseudocode');
     if (translateBtn) translateBtn.disabled = false;
-    const runBtn = document.getElementById('btn-run-code');
+    const runBtn = $id('btn-run-code');
     if (runBtn) runBtn.disabled = false;
-    const returnBtn = document.getElementById('btn-return-to-exercises');
+    const returnBtn = $id('btn-return-to-exercises');
     if (returnBtn) returnBtn.disabled = false;
 
-    // Navigate to Exercises & Tasks page — navigateTo automatically calls loadStudentExercises()
-    // which refreshes the exercise list, completed count, and progress bar from the database.
->>>>>>> 6eb1a46 (Update project)
     navigateTo('exercises-student');
 }
 
@@ -1880,53 +1633,38 @@ function toggleExerciseInstructions() {
 
 function _clearExerciseErrors() {
     ['ex-title-error', 'ex-desc-error', 'ex-difficulty-error', 'ex-solution-error'].forEach(id => {
-        const el = document.getElementById(id);
+        const el = $id(id);
         if (el) el.style.display = 'none';
     });
 }
 
 async function openExerciseModal(id = null) {
     editingExerciseId = id;
-<<<<<<< HEAD
+    _clearExerciseErrors();
     const modal = $id('exercise-modal');
     const title = $id('exercise-modal-title');
     if (!modal || !title) return;
-=======
-    _clearExerciseErrors();
-    const modal = document.getElementById('exercise-modal');
-    const title = document.getElementById('exercise-modal-title');
->>>>>>> 6eb1a46 (Update project)
 
     if (id) {
         const ex = await dbGet(exercisesRef, id);
         if (ex) {
             title.textContent = 'Edit Exercise';
-<<<<<<< HEAD
-            setValue('ex-title', ex.title);
-            setValue('ex-desc', ex.description);
-            setValue('ex-difficulty', ex.difficulty);
-            setValue('ex-solution', ex.solution || '');
+            const rawDiff = (ex.difficulty || 'moderate').toLowerCase();
+            setValue('ex-title', ex.title || ex.concept || '');
+            setValue('ex-desc', ex.description || '');
+            setValue('ex-difficulty', rawDiff === 'medium' ? 'moderate' : rawDiff);
+            setValue('ex-solution', ex.solution || ex.pseudocode || '');
+            const saveBtn = $id('exercise-save-btn');
+            if (saveBtn) saveBtn.textContent = '💾 Save Changes';
         }
     } else {
-        title.textContent = 'New Exercise';
+        title.textContent = 'Add Exercise';
         setValue('ex-title', '');
         setValue('ex-desc', '');
-        setValue('ex-difficulty', 'medium');
+        setValue('ex-difficulty', 'moderate');
         setValue('ex-solution', '');
-=======
-            const rawDiff = (ex.difficulty || 'moderate').toLowerCase();
-            document.getElementById('ex-title').value = ex.title || ex.concept || '';
-            document.getElementById('ex-desc').value = ex.description || '';
-            document.getElementById('ex-difficulty').value = rawDiff === 'medium' ? 'moderate' : rawDiff;
-            document.getElementById('ex-solution').value = ex.solution || ex.pseudocode || '';
-        }
-    } else {
-        title.textContent = 'New Exercise';
-        document.getElementById('ex-title').value = '';
-        document.getElementById('ex-desc').value = '';
-        document.getElementById('ex-difficulty').value = 'moderate';
-        document.getElementById('ex-solution').value = '';
->>>>>>> 6eb1a46 (Update project)
+        const saveBtn = $id('exercise-save-btn');
+        if (saveBtn) saveBtn.textContent = '➕ Add Exercise';
     }
     modal.classList.remove('hidden');
 }
@@ -1938,39 +1676,32 @@ function closeExerciseModal() {
 }
 
 async function saveExercise() {
-<<<<<<< HEAD
-    const title = getValue('ex-title').trim();
-    const desc = getValue('ex-desc').trim();
-    const difficulty = getValue('ex-difficulty');
-    const solution = getValue('ex-solution').trim();
-=======
     _clearExerciseErrors();
->>>>>>> 6eb1a46 (Update project)
 
-    const titleVal = document.getElementById('ex-title').value.trim();
-    const descVal = document.getElementById('ex-desc').value.trim();
-    const diffVal = document.getElementById('ex-difficulty').value;
-    const solutionVal = document.getElementById('ex-solution').value.trim();
+    const titleVal = getValue('ex-title').trim();
+    const descVal = getValue('ex-desc').trim();
+    const diffVal = getValue('ex-difficulty');
+    const solutionVal = getValue('ex-solution').trim();
 
     // Per-field validation
     let hasError = false;
     if (!titleVal) {
-        const el = document.getElementById('ex-title-error');
+        const el = $id('ex-title-error');
         if (el) el.style.display = 'block';
         hasError = true;
     }
     if (!descVal) {
-        const el = document.getElementById('ex-desc-error');
+        const el = $id('ex-desc-error');
         if (el) el.style.display = 'block';
         hasError = true;
     }
     if (!diffVal) {
-        const el = document.getElementById('ex-difficulty-error');
+        const el = $id('ex-difficulty-error');
         if (el) el.style.display = 'block';
         hasError = true;
     }
     if (!solutionVal) {
-        const el = document.getElementById('ex-solution-error');
+        const el = $id('ex-solution-error');
         if (el) el.style.display = 'block';
         hasError = true;
     }
@@ -1996,7 +1727,7 @@ async function saveExercise() {
                 createdBy: currentUser?.id || 'unknown',
                 createdAt: new Date().toISOString().split('T')[0]
             });
-            showToast('Exercise created successfully!', 'success');
+            showToast('Exercise added successfully!', 'success');
         }
         closeExerciseModal();
         await loadExercises();
@@ -2011,11 +1742,8 @@ function editExercise(id) { openExerciseModal(id); }
 async function deleteExercise(id) {
     if (!confirm('Delete this exercise?')) return;
 
-    // ── Optimistic UI: remove the row instantly ──
-    const tbody = document.getElementById('exercises-table-body');
+    const tbody = $id('exercises-table-body');
     if (tbody) {
-        // Each row's delete button calls deleteExercise(id).
-        // Walk up from the button to find the <tr> that contains it.
         const btn = tbody.querySelector(`[onclick="deleteExercise('${id}')"]`);
         if (btn) {
             const row = btn.closest('tr');
@@ -2027,77 +1755,395 @@ async function deleteExercise(id) {
         }
     }
 
-    // ── Background: commit delete to IndexedDB ──
     dbDelete(exercisesRef, id)
         .then(() => showToast('Exercise deleted.', 'info'))
         .catch(err => {
             console.error('[Offline Database] Delete exercise error:', err);
             showToast('Failed to delete exercise. Please refresh.', 'error');
-            loadExercises(); // revert on failure
+            loadExercises();
         });
 }
 
 
 /* ============================================================
-   USER MANAGEMENT (Admin) — Offline Database CRUD
+   USER MANAGEMENT (Admin) — Manage Instructors
    ============================================================ */
 
+let allCachedInstructors = [];   // full list from DB (unfiltered)
+let filteredInstructors = [];    // after search/filter/sort
+let instructorPage = 1;
+const INSTR_PAGE_SIZE = 10;
+
+function _fmtDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+           ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
 async function loadUsers() {
+    const tbody = $id('users-table-body');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">Loading instructors...</td></tr>`;
+
     const users = await refreshUsers();
-<<<<<<< HEAD
+    const instructors = users.filter(u => u.role === 'instructor');
+
+    allCachedInstructors = instructors;
+
+    // KPI cards
+    setText('stat-total-instructors', instructors.length);
+    setText('stat-active-instructors', instructors.filter(u => u.status === 'active').length);
+    setText('stat-inactive-instructors', instructors.filter(u => u.status === 'inactive').length);
+
+    // apply existing filter state
+    applyInstructorFilters();
+}
+
+function applyInstructorFilters() {
+    const searchVal  = ($id('instructor-search')?.value || '').toLowerCase().trim();
+    const statusVal  = $id('instructor-filter-status')?.value || '';
+    const sortVal    = $id('instructor-sort')?.value || 'newest';
+
+    let list = allCachedInstructors.filter(u => {
+        if (statusVal && u.status !== statusVal) return false;
+        if (searchVal) {
+            const hay = [u.fullName, u.username, u.email].join(' ').toLowerCase();
+            if (!hay.includes(searchVal)) return false;
+        }
+        return true;
+    });
+
+    if (sortVal === 'name') {
+        list = list.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+    } else if (sortVal === 'oldest') {
+        list = list.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    } else {
+        list = list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    }
+
+    filteredInstructors = list;
+    instructorPage = 1;
+    renderInstructorTable();
+}
+
+function renderInstructorTable() {
     const tbody = $id('users-table-body');
     if (!tbody) return;
 
-    setText('stat-total-users', users.length);
-    setText('stat-total-students', users.filter(u => u.role === 'student').length);
-    setText('stat-total-instructors', users.filter(u => u.role === 'instructor').length);
-    setText('stat-total-admins', users.filter(u => u.role === 'admin').length);
-=======
-    const instructors = users.filter(u => u.role === 'instructor');
-    const tbody = document.getElementById('users-table-body');
+    const total = filteredInstructors.length;
+    const pageCount = Math.max(1, Math.ceil(total / INSTR_PAGE_SIZE));
+    instructorPage = Math.min(instructorPage, pageCount);
+    const start = (instructorPage - 1) * INSTR_PAGE_SIZE;
+    const slice = filteredInstructors.slice(start, start + INSTR_PAGE_SIZE);
 
-    document.getElementById('stat-total-instructors').textContent = instructors.length;
-    document.getElementById('stat-active-instructors').textContent = instructors.filter(u => u.status === 'active').length;
-    document.getElementById('stat-inactive-instructors').textContent = instructors.filter(u => u.status === 'inactive').length;
+    // count label
+    setText('instructor-count-label', total === 0 ? 'No instructors found' : `${total} instructor${total !== 1 ? 's' : ''}`);
 
-    const badgeClasses = { student: 'badge-student', instructor: 'badge-instructor', admin: 'badge-admin' };
-    const roleLabels = { student: 'Student', instructor: 'Instructor', admin: 'Admin' };
->>>>>>> 6eb1a46 (Update project)
+    // pagination info
+    const showing = total === 0 ? 0 : start + 1;
+    const showEnd = Math.min(start + INSTR_PAGE_SIZE, total);
+    setText('instructor-page-info', `Showing ${showing} to ${showEnd} of ${total} results`);
 
-    if (instructors.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">No instructors registered yet.</td></tr>`;
+    // page number buttons
+    const pageNumbers = $id('instructor-page-numbers');
+    if (pageNumbers) {
+        let html = '';
+        for (let p = 1; p <= pageCount; p++) {
+            html += `<button class="an-page-btn ${p === instructorPage ? 'active' : ''}" onclick="instructorGoPage(${p})">${p}</button>`;
+        }
+        pageNumbers.innerHTML = html;
+    }
+
+    const prevBtn = $id('instructor-prev-btn');
+    const nextBtn = $id('instructor-next-btn');
+    if (prevBtn) prevBtn.disabled = instructorPage <= 1;
+    if (nextBtn) nextBtn.disabled = instructorPage >= pageCount;
+
+    if (total === 0) {
+        tbody.innerHTML = `
+            <tr>
+              <td colspan="7" style="text-align:center;padding:3rem;color:var(--text-muted)">
+                <div style="font-size:2.5rem;margin-bottom:0.75rem">👥</div>
+                <div style="font-weight:600;font-size:1rem;margin-bottom:0.4rem">No instructors found</div>
+                <div style="font-size:0.83rem">Try adjusting your search or filter, or click <strong>Add Instructor</strong> to create one.</div>
+              </td>
+            </tr>`;
         return;
     }
 
-    tbody.innerHTML = instructors.map(u => `
-    <tr>
-      <td><div class="user-cell"><div class="avatar-sm">${u.fullName.charAt(0)}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
-      <td>${u.email}</td>
-      <td>
-        <div style="display:flex; align-items:center; gap:0.5rem">
-          <span id="pwd-masked-${u.id}" style="font-family: monospace; letter-spacing: 2px;">••••••</span>
-          <span id="pwd-real-${u.id}" class="hidden" style="font-family: monospace;">${u.password}</span>
-          <button class="btn btn-ghost btn-icon" onclick="toggleUserPasswordVisibility('${u.id}')" style="font-size: 0.9rem; opacity: 0.7; padding: 2px;">👁️</button>
-        </div>
-      </td>
-      <td><span class="badge ${ROLE_BADGES[u.role]}">${ROLE_LABELS[u.role]}</span></td>
-      <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
-      <td><div style="display:flex;gap:0.5rem">
-        <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit">✏️</button>
-        <button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}">${u.status === 'active' ? '🔒' : '🔓'}</button>
-        <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" ${u.id === currentUser?.id ? 'disabled title="Cannot delete yourself"' : ''} title="Delete">🗑️</button>
-      </div></td>
-    </tr>`).join('');
+    tbody.innerHTML = slice.map(u => {
+        const initial = (u.fullName || 'I').charAt(0).toUpperCase();
+        const statusBadge = u.status === 'active'
+            ? `<span class="badge badge-active">ACTIVE</span>`
+            : `<span class="badge badge-inactive">INACTIVE</span>`;
+        const dateAdded = _fmtDate(u.createdAt);
+        const lastLogin = _fmtDate(u.lastLogin);
+        return `
+        <tr>
+          <td>
+            <div class="user-cell">
+              <div class="avatar-sm" style="background:hsl(${(initial.charCodeAt(0)*17)%360},55%,45%)">${initial}</div>
+              <div>
+                <div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div>
+                <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace">@${u.username}</div>
+              </div>
+            </div>
+          </td>
+          <td style="color:var(--text-secondary);font-size:0.85rem">${u.email}</td>
+          <td><span class="badge badge-instructor" style="font-size:0.7rem;padding:0.25rem 0.6rem;letter-spacing:0.05em">INSTRUCTOR</span></td>
+          <td>${statusBadge}</td>
+          <td style="font-size:0.8rem;color:var(--text-muted)">${dateAdded}</td>
+          <td style="font-size:0.8rem;color:var(--text-muted)">${lastLogin}</td>
+          <td>
+            <div style="display:flex;gap:0.35rem;align-items:center">
+              <button class="btn btn-ghost btn-sm" onclick="viewInstructor('${u.id}')" title="View Details" style="padding:0.3rem 0.5rem;font-size:0.8rem">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="openInstructorEditModal('${u.id}')" title="Edit" style="padding:0.3rem 0.5rem;font-size:0.8rem">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="confirmToggleInstructorStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${u.status === 'active' ? 'var(--warning)' : 'var(--success)'}">
+                ${u.status === 'active'
+                    ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
+                    : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`
+                }
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" ${u.id === currentUser?.id ? 'disabled title="Cannot delete yourself"' : 'title="Delete"'} style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--danger)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              </button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+}
+
+function instructorPageNav(dir) {
+    const total = filteredInstructors.length;
+    const pageCount = Math.max(1, Math.ceil(total / INSTR_PAGE_SIZE));
+    instructorPage = Math.max(1, Math.min(instructorPage + dir, pageCount));
+    renderInstructorTable();
+}
+
+function instructorGoPage(p) {
+    instructorPage = p;
+    renderInstructorTable();
+}
+
+// ── Add / Edit Instructor Modal ──────────────────────────────
+
+let editingInstructorId = null;
+
+function openInstructorAddModal() {
+    editingInstructorId = null;
+    setText('instructor-modal-title', '➕ Add Instructor');
+    const saveBtn = $id('inst-save-btn');
+    if (saveBtn) saveBtn.textContent = '➕ Add Instructor';
+
+    setValue('inst-fullname', '');
+    setValue('inst-username', '');
+    setValue('inst-email', '');
+    setValue('inst-password', '');
+    setValue('inst-confirm-password', '');
+    setValue('inst-status', 'active');
+
+    const pwGroup  = $id('inst-password-group');
+    const cpGroup  = $id('inst-confirm-password-group');
+    if (pwGroup) pwGroup.classList.remove('hidden');
+    if (cpGroup) cpGroup.classList.remove('hidden');
+
+    const alert = $id('inst-form-alert');
+    if (alert) { alert.textContent = ''; alert.classList.add('hidden'); }
+
+    const modal = $id('instructor-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+async function openInstructorEditModal(id) {
+    const users = allCachedInstructors.length ? allCachedInstructors : await refreshUsers().then(u => u.filter(x => x.role === 'instructor'));
+    const user = users.find(u => u.id === id);
+    if (!user) return;
+
+    editingInstructorId = id;
+    setText('instructor-modal-title', '✏️ Edit Instructor');
+    const saveBtn = $id('inst-save-btn');
+    if (saveBtn) saveBtn.textContent = '💾 Save Changes';
+
+    setValue('inst-fullname', user.fullName || '');
+    setValue('inst-username', user.username || '');
+    setValue('inst-email', user.email || '');
+    setValue('inst-password', '');
+    setValue('inst-confirm-password', '');
+    setValue('inst-status', user.status || 'active');
+
+    // hide password fields during edit
+    const pwGroup  = $id('inst-password-group');
+    const cpGroup  = $id('inst-confirm-password-group');
+    if (pwGroup) pwGroup.classList.add('hidden');
+    if (cpGroup) cpGroup.classList.add('hidden');
+
+    const alert = $id('inst-form-alert');
+    if (alert) { alert.textContent = ''; alert.classList.add('hidden'); }
+
+    const modal = $id('instructor-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeInstructorModal() {
+    const modal = $id('instructor-modal');
+    if (modal) modal.classList.add('hidden');
+    editingInstructorId = null;
+}
+
+function _showInstAlert(msg) {
+    const el = $id('inst-form-alert');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+}
+
+async function saveInstructor() {
+    const fullName  = getValue('inst-fullname').trim();
+    const username  = getValue('inst-username').trim();
+    const email     = getValue('inst-email').trim();
+    const password  = getValue('inst-password').trim();
+    const confirm   = getValue('inst-confirm-password').trim();
+    const status    = getValue('inst-status') || 'active';
+
+    const alertEl = $id('inst-form-alert');
+    if (alertEl) { alertEl.textContent = ''; alertEl.classList.add('hidden'); }
+
+    // Validate required fields
+    if (!fullName)  { _showInstAlert('Full Name is required.'); return; }
+    if (!username)  { _showInstAlert('Username is required.'); return; }
+    if (!email)     { _showInstAlert('Email is required.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { _showInstAlert('Enter a valid email address.'); return; }
+
+    const allUsers = cachedUsers.length ? cachedUsers : await refreshUsers();
+
+    // Duplicate check
+    const dupUser = allUsers.find(u => u.username === username && u.id !== editingInstructorId);
+    if (dupUser) { _showInstAlert('Username is already taken. Choose another.'); return; }
+
+    const dupEmail = allUsers.find(u => u.email === email && u.id !== editingInstructorId);
+    if (dupEmail) { _showInstAlert('Email is already registered to another account.'); return; }
+
+    try {
+        if (editingInstructorId) {
+            // Edit mode
+            const user = allUsers.find(u => u.id === editingInstructorId);
+            if (!user) { _showInstAlert('Instructor not found.'); return; }
+            await dbUpdate(usersRef, user._docId, { fullName, username, email, status, role: 'instructor' });
+            showToast('Instructor updated successfully.', 'success');
+        } else {
+            // Add mode — password required
+            if (!password)  { _showInstAlert('Password is required.'); return; }
+            if (password.length < 8) { _showInstAlert('Password must be at least 8 characters long.'); return; }
+            if (!/[A-Z]/.test(password)) { _showInstAlert('Password must include at least one uppercase letter.'); return; }
+            if (!/[a-z]/.test(password)) { _showInstAlert('Password must include at least one lowercase letter.'); return; }
+            if (!/[0-9]/.test(password)) { _showInstAlert('Password must include at least one number.'); return; }
+            if (password !== confirm)    { _showInstAlert('Passwords do not match.'); return; }
+
+            const newId = 'u_inst_' + Date.now();
+            await dbSet(usersRef, newId, {
+                _docId: newId,
+                id: newId,
+                fullName,
+                username,
+                email,
+                password,
+                role: 'instructor',
+                status,
+                createdAt: new Date().toISOString(),
+                lastLogin: null,
+                createdBy: currentUser.id
+            });
+            showToast('Instructor added successfully.', 'success');
+        }
+        closeInstructorModal();
+        await loadUsers();
+    } catch (err) {
+        console.error('[Instructor] saveInstructor error:', err);
+        _showInstAlert(editingInstructorId ? 'Unable to update Instructor.' : 'Unable to add Instructor.');
+    }
+}
+
+// ── View Instructor Detail ───────────────────────────────────
+
+async function viewInstructor(id) {
+    const allUsers = cachedUsers.length ? cachedUsers : await refreshUsers();
+    const user = allUsers.find(u => u.id === id);
+    if (!user) return;
+
+    // Update all fields in the detail modal
+    const initial = (user.fullName || 'I').charAt(0).toUpperCase();
+    const avatarEl = $id('idm-avatar');
+    if (avatarEl) {
+        avatarEl.textContent = initial;
+        avatarEl.style.background = `hsl(${(initial.charCodeAt(0) * 17) % 360},55%,45%)`;
+    }
+    setText('idm-name', user.fullName || 'N/A');
+    setText('idm-username', '@' + (user.username || 'N/A'));
+    setText('idm-email', user.email || 'N/A');
+
+    const roleEl = $id('idm-role');
+    if (roleEl) roleEl.innerHTML = `<span class="badge badge-instructor" style="font-size:0.75rem">INSTRUCTOR</span>`;
+
+    const statusEl = $id('idm-status');
+    if (statusEl) statusEl.innerHTML = user.status === 'active'
+        ? `<span class="badge badge-active" style="font-size:0.75rem">ACTIVE</span>`
+        : `<span class="badge badge-inactive" style="font-size:0.75rem">INACTIVE</span>`;
+
+    setText('idm-date-added', user.createdAt ? _fmtDate(user.createdAt) : 'N/A');
+    setText('idm-last-login', user.lastLogin ? _fmtDate(user.lastLogin) : 'N/A');
+
+    // Compute totals from live data
+    const students = (cachedUsers.length ? cachedUsers : await refreshUsers()).filter(u => u.role === 'student' && u.instructorId === id);
+    const exercises = await refreshExercises();
+    const activity  = cachedActivity.length ? cachedActivity : await dbGetAll(activityRef);
+
+    setText('idm-students', String(students.length));
+    setText('idm-exercises', String(exercises.length));
+    setText('idm-submissions', String(activity.filter(a => {
+        const sid = students.map(s => s.id);
+        return sid.some(sid => a.studentId === students.find(s => s.id === sid)?.studentId);
+    }).length || activity.length));
+
+    const modal = $id('instructor-detail-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeInstructorDetailModal() {
+    const modal = $id('instructor-detail-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// ── Status Toggle with Confirmation ─────────────────────────
+
+async function confirmToggleInstructorStatus(id) {
+    const user = allCachedInstructors.find(u => u.id === id);
+    if (!user) return;
+    const newStatus = user.status === 'active' ? 'inactive' : 'active';
+    const action = newStatus === 'inactive' ? 'deactivate' : 'activate';
+    if (!confirm(`Are you sure you want to ${action} ${user.fullName}?\n\n${newStatus === 'inactive' ? 'They will not be able to log in.' : 'They will be able to log in again.'}`)) return;
+    try {
+        await dbUpdate(usersRef, user._docId, { status: newStatus });
+        showToast(`Instructor status updated to ${newStatus} successfully.`, 'success');
+        await loadUsers();
+    } catch (err) {
+        console.error('[Instructor] Toggle status error:', err);
+        showToast('Unable to update instructor status.', 'error');
+    }
 }
 
 async function loadStudents() {
     const users = await refreshUsers();
     const students = users.filter(u => u.role === 'student' && u.instructorId === currentUser.id);
-    const tbody = document.getElementById('students-table-body');
+    const tbody = $id('students-table-body');
 
-    document.getElementById('stat-student-total').textContent = students.length;
-    document.getElementById('stat-student-active').textContent = students.filter(u => u.status === 'active').length;
-    document.getElementById('stat-student-inactive').textContent = students.filter(u => u.status === 'inactive').length;
+    setText('stat-student-total', String(students.length));
+    setText('stat-student-active', String(students.filter(u => u.status === 'active').length));
+    setText('stat-student-inactive', String(students.filter(u => u.status === 'inactive').length));
 
     if (students.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">No students enrolled under your class yet.</td></tr>`;
@@ -2164,32 +2210,26 @@ async function toggleUserStatus(id) {
 
 async function openUserModal(id = null) {
     editingUserId = id;
-<<<<<<< HEAD
     const modal = $id('user-modal');
     const title = $id('user-modal-title');
+    const roleGroup = $id('user-role-group');
     if (!modal || !title) return;
-=======
-    const modal = document.getElementById('user-modal');
-    const title = document.getElementById('user-modal-title');
-    const roleGroup = document.getElementById('user-role-group');
 
     if (currentUser.role === 'admin') {
-        document.getElementById('user-role-select').value = 'instructor';
+        setValue('user-role-select', 'instructor');
         if (roleGroup) roleGroup.classList.add('hidden');
     } else if (currentUser.role === 'instructor') {
-        document.getElementById('user-role-select').value = 'student';
+        setValue('user-role-select', 'student');
         if (roleGroup) roleGroup.classList.add('hidden');
     } else {
         if (roleGroup) roleGroup.classList.remove('hidden');
     }
->>>>>>> 6eb1a46 (Update project)
 
     if (id) {
         const users = cachedUsers.length ? cachedUsers : await refreshUsers();
         const user = users.find(u => u.id === id);
         if (user) {
-<<<<<<< HEAD
-            title.textContent = 'Edit User';
+            title.textContent = currentUser.role === 'admin' ? 'Edit Instructor' : (currentUser.role === 'instructor' ? 'Edit Student' : 'Edit User');
             setValue('user-fullname', user.fullName);
             setValue('user-username', user.username);
             setValue('user-email', user.email);
@@ -2199,31 +2239,20 @@ async function openUserModal(id = null) {
             if (pwGroup) pwGroup.classList.add('hidden');
         }
     } else {
-        title.textContent = 'Add New User';
+        title.textContent = currentUser.role === 'admin' ? 'Add New Instructor' : (currentUser.role === 'instructor' ? 'Add New Student' : 'Add New User');
         setValue('user-fullname', '');
         setValue('user-username', '');
         setValue('user-email', '');
         setValue('user-password', '');
-        setValue('user-role-select', 'student');
+        if (currentUser.role === 'admin') {
+            setValue('user-role-select', 'instructor');
+        } else if (currentUser.role === 'instructor') {
+            setValue('user-role-select', 'student');
+        } else {
+            setValue('user-role-select', 'student');
+        }
         const pwGroup = $id('user-password-group');
         if (pwGroup) pwGroup.classList.remove('hidden');
-=======
-            title.textContent = currentUser.role === 'admin' ? 'Edit Instructor' : (currentUser.role === 'instructor' ? 'Edit Student' : 'Edit User');
-            document.getElementById('user-fullname').value = user.fullName;
-            document.getElementById('user-username').value = user.username;
-            document.getElementById('user-email').value = user.email;
-            document.getElementById('user-password').value = user.password;
-            document.getElementById('user-role-select').value = user.role;
-            document.getElementById('user-password-group').classList.add('hidden');
-        }
-    } else {
-        title.textContent = currentUser.role === 'admin' ? 'Add New Instructor' : (currentUser.role === 'instructor' ? 'Add New Student' : 'Add New User');
-        document.getElementById('user-fullname').value = '';
-        document.getElementById('user-username').value = '';
-        document.getElementById('user-email').value = '';
-        document.getElementById('user-password').value = '';
-        document.getElementById('user-password-group').classList.remove('hidden');
->>>>>>> 6eb1a46 (Update project)
     }
     modal.classList.remove('hidden');
 }
@@ -2235,25 +2264,17 @@ function closeUserModal() {
 }
 
 async function saveUser() {
-<<<<<<< HEAD
     const fullName = getValue('user-fullname').trim();
     const username = getValue('user-username').trim();
     const email = getValue('user-email').trim();
     const password = getValue('user-password').trim();
-    const role = getValue('user-role-select');
-=======
-    const fullName = document.getElementById('user-fullname').value.trim();
-    const username = document.getElementById('user-username').value.trim();
-    const email = document.getElementById('user-email').value.trim();
-    const password = document.getElementById('user-password').value.trim();
-    let role = document.getElementById('user-role-select').value;
+    let role = getValue('user-role-select');
 
     if (currentUser.role === 'admin') {
         role = 'instructor';
     } else if (currentUser.role === 'instructor') {
         role = 'student';
     }
->>>>>>> 6eb1a46 (Update project)
 
     if (!fullName || !username || !email || (!editingUserId && !password)) { showToast('Please fill in all required fields.', 'error'); return; }
 
@@ -2333,11 +2354,11 @@ async function loadAnalytics() {
     currentFilteredActivity = [...cachedActivity];
 
     // Set default filter values to match August 2025 (Week 2)
-    const searchEl = document.getElementById('filter-search');
-    const dateEl = document.getElementById('filter-date');
-    const monthEl = document.getElementById('filter-month');
-    const weekEl = document.getElementById('filter-week');
-    const statusEl = document.getElementById('filter-submission');
+    const searchEl = $id('filter-search');
+    const dateEl = $id('filter-date');
+    const monthEl = $id('filter-month');
+    const weekEl = $id('filter-week');
+    const statusEl = $id('filter-submission');
 
     if (searchEl) searchEl.value = '';
     if (dateEl) dateEl.value = '';
@@ -2350,37 +2371,14 @@ async function loadAnalytics() {
     applyAnalyticsFilters();
 }
 
-<<<<<<< HEAD
-function renderSubmissionsChart() {
-    const container = $id('chart-submissions');
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const values = [12, 19, 8, 25, 32, 15, 28];
-    const max = Math.max(...values);
-    const colors = ['#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#3b82f6', '#6366f1', '#8b5cf6'];
-    container.innerHTML = values.map((v, i) => `<div class="chart-bar" style="height:${(v / max) * 220}px;background:${colors[i]}"><span class="bar-value">${v}</span><span class="bar-label">${days[i]}</span></div>`).join('');
-}
-
-function renderErrorsChart() {
-    const container = $id('chart-errors');
-    const types = ['Syntax', 'Logic', 'Missing END', 'Indent', 'Type', 'Other'];
-    const values = [35, 22, 18, 12, 8, 5];
-    const max = Math.max(...values);
-    const colors = ['#ef4444', '#f59e0b', '#f97316', '#eab308', '#84cc16', '#6b7280'];
-    container.innerHTML = values.map((v, i) => `<div class="chart-bar" style="height:${(v / max) * 220}px;background:${colors[i]}"><span class="bar-value">${v}%</span><span class="bar-label">${types[i]}</span></div>`).join('');
-}
-
-async function renderActivityTable() {
-    const tbody = $id('activity-table-body');
-    const activity = await refreshActivity();
-=======
 function analyticsGoToPage(pageNum) {
     analyticsCurrentPage = pageNum;
     renderFilteredActivityTable(currentFilteredActivity);
 }
 
 function updateWeekDropdownLabels() {
-    const monthSelect = document.getElementById('filter-month');
-    const weekSelect = document.getElementById('filter-week');
+    const monthSelect = $id('filter-month');
+    const weekSelect = $id('filter-week');
     if (!weekSelect) return;
 
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -2400,24 +2398,26 @@ function updateWeekDropdownLabels() {
 }
 
 function applyAnalyticsFilters() {
-    const searchVal = (document.getElementById('filter-search')?.value || '').toLowerCase().trim();
-    const dateVal = document.getElementById('filter-date')?.value || '';
-    const monthVal = document.getElementById('filter-month')?.value ?? '';
-    const weekVal = document.getElementById('filter-week')?.value || '';
-    const submissionVal = document.getElementById('filter-submission')?.value || '';
+    const searchVal = ($id('filter-search')?.value || '').toLowerCase().trim();
+    const dateVal = $id('filter-date')?.value || '';
+    const monthVal = $id('filter-month')?.value ?? '';
+    const weekVal = $id('filter-week')?.value || '';
+    const submissionVal = $id('filter-submission')?.value || '';
 
     updateWeekDropdownLabels();
 
     currentFilteredActivity = cachedActivity.filter(a => {
         const recordDate = new Date(a.timestamp || a.time);
 
-        // 1. Search — student name, exercise title, student ID, submission ID
+        // 1. Search — student name, exercise title, student ID, submission ID, username, email
         if (searchVal) {
             const haystack = [
                 (a.student || '').toLowerCase(),
                 (a.exercise || '').toLowerCase(),
                 (a.studentId || '').toLowerCase(),
                 (a._docId || '').toLowerCase(),
+                (a.username || '').toLowerCase(),
+                (a.email || '').toLowerCase()
             ].join(' ');
             if (!haystack.includes(searchVal)) return false;
         }
@@ -2461,15 +2461,24 @@ function applyAnalyticsFilters() {
         return true;
     });
 
-    // Update activity chart subtitle label if week selected
-    const subLabel = document.getElementById('an-chart-sub-label');
+    // Update activity chart subtitle label dynamically
+    const subLabel = $id('an-chart-sub-label');
     if (subLabel) {
-        if (weekVal === '2') {
-            subLabel.textContent = 'Shows the number of student submissions based on the selected week (Aug 4 - Aug 10).';
+        const weekLabels = {
+            '1': 'Week 1 (days 1–3)', '2': 'Week 2 (days 4–10)',
+            '3': 'Week 3 (days 11–17)', '4': 'Week 4 (days 18–24)', '5': 'Week 5 (days 25–31)'
+        };
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const mIdx = monthVal !== '' ? parseInt(monthVal) : -1;
+        const mName = mIdx >= 0 ? monthNames[mIdx] : '';
+        if (weekVal && mName) {
+            subLabel.textContent = `Shows student submissions for ${mName} ${weekLabels[weekVal] || 'Week ' + weekVal}.`;
         } else if (weekVal) {
-            subLabel.textContent = `Shows the number of student submissions based on selected Week ${weekVal}.`;
-        } else if (monthVal !== '') {
-            subLabel.textContent = 'Shows the number of student submissions based on the selected month.';
+            subLabel.textContent = `Shows student submissions for ${weekLabels[weekVal] || 'Week ' + weekVal}.`;
+        } else if (mName) {
+            subLabel.textContent = `Shows student submissions for ${mName}.`;
+        } else if (dateVal) {
+            subLabel.textContent = `Shows student submissions for the selected date.`;
         } else {
             subLabel.textContent = 'Shows the number of student submissions based on selected filters.';
         }
@@ -2481,7 +2490,7 @@ function applyAnalyticsFilters() {
 
 function resetAnalyticsFilters() {
     ['filter-search', 'filter-date', 'filter-month', 'filter-week', 'filter-submission'].forEach(id => {
-        const el = document.getElementById(id);
+        const el = $id(id);
         if (el) el.value = '';
     });
     updateWeekDropdownLabels();
@@ -2495,18 +2504,18 @@ function updateAnalyticsUI() {
 
     // Stat Cards
     const uniqueStudents = new Set(currentFilteredActivity.map(a => a.student)).size;
-    document.getElementById('stat-students').textContent = uniqueStudents || (total > 0 ? 10 : 0);
-    document.getElementById('stat-submissions').textContent = total;
+    setText('stat-students', String(uniqueStudents || (total > 0 ? 10 : 0)));
+    setText('stat-submissions', String(total));
 
     const completed = currentFilteredActivity.filter(a => a.status === 'Completed').length;
     const successRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-    document.getElementById('stat-success-rate').textContent = successRate + '%';
+    setText('stat-success-rate', successRate + '%');
 
     const errCount = currentFilteredActivity.filter(a => a.errorType && a.errorType.trim() !== '').length;
-    document.getElementById('stat-common-errors').textContent = errCount;
+    setText('stat-common-errors', String(errCount));
 
     // Record count label
-    const countLabel = document.getElementById('activity-count-label');
+    const countLabel = $id('activity-count-label');
     if (countLabel) countLabel.textContent = total === 0 ? 'No records' : `${total} record${total !== 1 ? 's' : ''}`;
 
     // Render Charts
@@ -2518,50 +2527,114 @@ function updateAnalyticsUI() {
 }
 
 function renderSubmissionActivityChart(filteredActivity) {
-    const container = document.getElementById('chart-submissions');
-    const yAxisContainer = document.getElementById('an-bar-y-axis');
-    const tooltip = document.getElementById('an-bar-tooltip');
+    const container = $id('chart-submissions');
+    const yAxisContainer = $id('an-bar-y-axis');
+    const tooltip = $id('an-bar-tooltip');
     if (!container) return;
 
-    // Days for Week 2 (Aug 4 - Aug 10, 2025)
-    const weekDays = [
-        { label: 'Mon', sub: 'Aug 4', dateKey: '2025-08-04', defaultCount: 4 },
-        { label: 'Tue', sub: 'Aug 5', dateKey: '2025-08-05', defaultCount: 6 },
-        { label: 'Wed', sub: 'Aug 6', dateKey: '2025-08-06', defaultCount: 8 },
-        { label: 'Thu', sub: 'Aug 7', dateKey: '2025-08-07', defaultCount: 5 },
-        { label: 'Fri', sub: 'Aug 8', dateKey: '2025-08-08', defaultCount: 10, active: true },
-        { label: 'Sat', sub: 'Aug 9', dateKey: '2025-08-09', defaultCount: 2 },
-        { label: 'Sun', sub: 'Aug 10', dateKey: '2025-08-10', defaultCount: 3 }
-    ];
+    // --- Determine chart period dynamically from filters ---
+    const monthVal = $id('filter-month')?.value ?? '';
+    const weekVal  = $id('filter-week')?.value  || '';
+    const dateVal  = $id('filter-date')?.value  || '';
+    const viewMode = $id('chart-view-mode')?.value || 'day';
 
-    // Group filtered records by dateKey
+    // Group all filtered activity by date
     const dateMap = {};
     filteredActivity.forEach(a => {
         const d = new Date(a.timestamp || a.time);
         if (isNaN(d.getTime())) return;
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         if (!dateMap[key]) dateMap[key] = [];
         dateMap[key].push(a);
     });
 
-    const dayCounts = weekDays.map(w => (dateMap[w.dateKey] ? dateMap[w.dateKey].length : w.defaultCount));
-    const maxVal = Math.max(...dayCounts, 12);
+    // Build chart columns based on selected filter context
+    let weekDays = [];
 
-    // Y-Axis labels: 12, 10, 8, 6, 4, 2, 0
+    if (viewMode === 'month' || (monthVal !== '' && !weekVal)) {
+        // Monthly view: show each week as a bar
+        const mIdx = monthVal !== '' ? parseInt(monthVal) : new Date().getMonth();
+        const year = 2025;
+        const mName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mIdx];
+        const weekRanges = [
+            { label: 'Wk 1', start: 1,  end: 3,  w: 1 },
+            { label: 'Wk 2', start: 4,  end: 10, w: 2 },
+            { label: 'Wk 3', start: 11, end: 17, w: 3 },
+            { label: 'Wk 4', start: 18, end: 24, w: 4 },
+            { label: 'Wk 5', start: 25, end: 31, w: 5 }
+        ];
+        weekDays = weekRanges.map(r => {
+            let count = 0;
+            for (let d = r.start; d <= r.end; d++) {
+                const key = `${year}-${String(mIdx+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                count += (dateMap[key] || []).length;
+            }
+            return { label: r.label, sub: `${mName} ${r.start}–${r.end}`, dateKey: null, weekRange: r, count, active: weekVal === String(r.w) };
+        });
+    } else {
+        // Default: daily view for selected week (or show last 7 unique days if no week)
+        let startDay = 4, year = 2025, mIdx = 7; // default Aug Week 2
+        if (monthVal !== '') mIdx = parseInt(monthVal);
+        if (weekVal === '1') startDay = 1;
+        else if (weekVal === '2') startDay = 4;
+        else if (weekVal === '3') startDay = 11;
+        else if (weekVal === '4') startDay = 18;
+        else if (weekVal === '5') startDay = 25;
+        else if (!weekVal && monthVal === '') {
+            // No filter: show the 7 days with most activity from actual data
+            const sortedDays = Object.keys(dateMap).sort((a,b) => b.localeCompare(a)).slice(0,7).reverse();
+            if (sortedDays.length > 0) {
+                weekDays = sortedDays.map(key => {
+                    const d = new Date(key);
+                    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                    const monNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    return {
+                        label: dayNames[d.getDay()],
+                        sub: `${monNames[d.getMonth()]} ${d.getDate()}`,
+                        dateKey: key,
+                        count: (dateMap[key]||[]).length,
+                        active: false
+                    };
+                });
+            }
+        }
+
+        if (weekDays.length === 0) {
+            const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            const mName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mIdx];
+            for (let i = 0; i < 7; i++) {
+                const day = startDay + i;
+                const key = `${year}-${String(mIdx+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const d = new Date(key);
+                weekDays.push({
+                    label: dayNames[d.getDay()],
+                    sub: `${mName} ${day}`,
+                    dateKey: key,
+                    count: (dateMap[key]||[]).length,
+                    active: dateVal === key
+                });
+            }
+        }
+    }
+
+    const dayCounts = weekDays.map(w => w.count !== undefined ? w.count : (dateMap[w.dateKey]||[]).length);
+    const maxVal = Math.max(...dayCounts, 1);
+    const yMax = maxVal <= 5 ? 6 : maxVal <= 10 ? 12 : Math.ceil(maxVal * 1.2);
+    const yStep = yMax <= 6 ? 2 : yMax <= 12 ? 2 : Math.ceil(yMax / 6);
+    const yLabels = [];
+    for (let v = yMax; v >= 0; v -= yStep) yLabels.push(v);
+    if (yLabels[yLabels.length - 1] !== 0) yLabels.push(0);
+
     if (yAxisContainer) {
-        yAxisContainer.innerHTML = `
-            <span>12</span><span>10</span><span>8</span><span>6</span><span>4</span><span>2</span><span>0</span>
-        `;
+        yAxisContainer.innerHTML = yLabels.map(v => `<span>${v}</span>`).join('');
     }
 
     container.innerHTML = weekDays.map((w, idx) => {
-        const items = dateMap[w.dateKey] || [];
-        const count = items.length || w.defaultCount;
-        const heightPct = Math.max((count / maxVal) * 100, 6);
+        const count = w.count !== undefined ? w.count : (dateMap[w.dateKey]||[]).length;
+        const heightPct = Math.max((count / yMax) * 100, 3);
         const isHighlighted = w.active;
-
         return `
-            <div class="an-bar-col ${isHighlighted ? 'highlighted' : ''}" data-key="${w.dateKey}" data-idx="${idx}">
+            <div class="an-bar-col ${isHighlighted ? 'highlighted' : ''}" data-key="${w.dateKey || ''}" data-idx="${idx}">
                 <span class="an-bar-val">${count}</span>
                 <div class="an-bar-inner" style="height:${heightPct}%"></div>
                 <span class="an-bar-lbl">${w.label}<br><span style="font-size:0.62rem;opacity:0.75">${w.sub}</span></span>
@@ -2570,36 +2643,31 @@ function renderSubmissionActivityChart(filteredActivity) {
     }).join('');
 
     // Attach Hover and Click Handlers
-    container.querySelectorAll('.an-bar-col').forEach(col => {
+    container.querySelectorAll('.an-bar-col').forEach((col, idx) => {
         const key = col.getAttribute('data-key');
-        const items = dateMap[key] || [];
+        const w = weekDays[idx];
+        const items = key ? (dateMap[key] || []) : [];
 
-        col.addEventListener('mouseenter', (e) => {
+        col.addEventListener('mouseenter', () => {
             if (!tooltip) return;
-            const completedCount = items.filter(i => i.status === 'Completed').length || (key === '2025-08-08' ? 7 : Math.ceil(items.length * 0.7));
-            const pendingCount = items.filter(i => i.status === 'Pending').length || (key === '2025-08-08' ? 2 : 1);
-            const failedCount = items.filter(i => i.status === 'Failed').length || (key === '2025-08-08' ? 1 : 0);
-            
-            const studentNames = items.length > 0
-                ? Array.from(new Set(items.map(i => i.student))).slice(0, 3)
-                : ['John Cruz', 'Maria Santos', 'Kevin Ramos'];
+            const completedCount = items.filter(i => i.status === 'Completed').length;
+            const pendingCount = items.filter(i => i.status === 'Pending').length;
+            const failedCount = items.filter(i => i.status === 'Failed').length;
+            const totalCount = w.count !== undefined ? w.count : items.length;
+            const studentNames = Array.from(new Set(items.map(i => i.student))).slice(0, 3);
 
-            const d = new Date(key);
-            const fullDateStr = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+            const headerText = key
+                ? new Date(key + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
+                : (w.sub || w.label);
 
             tooltip.innerHTML = `
-                <div class="an-tt-header">${fullDateStr}</div>
-                <div class="an-tt-row"><span style="color:#60a5fa;font-weight:700">${items.length || (key==='2025-08-08'?10:4)} Submissions</span></div>
+                <div class="an-tt-header">${headerText}</div>
+                <div class="an-tt-row"><span style="color:#60a5fa;font-weight:700">${totalCount} Submission${totalCount !== 1 ? 's' : ''}</span></div>
                 <div class="an-tt-row"><span>Completed:</span> <strong style="color:#34d399">${completedCount}</strong></div>
                 <div class="an-tt-row"><span>Pending:</span> <strong style="color:#fbbf24">${pendingCount}</strong></div>
                 <div class="an-tt-row"><span>Failed:</span> <strong style="color:#f87171">${failedCount}</strong></div>
-                ${studentNames.length > 0 ? `
-                    <div class="an-tt-students">
-                        <div class="an-tt-st-head">Top Students:</div>
-                        <div class="an-tt-st-list">• ${studentNames.join('<br>• ')}</div>
-                    </div>
-                ` : ''}
-                <div style="font-size:0.68rem;color:#94a3b8;margin-top:0.4rem;font-style:italic">Click to view details</div>
+                ${studentNames.length > 0 ? `<div class="an-tt-students"><div class="an-tt-st-head">Top Students:</div><div class="an-tt-st-list">• ${studentNames.join('<br>• ')}</div></div>` : ''}
+                <div style="font-size:0.68rem;color:#94a3b8;margin-top:0.4rem;font-style:italic">Click to filter table by this period</div>
             `;
             tooltip.classList.remove('hidden');
         });
@@ -2607,21 +2675,16 @@ function renderSubmissionActivityChart(filteredActivity) {
         col.addEventListener('mousemove', (e) => {
             if (!tooltip) return;
             const cardRect = container.closest('.an-chart-card').getBoundingClientRect();
-            const x = e.clientX - cardRect.left + 10;
-            const y = e.clientY - cardRect.top - 10;
-            tooltip.style.left = `${Math.min(x, cardRect.width - 210)}px`;
-            tooltip.style.top = `${Math.max(y - 120, 10)}px`;
+            tooltip.style.left = `${Math.min(e.clientX - cardRect.left + 10, cardRect.width - 220)}px`;
+            tooltip.style.top = `${Math.max(e.clientY - cardRect.top - 130, 10)}px`;
         });
 
-        col.addEventListener('mouseleave', () => {
-            if (tooltip) tooltip.classList.add('hidden');
-        });
+        col.addEventListener('mouseleave', () => { if (tooltip) tooltip.classList.add('hidden'); });
 
         col.addEventListener('click', () => {
-            const dateInput = document.getElementById('filter-date');
-            if (dateInput) {
-                dateInput.value = key;
-                applyAnalyticsFilters();
+            if (key) {
+                const dateInput = $id('filter-date');
+                if (dateInput) { dateInput.value = key; applyAnalyticsFilters(); }
                 document.querySelector('.an-table-card')?.scrollIntoView({ behavior: 'smooth' });
             }
         });
@@ -2629,22 +2692,57 @@ function renderSubmissionActivityChart(filteredActivity) {
 }
 
 function renderErrorDistributionChart(filteredActivity) {
-    const chart = document.getElementById('an-donut-chart');
-    const legend = document.getElementById('an-donut-legend');
-    const totalEl = document.getElementById('an-donut-total');
+    const chart = $id('an-donut-chart');
+    const legend = $id('an-donut-legend');
+    const totalEl = $id('an-donut-total');
     if (!chart || !legend) return;
 
-    const categories = [
-        { name: 'Syntax Error', color: '#ef4444', pct: 31, count: 8 },
-        { name: 'Logic Error', color: '#f59e0b', pct: 23, count: 6 },
-        { name: 'Missing END', color: '#f97316', pct: 15, count: 4 },
-        { name: 'Indentation Error', color: '#10b981', pct: 12, count: 3 },
-        { name: 'Type Error', color: '#3b82f6', pct: 10, count: 3 },
-        { name: 'Other', color: '#8b5cf6', pct: 9, count: 2 }
-    ];
+    // Count actual error types from real filtered data
+    const errorColorMap = {
+        'Syntax Error':      '#ef4444',
+        'Logic Error':       '#f59e0b',
+        'Missing END':       '#f97316',
+        'Indentation Error': '#10b981',
+        'Type Error':        '#3b82f6',
+        'Other':             '#8b5cf6'
+    };
+    const knownTypes = Object.keys(errorColorMap);
+    const counts = {};
+    knownTypes.forEach(t => counts[t] = 0);
 
-    const totalErrors = categories.reduce((a, b) => a + b.count, 0);
+    filteredActivity.forEach(a => {
+        if (!a.errorType || a.errorType.trim() === '') return;
+        const t = a.errorType.trim();
+        if (counts[t] !== undefined) counts[t]++;
+        else counts['Other']++;
+    });
+
+    const totalErrors = Object.values(counts).reduce((s, v) => s + v, 0);
+
+    // If no errors in filtered set, show a neutral grey ring
+    if (totalErrors === 0) {
+        if (totalEl) totalEl.textContent = '0';
+        chart.style.background = '#1e1e2e';
+        legend.innerHTML = `<div style="color:var(--text-muted);font-size:0.82rem;padding:0.5rem">No errors in selected period.</div>`;
+        return;
+    }
+
     if (totalEl) totalEl.textContent = totalErrors;
+
+    const categories = knownTypes
+        .filter(t => counts[t] > 0)
+        .map(t => ({
+            name: t,
+            color: errorColorMap[t],
+            count: counts[t],
+            pct: Math.round((counts[t] / totalErrors) * 100)
+        }));
+
+    // Adjust rounding so percentages sum to 100
+    const pctSum = categories.reduce((s, c) => s + c.pct, 0);
+    if (pctSum !== 100 && categories.length > 0) {
+        categories[0].pct += (100 - pctSum);
+    }
 
     let currentDeg = 0;
     const gradientStops = [];
@@ -2655,7 +2753,6 @@ function renderErrorDistributionChart(filteredActivity) {
         const nextDeg = currentDeg + deg;
         gradientStops.push(`${cat.color} ${currentDeg.toFixed(1)}deg ${nextDeg.toFixed(1)}deg`);
         currentDeg = nextDeg;
-
         legendItemsHtml.push(`
             <div class="an-donut-item">
                 <div class="an-donut-dot-wrap">
@@ -2679,11 +2776,11 @@ function analyticsPageNav(dir) {
 }
 
 function renderFilteredActivityTable(activityList) {
-    const tbody = document.getElementById('activity-table-body');
-    const pageInfo = document.getElementById('an-page-info');
-    const prevBtn = document.getElementById('an-prev-btn');
-    const nextBtn = document.getElementById('an-next-btn');
-    const pageNumbers = document.getElementById('an-page-numbers');
+    const tbody = $id('activity-table-body');
+    const pageInfo = $id('an-page-info');
+    const prevBtn = $id('an-prev-btn');
+    const nextBtn = $id('an-next-btn');
+    const pageNumbers = $id('an-page-numbers');
     if (!tbody) return;
 
     const totalRecords = activityList.length;
@@ -2731,6 +2828,7 @@ function renderFilteredActivityTable(activityList) {
         const v = (d || 'moderate').toLowerCase();
         if (v === 'easy') return `<span class="badge-diff badge-easy">Easy</span>`;
         if (v === 'hard') return `<span class="badge-diff badge-hard">Hard</span>`;
+        // 'medium' and 'moderate' both display as Moderate
         return `<span class="badge-diff badge-moderate">Moderate</span>`;
     };
 
@@ -2795,61 +2893,62 @@ function viewSubmissionDetail(docId) {
         : (a.time || '—');
 
     // Info fields
-    document.getElementById('sdm-student').textContent = a.student || '—';
-    document.getElementById('sdm-student-id').textContent = a.studentId || '—';
-    document.getElementById('sdm-exercise').textContent = a.exercise || '—';
-    document.getElementById('sdm-date').textContent = dateStr;
-    document.getElementById('sdm-proc-time').textContent = a.processingTime || '—';
-    document.getElementById('sdm-score').textContent = a.score || '—';
+    setText('sdm-student', a.student || '—');
+    setText('sdm-student-id', a.studentId || '—');
+    setText('sdm-exercise', a.exercise || '—');
+    setText('sdm-date', dateStr);
+    setText('sdm-proc-time', a.processingTime || '—');
+    setText('sdm-score', a.score || '—');
 
     // Difficulty badge
     const diff = (a.difficulty || 'moderate').toLowerCase();
     const dColor = diff === 'easy' ? 'var(--success)' : diff === 'hard' ? 'var(--danger)' : 'var(--warning)';
-    document.getElementById('sdm-difficulty').innerHTML =
-        `<span style="font-weight:600;color:${dColor};text-transform:capitalize">${diff.charAt(0).toUpperCase() + diff.slice(1)}</span>`;
+    setHtml('sdm-difficulty', `<span style="font-weight:600;color:${dColor};text-transform:capitalize">${diff.charAt(0).toUpperCase() + diff.slice(1)}</span>`);
 
     // Status badge
->>>>>>> 6eb1a46 (Update project)
     const statusBadges = {
         'Completed': '<span class="badge badge-active">Completed</span>',
         'In Progress': '<span class="badge badge-student">In Progress</span>',
         'Failed': '<span class="badge badge-inactive">Failed</span>',
     };
-    document.getElementById('sdm-status').innerHTML = statusBadges[a.status] || `<span class="badge">${a.status}</span>`;
+    setHtml('sdm-status', statusBadges[a.status] || `<span class="badge">${a.status}</span>`);
 
     // Score colour
-    const scoreEl = document.getElementById('sdm-score');
-    if (a.status === 'Completed') scoreEl.style.color = 'var(--success)';
-    else if (a.status === 'Failed') scoreEl.style.color = 'var(--danger)';
-    else scoreEl.style.color = 'var(--text-muted)';
+    const scoreEl = $id('sdm-score');
+    if (scoreEl) {
+        if (a.status === 'Completed') scoreEl.style.color = 'var(--success)';
+        else if (a.status === 'Failed') scoreEl.style.color = 'var(--danger)';
+        else scoreEl.style.color = 'var(--text-muted)';
+    }
 
     // Error row
-    const errRow = document.getElementById('sdm-error-row');
+    const errRow = $id('sdm-error-row');
     if (a.errorType) {
-        document.getElementById('sdm-error-type').textContent = a.errorType;
-        errRow.style.display = 'block';
+        setText('sdm-error-type', a.errorType);
+        if (errRow) errRow.style.display = 'block';
     } else {
-        errRow.style.display = 'none';
+        if (errRow) errRow.style.display = 'none';
     }
 
     // Code panels
-    document.getElementById('sdm-pseudo').textContent = a.submittedCode || a.pseudocode || '(No pseudocode recorded)';
-    document.getElementById('sdm-python').textContent = a.pythonCode || a.python_code || '(No Python output recorded)';
+    setText('sdm-pseudo', a.submittedCode || a.pseudocode || '(No pseudocode recorded)');
+    setText('sdm-python', a.pythonCode || a.python_code || '(No Python output recorded)');
 
     // Compiler output panel (if present)
-    const outputEl = document.getElementById('sdm-output');
+    const outputEl = $id('sdm-output');
     if (outputEl) {
         outputEl.textContent = a.output || a.compilerOutput || (a.status === 'Completed' ? 'Execution successful.' : a.errorType ? `Error: ${a.errorType} during compilation.` : '(No output recorded)');
     }
 
     // Modal title
-    document.getElementById('sdm-title').textContent = `📄 ${a.student} — ${a.exercise}`;
+    setText('sdm-title', `📄 ${a.student} — ${a.exercise}`);
 
-    document.getElementById('submission-detail-modal').classList.remove('hidden');
+    const modal = $id('submission-detail-modal');
+    if (modal) modal.classList.remove('hidden');
 }
 
 function closeSubmissionDetail() {
-    document.getElementById('submission-detail-modal').classList.add('hidden');
+    hide('submission-detail-modal');
 }
 
 
@@ -3671,7 +3770,6 @@ function loadCompilerMetrics() {
     setText('metric-total-executions', session.totalExecutions);
 
     // Error trend badge
-<<<<<<< HEAD
     const trendEl = $id('metric-error-trend');
     const trendIcons = { improving: '↑ Improving', declining: '↓ Declining', stable: '— Stable' };
     const trendClasses = { improving: 'positive', declining: 'negative', stable: '' };
@@ -3679,13 +3777,6 @@ function loadCompilerMetrics() {
         trendEl.textContent = trendIcons[session.errorTrend] || '— Stable';
         trendEl.className = 'stat-change ' + (trendClasses[session.errorTrend] || '');
     }
-=======
-    const trendEl = document.getElementById('metric-error-trend');
-    const trendIcons   = { improving: '↑ Improving', declining: '↓ Declining', stable: '— Stable' };
-    const trendClasses = { improving: 'positive', declining: 'negative', stable: '' };
-    trendEl.textContent = trendIcons[session.errorTrend] || '— Stable';
-    trendEl.className   = 'stat-change ' + (trendClasses[session.errorTrend] || '');
->>>>>>> 6eb1a46 (Update project)
 
     // ── Improvement Section ──
     const improvementEl = $id('metrics-improvement-section');
@@ -3733,15 +3824,9 @@ function loadCompilerMetrics() {
  * Deliverable  : Populates all dashboard cards, per-test table, concept mastery.
  */
 async function runBenchmarkTest() {
-<<<<<<< HEAD
-    showToast('Running benchmark...', 'info');
     const btn = $id('run-benchmark-btn');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Running...'; }
-=======
-    const btn = document.getElementById('run-benchmark-btn');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Running…'; }
-    showToast('Running benchmark… loading exercises from database.', 'info');
->>>>>>> 6eb1a46 (Update project)
+    showToast('Running benchmark... loading exercises from database.', 'info');
 
     try {
         // Load from IndexedDB — no fetch/CORS errors
@@ -3780,7 +3865,6 @@ async function runBenchmarkTest() {
  * Populates: B. summary cards, per-test table, E. concept mastery table.
  */
 function renderBenchmarkResults(results) {
-<<<<<<< HEAD
     // ── Summary Cards ──
     setText('benchmark-accuracy', results.accuracy + '%');
     setText('benchmark-precision', results.avgPrecision + '%');
@@ -3789,34 +3873,14 @@ function renderBenchmarkResults(results) {
     setText('benchmark-compile-rate', results.compilationSuccessRate + '%');
     setText('benchmark-avg-time', results.avgTimeMs + 'ms');
 
-    // ── Detailed Results Table ──
-    const tbody = $id('benchmark-results-body');
-    tbody.innerHTML = results.results.map(r => `
-    <tr>
-      <td style="font-weight:600;color:var(--text-primary)">${r.id}</td>
-      <td>${r.concept}</td>
-      <td><span class="badge ${r.compiled ? 'badge-active' : 'badge-inactive'}">${r.compiled ? '✅ Pass' : '❌ Fail'}</span></td>
-      <td><span class="badge ${r.exactMatch ? 'badge-active' : 'badge-student'}">${r.exactMatch ? '✅ Match' : '⚠️ Diff'}</span></td>
-      <td style="font-weight:500">${(r.precision * 100).toFixed(0)}%</td>
-      <td style="font-weight:500">${(r.recall * 100).toFixed(0)}%</td>
-      <td style="color:var(--text-muted)">${r.timeMs}ms</td>
-    </tr>`).join('');
-=======
-    // B. Accuracy + other summary cards
-    document.getElementById('benchmark-accuracy').textContent      = results.accuracy + '%';
-    document.getElementById('benchmark-precision').textContent     = results.avgPrecision + '%';
-    document.getElementById('benchmark-recall').textContent        = results.avgRecall + '%';
-    document.getElementById('benchmark-f1').textContent            = results.f1Score + '%';
-    document.getElementById('benchmark-compile-rate').textContent  = results.compilationSuccessRate + '%';
-    document.getElementById('benchmark-avg-time').textContent      = results.avgTimeMs + 'ms';
-
     // Per-Test-Case Detail Table
-    const wrapper    = document.getElementById('benchmark-detail-wrapper');
-    const totalLabel = document.getElementById('benchmark-total-label');
-    if (wrapper)    wrapper.style.display = 'block';
+    const wrapper = $id('benchmark-detail-wrapper');
+    const totalLabel = $id('benchmark-total-label');
+    if (wrapper) wrapper.style.display = 'block';
     if (totalLabel) totalLabel.textContent = `${results.totalTestCases} test cases`;
 
-    const tbody = document.getElementById('benchmark-results-body');
+    // ── Detailed Results Table ──
+    const tbody = $id('benchmark-results-body');
     if (tbody) {
         tbody.innerHTML = results.results.map(r => `
         <tr>
@@ -3831,7 +3895,7 @@ function renderBenchmarkResults(results) {
     }
 
     // ── Concept Mastery Table ──
-    const masteryBody = document.getElementById('concept-mastery-body');
+    const masteryBody = $id('concept-mastery-body');
     if (masteryBody) {
         const conceptData = metricsEngine.getConceptMastery();
         if (conceptData.length === 0) {
@@ -3855,7 +3919,6 @@ function renderBenchmarkResults(results) {
             }).join('');
         }
     }
->>>>>>> 6eb1a46 (Update project)
 }
 
 /**
@@ -3878,11 +3941,12 @@ function renderPipelineTimingChart(timing) {
     ];
 
     const max = Math.max(...stages.map(s => s.value), 0.001);
-    container.innerHTML = stages.map(s => `
-    <div class="chart-bar" style="height:${Math.max((s.value / max) * 180, 20)}px;background:${s.color}">
-      <span class="bar-value">${s.value}ms</span>
-      <span class="bar-label">${s.name}</span>
-    </div>`).join('');
+    container.innerHTML = stages.map(s => 
+      '<div class="chart-bar" style="height:' + Math.max((s.value / max) * 180, 20) + 'px;background:' + s.color + '">' +
+        '<span class="bar-value">' + s.value + 'ms</span>' +
+        '<span class="bar-label">' + s.name + '</span>' +
+      '</div>'
+    ).join('');
 }
 
 
@@ -4021,8 +4085,8 @@ async function handleChangePassword() {
 }
 
 function toggleUserPasswordVisibility(userId) {
-    const masked = $id(`pwd-masked-${userId}`);
-    const real = $id(`pwd-real-${userId}`);
+    const masked = $id('pwd-masked-' + userId);
+    const real = $id('pwd-real-' + userId);
 
     if (masked && real) {
         if (masked.classList.contains('hidden')) {
@@ -4036,20 +4100,48 @@ function toggleUserPasswordVisibility(userId) {
 }
 
 // ── Data Management ──
-function exportData(type) {
-    const data = localStorage.getItem('pseudopy_' + type);
-    if (!data) return showToast('No data to export.', 'warning');
+async function exportData(type) {
+    try {
+        let exportDataObj = null;
+        let filename = 'pseudopy_export.json';
 
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pseudopy_${type}_export_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('Data exported successfully!', 'success');
+        if (type === 'users') {
+            const users = await refreshUsers();
+            const instructors = users.filter(u => u.role === 'instructor');
+            if (!instructors || instructors.length === 0) {
+                return showToast('No instructor data to export.', 'info');
+            }
+            exportDataObj = instructors.map(u => ({
+                id: u.id || u._docId,
+                fullName: u.fullName,
+                username: u.username,
+                email: u.email,
+                role: u.role,
+                status: u.status,
+                createdBy: u.createdBy || 'u1'
+            }));
+            filename = `pseudopy_instructors_${new Date().toISOString().split('T')[0]}.json`;
+        } else {
+            const dataStr = localStorage.getItem('pseudopy_' + type);
+            if (!dataStr) return showToast('No data to export.', 'info');
+            exportDataObj = JSON.parse(dataStr);
+            filename = `pseudopy_${type}_${new Date().toISOString().split('T')[0]}.json`;
+        }
+
+        const blob = new Blob([JSON.stringify(exportDataObj, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Data exported successfully!', 'success');
+    } catch (err) {
+        console.error('[ExportData]', err);
+        showToast('Failed to export data.', 'error');
+    }
 }
 
 /* ============================================================
