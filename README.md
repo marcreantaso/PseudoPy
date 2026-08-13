@@ -1,6 +1,6 @@
 # PseudoPy — Automated Code Generation System
 
-> **Bridging Pseudocode and Python: An Algorithmic Approach to Automated Code Generation**
+> **Translating Pseudocode and Python: An Algorithmic Approach to Automated Code Generation**
 
 A web-based system that translates pseudocode into executable Python code, built as a Progressive Web App (PWA) with full mobile responsiveness.
 
@@ -9,7 +9,7 @@ A web-based system that translates pseudocode into executable Python code, built
 - **Pseudocode-to-Python Translation Engine** — Rule-based converter supporting IF/ELSE, FOR, WHILE, FUNCTION, SET, DISPLAY, and more
 - **In-Browser Code Execution** — Run Python directly in the browser via Skulpt
 - **Feedback & Suggestions** — Analyze pseudocode for structure, syntax balance, and quality
-- **Role-Based Access** — Student, Instructor, and Admin dashboards
+- **Automatic Role-Based Access** — Student, Instructor, and Admin dashboards
 - **Exercise Management** — Instructors create exercises, students practice pseudocode
 - **Learning Analytics** — Track submissions, success rates, and common errors
 - **PWA Support** — Installable on Android and iOS, works offline
