@@ -1341,22 +1341,203 @@ async function loadExercises(append = false) {
     }
 }
 
-async function loadStudentExercises(append = false) {
-    if (!append) studentExOffset = 0;
-    const exercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, studentExOffset);
-    const container = $id('student-exercises-list');
+let studentExCurrentPage = 1;
+const STUDENT_EX_PER_PAGE = 8;
 
-    if (!container) return;
-    if (exercises.length === 0 && !append) {
-        container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📝</div><h3>No Exercises Available</h3><p>Your instructor hasn't created any exercises yet.</p></div>`;
+/**
+ * getExerciseIconInfo(ex)
+ * Automatically determines appropriate icon SVG & background color based on title/category/concept/desc keywords.
+ */
+function getExerciseIconInfo(ex) {
+    const title = ex.title || ex.concept || '';
+    const desc = ex.description || '';
+    const cat = ex.category || '';
+    const text = (title + ' ' + cat + ' ' + desc).toLowerCase();
+
+    // 1. Array / List / Elements
+    if (text.includes('array') || text.includes('element') || text.includes('list') || text.includes('vector')) {
+        return {
+            bgColor: '#16a34a',
+            svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`
+        };
+    }
+    // 2. Factorial
+    if (text.includes('factorial')) {
+        return {
+            bgColor: '#ea580c',
+            svg: `<span style="font-family:system-ui,-apple-system,sans-serif;font-weight:900;font-size:1.15rem;letter-spacing:-0.5px">n!</span>`
+        };
+    }
+    // 3. Sum / Addition / Accumulate / Odd / Even
+    if (text.includes('sum') || text.includes('addition') || text.includes('add') || text.includes('odd') || text.includes('even')) {
+        return {
+            bgColor: '#9333ea',
+            svg: `<span style="font-family:Georgia,serif;font-weight:900;font-size:1.4rem;line-height:1">Σ</span>`
+        };
+    }
+    // 4. Average / Mean / Statistics
+    if (text.includes('average') || text.includes('mean') || text.includes('stat') || text.includes('chart')) {
+        return {
+            bgColor: '#2563eb',
+            svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="15" y="5" width="5" height="15" rx="1"/><rect x="9" y="10" width="5" height="10" rx="1"/><rect x="3" y="15" width="5" height="5" rx="1"/></svg>`
+        };
+    }
+    // 5. Sort / Sorting / Order / Ascending / Descending
+    if (text.includes('sort') || text.includes('order') || text.includes('ascending') || text.includes('descending')) {
+        return {
+            bgColor: '#d97706',
+            svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5h10M11 9h7M11 13h4M3 17l3 3 3-3M6 4v16"/></svg>`
+        };
+    }
+    // 6. Palindrome / String / Text / Character / Word
+    if (text.includes('palindrome') || text.includes('string') || text.includes('text') || text.includes('char') || text.includes('word')) {
+        return {
+            bgColor: '#0891b2',
+            svg: `<span style="font-family:system-ui,-apple-system,sans-serif;font-weight:900;font-size:1.25rem">P</span>`
+        };
+    }
+    // 7. Count / Counter / Positive / Negative
+    if (text.includes('count') || text.includes('counter') || text.includes('positive') || text.includes('negative') || text.includes('how many')) {
+        return {
+            bgColor: '#0d9488',
+            svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`
+        };
+    }
+    // 8. Largest / Maximum / Smallest / Minimum / Find / Peak
+    if (text.includes('largest') || text.includes('maximum') || text.includes('max') || text.includes('smallest') || text.includes('minimum') || text.includes('min') || text.includes('peak') || text.includes('find')) {
+        return {
+            bgColor: '#e11d48',
+            svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`
+        };
+    }
+    // 9. Loop / Iteration / Repeat / Cycle
+    if (text.includes('loop') || text.includes('iteration') || text.includes('repeat') || text.includes('cycle') || text.includes('while') || text.includes('for')) {
+        return {
+            bgColor: '#4f46e5',
+            svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>`
+        };
+    }
+    // 10. Matrix / 2D Grid
+    if (text.includes('matrix') || text.includes('grid') || text.includes('2d')) {
+        return {
+            bgColor: '#059669',
+            svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>`
+        };
+    }
+    // 11. Number / Math / Compute / Multiply / Divide
+    if (text.includes('number') || text.includes('math') || text.includes('multiply') || text.includes('divide') || text.includes('product') || text.includes('compute') || text.includes('calculator')) {
+        return {
+            bgColor: '#ea580c',
+            svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01M12 10h.01M8 10h.01M12 14h.01M8 14h.01M12 18h.01M8 18h.01"/></svg>`
+        };
+    }
+    // 12. Default Fallback
+    return {
+        bgColor: '#475569',
+        svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`
+    };
+}
+
+function toggleStudentGuidelines() {
+    const body = $id('student-guidelines-body');
+    const icon = $id('guidelines-toggle-icon');
+    if (!body) return;
+    const isCollapsed = body.classList.toggle('collapsed');
+    if (icon) {
+        icon.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+    }
+}
+
+async function changeStudentPage(targetPage) {
+    await loadStudentExercises(targetPage);
+    const el = $id('page-exercises-student');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+}
+
+function renderStudentPaginationControls(totalExercises, currentPage) {
+    const totalPages = Math.max(1, Math.ceil(totalExercises / STUDENT_EX_PER_PAGE));
+    const controlsEl = $id('student-pagination-controls');
+    const infoEl = $id('student-pagination-info');
+
+    if (infoEl) {
+        if (totalExercises === 0) {
+            infoEl.textContent = 'Showing 0 to 0 of 0 exercises';
+        } else {
+            const start = (currentPage - 1) * STUDENT_EX_PER_PAGE + 1;
+            const end = Math.min(currentPage * STUDENT_EX_PER_PAGE, totalExercises);
+            infoEl.textContent = `Showing ${start} to ${end} of ${totalExercises} exercises`;
+        }
+    }
+
+    if (!controlsEl) return;
+    if (totalPages <= 1) {
+        controlsEl.innerHTML = '';
         return;
     }
 
-    // ── Progress tracking: fetch real totals from DB (not just the current page) ──
-    await loadStudentProgress(); // updates all progress UI elements from the database
+    let buttonsHtml = '';
 
+    // Previous Button
+    const prevDisabled = currentPage === 1 ? 'disabled' : '';
+    buttonsHtml += `<button class="page-btn" ${prevDisabled} onclick="changeStudentPage(${currentPage - 1})">‹</button>`;
 
-    // ── Fetch completed exercise IDs for this student (for card status badges) ──
+    // Page Numbers logic
+    const pages = [];
+    if (totalPages <= 7) {
+        for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+        pages.push(1);
+        if (currentPage > 3) pages.push('...');
+
+        const start = Math.max(2, currentPage - 1);
+        const end = Math.min(totalPages - 1, currentPage + 1);
+        for (let i = start; i <= end; i++) {
+            if (!pages.includes(i)) pages.push(i);
+        }
+
+        if (currentPage < totalPages - 2) pages.push('...');
+        pages.push(totalPages);
+    }
+
+    pages.forEach(p => {
+        if (p === '...') {
+            buttonsHtml += `<span class="page-ellipsis">…</span>`;
+        } else {
+            const isActive = p === currentPage ? 'active' : '';
+            buttonsHtml += `<button class="page-btn ${isActive}" onclick="changeStudentPage(${p})">${p}</button>`;
+        }
+    });
+
+    // Next Button
+    const nextDisabled = currentPage === totalPages ? 'disabled' : '';
+    buttonsHtml += `<button class="page-btn" ${nextDisabled} onclick="changeStudentPage(${currentPage + 1})">›</button>`;
+
+    controlsEl.innerHTML = buttonsHtml;
+}
+
+async function loadStudentExercises(page = 1) {
+    if (typeof page === 'boolean') {
+        page = 1;
+    }
+    studentExCurrentPage = Math.max(1, page);
+    const offset = (studentExCurrentPage - 1) * STUDENT_EX_PER_PAGE;
+
+    const exercises = await dbGetAll(exercisesRef, STUDENT_EX_PER_PAGE, offset);
+    const totalExercises = await dbCount(exercisesRef);
+    const container = $id('student-exercises-list');
+
+    if (!container) return;
+
+    // Progress tracking update
+    await loadStudentProgress();
+
+    if (exercises.length === 0) {
+        container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📝</div><h3>No Exercises Available</h3><p>Your instructor hasn't created any exercises yet.</p></div>`;
+        renderStudentPaginationControls(totalExercises, studentExCurrentPage);
+        return;
+    }
+
+    // Fetch completed exercise titles for current student
     const allActivity = await dbGetAll(activityRef);
     const studentName = currentUser ? currentUser.fullName : '';
     const completedIds = new Set(
@@ -1376,35 +1557,39 @@ async function loadStudentExercises(append = false) {
         const exDesc = ex.description || 'No description provided.';
         const exDiff = normDiff(ex.difficulty);
         const isCompleted = completedIds.has(exTitle);
+        const iconInfo = getExerciseIconInfo(ex);
+        const exDate = ex.createdAt || '2026-08-12';
+
         return `
-    <div class="exercise-card" ${isCompleted ? 'style="border-color: var(--success); opacity: 0.8;"' : ''}>
-      <div class="ex-header">
-        <span class="ex-title">${exTitle}</span>
-        <span class="ex-difficulty ${exDiff}">${dispDiff(ex.difficulty)}</span>
+    <div class="exercise-card">
+      <div class="ex-card-top">
+        <div class="ex-icon-box" style="background: ${iconInfo.bgColor};">
+          ${iconInfo.svg}
+        </div>
+        <div class="ex-header-text">
+          <div class="ex-header-row">
+            <h4 class="ex-title">${exTitle}</h4>
+            <span class="ex-difficulty ${exDiff}">${dispDiff(ex.difficulty)}</span>
+          </div>
+        </div>
       </div>
       <p class="ex-desc">${exDesc}</p>
-      <div class="ex-meta"><span>📅 ${ex.createdAt || '—'}</span></div>
-      <div class="ex-actions">
+      <div class="ex-date-row">
+        <span>📅</span>
+        <span>${exDate}</span>
+      </div>
+      <hr class="ex-divider" />
+      <div class="ex-card-footer">
         ${isCompleted
-                ? `<span class="badge badge-success" style="padding: 0.4rem 0.8rem;">✅ Completed</span>`
-                : `<button class="btn btn-primary btn-sm" style="width:auto" onclick="attemptExercise('${ex._docId}')">📝 Start Exercise</button>`
+                ? `<span class="ex-completed-badge">✅ Completed</span>`
+                : `<button class="ex-start-btn" onclick="attemptExercise('${ex._docId}')"><span>▶</span> Start Exercise</button>`
             }
       </div>
     </div>`;
     }).join('');
 
-    if (append) {
-        const btn = $id('load-more-student');
-        if (btn) btn.remove();
-        container.innerHTML += html;
-    } else {
-        container.innerHTML = html;
-    }
-
-    if (exercises.length === EX_PAGE_LIMIT) {
-        studentExOffset += EX_PAGE_LIMIT;
-        container.innerHTML += `<div id="load-more-student" style="grid-column:1/-1; text-align:center; padding: 1rem;"><button class="btn btn-secondary" onclick="loadStudentExercises(true)">Load More</button></div>`;
-    }
+    container.innerHTML = html;
+    renderStudentPaginationControls(totalExercises, studentExCurrentPage);
 }
 
 
@@ -1420,6 +1605,7 @@ async function loadStudentExercises(append = false) {
  *   • #student-completed-count   (Exercises & Tasks page counter)
  *   • #student-total-count       (Exercises & Tasks page counter)
  *   • #student-progress-fill     (Exercises & Tasks page progress bar)
+ *   • #student-progress-pct      (Exercises & Tasks page percentage text)
  *   • #topbar-progress-pill      (Write Pseudocode page topbar pill)
  * ─────────────────────────────────────────────────────────────────────
  */
@@ -1447,9 +1633,11 @@ async function loadStudentProgress() {
         const totalEl = $id('student-total-count');
         const compEl  = $id('student-completed-count');
         const fillEl  = $id('student-progress-fill');
+        const pctEl   = $id('student-progress-pct');
         if (totalEl) totalEl.textContent = totalExercises;
         if (compEl)  compEl.textContent  = completedCount;
         if (fillEl)  fillEl.style.width  = pct + '%';
+        if (pctEl)   pctEl.textContent   = pct + '%';
 
         // 5. Update Write Pseudocode topbar progress pill + mini bar
         const pill = $id('topbar-progress-pill');
