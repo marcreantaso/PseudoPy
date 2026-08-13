@@ -1385,3 +1385,7 @@ class PseudocodeCompiler {
         return 'O(N^' + maxDepth + ')';
     }
 }
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { PseudocodeCompiler, preprocessPseudocode };
+}

@@ -1,13 +1,20 @@
 
-const KNOWN_KEYWORDS = ['START', 'BEGIN', 'END', 'IF', 'THEN', 'ELSE', 'FOR', 'WHILE', 'PRINT', 'INPUT'];
-const currentErrorLineNumbers = [];
+    const KNOWN_KEYWORDS = ['START', 'BEGIN', 'END', 'IF', 'THEN', 'ELSE', 'FOR', 'WHILE', 'PRINT', 'INPUT'];
+    const currentErrorLineNumbers = [];
+    function preprocessPseudocode(code) {
+    if (!code) return '';
+    return code.split('\n').map(line => {
+        // Strip leading line numbers: e.g. "1 BEGIN" -> "BEGIN", "2  PRINT" -> " PRINT"
+        return line.replace(/^\s*\d+[.:)]?[ \t]?/, '');
+    }).join('\n');
+}
+
+/**
+ * Core validation function — strict compiler-like approach.
+ * Validates BEFORE any translation occurs.
+ * Returns { valid: boolean, errors: [{ line: number, message: string, suggestion?: string }] }
+ */
 function validatePseudocode(code) {
-    function preprocessPseudocode(c) {
-        if (!c) return '';
-        return c.split('\n').map(line => {
-            return line.replace(/^\s*\d+[.:)]?[ \t]?/, '');
-        }).join('\n');
-    }
     code = preprocessPseudocode(code);
     const lines = code.split('\n');
     const errors = [];
@@ -230,22 +237,9 @@ function checkIncompleteExpression(expr, lineNum, errors) {
 /**
  * Format validation errors as Python comments for the output panel.
  */
-function formatValidationErrors(errors) {
-    let output = '# ❌ Syntax Errors Found:\n#\n';
-    for (const err of errors) {
-        output += `# Line ${err.line}: ${err.message}\n`;
-        if (err.suggestion) {
-            output += `#   💡 Suggestion: ${err.suggestion}\n`;
-        }
-        output += '#\n';
-    }
-    output += '# Fix the pseudocode before translation.\n';
-    return output;
-}
-
 /**
  * Render validation errors into HTML for terminal-like console window formatting.
  */
 
-
-module.exports = validatePseudocode;
+    
+    module.exports = validatePseudocode;

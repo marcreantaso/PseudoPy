@@ -40,7 +40,7 @@ function sanitizeCode(code) {
         inBlockComment = false;
         i += 1;
       } else {
-        result += ' ';
+        result += ch === '\n' ? '\n' : ' ';
       }
       continue;
     }
@@ -48,7 +48,7 @@ function sanitizeCode(code) {
     if (inSingle) {
       if (escaped) {
         escaped = false;
-        result += ' ';
+        result += ch === '\n' ? '\n' : ' ';
       } else if (ch === '\\') {
         escaped = true;
         result += ' ';
@@ -56,7 +56,7 @@ function sanitizeCode(code) {
         inSingle = false;
         result += ' ';
       } else {
-        result += ' ';
+        result += ch === '\n' ? '\n' : ' ';
       }
       continue;
     }
@@ -64,7 +64,7 @@ function sanitizeCode(code) {
     if (inDouble) {
       if (escaped) {
         escaped = false;
-        result += ' ';
+        result += ch === '\n' ? '\n' : ' ';
       } else if (ch === '\\') {
         escaped = true;
         result += ' ';
@@ -72,7 +72,7 @@ function sanitizeCode(code) {
         inDouble = false;
         result += ' ';
       } else {
-        result += ' ';
+        result += ch === '\n' ? '\n' : ' ';
       }
       continue;
     }
@@ -80,7 +80,7 @@ function sanitizeCode(code) {
     if (inTemplate) {
       if (escaped) {
         escaped = false;
-        result += ' ';
+        result += ch === '\n' ? '\n' : ' ';
       } else if (ch === '\\') {
         escaped = true;
         result += ' ';
@@ -88,7 +88,7 @@ function sanitizeCode(code) {
         inTemplate = false;
         result += ' ';
       } else {
-        result += ' ';
+        result += ch === '\n' ? '\n' : ' ';
       }
       continue;
     }

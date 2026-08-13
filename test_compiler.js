@@ -1,4 +1,4 @@
-const { PseudocodeCompiler } = require('./test_c.js');
+const { PseudocodeCompiler } = require('./compiler.js');
 const compiler = new PseudocodeCompiler();
 const code = `BEGIN
   // Outer loop for the 'x' axis

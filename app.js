@@ -470,8 +470,8 @@ function navigateTo(pageId) {
    ============================================================ */
 
 function toggleMobileSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
+    const sidebar = $qs('.sidebar');
+    const overlay = $id('sidebar-overlay');
     if (!sidebar) return;
     const isOpen = sidebar.classList.contains('open');
     if (isOpen) {
@@ -484,8 +484,8 @@ function toggleMobileSidebar() {
 }
 
 function closeMobileSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
+    const sidebar = $qs('.sidebar');
+    const overlay = $id('sidebar-overlay');
     if (sidebar) sidebar.classList.remove('open');
     if (overlay) overlay.classList.add('hidden');
 }
@@ -2718,7 +2718,7 @@ function renderSubmissionActivityChart(filteredActivity) {
             if (key) {
                 const dateInput = $id('filter-date');
                 if (dateInput) { dateInput.value = key; applyAnalyticsFilters(); }
-                document.querySelector('.an-table-card')?.scrollIntoView({ behavior: 'smooth' });
+                $qs('.an-table-card')?.scrollIntoView({ behavior: 'smooth' });
             }
         });
     });

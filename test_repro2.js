@@ -7,7 +7,7 @@ const env = {};
 const script = `
     const KNOWN_KEYWORDS = ['START', 'BEGIN', 'END', 'IF', 'THEN', 'ELSE', 'FOR', 'WHILE', 'PRINT', 'INPUT'];
     const currentErrorLineNumbers = [];
-    ${appJsContent.substring(appJsContent.indexOf('function validatePseudocode(code)'), appJsContent.indexOf('function renderHtmlErrors(errors)'))}
+    ${appJsContent.substring(appJsContent.indexOf('function preprocessPseudocode(code)'), appJsContent.indexOf('function renderHtmlErrors(errors)'))}
     
     module.exports = validatePseudocode;
 `;
