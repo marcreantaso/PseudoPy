@@ -447,7 +447,7 @@ class Parser {
         this.consume(); // [
         const indexExpr = this.collectLineTokens([']']);
         if (this.peek().value === ']') this.consume();
-        
+
         // Support either '=' or 'TO' as the assignment operator
         const assignOp = this.peek();
         if (assignOp.type === TOKEN_TYPES.OPERATOR && assignOp.value === '=') {
@@ -455,10 +455,10 @@ class Parser {
         } else if (assignOp.type === TOKEN_TYPES.KEYWORD && assignOp.value === 'TO') {
             this.consume(); // TO
         } else {
-            this.errors.push({ 
-                line: id.line, 
-                message: "Expected '=' or 'TO' after array index.", 
-                suggestion: "Example: " + id.value + "[index] = value" 
+            this.errors.push({
+                line: id.line,
+                message: "Expected '=' or 'TO' after array index.",
+                suggestion: "Example: " + id.value + "[index] = value"
             });
             if (assignOp.type === TOKEN_TYPES.OPERATOR || assignOp.type === TOKEN_TYPES.KEYWORD) {
                 this.consume();
@@ -816,8 +816,8 @@ class SemanticAnalyzer {
                 // Infer type from the assigned expression
                 {
                     const exprToks = node.expr ? node.expr.tokens : [];
-                    const hasStrTok  = exprToks.some(t => t.type === TOKEN_TYPES.STRING);
-                    const hasNumTok  = exprToks.some(t => t.type === TOKEN_TYPES.NUMBER);
+                    const hasStrTok = exprToks.some(t => t.type === TOKEN_TYPES.STRING);
+                    const hasNumTok = exprToks.some(t => t.type === TOKEN_TYPES.NUMBER);
                     let inferredType = 'unknown';
                     if (hasStrTok) inferredType = 'string';
                     else if (hasNumTok) inferredType = 'numeric';
@@ -912,7 +912,7 @@ class SemanticAnalyzer {
         const STRICT_MATH = ['-', '*', '/', '^'];
         let hasMath = tokens.some(
             t => (t.type === TOKEN_TYPES.OPERATOR && STRICT_MATH.includes(t.value)) ||
-                 (t.type === TOKEN_TYPES.KEYWORD && t.value.toUpperCase() === 'MOD')
+                (t.type === TOKEN_TYPES.KEYWORD && t.value.toUpperCase() === 'MOD')
         );
         // '+' is only numeric-math when there are no string literals present
         if (!hasStringLiteral && tokens.some(t => t.type === TOKEN_TYPES.OPERATOR && t.value === '+')) {
@@ -1023,13 +1023,13 @@ class CodeGenerator {
             // No leading space before comma or closing paren
             if (cur === ',' || cur === ')' || cur === ']') {
                 result += cur;
-            // No space before opening bracket if it follows an identifier or closing paren/bracket
+                // No space before opening bracket if it follows an identifier or closing paren/bracket
             } else if (cur === '[' && prev && /^[a-zA-Z0-9_)\]]+$/.test(prev)) {
                 result += cur;
-            // No trailing space after opening paren/bracket
+                // No trailing space after opening paren/bracket
             } else if (prev === '(' || prev === '[') {
                 result += cur;
-            // First token — no space
+                // First token — no space
             } else if (j === 0) {
                 result += cur;
             } else {
@@ -1097,8 +1097,8 @@ class CodeGenerator {
                 const typeUpper = (node.varType || '').toUpperCase();
                 let initVal = '0';  // default: INTEGER / FLOAT / REAL / NUMERIC
                 if (['STRING', 'CHAR', 'CHARACTER'].includes(typeUpper)) initVal = '""';
-                else if (['BOOLEAN', 'BOOL'].includes(typeUpper))        initVal = 'False';
-                else if (['ARRAY'].includes(typeUpper))                  initVal = '[]';
+                else if (['BOOLEAN', 'BOOL'].includes(typeUpper)) initVal = 'False';
+                else if (['ARRAY'].includes(typeUpper)) initVal = '[]';
                 this.lines.push(this.ind() + '# DECLARE ' + node.id + ' AS ' + node.varType);
                 this.lines.push(this.ind() + node.id + ' = ' + initVal);
                 break;

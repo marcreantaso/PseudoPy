@@ -3869,4 +3869,424 @@ select.form-input {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   PASSWORD RECOVERY & SECURITY STYLES
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Recovery Status Badges ── */
+.badge-recovery-pending {
+  background: rgba(245, 158, 11, 0.15) !important;
+  color: #f59e0b !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+}
+
+.badge-recovery-approved {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #10b981 !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+}
+
+.badge-recovery-rejected {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #ef4444 !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+}
+
+.badge-recovery-completed {
+  background: rgba(5, 150, 105, 0.15) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(5, 150, 105, 0.35) !important;
+}
+
+.badge-recovery-expired {
+  background: rgba(107, 114, 128, 0.15) !important;
+  color: #9ca3af !important;
+  border: 1px solid rgba(107, 114, 128, 0.35) !important;
+}
+
+/* ── Recovery Review Modal Grid ── */
+.recovery-info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.recovery-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.88rem;
+}
+
+.recovery-info-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.recovery-info-value {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.recovery-security-notice {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ── Forgot Password Flow Cards ── */
+.fp-status-card {
+  padding: 1.25rem;
+  border-radius: var(--radius);
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.fp-status-card .fp-status-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.fp-status-card h3 {
+  font-size: 1.05rem;
+  margin-bottom: 0.25rem;
+}
+
+.fp-status-card p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.fp-status-pending {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+.fp-status-pending h3 {
+  color: #f59e0b;
+}
+
+.fp-status-approved {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.fp-status-approved h3 {
+  color: #10b981;
+}
+
+.fp-status-success {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.fp-status-success h3 {
+  color: #10b981;
+}
+
+.fp-requirements {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.5rem;
+  padding-left: 0.25rem;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   STUDENT NOTIFICATION SYSTEM STYLES
+   ══════════════════════════════════════════════════════════════ */
+
+.topbar-notifications {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.25rem;
+}
+
+#notif-bell-btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius, 8px);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: all 0.2s ease;
+  color: var(--text-primary);
+}
+
+#notif-bell-btn:hover {
+  background: var(--bg-card, #1e293b);
+  border-color: var(--border, #334155);
+}
+
+.notif-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  background: linear-gradient(135deg, #ef4444, #a855f7);
+  color: #ffffff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  border-radius: 999px;
+  min-width: 17px;
+  height: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  pointer-events: none;
+  line-height: 1;
+}
+
+/* ── Notification Dropdown Panel ── */
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 330px;
+  max-width: calc(100vw - 24px);
+  background: var(--bg-card, #0f172a);
+  border: 1px solid var(--border, #334155);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+  z-index: 10000;
+  overflow: hidden;
+  animation: notifFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes notifFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.notif-dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--bg-secondary, #1e293b);
+  border-bottom: 1px solid var(--border, #334155);
+}
+
+.notif-dropdown-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+
+.notif-unread-count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--primary, #3b82f6);
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+}
+
+.notif-mark-all-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent, #38bdf8);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.notif-mark-all-btn:hover {
+  background: rgba(56, 189, 248, 0.1);
+  text-decoration: underline;
+}
+
+.notif-list {
+  max-height: 380px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.notif-item {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border, #1e293b);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.notif-item:last-child {
+  border-bottom: none;
+}
+
+.notif-item:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.notif-item.unread {
+  background: rgba(59, 130, 246, 0.05);
+  border-left: 3px solid var(--accent, #38bdf8);
+}
+
+.notif-item.read {
+  opacity: 0.82;
+}
+
+.notif-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.2rem;
+}
+
+.notif-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.notif-unread-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent, #38bdf8);
+  box-shadow: 0 0 6px var(--accent, #38bdf8);
+  display: inline-block;
+}
+
+.notif-item-title {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.notif-item-status {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.notif-item-status.unread {
+  color: var(--accent, #38bdf8);
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.notif-item-status.read {
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.notif-item-ex-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #a5f3fc;
+  margin-bottom: 0.2rem;
+}
+
+.notif-item-msg {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 0.35rem;
+}
+
+.notif-item-time {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.notif-empty {
+  padding: 2.25rem 1.25rem;
+  text-align: center;
+}
+
+/* ── Mobile adjustments for notification dropdown ── */
+@media (max-width: 480px) {
+  .notif-dropdown {
+    position: fixed;
+    top: 56px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+  }
+}
+
+/* ── Device Management & Authorization Styles ── */
+.device-action-btn {
+  position: relative;
+}
+
+.device-pending-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 7px;
+  height: 7px;
+  background: #f59e0b;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #f59e0b;
+  animation: pulse-badge 1.8s infinite;
+}
+
+@keyframes pulse-badge {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 10px #f59e0b; }
+  100% { transform: scale(0.9); opacity: 0.8; }
+}
+
+.badge-device-approved {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+
+.badge-device-pending {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+
+.badge-device-revoked {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+
+
 

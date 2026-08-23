@@ -74,75 +74,172 @@
 
     <!-- ── Right Form Panel ── -->
     <div class="login-form-section">
-      <div class="login-card">
-        <div class="login-card-header">
-          <h2>Sign In</h2>
-          <p>Enter your credentials to continue.</p>
-        </div>
-
-        <!-- ── Login Credentials Guide ── -->
-        <div class="login-hint-box">
-          <div class="login-hint-header" onclick="toggleLoginHint(this)">
-            <span>💡 How to log in</span>
-            <span class="login-hint-arrow">▾</span>
+        <div id="login-form-section-inner">
+          <div class="login-card-header">
+            <h2>Sign In</h2>
+            <p>Enter your credentials to continue.</p>
           </div>
-          <div class="login-hint-body">
-            <p class="login-hint-note">
-              Your username follows the format: <strong>name_role</strong><br>
-              The system will automatically detect your role based on your username.
-            </p>
-            <div class="login-hint-table">
-              <div class="login-hint-row login-hint-head">
-                <span>Username Format</span>
-                <span>Logs in as</span>
-              </div>
-              <div class="login-hint-row hint-row-2col">
-                <span class="hint-username" onclick="fillLoginUser('mbautista_admin')">mbautista_admin</span>
-                <span class="hint-badge hint-admin">🔧 Admin</span>
-              </div>
-              <div class="login-hint-row hint-row-2col">
-                <span class="hint-username" onclick="fillLoginUser('mreantaso_instructor')">mreantaso_instructor</span>
-                <span class="hint-badge hint-instructor">👨‍🏫 Instructor</span>
-              </div>
-              <div class="login-hint-row hint-row-2col">
-                <span class="hint-username" onclick="fillLoginUser('emirandilla_student')">emirandilla_student</span>
-                <span class="hint-badge hint-student">🎓 Student</span>
-              </div>
-              <div class="login-hint-row hint-row-2col">
-                <span class="hint-username" onclick="fillLoginUser('mdaet_student')">mdaet_student</span>
-                <span class="hint-badge hint-student">🎓 Student</span>
-              </div>
+
+          <!-- ── Login Credentials Guide ── -->
+          <div class="login-hint-box">
+            <div class="login-hint-header" onclick="toggleLoginHint(this)">
+              <span>💡 How to log in</span>
+              <span class="login-hint-arrow">▾</span>
             </div>
-            <p class="login-hint-tip">💬 Click any username to auto-fill it.</p>
+            <div class="login-hint-body">
+              <p class="login-hint-note">
+                Your username follows the format: <strong>name_role</strong><br>
+                The system will automatically detect your role based on your username.
+              </p>
+              <div class="login-hint-table">
+                <div class="login-hint-row login-hint-head">
+                  <span>Username Format</span>
+                  <span>Logs in as</span>
+                </div>
+                <div class="login-hint-row hint-row-2col">
+                  <span class="hint-username" onclick="fillLoginUser('mbautista_admin')">mbautista_admin</span>
+                  <span class="hint-badge hint-admin">🔧 Admin</span>
+                </div>
+                <div class="login-hint-row hint-row-2col">
+                  <span class="hint-username" onclick="fillLoginUser('mreantaso_instructor')">mreantaso_instructor</span>
+                  <span class="hint-badge hint-instructor">👨‍🏫 Instructor</span>
+                </div>
+                <div class="login-hint-row hint-row-2col">
+                  <span class="hint-username" onclick="fillLoginUser('emirandilla_student')">emirandilla_student</span>
+                  <span class="hint-badge hint-student">🎓 Student</span>
+                </div>
+                <div class="login-hint-row hint-row-2col">
+                  <span class="hint-username" onclick="fillLoginUser('mdaet_student')">mdaet_student</span>
+                  <span class="hint-badge hint-student">🎓 Student</span>
+                </div>
+              </div>
+              <p class="login-hint-tip">💬 Click any username to auto-fill it.</p>
+            </div>
           </div>
-        </div>
 
-        <div class="form-group">
-          <label>Username</label>
-          <input type="text" id="login-username" class="form-input" placeholder="Enter your username">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <div style="position: relative; display: flex; align-items: center;">
-            <input type="password" id="login-password" class="form-input" placeholder="Enter your password"
-              style="padding-right: 2.5rem; width: 100%;">
-            <button type="button" class="btn btn-ghost btn-icon"
-              onclick="togglePasswordVisibility('login-password', this)"
-              style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
-              👁️
+          <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="login-username" class="form-input" placeholder="Enter your username">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <div style="position: relative; display: flex; align-items: center;">
+              <input type="password" id="login-password" class="form-input" placeholder="Enter your password"
+                style="padding-right: 2.5rem; width: 100%;">
+              <button type="button" class="btn btn-ghost btn-icon"
+                onclick="togglePasswordVisibility('login-password', this)"
+                style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
+                👁️
+              </button>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" onclick="handleLogin()">
+            Sign In →
+          </button>
+
+          <div style="text-align:center; margin-top: 1rem;">
+            <button class="btn btn-ghost btn-sm" onclick="showForgotPassword()" style="font-size:0.85rem; color:var(--text-muted);">
+              🔐 Forgot your password?
             </button>
           </div>
+
+          <div class="login-footer-text">
+            <span>Pseudocode to Python &copy; 2026</span>
+          </div>
         </div>
 
+        <!-- ── Forgot Password Panel (hidden by default) ── -->
+        <div id="forgot-password-panel" class="hidden">
+          <div class="login-card-header">
+            <h2>🔐 Forgot Password?</h2>
+            <p>Submit a recovery request. Your instructor will authorize the reset.</p>
+          </div>
 
+          <!-- Step 1: Student Identification -->
+          <div id="fp-step-1">
+            <div class="form-group">
+              <label>Username or Student ID</label>
+              <input type="text" id="fp-username-input" class="form-input" placeholder="e.g. mdaet_student or 2024-032">
+            </div>
+            <div style="display:flex; gap:0.75rem; margin-top:1rem;">
+              <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">Cancel</button>
+              <button class="btn btn-primary" onclick="submitRecoveryRequest()" style="flex:2">📩 Request Recovery</button>
+            </div>
+          </div>
 
-        <button class="btn btn-primary" onclick="handleLogin()">
-          Sign In →
-        </button>
+          <!-- Step 2: Request Submitted / Check Status -->
+          <div id="fp-step-2" class="hidden">
+            <div class="fp-status-card fp-status-pending">
+              <div class="fp-status-icon">⏳</div>
+              <h3>Request Submitted</h3>
+              <p>Your recovery request for <strong id="fp-submitted-name">your account</strong> has been submitted.</p>
+              <p style="margin-top:0.5rem; font-size:0.85rem; color:var(--text-muted);">
+                Ask your instructor to review and approve the request in the <strong>Password Recovery</strong> panel.
+                Then return here and check your status.
+              </p>
+            </div>
+            <div class="form-group" style="margin-top:1rem;">
+              <label>Check Status &mdash; Enter your Username or Student ID</label>
+              <input type="text" id="fp-check-username" class="form-input" placeholder="e.g. mdaet_student or 2024-032">
+            </div>
+            <div style="display:flex; gap:0.75rem; margin-top:1rem;">
+              <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">← Back to Login</button>
+              <button class="btn btn-primary" onclick="checkRecoveryStatus()" style="flex:2">🔍 Check Status</button>
+            </div>
+          </div>
 
+          <!-- Step 3: Reset Password Form (shown after instructor approval) -->
+          <div id="fp-step-3" class="hidden">
+            <div class="fp-status-card fp-status-approved">
+              <div class="fp-status-icon">✅</div>
+              <h3>Reset Authorized!</h3>
+              <p id="fp-token-expiry" style="font-size:0.85rem; color:var(--warning);">Authorization expires in 30 minutes</p>
+            </div>
+            <!-- Hidden fields for token validation -->
+            <input type="hidden" id="fp-reset-request-id">
+            <input type="hidden" id="fp-reset-student-id">
+            <div class="form-group" style="margin-top:1rem;">
+              <label>New Password <span style="color:var(--danger)">*</span></label>
+              <div style="position:relative; display:flex; align-items:center;">
+                <input type="password" id="fp-reset-new-password" class="form-input"
+                  placeholder="Minimum 8 characters" style="padding-right:2.5rem; width:100%;">
+                <button type="button" class="btn btn-ghost btn-icon"
+                  onclick="togglePasswordVisibility('fp-reset-new-password', this)"
+                  style="position:absolute; right:0.25rem; background:transparent; border:none; font-size:1.1rem; opacity:0.7; cursor:pointer;">•••</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Confirm New Password <span style="color:var(--danger)">*</span></label>
+              <div style="position:relative; display:flex; align-items:center;">
+                <input type="password" id="fp-reset-confirm-password" class="form-input"
+                  placeholder="Re-enter new password" style="padding-right:2.5rem; width:100%;">
+                <button type="button" class="btn btn-ghost btn-icon"
+                  onclick="togglePasswordVisibility('fp-reset-confirm-password', this)"
+                  style="position:absolute; right:0.25rem; background:transparent; border:none; font-size:1.1rem; opacity:0.7; cursor:pointer;">•••</button>
+              </div>
+            </div>
+            <div class="fp-requirements">
+              <div>✓ Minimum 8 characters</div>
+              <div>✓ Passwords must match</div>
+            </div>
+            <div style="display:flex; gap:0.75rem; margin-top:1.25rem;">
+              <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">← Cancel</button>
+              <button class="btn btn-primary" onclick="submitPasswordReset()" style="flex:2">🔐 Reset Password</button>
+            </div>
+          </div>
 
-        <div class="login-footer-text">
-          <span>Pseudocode to Python &copy; 2026</span>
+          <!-- Step Success -->
+          <div id="fp-step-success" class="hidden">
+            <div class="fp-status-card fp-status-success">
+              <div class="fp-status-icon">🎉</div>
+              <h3>Password Reset Successfully!</h3>
+              <p>You can now log in with your new password.</p>
+            </div>
+            <button class="btn btn-primary" onclick="backToLoginAfterReset()" style="width:100%; margin-top:1.25rem;">
+              → Back to Login
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -203,7 +300,10 @@
           <button class="nav-item" onclick="navigateTo('compiler-metrics')">
             <span class="nav-icon">🧪</span> Compiler Metrics
           </button>
-
+          <button class="nav-item" onclick="navigateTo('password-recovery')" style="position:relative;">
+            <span class="nav-icon">🔑</span> Password Recovery
+            <span id="nav-recovery-badge" style="display:none; position:absolute; right:0.75rem; top:50%; transform:translateY(-50%); background:var(--danger); color:#fff; border-radius:999px; font-size:0.7rem; font-weight:700; min-width:18px; height:18px; align-items:center; justify-content:center; padding:0 4px;"></span>
+          </button>
         </div>
 
         <!-- Admin Nav -->
@@ -250,6 +350,27 @@
           <span style="font-weight:600; color:var(--text-primary);" id="topbar-welcome">Welcome, Guest</span>
           <span style="font-size:0.75rem; color:var(--primary); font-weight:600;" id="topbar-role">Role: Guest</span>
         </div>
+        <!-- Student Notification Bell & Dropdown -->
+        <div class="topbar-notifications" id="topbar-notifications" style="position:relative; display:none;">
+          <button class="btn btn-ghost btn-icon" id="notif-bell-btn" onclick="toggleNotificationDropdown(event)"
+            title="Notifications" style="position:relative; font-size:1.1rem; padding:0.4rem 0.55rem;">
+            🔔
+            <span id="notif-badge" class="notif-badge hidden">0</span>
+          </button>
+          <div id="notif-dropdown" class="notif-dropdown hidden">
+            <div class="notif-dropdown-header">
+              <div class="notif-dropdown-title">
+                <span>🔔 Notifications</span>
+                <span id="notif-unread-count" class="notif-unread-count">0 unread</span>
+              </div>
+              <button class="notif-mark-all-btn" onclick="markAllNotificationsAsRead(event)">Mark all as read</button>
+            </div>
+            <div id="notif-list" class="notif-list">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
         <button class="btn btn-ghost btn-icon" id="theme-toggle-btn" onclick="toggleTheme()"
           title="Toggle Dark/Light Mode">
           🌓
@@ -1057,8 +1178,7 @@
             <thead>
               <tr>
                 <th>Student</th>
-                <th>Email</th>
-                <th>Password</th>
+                <th>Student ID</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -1338,6 +1458,49 @@
                   mastery analytics.</td>
               </tr>
             </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════
+           PAGE: Password Recovery (Instructor)
+           ═══════════════════════════════════ -->
+      <div id="page-password-recovery" class="page-view hidden">
+        <div class="page-header">
+          <div>
+            <h2>🔑 Password Recovery Requests</h2>
+            <p>Review and authorize student password recovery requests. No passwords will be viewed or revealed.</p>
+          </div>
+        </div>
+
+        <div class="stats-grid" style="margin-bottom:1.5rem">
+          <div class="stat-card">
+            <div class="stat-icon">⏳</div>
+            <div class="stat-value" id="stat-recovery-pending" style="color:var(--warning)">0</div>
+            <div class="stat-label">Pending Requests</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">📋</div>
+            <div class="stat-value" id="stat-recovery-total">0</div>
+            <div class="stat-label">Total Requests</div>
+          </div>
+        </div>
+
+        <div class="data-table-container">
+          <div class="panel-header">
+            <h3>Password Recovery Requests</h3>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Student ID</th>
+                <th>Requested At</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="recovery-requests-body"></tbody>
           </table>
         </div>
       </div>
@@ -1705,29 +1868,30 @@
       <div id="page-password-requests" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>🔑 Password Change History</h2>
-            <p>View a log of all student password changes.</p>
+            <h2>🔒 Security Audit Log</h2>
+            <p>View a complete log of all password security events. No passwords are displayed.</p>
           </div>
         </div>
 
         <div class="stats-grid" style="margin-bottom:1.5rem">
           <div class="stat-card">
-            <div class="stat-icon">🔑</div>
+            <div class="stat-icon">📋</div>
             <div class="stat-value" id="stat-total-changes">0</div>
-            <div class="stat-label">Total Password Changes</div>
+            <div class="stat-label">Total Security Events</div>
           </div>
         </div>
 
         <div class="data-table-container">
           <div class="panel-header">
-            <h3>Password Change Log</h3>
+            <h3>Security Event Log</h3>
           </div>
           <table class="data-table">
             <thead>
               <tr>
-                <th>Student</th>
-                <th>Date Changed</th>
-                <th>Status</th>
+                <th>Account</th>
+                <th>Action</th>
+                <th>Authorized By</th>
+                <th>Date &amp; Time</th>
               </tr>
             </thead>
             <tbody id="password-requests-body"></tbody>
@@ -1978,6 +2142,159 @@
       </div>
     </div>
   </div>
+
+  <!-- Password Recovery Review Modal -->
+  <div id="recovery-review-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3>🔍 Student Verification &amp; Recovery Review</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeRecoveryReview()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="recovery-review-content"></div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; gap:0.75rem;">
+        <button class="btn btn-secondary" onclick="closeRecoveryReview()">Close</button>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-danger" id="recovery-reject-btn" onclick="rejectRecoveryRequest()">❌ Reject Request</button>
+          <button class="btn btn-primary" id="recovery-approve-btn" onclick="confirmApproveRecovery()">✅ Approve Password Reset</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Password Recovery Confirmation Dialog -->
+  <div id="recovery-confirm-dialog" class="modal-overlay hidden" style="z-index: 10001;">
+    <div class="modal" style="max-width: 460px;">
+      <div class="modal-header">
+        <h3>⚠️ Confirm Password Reset</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeRecoveryConfirm()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:1rem; margin-bottom:0.75rem;">
+          Approve password reset for <strong id="recovery-confirm-name">this student</strong>?
+        </p>
+        <p style="font-size:0.85rem; color:var(--text-muted); line-height:1.5;">
+          After approval, the student will be allowed to create a new password. The student's existing password will not be revealed.
+        </p>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button class="btn btn-secondary" onclick="closeRecoveryConfirm()">Cancel</button>
+        <button class="btn btn-primary" onclick="approveRecoveryRequest()">Approve Password Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Instructor Devices Management Modal (Admin) ── -->
+  <div id="instructor-devices-modal" class="modal-overlay hidden" style="z-index: 10002;">
+    <div class="modal" style="max-width: 680px; width: 95%;">
+      <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:0.6rem;">
+          <span style="font-size:1.4rem;">💻</span>
+          <div>
+            <h3 style="margin:0; font-size:1.15rem;">Authorized Devices &amp; Security</h3>
+            <p style="margin:0; font-size:0.8rem; color:var(--text-muted);" id="device-modal-instructor-subtitle">Manage device access for instructor</p>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-icon" onclick="closeInstructorDevicesModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 1.25rem;">
+        <div style="background:var(--bg-card-hover); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem 1rem; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+          <div>
+            <div style="font-size:0.8rem; color:var(--text-muted);">Instructor Profile</div>
+            <div style="font-weight:600; font-size:0.95rem; color:var(--text-primary);" id="device-modal-instructor-name">—</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-family:monospace;" id="device-modal-instructor-handle">@—</div>
+          </div>
+          <div style="display:flex; gap:0.75rem;">
+            <div style="text-align:center; padding:0.3rem 0.6rem; background:rgba(255,255,255,0.03); border-radius:6px;">
+              <div style="font-size:1.1rem; font-weight:700; color:var(--text-primary);" id="device-modal-total-count">0</div>
+              <div style="font-size:0.7rem; color:var(--text-muted);">Devices</div>
+            </div>
+            <div style="text-align:center; padding:0.3rem 0.6rem; background:rgba(34,197,94,0.08); border-radius:6px;">
+              <div style="font-size:1.1rem; font-weight:700; color:var(--success);" id="device-modal-approved-count">0</div>
+              <div style="font-size:0.7rem; color:var(--success);">Approved</div>
+            </div>
+            <div style="text-align:center; padding:0.3rem 0.6rem; background:rgba(245,158,11,0.08); border-radius:6px;">
+              <div style="font-size:1.1rem; font-weight:700; color:var(--warning);" id="device-modal-pending-count">0</div>
+              <div style="font-size:0.7rem; color:var(--warning);">Pending</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:0.75rem; display:flex; justify-content:space-between; align-items:center;">
+          <h4 style="margin:0; font-size:0.9rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);">Registered Devices</h4>
+          <span style="font-size:0.75rem; color:var(--text-muted);">Admin approval is required for each new device</span>
+        </div>
+
+        <div style="max-height:320px; overflow-y:auto; border:1px solid var(--border-color); border-radius:8px;">
+          <table class="data-table" style="margin:0; width:100%; font-size:0.85rem;">
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>OS &amp; Browser</th>
+                <th>Requested</th>
+                <th>Status</th>
+                <th style="text-align:right;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="device-modal-table-body">
+              <tr>
+                <td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">Loading devices...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <button class="btn btn-secondary" onclick="closeInstructorDevicesModal()">Close</button>
+        <button class="btn btn-primary btn-sm" onclick="approveAllPendingDevices()" id="btn-approve-all-devices">
+          ✅ Approve All Pending
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── New Device Pending Login Notification Modal ── -->
+  <div id="new-device-pending-modal" class="modal-overlay hidden" style="z-index: 10005;">
+    <div class="modal" style="max-width: 480px; text-align: center; padding: 2rem 1.5rem;">
+      <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(245, 158, 11, 0.15); color: #f59e0b; display: flex; align-items: center; justify-content: center; font-size: 2rem; margin: 0 auto 1.25rem;">
+        🛡️
+      </div>
+      <h3 style="margin: 0 0 0.5rem; font-size: 1.35rem; color: var(--text-primary);">New Device Detected</h3>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem;">
+        You are signing in from an unrecognized device. For instructor security, access from new devices requires <strong>Administrator Authorization</strong>.
+      </p>
+
+      <div style="background: var(--bg-card-hover); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; text-align: left; margin-bottom: 1.5rem; font-size: 0.85rem;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+          <span style="color: var(--text-muted);">Device Name:</span>
+          <strong id="pending-device-info-name" style="color: var(--text-primary);">-</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+          <span style="color: var(--text-muted);">Browser &amp; OS:</span>
+          <span id="pending-device-info-os" style="color: var(--text-primary);">-</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+          <span style="color: var(--text-muted);">Approval Status:</span>
+          <span class="badge badge-warning" style="font-size: 0.75rem;">PENDING APPROVAL</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: var(--text-muted);">Device ID:</span>
+          <span id="pending-device-info-id" style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted);">-</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <button class="btn btn-primary" onclick="checkCurrentDeviceApprovalStatus()" style="width: 100%; justify-content: center;">
+          🔄 Check Approval Status &amp; Sign In
+        </button>
+        <button class="btn btn-secondary" onclick="closePendingDeviceModal()" style="width: 100%; justify-content: center;">
+          Back to Sign In
+        </button>
+      </div>
+    </div>
+  </div>
+
 
 
 

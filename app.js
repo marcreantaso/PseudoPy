@@ -24,6 +24,9 @@ let exerciseState = {
 let cachedUsers = [];
 let cachedExercises = [];
 let cachedActivity = [];
+let cachedDevices = [];
+let activeDeviceInstructorId = null;
+let pendingDeviceAuthData = null;
 let instructorExOffset = 0;
 let studentExOffset = 0;
 const EX_PAGE_LIMIT = 20;
@@ -202,6 +205,15 @@ async function init() {
     // Setup real-time validation
     setupRealtimeValidation();
 
+    // Close notification dropdown on outside click
+    document.addEventListener('click', (e) => {
+        const notifWrap = $id('topbar-notifications');
+        const notifDropdown = $id('notif-dropdown');
+        if (notifWrap && notifDropdown && !notifWrap.contains(e.target)) {
+            notifDropdown.classList.add('hidden');
+        }
+    });
+
     // Restore active exercise if any
     const activeExId = localStorage.getItem('pseudopy_active_exercise');
     if (activeExId) {
@@ -264,6 +276,89 @@ function showToast(message, type = 'info') {
 
 
 /* ============================================================
+   DEVICE FINGERPRINTING & AUTHORIZATION
+   ============================================================ */
+
+/**
+ * Generates and retrieves device details for the current client.
+ */
+function getDeviceFingerprint() {
+    let devId = localStorage.getItem('pseudopy_device_id');
+    if (!devId) {
+        devId = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 8);
+        localStorage.setItem('pseudopy_device_id', devId);
+    }
+
+    const ua = navigator.userAgent || '';
+    let os = 'Unknown OS';
+    if (ua.includes('Win')) os = 'Windows';
+    else if (ua.includes('Mac')) os = 'macOS';
+    else if (ua.includes('Linux')) os = 'Linux';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+
+    let browser = 'Unknown Browser';
+    if (ua.includes('Firefox')) browser = 'Firefox';
+    else if (ua.includes('Edg')) browser = 'Microsoft Edge';
+    else if (ua.includes('Chrome')) browser = 'Chrome';
+    else if (ua.includes('Safari')) browser = 'Safari';
+
+    const deviceType = (/Mobi|Android|iPhone|iPad/i.test(ua)) ? 'Mobile' : 'Desktop';
+    const deviceName = `${os} ${deviceType} (${browser})`;
+
+    return {
+        deviceId: devId,
+        deviceName,
+        os,
+        browser,
+        deviceType,
+        screen: `${window.screen.width}x${window.screen.height}`,
+        userAgent: ua
+    };
+}
+
+function showPendingDeviceModal(deviceInfo, user) {
+    pendingDeviceAuthData = { deviceInfo, user };
+    setText('pending-device-info-name', deviceInfo.deviceName || 'Desktop/Browser');
+    setText('pending-device-info-os', `${deviceInfo.os} — ${deviceInfo.browser}`);
+    setText('pending-device-info-id', deviceInfo.deviceId || '-');
+    show('new-device-pending-modal');
+}
+
+function closePendingDeviceModal() {
+    hide('new-device-pending-modal');
+    pendingDeviceAuthData = null;
+}
+
+async function checkCurrentDeviceApprovalStatus() {
+    if (!pendingDeviceAuthData) {
+        closePendingDeviceModal();
+        return;
+    }
+    const { deviceInfo, user } = pendingDeviceAuthData;
+    showToast('Checking device approval status with admin...', 'info');
+
+    const devices = await dbGetAll(devicesRef);
+    const matched = devices.find(d => d.deviceId === deviceInfo.deviceId && (d.userId === (user._docId || user.id) || d.username === user.username));
+
+    if (matched && matched.status === 'approved') {
+        closePendingDeviceModal();
+        showToast('Device authorized by Administrator! Signing in...', 'success');
+        currentUser = user;
+        try {
+            await dbUpdate(usersRef, currentUser._docId || currentUser.id, { lastLogin: new Date().toISOString() });
+            currentUser.lastLogin = new Date().toISOString();
+        } catch (e) { }
+        showApp();
+    } else if (matched && matched.status === 'revoked') {
+        closePendingDeviceModal();
+        showToast('This device was revoked by Administrator. Access denied.', 'error');
+    } else {
+        showToast('Device is still awaiting Administrator approval.', 'warning');
+    }
+}
+
+/* ============================================================
    AUTHENTICATION
    ============================================================ */
 
@@ -294,9 +389,6 @@ async function handleLogin() {
         // Refresh users from Offline Database
         await refreshUsers();
 
-        console.log(`[Debug] Attempting login with: username='${username}'`);
-        console.log(`[Debug] Users in database:`, cachedUsers.map(u => ({ username: u.username, role: u.role, fullName: u.fullName })));
-
         // Step 1: Find user by username only
         const userByUsername = cachedUsers.find(u => u.username === username);
 
@@ -305,13 +397,138 @@ async function handleLogin() {
             return;
         }
 
-        // Step 2: Verify password
-        if (userByUsername.password !== password) {
+        // Step 2: Verify password — support both hashed (new) and plaintext (legacy migration)
+        let passwordValid = false;
+
+        if (userByUsername.passwordHash && userByUsername.passwordSalt) {
+            // ── New hashed auth ──
+            passwordValid = await verifyPassword(password, userByUsername.passwordHash, userByUsername.passwordSalt);
+        } else if (userByUsername.password) {
+            // ── Legacy plaintext — verify then IMMEDIATELY migrate to hash ──
+            passwordValid = (userByUsername.password === password);
+            if (passwordValid) {
+                try {
+                    const salt = generateSalt();
+                    const hash = await hashPassword(password, salt);
+                    // Save hashed credentials, remove plaintext field
+                    await dbUpdate(usersRef, userByUsername._docId, {
+                        passwordHash: hash,
+                        passwordSalt: salt,
+                        password: undefined   // mark for removal
+                    });
+                    // Remove plaintext from in-memory copy
+                    const stored = await dbGet(usersRef, userByUsername._docId);
+                    if (stored) {
+                        delete stored.password;
+                        await dbSet(usersRef, stored._docId, stored);
+                    }
+                    userByUsername.passwordHash = hash;
+                    userByUsername.passwordSalt = salt;
+                    delete userByUsername.password;
+                    console.log(`[Auth] Migrated ${username} from plaintext to hashed password ✅`);
+                } catch (migErr) {
+                    console.warn('[Auth] Password migration failed (non-critical):', migErr);
+                }
+            }
+        } else {
+            showToast('Account configuration error. Please contact your administrator.', 'error');
+            return;
+        }
+
+        if (!passwordValid) {
             showToast('Incorrect password.', 'error');
             return;
         }
 
-        // Step 3: Role is auto-detected from the database record
+        // Step 3: Check account status
+        if (userByUsername.status === 'inactive') {
+            showToast('Your account is inactive. Please contact your instructor.', 'error');
+            return;
+        }
+
+        // Step 3.5: Instructor Device Change Detection & Admin Approval
+        if (userByUsername.role === 'instructor') {
+            const currentDevice = getDeviceFingerprint();
+            const allDevices = await dbGetAll(devicesRef);
+            const instructorDevices = allDevices.filter(d =>
+                d.userId === (userByUsername._docId || userByUsername.id) ||
+                d.username === userByUsername.username
+            );
+
+            let matchedDevice = instructorDevices.find(d => d.deviceId === currentDevice.deviceId);
+
+            // If instructor has no registered devices yet, enroll this initial device as Primary Approved
+            if (instructorDevices.length === 0) {
+                const firstDev = {
+                    _docId: `dev_${Date.now()}_${userByUsername.username}`,
+                    userId: userByUsername._docId || userByUsername.id,
+                    username: userByUsername.username,
+                    instructorName: userByUsername.fullName,
+                    deviceId: currentDevice.deviceId,
+                    deviceName: currentDevice.deviceName + ' (Primary)',
+                    os: currentDevice.os,
+                    browser: currentDevice.browser,
+                    deviceType: currentDevice.deviceType,
+                    screen: currentDevice.screen,
+                    userAgent: currentDevice.userAgent,
+                    status: 'approved',
+                    requestedAt: new Date().toISOString(),
+                    approvedAt: new Date().toISOString(),
+                    lastSeenAt: new Date().toISOString(),
+                    approvedBy: 'System Auto-Enroll'
+                };
+                await dbSet(devicesRef, firstDev._docId, firstDev);
+                matchedDevice = firstDev;
+            }
+
+            if (!matchedDevice) {
+                // New / Changed device detected! Create pending authorization record
+                const newDevDocId = `dev_${Date.now()}_${userByUsername.username}`;
+                const newDev = {
+                    _docId: newDevDocId,
+                    userId: userByUsername._docId || userByUsername.id,
+                    username: userByUsername.username,
+                    instructorName: userByUsername.fullName,
+                    deviceId: currentDevice.deviceId,
+                    deviceName: currentDevice.deviceName,
+                    os: currentDevice.os,
+                    browser: currentDevice.browser,
+                    deviceType: currentDevice.deviceType,
+                    screen: currentDevice.screen,
+                    userAgent: currentDevice.userAgent,
+                    status: 'pending',
+                    requestedAt: new Date().toISOString(),
+                    lastSeenAt: new Date().toISOString()
+                };
+                await dbSet(devicesRef, newDevDocId, newDev);
+
+                try {
+                    await dbAdd(auditLogRef, {
+                        eventType: 'INSTRUCTOR_NEW_DEVICE_ATTEMPT',
+                        actor: userByUsername.username,
+                        target: currentDevice.deviceName,
+                        details: `Instructor attempted sign-in from unapproved device (${currentDevice.os} - ${currentDevice.browser})`,
+                        timestamp: new Date().toISOString()
+                    });
+                } catch (e) { }
+
+                showPendingDeviceModal(newDev, userByUsername);
+                return;
+            } else if (matchedDevice.status === 'pending') {
+                showPendingDeviceModal(matchedDevice, userByUsername);
+                return;
+            } else if (matchedDevice.status === 'revoked') {
+                showToast('This device was revoked by Administrator. Access denied.', 'error');
+                return;
+            } else {
+                // Device is approved — update activity timestamp
+                try {
+                    await dbUpdate(devicesRef, matchedDevice._docId, { lastSeenAt: new Date().toISOString() });
+                } catch (e) { }
+            }
+        }
+
+        // Step 4: Role is auto-detected from the database record
         currentUser = userByUsername;
 
         // Record last login timestamp
@@ -328,7 +545,6 @@ async function handleLogin() {
     }
 }
 
-
 function handleLogout() {
     currentUser = null;
     hide('app-layout');
@@ -341,7 +557,7 @@ const ROLE_BADGES = { student: 'badge-student', instructor: 'badge-instructor', 
 
 function checkAccess(role, pageId) {
     const adminPages = ['manage-users', 'password-requests', 'admin-execute'];
-    const instructorPages = ['analytics', 'manage-exercises', 'generate-code', 'compiler-metrics', 'manage-students'];
+    const instructorPages = ['analytics', 'manage-exercises', 'generate-code', 'compiler-metrics', 'manage-students', 'password-recovery'];
     const studentPages = ['write-pseudocode', 'translate', 'execute', 'feedback', 'exercises-student', 'student-settings', 'change-password'];
 
     if (adminPages.includes(pageId)) return role === 'admin';
@@ -373,6 +589,17 @@ function showApp() {
     const progressPillWrap = $id('student-progress-pill-wrap');
     if (progressPillWrap) {
         progressPillWrap.style.display = currentUser.role === 'student' ? 'flex' : 'none';
+    }
+
+    // Handle student notifications display
+    const notifWrap = $id('topbar-notifications');
+    if (notifWrap) {
+        if (currentUser.role === 'student') {
+            notifWrap.style.display = 'inline-block';
+            loadStudentNotifications();
+        } else {
+            notifWrap.style.display = 'none';
+        }
     }
 
     // Navigate to default page
@@ -447,7 +674,8 @@ function navigateTo(pageId) {
         'admin-execute': 'Execute Code',
         'change-password': 'Change Password',
         'student-settings': 'Settings',
-        'password-requests': 'Password Requests',
+        'password-requests': 'Security Audit Log',
+        'password-recovery': 'Password Recovery',
         'compiler-metrics': 'Compiler Metrics & Evaluation'
     };
     setText('topbar-title', titles[pageId] || 'Dashboard');
@@ -460,6 +688,7 @@ function navigateTo(pageId) {
     if (pageId === 'exercises-student') loadStudentExercises();
     if (pageId === 'student-settings') loadStudentSettings();
     if (pageId === 'password-requests') loadPasswordRequests();
+    if (pageId === 'password-recovery') loadPasswordRecovery();
     if (pageId === 'compiler-metrics') loadCompilerMetrics();
     // Refresh student progress pill whenever the Write Pseudocode page is shown
     if (pageId === 'write-pseudocode' && currentUser && currentUser.role === 'student') loadStudentProgress();
@@ -1631,13 +1860,13 @@ async function loadStudentProgress() {
 
         // 4. Update Exercises & Tasks page counters
         const totalEl = $id('student-total-count');
-        const compEl  = $id('student-completed-count');
-        const fillEl  = $id('student-progress-fill');
-        const pctEl   = $id('student-progress-pct');
+        const compEl = $id('student-completed-count');
+        const fillEl = $id('student-progress-fill');
+        const pctEl = $id('student-progress-pct');
         if (totalEl) totalEl.textContent = totalExercises;
-        if (compEl)  compEl.textContent  = completedCount;
-        if (fillEl)  fillEl.style.width  = pct + '%';
-        if (pctEl)   pctEl.textContent   = pct + '%';
+        if (compEl) compEl.textContent = completedCount;
+        if (fillEl) fillEl.style.width = pct + '%';
+        if (pctEl) pctEl.textContent = pct + '%';
 
         // 5. Update Write Pseudocode topbar progress pill + mini bar
         const pill = $id('topbar-progress-pill');
@@ -1936,6 +2165,7 @@ async function saveExercise() {
                 difficulty: diffVal,
                 solution: solutionVal
             });
+            await createExerciseNotifications(editingExerciseId, titleVal, 'updated');
             showToast('Exercise updated successfully!', 'success');
         } else {
             const newId = 'ex' + Date.now();
@@ -1948,6 +2178,7 @@ async function saveExercise() {
                 createdBy: currentUser?.id || 'unknown',
                 createdAt: new Date().toISOString().split('T')[0]
             });
+            await createExerciseNotifications(newId, titleVal, 'added');
             showToast('Exercise added successfully!', 'success');
         }
         closeExerciseModal();
@@ -2000,7 +2231,7 @@ function _fmtDate(dateStr) {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
-           ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
 async function loadUsers() {
@@ -2009,6 +2240,9 @@ async function loadUsers() {
 
     const users = await refreshUsers();
     const instructors = users.filter(u => u.role === 'instructor');
+
+    // Load device records to track pending device approvals per instructor
+    cachedDevices = await dbGetAll(devicesRef);
 
     allCachedInstructors = instructors;
 
@@ -2022,9 +2256,9 @@ async function loadUsers() {
 }
 
 function applyInstructorFilters() {
-    const searchVal  = ($id('instructor-search')?.value || '').toLowerCase().trim();
-    const statusVal  = $id('instructor-filter-status')?.value || '';
-    const sortVal    = $id('instructor-sort')?.value || 'newest';
+    const searchVal = ($id('instructor-search')?.value || '').toLowerCase().trim();
+    const statusVal = $id('instructor-filter-status')?.value || '';
+    const sortVal = $id('instructor-sort')?.value || 'newest';
 
     let list = allCachedInstructors.filter(u => {
         if (statusVal && u.status !== statusVal) return false;
@@ -2100,11 +2334,16 @@ function renderInstructorTable() {
             : `<span class="badge badge-inactive">INACTIVE</span>`;
         const dateAdded = _fmtDate(u.createdAt);
         const lastLogin = _fmtDate(u.lastLogin);
+
+        const userDevices = (cachedDevices || []).filter(d => d.userId === u.id || d.userId === u._docId || d.username === u.username);
+        const pendingDevices = userDevices.filter(d => d.status === 'pending');
+        const pendingCount = pendingDevices.length;
+
         return `
         <tr>
           <td>
             <div class="user-cell">
-              <div class="avatar-sm" style="background:hsl(${(initial.charCodeAt(0)*17)%360},55%,45%)">${initial}</div>
+              <div class="avatar-sm" style="background:hsl(${(initial.charCodeAt(0) * 17) % 360},55%,45%)">${initial}</div>
               <div>
                 <div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div>
                 <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace">@${u.username}</div>
@@ -2124,11 +2363,15 @@ function renderInstructorTable() {
               <button class="btn btn-ghost btn-sm" onclick="openInstructorEditModal('${u.id}')" title="Edit" style="padding:0.3rem 0.5rem;font-size:0.8rem">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               </button>
+              <button class="btn btn-ghost btn-sm device-action-btn" onclick="openInstructorDevicesModal('${u.id}')" title="Manage Authorized Devices (${userDevices.length} registered${pendingCount > 0 ? `, ${pendingCount} pending approval` : ''})" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${pendingCount > 0 ? '#f59e0b' : '#38bdf8'}">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                ${pendingCount > 0 ? `<span class="device-pending-badge"></span>` : ''}
+              </button>
               <button class="btn btn-ghost btn-sm" onclick="confirmToggleInstructorStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${u.status === 'active' ? 'var(--warning)' : 'var(--success)'}">
                 ${u.status === 'active'
-                    ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
-                    : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`
-                }
+                ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
+                : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`
+            }
               </button>
               <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" ${u.id === currentUser?.id ? 'disabled title="Cannot delete yourself"' : 'title="Delete"'} style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--danger)">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
@@ -2151,6 +2394,195 @@ function instructorGoPage(p) {
     renderInstructorTable();
 }
 
+// ── Instructor Device Management & Approvals ──────────────────
+
+async function openInstructorDevicesModal(instructorId) {
+    activeDeviceInstructorId = instructorId;
+    const instructor = allCachedInstructors.find(u => u.id === instructorId || u._docId === instructorId);
+    if (!instructor) {
+        showToast('Instructor not found.', 'error');
+        return;
+    }
+
+    setText('device-modal-instructor-name', instructor.fullName);
+    setText('device-modal-instructor-handle', '@' + instructor.username);
+    setText('device-modal-instructor-subtitle', `Authorized device access control for ${instructor.fullName}`);
+
+    show('instructor-devices-modal');
+    await renderDeviceModalTable();
+}
+
+function closeInstructorDevicesModal() {
+    hide('instructor-devices-modal');
+    activeDeviceInstructorId = null;
+}
+
+async function renderDeviceModalTable() {
+    const tbody = $id('device-modal-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:1.5rem; color:var(--text-muted);">Loading devices...</td></tr>`;
+
+    const allDevices = await dbGetAll(devicesRef);
+    cachedDevices = allDevices;
+    const instructor = allCachedInstructors.find(u => u.id === activeDeviceInstructorId || u._docId === activeDeviceInstructorId);
+    if (!instructor) return;
+
+    const devices = allDevices.filter(d =>
+        d.userId === instructor.id ||
+        d.userId === instructor._docId ||
+        d.username === instructor.username
+    );
+
+    const total = devices.length;
+    const approved = devices.filter(d => d.status === 'approved').length;
+    const pending = devices.filter(d => d.status === 'pending').length;
+
+    setText('device-modal-total-count', total);
+    setText('device-modal-approved-count', approved);
+    setText('device-modal-pending-count', pending);
+
+    const approveAllBtn = $id('btn-approve-all-devices');
+    if (approveAllBtn) {
+        approveAllBtn.style.display = pending > 0 ? 'inline-flex' : 'none';
+    }
+
+    if (devices.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+              <td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">
+                <div style="font-size:1.8rem; margin-bottom:0.4rem;">💻</div>
+                <div style="font-weight:600; font-size:0.9rem;">No Registered Devices Yet</div>
+                <div style="font-size:0.75rem;">When this instructor signs in from a device, it will automatically appear here for verification.</div>
+              </td>
+            </tr>`;
+        return;
+    }
+
+    tbody.innerHTML = devices.map(d => {
+        const isMobile = d.deviceType === 'Mobile';
+        const icon = isMobile ? '📱' : '💻';
+        const reqTime = _fmtDate(d.requestedAt);
+        const lastSeen = _fmtDate(d.lastSeenAt);
+
+        let statusBadge = '';
+        if (d.status === 'approved') {
+            statusBadge = `<span class="badge-device-approved">APPROVED</span>`;
+        } else if (d.status === 'pending') {
+            statusBadge = `<span class="badge-device-pending">PENDING APPROVAL</span>`;
+        } else {
+            statusBadge = `<span class="badge-device-revoked">REVOKED</span>`;
+        }
+
+        return `
+        <tr>
+          <td>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <span style="font-size:1.1rem;">${icon}</span>
+              <div>
+                <strong style="color:var(--text-primary); font-size:0.85rem;">${d.deviceName || 'Device'}</strong>
+                <div style="font-size:0.72rem; color:var(--text-muted); font-family:monospace;">${d.deviceId ? d.deviceId.substring(0, 16) + '...' : '-'}</div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div style="font-size:0.82rem; color:var(--text-primary);">${d.os || 'Unknown OS'}</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);">${d.browser || 'Unknown Browser'}</div>
+          </td>
+          <td>
+            <div style="font-size:0.78rem; color:var(--text-primary);">${reqTime}</div>
+            <div style="font-size:0.7rem; color:var(--text-muted);">Active: ${lastSeen}</div>
+          </td>
+          <td>${statusBadge}</td>
+          <td style="text-align:right;">
+            <div style="display:flex; gap:0.35rem; justify-content:flex-end;">
+              ${d.status !== 'approved' ? `
+                <button class="btn btn-sm" onclick="approveDevice('${d._docId}')" style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3); font-size:0.75rem; padding:0.25rem 0.5rem;" title="Approve this device">
+                  ✅ Approve
+                </button>
+              ` : `
+                <button class="btn btn-sm" onclick="revokeDevice('${d._docId}')" style="background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); font-size:0.75rem; padding:0.25rem 0.5rem;" title="Revoke authorization">
+                  🔒 Revoke
+                </button>
+              `}
+              <button class="btn btn-ghost btn-sm" onclick="deleteDeviceRecord('${d._docId}')" style="color:var(--danger); padding:0.25rem 0.4rem; font-size:0.75rem;" title="Remove record">
+                🗑️
+              </button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+}
+
+async function approveDevice(deviceDocId) {
+    try {
+        await dbUpdate(devicesRef, deviceDocId, {
+            status: 'approved',
+            approvedAt: new Date().toISOString(),
+            approvedBy: currentUser?.username || 'admin'
+        });
+        showToast('Device approved successfully!', 'success');
+        await renderDeviceModalTable();
+        await loadUsers();
+    } catch (err) {
+        console.error('[Device] Approve error:', err);
+        showToast('Failed to approve device.', 'error');
+    }
+}
+
+async function revokeDevice(deviceDocId) {
+    try {
+        await dbUpdate(devicesRef, deviceDocId, {
+            status: 'revoked',
+            revokedAt: new Date().toISOString(),
+            revokedBy: currentUser?.username || 'admin'
+        });
+        showToast('Device access revoked.', 'info');
+        await renderDeviceModalTable();
+        await loadUsers();
+    } catch (err) {
+        console.error('[Device] Revoke error:', err);
+        showToast('Failed to revoke device.', 'error');
+    }
+}
+
+async function deleteDeviceRecord(deviceDocId) {
+    if (!confirm('Are you sure you want to remove this device record?')) return;
+    try {
+        await dbDelete(devicesRef, deviceDocId);
+        showToast('Device record removed.', 'info');
+        await renderDeviceModalTable();
+        await loadUsers();
+    } catch (err) {
+        console.error('[Device] Delete error:', err);
+        showToast('Failed to remove device.', 'error');
+    }
+}
+
+async function approveAllPendingDevices() {
+    if (!activeDeviceInstructorId) return;
+    const instructor = allCachedInstructors.find(u => u.id === activeDeviceInstructorId || u._docId === activeDeviceInstructorId);
+    if (!instructor) return;
+
+    const allDevices = await dbGetAll(devicesRef);
+    const pendingDevices = allDevices.filter(d =>
+        (d.userId === instructor.id || d.userId === instructor._docId || d.username === instructor.username) &&
+        d.status === 'pending'
+    );
+
+    for (const dev of pendingDevices) {
+        await dbUpdate(devicesRef, dev._docId, {
+            status: 'approved',
+            approvedAt: new Date().toISOString(),
+            approvedBy: currentUser?.username || 'admin'
+        });
+    }
+
+    showToast(`Approved ${pendingDevices.length} pending device(s) for ${instructor.fullName}!`, 'success');
+    await renderDeviceModalTable();
+    await loadUsers();
+}
+
 // ── Add / Edit Instructor Modal ──────────────────────────────
 
 let editingInstructorId = null;
@@ -2168,8 +2600,8 @@ function openInstructorAddModal() {
     setValue('inst-confirm-password', '');
     setValue('inst-status', 'active');
 
-    const pwGroup  = $id('inst-password-group');
-    const cpGroup  = $id('inst-confirm-password-group');
+    const pwGroup = $id('inst-password-group');
+    const cpGroup = $id('inst-confirm-password-group');
     if (pwGroup) pwGroup.classList.remove('hidden');
     if (cpGroup) cpGroup.classList.remove('hidden');
 
@@ -2198,8 +2630,8 @@ async function openInstructorEditModal(id) {
     setValue('inst-status', user.status || 'active');
 
     // hide password fields during edit
-    const pwGroup  = $id('inst-password-group');
-    const cpGroup  = $id('inst-confirm-password-group');
+    const pwGroup = $id('inst-password-group');
+    const cpGroup = $id('inst-confirm-password-group');
     if (pwGroup) pwGroup.classList.add('hidden');
     if (cpGroup) cpGroup.classList.add('hidden');
 
@@ -2224,20 +2656,20 @@ function _showInstAlert(msg) {
 }
 
 async function saveInstructor() {
-    const fullName  = getValue('inst-fullname').trim();
-    const username  = getValue('inst-username').trim();
-    const email     = getValue('inst-email').trim();
-    const password  = getValue('inst-password').trim();
-    const confirm   = getValue('inst-confirm-password').trim();
-    const status    = getValue('inst-status') || 'active';
+    const fullName = getValue('inst-fullname').trim();
+    const username = getValue('inst-username').trim();
+    const email = getValue('inst-email').trim();
+    const password = getValue('inst-password').trim();
+    const confirm = getValue('inst-confirm-password').trim();
+    const status = getValue('inst-status') || 'active';
 
     const alertEl = $id('inst-form-alert');
     if (alertEl) { alertEl.textContent = ''; alertEl.classList.add('hidden'); }
 
     // Validate required fields
-    if (!fullName)  { _showInstAlert('Full Name is required.'); return; }
-    if (!username)  { _showInstAlert('Username is required.'); return; }
-    if (!email)     { _showInstAlert('Email is required.'); return; }
+    if (!fullName) { _showInstAlert('Full Name is required.'); return; }
+    if (!username) { _showInstAlert('Username is required.'); return; }
+    if (!email) { _showInstAlert('Email is required.'); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { _showInstAlert('Enter a valid email address.'); return; }
 
     const allUsers = cachedUsers.length ? cachedUsers : await refreshUsers();
@@ -2258,12 +2690,12 @@ async function saveInstructor() {
             showToast('Instructor updated successfully.', 'success');
         } else {
             // Add mode — password required
-            if (!password)  { _showInstAlert('Password is required.'); return; }
+            if (!password) { _showInstAlert('Password is required.'); return; }
             if (password.length < 8) { _showInstAlert('Password must be at least 8 characters long.'); return; }
             if (!/[A-Z]/.test(password)) { _showInstAlert('Password must include at least one uppercase letter.'); return; }
             if (!/[a-z]/.test(password)) { _showInstAlert('Password must include at least one lowercase letter.'); return; }
             if (!/[0-9]/.test(password)) { _showInstAlert('Password must include at least one number.'); return; }
-            if (password !== confirm)    { _showInstAlert('Passwords do not match.'); return; }
+            if (password !== confirm) { _showInstAlert('Passwords do not match.'); return; }
 
             const newId = 'u_inst_' + Date.now();
             await dbSet(usersRef, newId, {
@@ -2321,7 +2753,7 @@ async function viewInstructor(id) {
     // Compute totals from live data
     const students = (cachedUsers.length ? cachedUsers : await refreshUsers()).filter(u => u.role === 'student' && u.instructorId === id);
     const exercises = await refreshExercises();
-    const activity  = cachedActivity.length ? cachedActivity : await dbGetAll(activityRef);
+    const activity = cachedActivity.length ? cachedActivity : await dbGetAll(activityRef);
 
     setText('idm-students', String(students.length));
     setText('idm-exercises', String(exercises.length));
@@ -2367,49 +2799,27 @@ async function loadStudents() {
     setText('stat-student-inactive', String(students.filter(u => u.status === 'inactive').length));
 
     if (students.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">No students enrolled under your class yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">No students enrolled under your class yet.</td></tr>`;
         return;
     }
 
     tbody.innerHTML = students.map(u => `
     <tr>
       <td><div class="user-cell"><div class="avatar-sm">${u.fullName.charAt(0)}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
-      <td>${u.email}</td>
-      <td>
-        <div style="display:flex; align-items:center; gap:0.5rem">
-          <span id="pwd-masked-${u.id}" style="font-family: monospace; letter-spacing: 2px;">••••••</span>
-          <span id="pwd-real-${u.id}" class="hidden" style="font-family: monospace;">${u.password}</span>
-          <button class="btn btn-ghost btn-icon" onclick="toggleUserPasswordVisibility('${u.id}')" style="font-size: 0.9rem; opacity: 0.7; padding: 2px;">👁️</button>
-        </div>
-      </td>
+      <td>${u.studentId || '—'}</td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">
         <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit">✏️</button>
-        <button class="btn btn-ghost btn-sm" onclick="resetStudentPassword('${u.id}')" title="Reset Password">🔑</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}">${u.status === 'active' ? '🔒' : '🔓'}</button>
         <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" title="Delete">🗑️</button>
       </div></td>
     </tr>`).join('');
 }
 
-async function resetStudentPassword(id) {
-    const student = cachedUsers.find(u => u.id === id);
-    if (!student) return;
-    const newPwd = prompt(`Enter new password for student ${student.fullName}:`);
-    if (newPwd === null) return; // cancelled
-    if (newPwd.trim().length < 6) {
-        showToast('Password must be at least 6 characters.', 'error');
-        return;
-    }
-    try {
-        await dbUpdate(usersRef, student._docId, { password: newPwd.trim() });
-        showToast(`Password for ${student.fullName} reset successfully.`, 'success');
-        await loadStudents();
-    } catch (err) {
-        console.error('[Instructor] Reset password error:', err);
-        showToast('Failed to reset password.', 'error');
-    }
-}
+// resetStudentPassword() was removed for security.
+// Instructors must use the Password Recovery workflow instead:
+// navigateTo('password-recovery') → Approve Request → Student resets own password.
+
 
 async function toggleUserStatus(id) {
     try {
@@ -2689,7 +3099,7 @@ function applyAnalyticsFilters() {
             '1': 'Week 1 (days 1–3)', '2': 'Week 2 (days 4–10)',
             '3': 'Week 3 (days 11–17)', '4': 'Week 4 (days 18–24)', '5': 'Week 5 (days 25–31)'
         };
-        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const mIdx = monthVal !== '' ? parseInt(monthVal) : -1;
         const mName = mIdx >= 0 ? monthNames[mIdx] : '';
         if (weekVal && mName) {
@@ -2755,8 +3165,8 @@ function renderSubmissionActivityChart(filteredActivity) {
 
     // --- Determine chart period dynamically from filters ---
     const monthVal = $id('filter-month')?.value ?? '';
-    const weekVal  = $id('filter-week')?.value  || '';
-    const dateVal  = $id('filter-date')?.value  || '';
+    const weekVal = $id('filter-week')?.value || '';
+    const dateVal = $id('filter-date')?.value || '';
     const viewMode = $id('chart-view-mode')?.value || 'day';
 
     // Group all filtered activity by date
@@ -2764,7 +3174,7 @@ function renderSubmissionActivityChart(filteredActivity) {
     filteredActivity.forEach(a => {
         const d = new Date(a.timestamp || a.time);
         if (isNaN(d.getTime())) return;
-        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         if (!dateMap[key]) dateMap[key] = [];
         dateMap[key].push(a);
     });
@@ -2776,10 +3186,10 @@ function renderSubmissionActivityChart(filteredActivity) {
         // Monthly view: show each week as a bar
         const mIdx = monthVal !== '' ? parseInt(monthVal) : new Date().getMonth();
         const year = 2025;
-        const mName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mIdx];
+        const mName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mIdx];
         const weekRanges = [
-            { label: 'Wk 1', start: 1,  end: 3,  w: 1 },
-            { label: 'Wk 2', start: 4,  end: 10, w: 2 },
+            { label: 'Wk 1', start: 1, end: 3, w: 1 },
+            { label: 'Wk 2', start: 4, end: 10, w: 2 },
             { label: 'Wk 3', start: 11, end: 17, w: 3 },
             { label: 'Wk 4', start: 18, end: 24, w: 4 },
             { label: 'Wk 5', start: 25, end: 31, w: 5 }
@@ -2787,7 +3197,7 @@ function renderSubmissionActivityChart(filteredActivity) {
         weekDays = weekRanges.map(r => {
             let count = 0;
             for (let d = r.start; d <= r.end; d++) {
-                const key = `${year}-${String(mIdx+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const key = `${year}-${String(mIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 count += (dateMap[key] || []).length;
             }
             return { label: r.label, sub: `${mName} ${r.start}–${r.end}`, dateKey: null, weekRange: r, count, active: weekVal === String(r.w) };
@@ -2803,17 +3213,17 @@ function renderSubmissionActivityChart(filteredActivity) {
         else if (weekVal === '5') startDay = 25;
         else if (!weekVal && monthVal === '') {
             // No filter: show the 7 days with most activity from actual data
-            const sortedDays = Object.keys(dateMap).sort((a,b) => b.localeCompare(a)).slice(0,7).reverse();
+            const sortedDays = Object.keys(dateMap).sort((a, b) => b.localeCompare(a)).slice(0, 7).reverse();
             if (sortedDays.length > 0) {
                 weekDays = sortedDays.map(key => {
                     const d = new Date(key);
-                    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-                    const monNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    const monNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                     return {
                         label: dayNames[d.getDay()],
                         sub: `${monNames[d.getMonth()]} ${d.getDate()}`,
                         dateKey: key,
-                        count: (dateMap[key]||[]).length,
+                        count: (dateMap[key] || []).length,
                         active: false
                     };
                 });
@@ -2821,24 +3231,24 @@ function renderSubmissionActivityChart(filteredActivity) {
         }
 
         if (weekDays.length === 0) {
-            const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-            const mName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mIdx];
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const mName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mIdx];
             for (let i = 0; i < 7; i++) {
                 const day = startDay + i;
-                const key = `${year}-${String(mIdx+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const key = `${year}-${String(mIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const d = new Date(key);
                 weekDays.push({
                     label: dayNames[d.getDay()],
                     sub: `${mName} ${day}`,
                     dateKey: key,
-                    count: (dateMap[key]||[]).length,
+                    count: (dateMap[key] || []).length,
                     active: dateVal === key
                 });
             }
         }
     }
 
-    const dayCounts = weekDays.map(w => w.count !== undefined ? w.count : (dateMap[w.dateKey]||[]).length);
+    const dayCounts = weekDays.map(w => w.count !== undefined ? w.count : (dateMap[w.dateKey] || []).length);
     const maxVal = Math.max(...dayCounts, 1);
     const yMax = maxVal <= 5 ? 6 : maxVal <= 10 ? 12 : Math.ceil(maxVal * 1.2);
     const yStep = yMax <= 6 ? 2 : yMax <= 12 ? 2 : Math.ceil(yMax / 6);
@@ -2851,7 +3261,7 @@ function renderSubmissionActivityChart(filteredActivity) {
     }
 
     container.innerHTML = weekDays.map((w, idx) => {
-        const count = w.count !== undefined ? w.count : (dateMap[w.dateKey]||[]).length;
+        const count = w.count !== undefined ? w.count : (dateMap[w.dateKey] || []).length;
         const heightPct = Math.max((count / yMax) * 100, 3);
         const isHighlighted = w.active;
         return `
@@ -2920,12 +3330,12 @@ function renderErrorDistributionChart(filteredActivity) {
 
     // Count actual error types from real filtered data
     const errorColorMap = {
-        'Syntax Error':      '#ef4444',
-        'Logic Error':       '#f59e0b',
-        'Missing END':       '#f97316',
+        'Syntax Error': '#ef4444',
+        'Logic Error': '#f59e0b',
+        'Missing END': '#f97316',
         'Indentation Error': '#10b981',
-        'Type Error':        '#3b82f6',
-        'Other':             '#8b5cf6'
+        'Type Error': '#3b82f6',
+        'Other': '#8b5cf6'
     };
     const knownTypes = Object.keys(errorColorMap);
     const counts = {};
@@ -3040,8 +3450,8 @@ function renderFilteredActivityTable(activityList) {
 
     const anStatusBadge = s => {
         const norm = (s || '').toLowerCase();
-        if (norm === 'completed')   return `<span class="badge-status badge-completed">Completed</span>`;
-        if (norm === 'failed')      return `<span class="badge-status badge-failed">Failed</span>`;
+        if (norm === 'completed') return `<span class="badge-status badge-completed">Completed</span>`;
+        if (norm === 'failed') return `<span class="badge-status badge-failed">Failed</span>`;
         return `<span class="badge-status badge-pending">Pending</span>`;
     };
 
@@ -3268,7 +3678,7 @@ function renderPasswordChangeHistory(history) {
 }
 
 /**
- * Change the student's password directly
+ * Change the student's password securely (hash-based).
  */
 async function submitPasswordChangeRequest() {
     const newPassword = getValue('new-password').trim();
@@ -3278,41 +3688,52 @@ async function submitPasswordChangeRequest() {
         showToast('Please fill in both password fields.', 'error');
         return;
     }
-    if (newPassword.length < 6) {
-        showToast('Password must be at least 6 characters.', 'error');
+    if (newPassword.length < 8) {
+        showToast('Password must be at least 8 characters.', 'error');
         return;
     }
     if (newPassword !== confirmPassword) {
         showToast('Passwords do not match.', 'error');
         return;
     }
-    if (newPassword === currentUser.password) {
-        showToast('New password must be different from current password.', 'error');
-        return;
-    }
 
     try {
-        // Update the password directly in Offline Database
+        // Hash the new password before storing
+        const salt = generateSalt();
+        const hash = await hashPassword(newPassword, salt);
+
+        // Update the hashed password in Offline Database
         const users = cachedUsers.length ? cachedUsers : await refreshUsers();
         const user = users.find(u => u.id === currentUser.id);
         if (user) {
-            await dbUpdate(usersRef, user._docId, {
-                password: newPassword,
-                lastPasswordChange: new Date().toISOString().split('T')[0]
-            });
+            const updatedData = await dbGet(usersRef, user._docId);
+            if (updatedData) {
+                delete updatedData.password; // remove any plaintext residue
+                updatedData.passwordHash = hash;
+                updatedData.passwordSalt = salt;
+                updatedData.lastPasswordChange = new Date().toISOString().split('T')[0];
+                await dbSet(usersRef, user._docId, updatedData);
+            }
         }
 
-        // Update current session
-        currentUser.password = newPassword;
+        // Update current session (remove plaintext, store hash info)
+        delete currentUser.password;
+        currentUser.passwordHash = hash;
+        currentUser.passwordSalt = salt;
 
-        // Log the password change for admin history
-        const logId = 'pc' + Date.now();
-        await dbSet(passwordRequestsRef, logId, {
-            id: logId,
-            userId: currentUser.id,
+        // Log the password change to audit log
+        const logId = 'al_pc_' + Date.now();
+        await dbSet(auditLogRef, logId, {
+            _docId: logId,
+            action: 'password_changed',
+            studentId: currentUser.id,
+            studentName: currentUser.fullName,
             username: currentUser.username,
-            fullName: currentUser.fullName,
-            changedAt: new Date().toISOString().split('T')[0]
+            instructorId: null,
+            instructorName: null,
+            timestamp: new Date().toISOString(),
+            requestId: null
+            // NEVER log the password or hash
         });
 
         setValue('new-password', '');
@@ -3358,13 +3779,803 @@ async function loadPasswordRequests() {
 
 // No pending badge needed — admin just views history
 async function updatePendingRequestsBadge() {
-    // No-op — kept for compatibility
+    // Update pending recovery requests badge on instructor nav
+    try {
+        const requests = await dbGetAll(passwordRequestsRef);
+        const pending = requests.filter(r => r.type === 'recovery' && r.status === 'pending');
+        const badge = $id('nav-recovery-badge');
+        if (badge) {
+            badge.textContent = pending.length > 0 ? String(pending.length) : '';
+            badge.style.display = pending.length > 0 ? 'inline-flex' : 'none';
+        }
+    } catch (e) { /* non-critical */ }
 }
 
 
 /* ============================================================
-   UPLOAD PSEUDOCODE
+   AUDIT LOG HELPER
    ============================================================ */
+
+/**
+ * Records an audit action. NEVER logs passwords or hashes.
+ */
+async function logAuditAction({ action, studentId, studentName, username, instructorId, instructorName, requestId }) {
+    try {
+        const logId = 'al_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        await dbSet(auditLogRef, logId, {
+            _docId: logId,
+            action,
+            studentId: studentId || null,
+            studentName: studentName || null,
+            username: username || null,
+            instructorId: instructorId || null,
+            instructorName: instructorName || null,
+            requestId: requestId || null,
+            timestamp: new Date().toISOString()
+        });
+    } catch (e) {
+        console.warn('[Audit] Failed to write audit log:', e);
+    }
+}
+
+
+/* ============================================================
+   FORGOT PASSWORD — STUDENT FLOW
+   ============================================================ */
+
+/**
+ * Shows the forgot-password panel on the login page.
+ */
+function showForgotPassword() {
+    hide('login-form-section-inner');
+    show('forgot-password-panel');
+    setValue('fp-username-input', '');
+    hide('fp-step-2');
+    show('fp-step-1');
+}
+
+/**
+ * Returns to the normal login form from the forgot-password panel.
+ */
+function cancelForgotPassword() {
+    show('login-form-section-inner');
+    hide('forgot-password-panel');
+}
+
+/**
+ * Student submits a password recovery request.
+ */
+async function submitRecoveryRequest() {
+    const usernameOrId = getValue('fp-username-input').trim();
+    if (!usernameOrId) {
+        showToast('Please enter your username or Student ID.', 'error');
+        return;
+    }
+
+    await refreshUsers();
+    const student = cachedUsers.find(u =>
+        (u.username === usernameOrId || u.studentId === usernameOrId) && u.role === 'student'
+    );
+
+    if (!student) {
+        showToast('Student account not found. Check your username or Student ID.', 'error');
+        return;
+    }
+
+    if (student.status === 'inactive') {
+        showToast('Your account is inactive. Please contact your instructor.', 'error');
+        return;
+    }
+
+    // Check for existing pending request to avoid duplicates
+    const existing = await dbGetAll(passwordRequestsRef);
+    const alreadyPending = existing.find(r =>
+        r.type === 'recovery' && r.studentId === student._docId && r.status === 'pending'
+    );
+
+    if (alreadyPending) {
+        // Show the check-status step instead
+        setText('fp-submitted-name', student.fullName);
+        hide('fp-step-1');
+        show('fp-step-2');
+        showToast('You already have a pending recovery request. Ask your instructor to approve it.', 'info');
+        return;
+    }
+
+    // Create a new recovery request
+    const reqId = 'pr_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    await dbSet(passwordRequestsRef, reqId, {
+        _docId: reqId,
+        type: 'recovery',
+        studentId: student._docId,
+        studentName: student.fullName,
+        studentUsername: student.username,
+        studentEnrolledId: student.studentId || '—',
+        instructorId: student.instructorId || null,
+        status: 'pending',
+        requestedAt: new Date().toISOString(),
+        reviewedAt: null,
+        reviewedBy: null,
+        reviewedByName: null,
+        resetToken: null,
+        tokenExpiresAt: null,
+        tokenUsed: false
+    });
+
+    await logAuditAction({
+        action: 'password_reset_requested',
+        studentId: student._docId,
+        studentName: student.fullName,
+        username: student.username,
+        requestId: reqId
+    });
+
+    setText('fp-submitted-name', student.fullName);
+    hide('fp-step-1');
+    show('fp-step-2');
+    showToast('Recovery request submitted! Ask your instructor to approve it.', 'success');
+
+    // Update instructor badge
+    updatePendingRequestsBadge();
+}
+
+/**
+ * Student checks if their recovery request has been approved,
+ * then shows the reset password form if a valid token exists.
+ */
+async function checkRecoveryStatus() {
+    const usernameOrId = getValue('fp-username-input').trim() ||
+        (getValue('fp-check-username') || '').trim();
+    const checkInput = getValue('fp-check-username').trim();
+    const lookupVal = checkInput || usernameOrId;
+
+    if (!lookupVal) {
+        showToast('Please enter your username or Student ID.', 'error');
+        return;
+    }
+
+    await refreshUsers();
+    const student = cachedUsers.find(u =>
+        (u.username === lookupVal || u.studentId === lookupVal) && u.role === 'student'
+    );
+
+    if (!student) {
+        showToast('Student account not found.', 'error');
+        return;
+    }
+
+    // Find the most recent approved (unused, non-expired) recovery request
+    const requests = await dbGetAll(passwordRequestsRef);
+    const now = Date.now();
+
+    const approvedReq = requests
+        .filter(r =>
+            r.type === 'recovery' &&
+            r.studentId === student._docId &&
+            r.status === 'approved' &&
+            !r.tokenUsed &&
+            r.tokenExpiresAt && r.tokenExpiresAt > now
+        )
+        .sort((a, b) => b.tokenExpiresAt - a.tokenExpiresAt)[0];
+
+    if (!approvedReq) {
+        // Check if there's an expired one
+        const expiredReq = requests.find(r =>
+            r.type === 'recovery' &&
+            r.studentId === student._docId &&
+            r.status === 'approved' &&
+            (!r.tokenExpiresAt || r.tokenExpiresAt <= now)
+        );
+        if (expiredReq) {
+            // Auto-mark as expired
+            await dbUpdate(passwordRequestsRef, expiredReq._docId, { status: 'expired' });
+            showToast('Your recovery authorization has expired. Please submit a new request.', 'error');
+        } else {
+            showToast('No approved recovery request found. Please ask your instructor to approve it.', 'info');
+        }
+        return;
+    }
+
+    // Show reset password form
+    // Store the request ID in a hidden field on the form
+    setValue('fp-reset-request-id', approvedReq._docId);
+    setValue('fp-reset-student-id', student._docId);
+    setValue('fp-reset-new-password', '');
+    setValue('fp-reset-confirm-password', '');
+
+    // Show expiry countdown
+    const minsLeft = Math.max(0, Math.floor((approvedReq.tokenExpiresAt - now) / 60000));
+    setText('fp-token-expiry', `Authorization expires in ~${minsLeft} minute${minsLeft !== 1 ? 's' : ''}`);
+
+    hide('fp-step-2');
+    show('fp-step-3');
+}
+
+/**
+ * Student submits their new password after instructor approval.
+ */
+async function submitPasswordReset() {
+    const requestId = getValue('fp-reset-request-id').trim();
+    const studentDocId = getValue('fp-reset-student-id').trim();
+    const newPwd = getValue('fp-reset-new-password').trim();
+    const confirmPwd = getValue('fp-reset-confirm-password').trim();
+
+    if (!newPwd || !confirmPwd) {
+        showToast('Please fill in both password fields.', 'error');
+        return;
+    }
+    if (newPwd.length < 8) {
+        showToast('Password must be at least 8 characters.', 'error');
+        return;
+    }
+    if (newPwd !== confirmPwd) {
+        showToast('Passwords do not match.', 'error');
+        return;
+    }
+
+    // Re-validate token is still valid
+    const req = await dbGet(passwordRequestsRef, requestId);
+    if (!req || req.status !== 'approved' || req.tokenUsed || req.tokenExpiresAt <= Date.now()) {
+        showToast('Recovery authorization is invalid or expired. Please request a new one.', 'error');
+        return;
+    }
+
+    try {
+        // Hash the new password
+        const salt = generateSalt();
+        const hash = await hashPassword(newPwd, salt);
+
+        // Update the student's credentials
+        const storedUser = await dbGet(usersRef, studentDocId);
+        if (storedUser) {
+            delete storedUser.password;
+            storedUser.passwordHash = hash;
+            storedUser.passwordSalt = salt;
+            storedUser.lastPasswordChange = new Date().toISOString().split('T')[0];
+            await dbSet(usersRef, storedUser._docId, storedUser);
+        }
+
+        // Invalidate the token (one-time use)
+        await dbUpdate(passwordRequestsRef, requestId, {
+            status: 'completed',
+            tokenUsed: true,
+            completedAt: new Date().toISOString()
+        });
+
+        // Log to audit trail — NEVER log the password
+        await logAuditAction({
+            action: 'password_reset_completed',
+            studentId: studentDocId,
+            studentName: req.studentName,
+            username: req.studentUsername,
+            instructorId: req.reviewedBy,
+            instructorName: req.reviewedByName,
+            requestId: requestId
+        });
+
+        // Show success state
+        hide('fp-step-3');
+        show('fp-step-success');
+        showToast('Password reset successfully! You can now log in.', 'success');
+
+        // Refresh caches
+        await refreshUsers();
+    } catch (err) {
+        console.error('[PasswordReset] Error:', err);
+        showToast('Failed to reset password. Please try again.', 'error');
+    }
+}
+
+/**
+ * Returns to login after successful reset.
+ */
+function backToLoginAfterReset() {
+    hide('forgot-password-panel');
+    show('login-form-section-inner');
+    hide('fp-step-success');
+    show('fp-step-1');
+    setValue('fp-username-input', '');
+    setValue('fp-check-username', '');
+}
+
+
+/* ============================================================
+   INSTRUCTOR: PASSWORD RECOVERY REQUESTS
+   ============================================================ */
+
+let currentReviewRequestId = null;
+
+/**
+ * Loads the instructor's Password Recovery page.
+ */
+async function loadPasswordRecovery() {
+    const requests = await dbGetAll(passwordRequestsRef);
+    const recoveryRequests = requests
+        .filter(r => r.type === 'recovery')
+        .sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
+
+    // Auto-expire old approved tokens
+    const now = Date.now();
+    for (const r of recoveryRequests) {
+        if (r.status === 'approved' && r.tokenExpiresAt && r.tokenExpiresAt <= now && !r.tokenUsed) {
+            await dbUpdate(passwordRequestsRef, r._docId, { status: 'expired' });
+            r.status = 'expired';
+        }
+    }
+
+    const pending = recoveryRequests.filter(r => r.status === 'pending');
+    setText('stat-recovery-pending', String(pending.length));
+    setText('stat-recovery-total', String(recoveryRequests.length));
+
+    const tbody = $id('recovery-requests-body');
+    if (!tbody) return;
+
+    if (recoveryRequests.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">No password recovery requests yet.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = recoveryRequests.map(r => {
+        const statusMap = {
+            pending: { cls: 'badge-recovery-pending', label: '⏳ Pending' },
+            approved: { cls: 'badge-recovery-approved', label: '✅ Approved' },
+            rejected: { cls: 'badge-recovery-rejected', label: '❌ Rejected' },
+            completed: { cls: 'badge-recovery-completed', label: '✔️ Completed' },
+            expired: { cls: 'badge-recovery-expired', label: '⏱️ Expired' }
+        };
+        const s = statusMap[r.status] || { cls: '', label: r.status };
+        const dt = r.requestedAt ? new Date(r.requestedAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+        const canReview = r.status === 'pending';
+        return `
+        <tr>
+          <td><div class="user-cell"><div class="avatar-sm">${(r.studentName || '?').charAt(0)}</div><div>
+            <div style="font-weight:600;color:var(--text-primary)">${r.studentName || 'Unknown'}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">@${r.studentUsername || '—'}</div>
+          </div></div></td>
+          <td>${r.studentEnrolledId || '—'}</td>
+          <td>${dt}</td>
+          <td><span class="badge ${s.cls}">${s.label}</span></td>
+          <td>
+            ${canReview
+                ? `<button class="btn btn-primary btn-sm" onclick="openRecoveryReview('${r._docId}')">🔍 Review</button>`
+                : `<button class="btn btn-ghost btn-sm" onclick="openRecoveryReview('${r._docId}')">👁️ View</button>`
+            }
+          </td>
+        </tr>`;
+    }).join('');
+
+    // Update nav badge
+    updatePendingRequestsBadge();
+}
+
+/**
+ * Opens the review modal for a recovery request.
+ * Shows ONLY safe account info — no password, hash, or token.
+ */
+async function openRecoveryReview(requestId) {
+    const req = await dbGet(passwordRequestsRef, requestId);
+    if (!req) { showToast('Request not found.', 'error'); return; }
+
+    currentReviewRequestId = requestId;
+
+    // Fetch student safe info
+    const student = cachedUsers.find(u => u._docId === req.studentId) ||
+        (await refreshUsers()).find(u => u._docId === req.studentId);
+
+    const dt = req.requestedAt
+        ? new Date(req.requestedAt).toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short' })
+        : '—';
+
+    const statusMap = {
+        pending: { cls: 'badge-recovery-pending', label: '⏳ Pending' },
+        approved: { cls: 'badge-recovery-approved', label: '✅ Approved' },
+        rejected: { cls: 'badge-recovery-rejected', label: '❌ Rejected' },
+        completed: { cls: 'badge-recovery-completed', label: '✔️ Completed' },
+        expired: { cls: 'badge-recovery-expired', label: '⏱️ Expired' }
+    };
+    const s = statusMap[req.status] || { cls: '', label: req.status };
+
+    setHtml('recovery-review-content', `
+        <div class="recovery-info-grid">
+          <div class="recovery-info-row">
+            <span class="recovery-info-label">👤 Full Name</span>
+            <span class="recovery-info-value">${req.studentName || 'Unknown'}</span>
+          </div>
+          <div class="recovery-info-row">
+            <span class="recovery-info-label">🪪 Student ID</span>
+            <span class="recovery-info-value">${req.studentEnrolledId || '—'}</span>
+          </div>
+          <div class="recovery-info-row">
+            <span class="recovery-info-label">👤 Username</span>
+            <span class="recovery-info-value">@${req.studentUsername || '—'}</span>
+          </div>
+          <div class="recovery-info-row">
+            <span class="recovery-info-label">🟢 Account Status</span>
+            <span class="recovery-info-value">${student ? student.status : '—'}</span>
+          </div>
+          <div class="recovery-info-row">
+            <span class="recovery-info-label">📅 Request Date</span>
+            <span class="recovery-info-value">${dt}</span>
+          </div>
+          <div class="recovery-info-row">
+            <span class="recovery-info-label">📋 Request Status</span>
+            <span class="recovery-info-value"><span class="badge ${s.cls}">${s.label}</span></span>
+          </div>
+        </div>
+        <div class="recovery-security-notice">
+          🔒 <strong>Security Notice:</strong> No password information is displayed. 
+          The instructor only authorizes the student to create a new password.
+        </div>
+    `);
+
+    const approveBtn = $id('recovery-approve-btn');
+    const rejectBtn = $id('recovery-reject-btn');
+    if (approveBtn) approveBtn.style.display = req.status === 'pending' ? 'inline-flex' : 'none';
+    if (rejectBtn) rejectBtn.style.display = req.status === 'pending' ? 'inline-flex' : 'none';
+
+    show('recovery-review-modal');
+}
+
+function closeRecoveryReview() {
+    hide('recovery-review-modal');
+    currentReviewRequestId = null;
+}
+
+/**
+ * Shows confirmation dialog before approving a reset request.
+ */
+function confirmApproveRecovery() {
+    if (!currentReviewRequestId) return;
+    const req = cachedUsers; // we'll look it up in approveRecoveryRequest
+    const modal = $id('recovery-review-modal');
+    // Read the name from the info grid
+    const nameEl = modal ? modal.querySelector('.recovery-info-value') : null;
+    const studentName = nameEl ? nameEl.textContent : 'this student';
+
+    setText('recovery-confirm-name', studentName);
+    show('recovery-confirm-dialog');
+}
+
+function closeRecoveryConfirm() {
+    hide('recovery-confirm-dialog');
+}
+
+/**
+ * Instructor approves the password reset — generates one-time token.
+ * Does NOT set or reveal any password.
+ */
+async function approveRecoveryRequest() {
+    hide('recovery-confirm-dialog');
+    if (!currentReviewRequestId) return;
+
+    const req = await dbGet(passwordRequestsRef, currentReviewRequestId);
+    if (!req || req.status !== 'pending') {
+        showToast('This request is no longer pending.', 'error');
+        closeRecoveryReview();
+        return;
+    }
+
+    // Generate a cryptographically random one-time token
+    const tokenBytes = new Uint8Array(32);
+    crypto.getRandomValues(tokenBytes);
+    const resetToken = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    // 30-minute expiry
+    const tokenExpiresAt = Date.now() + (30 * 60 * 1000);
+
+    await dbUpdate(passwordRequestsRef, req._docId, {
+        status: 'approved',
+        resetToken: resetToken,
+        tokenExpiresAt: tokenExpiresAt,
+        tokenUsed: false,
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: currentUser._docId || currentUser.id,
+        reviewedByName: currentUser.fullName
+    });
+
+    await logAuditAction({
+        action: 'password_reset_approved',
+        studentId: req.studentId,
+        studentName: req.studentName,
+        username: req.studentUsername,
+        instructorId: currentUser._docId || currentUser.id,
+        instructorName: currentUser.fullName,
+        requestId: req._docId
+    });
+
+    closeRecoveryReview();
+    showToast(`Password reset approved for ${req.studentName}. Token valid for 30 minutes.`, 'success');
+    await loadPasswordRecovery();
+}
+
+/**
+ * Instructor rejects a password recovery request.
+ */
+async function rejectRecoveryRequest() {
+    if (!currentReviewRequestId) return;
+
+    const req = await dbGet(passwordRequestsRef, currentReviewRequestId);
+    if (!req) return;
+
+    await dbUpdate(passwordRequestsRef, req._docId, {
+        status: 'rejected',
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: currentUser._docId || currentUser.id,
+        reviewedByName: currentUser.fullName
+    });
+
+    await logAuditAction({
+        action: 'password_reset_rejected',
+        studentId: req.studentId,
+        studentName: req.studentName,
+        username: req.studentUsername,
+        instructorId: currentUser._docId || currentUser.id,
+        instructorName: currentUser.fullName,
+        requestId: req._docId
+    });
+
+    closeRecoveryReview();
+    showToast(`Recovery request for ${req.studentName} has been rejected.`, 'info');
+    await loadPasswordRecovery();
+}
+
+
+/* ============================================================
+   STUDENT NOTIFICATION SYSTEM
+   ============================================================ */
+
+/**
+ * Creates notifications for all enrolled students when an exercise is added or updated.
+ */
+async function createExerciseNotifications(exerciseId, exerciseTitle, actionType = 'added') {
+    try {
+        const users = await refreshUsers();
+        const students = users.filter(u => u.role === 'student');
+        if (students.length === 0) return;
+
+        const isAdded = actionType === 'added';
+        const title = isAdded ? 'New Exercise Added' : 'Exercise Updated';
+        const message = isAdded
+            ? `Your instructor added a new exercise: ${exerciseTitle}.`
+            : `Your instructor updated this exercise.`;
+
+        const now = new Date().toISOString();
+
+        for (const s of students) {
+            const notifId = 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6) + '_' + (s._docId || s.id);
+            await dbSet(notificationsRef, notifId, {
+                _docId: notifId,
+                studentId: s._docId || s.id,
+                exerciseId: exerciseId,
+                exerciseTitle: exerciseTitle,
+                title: title,
+                message: message,
+                type: isAdded ? 'exercise_added' : 'exercise_updated',
+                isRead: false,
+                createdAt: now
+            });
+        }
+
+        console.log(`[Notifications] Sent "${title}" notifications to ${students.length} students ✅`);
+    } catch (err) {
+        console.error('[Notifications] Failed to create notifications:', err);
+    }
+}
+
+/**
+ * Loads and renders notifications for the currently logged-in student.
+ */
+async function loadStudentNotifications() {
+    if (!currentUser || currentUser.role !== 'student') return;
+
+    try {
+        const allNotifs = await dbGetAll(notificationsRef);
+        const studentId = currentUser._docId || currentUser.id;
+        const myNotifs = allNotifs
+            .filter(n => n.studentId === studentId || n.studentId === currentUser.id || n.studentId === currentUser._docId)
+            .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+        const unreadCount = myNotifs.filter(n => !n.isRead).length;
+
+        // Update badge
+        const badge = $id('notif-badge');
+        if (badge) {
+            if (unreadCount > 0) {
+                badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        // Update unread count in dropdown header
+        const countEl = $id('notif-unread-count');
+        if (countEl) {
+            countEl.textContent = `${unreadCount} unread`;
+        }
+
+        // Render notifications list
+        const listEl = $id('notif-list');
+        if (!listEl) return;
+
+        if (myNotifs.length === 0) {
+            listEl.innerHTML = `
+                <div class="notif-empty">
+                    <div style="font-size:1.75rem; margin-bottom:0.35rem; opacity:0.6;">🔕</div>
+                    <div style="font-weight:600; color:var(--text-secondary); margin-bottom:0.25rem;">No notifications yet</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted);">You will be notified when your instructor adds or updates exercises.</div>
+                </div>`;
+            return;
+        }
+
+        listEl.innerHTML = myNotifs.map(n => {
+            const dt = n.createdAt
+                ? new Date(n.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : 'Recent';
+            const isUnread = !n.isRead;
+            return `
+                <div class="notif-item ${isUnread ? 'unread' : 'read'}" onclick="handleNotificationClick('${n._docId}', '${n.exerciseId || ''}')">
+                    <div class="notif-item-header">
+                        <div class="notif-item-title-row">
+                            ${isUnread ? '<span class="notif-unread-dot"></span>' : ''}
+                            <strong class="notif-item-title">${n.title || 'New Exercise Added'}</strong>
+                        </div>
+                        <span class="notif-item-status ${isUnread ? 'unread' : 'read'}">${isUnread ? 'Unread' : 'Read'}</span>
+                    </div>
+                    <div class="notif-item-ex-title">"${n.exerciseTitle || 'Exercise'}"</div>
+                    <div class="notif-item-msg">${n.message || ''}</div>
+                    <div class="notif-item-time">📅 ${dt} &bull; <span style="font-weight:500;">${isUnread ? 'Unread' : 'Read'}</span></div>
+                </div>`;
+        }).join('');
+    } catch (err) {
+        console.error('[Notifications] Failed to load student notifications:', err);
+    }
+}
+
+/**
+ * Toggles the notification dropdown panel.
+ */
+function toggleNotificationDropdown(event) {
+    if (event) event.stopPropagation();
+    const dropdown = $id('notif-dropdown');
+    if (!dropdown) return;
+
+    const isHidden = dropdown.classList.contains('hidden');
+    if (isHidden) {
+        dropdown.classList.remove('hidden');
+        loadStudentNotifications();
+    } else {
+        dropdown.classList.add('hidden');
+    }
+}
+
+/**
+ * Handles clicking a notification item: marks as read and navigates to exercise.
+ */
+async function handleNotificationClick(notifId, exerciseId) {
+    try {
+        if (notifId) {
+            await dbUpdate(notificationsRef, notifId, { isRead: true });
+        }
+
+        // Close dropdown
+        const dropdown = $id('notif-dropdown');
+        if (dropdown) dropdown.classList.add('hidden');
+
+        // Refresh badge
+        await loadStudentNotifications();
+
+        // Navigate to Exercises & Tasks
+        navigateTo('exercises-student');
+
+        // If specific exercise is provided, launch it directly for the student
+        if (exerciseId) {
+            setTimeout(async () => {
+                const ex = await dbGet(exercisesRef, exerciseId);
+                if (ex) {
+                    attemptExercise(exerciseId);
+                }
+            }, 200);
+        }
+    } catch (err) {
+        console.error('[Notifications] Error handling notification click:', err);
+    }
+}
+
+/**
+ * Marks all notifications for the current student as read.
+ */
+async function markAllNotificationsAsRead(event) {
+    if (event) event.stopPropagation();
+    if (!currentUser || currentUser.role !== 'student') return;
+
+    try {
+        const allNotifs = await dbGetAll(notificationsRef);
+        const studentId = currentUser._docId || currentUser.id;
+        const unread = allNotifs.filter(n =>
+            (n.studentId === studentId || n.studentId === currentUser.id || n.studentId === currentUser._docId) && !n.isRead
+        );
+
+        for (const n of unread) {
+            await dbUpdate(notificationsRef, n._docId, { isRead: true });
+        }
+
+        await loadStudentNotifications();
+        showToast('All notifications marked as read.', 'info');
+    } catch (err) {
+        console.error('[Notifications] Failed to mark all as read:', err);
+        showToast('Failed to mark notifications as read.', 'error');
+    }
+}
+
+/* ============================================================
+   ADMIN: SECURITY AUDIT LOG
+   ============================================================ */
+
+/**
+ * Loads the Security Audit Log for the admin panel.
+ * Replaces the old simple password-change history.
+ */
+async function loadPasswordRequests() {
+    // Load both audit log and legacy password change history
+    const auditLogs = await refreshAuditLog();
+    const recoveryReqs = await dbGetAll(passwordRequestsRef);
+
+    // Combine legacy change-history records (changedAt field) with audit log
+    const legacyHistory = (await dbGetAll(passwordRequestsRef))
+        .filter(r => r.changedAt && !r.type)
+        .map(r => ({
+            _docId: r._docId,
+            action: 'password_changed',
+            studentName: r.fullName,
+            username: r.username,
+            timestamp: r.changedAt,
+            instructorName: null,
+            status: 'completed'
+        }));
+
+    const allLogs = [...auditLogs, ...legacyHistory]
+        .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+
+    setText('stat-total-changes', allLogs.length);
+
+    const tbody = $id('password-requests-body');
+    if (!tbody) return;
+
+    if (allLogs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">No security events recorded yet.</td></tr>';
+        return;
+    }
+
+    const actionLabels = {
+        'password_changed': { icon: '🔑', label: 'Password Changed', cls: 'badge-approved' },
+        'password_reset_requested': { icon: '📩', label: 'Reset Requested', cls: 'badge-recovery-pending' },
+        'password_reset_approved': { icon: '✅', label: 'Reset Approved', cls: 'badge-recovery-approved' },
+        'password_reset_rejected': { icon: '❌', label: 'Reset Rejected', cls: 'badge-recovery-rejected' },
+        'password_reset_completed': { icon: '🎉', label: 'Reset Completed', cls: 'badge-recovery-completed' }
+    };
+
+    tbody.innerHTML = allLogs.map(r => {
+        const a = actionLabels[r.action] || { icon: '📋', label: r.action || 'Unknown', cls: '' };
+        const dt = r.timestamp
+            ? new Date(r.timestamp).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+            : '—';
+        return `
+        <tr>
+          <td><div class="user-cell"><div class="avatar-sm">${(r.studentName || '?').charAt(0)}</div>
+            <div>
+              <div style="font-weight:600;color:var(--text-primary)">${r.studentName || 'Unknown'}</div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">@${r.username || '—'}</div>
+            </div>
+          </div></td>
+          <td><span class="badge ${a.cls}">${a.icon} ${a.label}</span></td>
+          <td>${r.instructorName || '—'}</td>
+          <td>${dt}</td>
+        </tr>`;
+    }).join('');
+}
+
+
 
 /**
  * Trigger the hidden file input to upload a pseudocode file
@@ -4124,10 +5335,10 @@ function renderBenchmarkResults(results) {
         } else {
             masteryBody.innerHTML = conceptData.map(c => {
                 let masteryLabel, masteryColor;
-                if (c.accuracy >= 80)      { masteryLabel = '🟢 Expert';      masteryColor = '#22c55e'; }
-                else if (c.accuracy >= 60) { masteryLabel = '🔵 Proficient';  masteryColor = '#3b82f6'; }
+                if (c.accuracy >= 80) { masteryLabel = '🟢 Expert'; masteryColor = '#22c55e'; }
+                else if (c.accuracy >= 60) { masteryLabel = '🔵 Proficient'; masteryColor = '#3b82f6'; }
                 else if (c.accuracy >= 40) { masteryLabel = '🟡 Developing'; masteryColor = '#f59e0b'; }
-                else                        { masteryLabel = '🔴 Beginner';    masteryColor = '#ef4444'; }
+                else { masteryLabel = '🔴 Beginner'; masteryColor = '#ef4444'; }
 
                 return `<tr>
                   <td style="font-weight:600;color:var(--text-primary)">${c.concept}</td>
@@ -4162,11 +5373,11 @@ function renderPipelineTimingChart(timing) {
     ];
 
     const max = Math.max(...stages.map(s => s.value), 0.001);
-    container.innerHTML = stages.map(s => 
-      '<div class="chart-bar" style="height:' + Math.max((s.value / max) * 180, 20) + 'px;background:' + s.color + '">' +
+    container.innerHTML = stages.map(s =>
+        '<div class="chart-bar" style="height:' + Math.max((s.value / max) * 180, 20) + 'px;background:' + s.color + '">' +
         '<span class="bar-value">' + s.value + 'ms</span>' +
         '<span class="bar-label">' + s.name + '</span>' +
-      '</div>'
+        '</div>'
     ).join('');
 }
 
@@ -4265,18 +5476,22 @@ async function handleChangePassword() {
         return;
     }
 
-    if (currentParam !== currentUser.password) {
+    // Verify current password using hash-based check
+    let currentValid = false;
+    if (currentUser.passwordHash && currentUser.passwordSalt) {
+        currentValid = await verifyPassword(currentParam, currentUser.passwordHash, currentUser.passwordSalt);
+    } else if (currentUser.password) {
+        // Legacy plaintext fallback
+        currentValid = (currentParam === currentUser.password);
+    }
+
+    if (!currentValid) {
         showToast('Incorrect current password.', 'error');
         return;
     }
 
-    if (newParam === currentParam) {
-        showToast('New password cannot be the same as current password.', 'warning');
-        return;
-    }
-
-    if (newParam.length < 6) {
-        showToast('New password must be at least 6 characters.', 'error');
+    if (newParam.length < 8) {
+        showToast('New password must be at least 8 characters.', 'error');
         return;
     }
 
@@ -4286,12 +5501,28 @@ async function handleChangePassword() {
     }
 
     try {
-        await dbUpdate(usersRef, currentUser._docId, { password: newParam });
-        currentUser.password = newParam; // Update local state immediately
+        const salt = generateSalt();
+        const hash = await hashPassword(newParam, salt);
 
-        // Update cached array so it's fresh
+        const stored = await dbGet(usersRef, currentUser._docId);
+        if (stored) {
+            delete stored.password;
+            stored.passwordHash = hash;
+            stored.passwordSalt = salt;
+            await dbSet(usersRef, stored._docId, stored);
+        }
+
+        // Update local state
+        delete currentUser.password;
+        currentUser.passwordHash = hash;
+        currentUser.passwordSalt = salt;
+
         const uIndex = cachedUsers.findIndex(u => u.id === currentUser.id);
-        if (uIndex !== -1) cachedUsers[uIndex].password = newParam;
+        if (uIndex !== -1) {
+            delete cachedUsers[uIndex].password;
+            cachedUsers[uIndex].passwordHash = hash;
+            cachedUsers[uIndex].passwordSalt = salt;
+        }
 
         showToast('Password updated successfully!', 'success');
 
@@ -4305,20 +5536,9 @@ async function handleChangePassword() {
     }
 }
 
-function toggleUserPasswordVisibility(userId) {
-    const masked = $id('pwd-masked-' + userId);
-    const real = $id('pwd-real-' + userId);
-
-    if (masked && real) {
-        if (masked.classList.contains('hidden')) {
-            masked.classList.remove('hidden');
-            real.classList.add('hidden');
-        } else {
-            masked.classList.add('hidden');
-            real.classList.remove('hidden');
-        }
-    }
-}
+// toggleUserPasswordVisibility() was removed for security.
+// Instructor views of student accounts must NEVER display passwords.
+// Use the Password Recovery workflow for access issues.
 
 // ── Data Management ──
 async function exportData(type) {
