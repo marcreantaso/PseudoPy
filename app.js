@@ -397,39 +397,13 @@ async function handleLogin() {
             return;
         }
 
-        // Step 2: Verify password — support both hashed (new) and plaintext (legacy migration)
+        // Step 2: Verify password — support both plaintext and hashed auth
         let passwordValid = false;
 
-        if (userByUsername.passwordHash && userByUsername.passwordSalt) {
-            // ── New hashed auth ──
+        if (userByUsername.password && userByUsername.password === password) {
+            passwordValid = true;
+        } else if (userByUsername.passwordHash && userByUsername.passwordSalt) {
             passwordValid = await verifyPassword(password, userByUsername.passwordHash, userByUsername.passwordSalt);
-        } else if (userByUsername.password) {
-            // ── Legacy plaintext — verify then IMMEDIATELY migrate to hash ──
-            passwordValid = (userByUsername.password === password);
-            if (passwordValid) {
-                try {
-                    const salt = generateSalt();
-                    const hash = await hashPassword(password, salt);
-                    // Save hashed credentials, remove plaintext field
-                    await dbUpdate(usersRef, userByUsername._docId, {
-                        passwordHash: hash,
-                        passwordSalt: salt,
-                        password: undefined   // mark for removal
-                    });
-                    // Remove plaintext from in-memory copy
-                    const stored = await dbGet(usersRef, userByUsername._docId);
-                    if (stored) {
-                        delete stored.password;
-                        await dbSet(usersRef, stored._docId, stored);
-                    }
-                    userByUsername.passwordHash = hash;
-                    userByUsername.passwordSalt = salt;
-                    delete userByUsername.password;
-                    console.log(`[Auth] Migrated ${username} from plaintext to hashed password ✅`);
-                } catch (migErr) {
-                    console.warn('[Auth] Password migration failed (non-critical):', migErr);
-                }
-            }
         } else {
             showToast('Account configuration error. Please contact your administrator.', 'error');
             return;
@@ -441,6 +415,11 @@ async function handleLogin() {
         }
 
         // Step 3: Check account status
+        if (userByUsername.status === 'archived') {
+            showToast('This account has been archived. Please contact your administrator.', 'error');
+            return;
+        }
+
         if (userByUsername.status === 'inactive') {
             showToast('Your account is inactive. Please contact your instructor.', 'error');
             return;
@@ -545,12 +524,206 @@ async function handleLogin() {
     }
 }
 
-function handleLogout() {
+function handleLogout(reason) {
+    // Stop the session timeout timer before clearing state
+    SessionTimeout.stop();
+
+    // Invalidate session state
     currentUser = null;
+    currentPage = '';
+    editingExerciseId = null;
+    editingUserId = null;
+
+    // Clear session token from storage (security: prevent stale session reuse)
+    localStorage.removeItem('pseudopy_session_user');
+    sessionStorage.removeItem('pseudopy_session_user');
+
     hide('app-layout');
     show('login-page');
-    showToast('Signed out successfully.', 'info');
+
+    if (reason === 'inactivity') {
+        showToast('You have been logged out due to inactivity.', 'info');
+    } else {
+        showToast('Signed out successfully.', 'info');
+    }
 }
+
+/* ============================================================
+   SESSION TIMEOUT — Automatic Inactivity Logout
+   ============================================================
+
+   - Logs out the user after TIMEOUT_MS of inactivity.
+   - Shows a warning modal WARNING_MS before the final logout.
+   - Resets on any user activity: mouse, keyboard, scroll, touch.
+   - Safe to call start() multiple times; never creates duplicate timers.
+   - Properly tears down all event listeners to prevent memory leaks.
+   ============================================================ */
+
+const SessionTimeout = (() => {
+    const TIMEOUT_MS  = 35 * 1000;  // 35 seconds total inactivity window
+    const WARNING_MS  = 10 * 1000;  // Show warning at 10 seconds remaining
+
+    let _mainTimer    = null;  // Fires at (TIMEOUT_MS - WARNING_MS)
+    let _warnTimer    = null;  // Fires WARNING_MS after the warning is shown
+    let _countdownInt = null;  // Updates the countdown display every second
+    let _active       = false; // Whether the timeout is currently running
+
+    // ── Activity Events ──────────────────────────────────────────
+    // All standard desktop + mobile (iOS / Android) interactions
+    const ACTIVITY_EVENTS = [
+        'mousemove', 'mousedown', 'click', 'dblclick',
+        'keydown', 'keypress', 'keyup',
+        'scroll', 'wheel',
+        'touchstart', 'touchmove', 'touchend',
+        'pointerdown', 'pointermove', 'pointerup',
+        'visibilitychange'
+    ];
+
+    // ── Internal Helpers ─────────────────────────────────────────
+
+    function _clearAllTimers() {
+        if (_mainTimer)    { clearTimeout(_mainTimer);    _mainTimer    = null; }
+        if (_warnTimer)    { clearTimeout(_warnTimer);    _warnTimer    = null; }
+        if (_countdownInt) { clearInterval(_countdownInt); _countdownInt = null; }
+    }
+
+    function _hideWarning() {
+        const overlay = document.getElementById('session-timeout-overlay');
+        if (overlay) overlay.classList.add('hidden');
+    }
+
+    function _showWarning() {
+        const overlay = document.getElementById('session-timeout-overlay');
+        if (!overlay) return;
+        overlay.classList.remove('hidden');
+
+        // Animate the countdown ring
+        const ring = document.getElementById('sto-ring-progress');
+        const label = document.getElementById('sto-countdown-label');
+        const warningSeconds = Math.floor(WARNING_MS / 1000); // 10
+        let remaining = warningSeconds;
+
+        // Set initial ring state
+        if (ring) {
+            const circumference = 2 * Math.PI * 45; // r=45
+            ring.style.strokeDasharray  = circumference;
+            ring.style.strokeDashoffset = '0';
+        }
+        if (label) label.textContent = remaining + 's';
+
+        _countdownInt = setInterval(() => {
+            remaining--;
+            if (remaining <= 0) {
+                clearInterval(_countdownInt);
+                _countdownInt = null;
+                if (label) label.textContent = '0s';
+                if (ring) ring.style.strokeDashoffset = String(2 * Math.PI * 45);
+                return;
+            }
+            if (label) label.textContent = remaining + 's';
+            if (ring) {
+                const circumference = 2 * Math.PI * 45;
+                const offset = circumference * (1 - remaining / warningSeconds);
+                ring.style.strokeDashoffset = String(offset);
+            }
+        }, 1000);
+    }
+
+    function _scheduleTimeout() {
+        _clearAllTimers();
+        _hideWarning();
+
+        // Phase 1: Wait until the warning threshold
+        _mainTimer = setTimeout(() => {
+            // Only trigger if a user is logged in
+            if (!currentUser) { _active = false; return; }
+
+            _showWarning();
+
+            // Phase 2: Final logout countdown
+            _warnTimer = setTimeout(() => {
+                _active = false;
+                _removeListeners();
+                _hideWarning();
+                _clearAllTimers();
+
+                // Perform the actual logout
+                if (typeof handleLogout === 'function') {
+                    handleLogout('inactivity');
+                }
+            }, WARNING_MS);
+
+        }, TIMEOUT_MS - WARNING_MS);
+    }
+
+    // ── Activity Handler ─────────────────────────────────────────
+    // Bound version stored so we can removeEventListener by reference
+    const _onActivity = (e) => {
+        // Ignore visibility change — tab hidden should NOT reset the timer
+        if (e.type === 'visibilitychange' && document.hidden) return;
+
+        // Dismiss warning if shown and reset the full timer
+        if (!document.getElementById('session-timeout-overlay')?.classList.contains('hidden')) {
+            _hideWarning();
+        }
+        _scheduleTimeout();
+    };
+
+    function _addListeners() {
+        ACTIVITY_EVENTS.forEach(evt => {
+            // Use passive:true for scroll/touch to avoid blocking the main thread on mobile
+            const opts = (evt.startsWith('touch') || evt === 'scroll' || evt === 'wheel' || evt.startsWith('pointer'))
+                ? { passive: true }
+                : false;
+            document.addEventListener(evt, _onActivity, opts);
+        });
+    }
+
+    function _removeListeners() {
+        ACTIVITY_EVENTS.forEach(evt => {
+            document.removeEventListener(evt, _onActivity, true);
+            document.removeEventListener(evt, _onActivity, false);
+        });
+    }
+
+    // ── Public API ───────────────────────────────────────────────
+
+    /**
+     * Start the inactivity session timer.
+     * Calling start() while already active resets to a fresh 35s window
+     * (ensures no duplicate timers exist after page navigation).
+     */
+    function start() {
+        // Full teardown first to guarantee no lingering timers or listeners
+        stop();
+        _active = true;
+        _addListeners();
+        _scheduleTimeout();
+        console.log('[SessionTimeout] Started — user will be logged out after 35s of inactivity.');
+    }
+
+    /**
+     * Stop the timer and remove all event listeners.
+     * Call this explicitly on manual logout.
+     */
+    function stop() {
+        _active = false;
+        _removeListeners();
+        _clearAllTimers();
+        _hideWarning();
+    }
+
+    /**
+     * Reset the timer to full 35 seconds (e.g., "Stay Logged In" button).
+     */
+    function reset() {
+        if (_active) {
+            _scheduleTimeout();
+        }
+    }
+
+    return { start, stop, reset };
+})();
 
 const ROLE_LABELS = { student: 'Student', instructor: 'Instructor', admin: 'Administrator' };
 const ROLE_BADGES = { student: 'badge-student', instructor: 'badge-instructor', admin: 'badge-admin' };
@@ -569,6 +742,9 @@ function checkAccess(role, pageId) {
 function showApp() {
     hide('login-page');
     show('app-layout');
+
+    // Start (or restart) the inactivity session timeout for the newly logged-in user
+    SessionTimeout.start();
 
     // Update sidebar user info
     setText('sidebar-avatar', currentUser.fullName.charAt(0).toUpperCase());
@@ -2225,6 +2401,8 @@ let allCachedInstructors = [];   // full list from DB (unfiltered)
 let filteredInstructors = [];    // after search/filter/sort
 let instructorPage = 1;
 const INSTR_PAGE_SIZE = 10;
+let pendingArchiveInstructorId = null;
+let pendingRestoreInstructorId = null;
 
 function _fmtDate(dateStr) {
     if (!dateStr) return 'N/A';
@@ -2246,8 +2424,8 @@ async function loadUsers() {
 
     allCachedInstructors = instructors;
 
-    // KPI cards
-    setText('stat-total-instructors', instructors.length);
+    // KPI cards (exclude archived from active/total count)
+    setText('stat-total-instructors', instructors.filter(u => u.status !== 'archived').length);
     setText('stat-active-instructors', instructors.filter(u => u.status === 'active').length);
     setText('stat-inactive-instructors', instructors.filter(u => u.status === 'inactive').length);
 
@@ -2261,7 +2439,12 @@ function applyInstructorFilters() {
     const sortVal = $id('instructor-sort')?.value || 'newest';
 
     let list = allCachedInstructors.filter(u => {
-        if (statusVal && u.status !== statusVal) return false;
+        if (statusVal) {
+            if (u.status !== statusVal) return false;
+        } else {
+            // Default "All Statuses": hide archived instructors from normal list
+            if (u.status === 'archived') return false;
+        }
         if (searchVal) {
             const hay = [u.fullName, u.username, u.email].join(' ').toLowerCase();
             if (!hay.includes(searchVal)) return false;
@@ -2329,8 +2512,11 @@ function renderInstructorTable() {
 
     tbody.innerHTML = slice.map(u => {
         const initial = (u.fullName || 'I').charAt(0).toUpperCase();
+        const isArchived = u.status === 'archived';
         const statusBadge = u.status === 'active'
             ? `<span class="badge badge-active">ACTIVE</span>`
+            : isArchived
+            ? `<span class="badge badge-archived">ARCHIVED</span>`
             : `<span class="badge badge-inactive">INACTIVE</span>`;
         const dateAdded = _fmtDate(u.createdAt);
         const lastLogin = _fmtDate(u.lastLogin);
@@ -2367,15 +2553,21 @@ function renderInstructorTable() {
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                 ${pendingCount > 0 ? `<span class="device-pending-badge"></span>` : ''}
               </button>
-              <button class="btn btn-ghost btn-sm" onclick="confirmToggleInstructorStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${u.status === 'active' ? 'var(--warning)' : 'var(--success)'}">
-                ${u.status === 'active'
-                ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
-                : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`
-            }
-              </button>
-              <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" ${u.id === currentUser?.id ? 'disabled title="Cannot delete yourself"' : 'title="Delete"'} style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--danger)">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-              </button>
+              ${isArchived ? `
+                <button class="btn btn-ghost btn-sm" onclick="openRestoreInstructorModal('${u.id}')" title="Restore Instructor" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--success)">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                </button>
+              ` : `
+                <button class="btn btn-ghost btn-sm" onclick="confirmToggleInstructorStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${u.status === 'active' ? 'var(--warning)' : 'var(--success)'}">
+                  ${u.status === 'active'
+                  ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
+                  : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`
+                  }
+                </button>
+                <button class="btn btn-ghost btn-sm" onclick="openArchiveInstructorModal('${u.id}')" ${u.id === currentUser?.id ? 'disabled title="Cannot archive yourself"' : 'title="Archive Instructor"'} style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--warning)">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
+                </button>
+              `}
             </div>
           </td>
         </tr>`;
@@ -2743,9 +2935,15 @@ async function viewInstructor(id) {
     if (roleEl) roleEl.innerHTML = `<span class="badge badge-instructor" style="font-size:0.75rem">INSTRUCTOR</span>`;
 
     const statusEl = $id('idm-status');
-    if (statusEl) statusEl.innerHTML = user.status === 'active'
-        ? `<span class="badge badge-active" style="font-size:0.75rem">ACTIVE</span>`
-        : `<span class="badge badge-inactive" style="font-size:0.75rem">INACTIVE</span>`;
+    if (statusEl) {
+        if (user.status === 'active') {
+            statusEl.innerHTML = `<span class="badge badge-active" style="font-size:0.75rem">ACTIVE</span>`;
+        } else if (user.status === 'archived') {
+            statusEl.innerHTML = `<span class="badge badge-archived" style="font-size:0.75rem">ARCHIVED</span>`;
+        } else {
+            statusEl.innerHTML = `<span class="badge badge-inactive" style="font-size:0.75rem">INACTIVE</span>`;
+        }
+    }
 
     setText('idm-date-added', user.createdAt ? _fmtDate(user.createdAt) : 'N/A');
     setText('idm-last-login', user.lastLogin ? _fmtDate(user.lastLogin) : 'N/A');
@@ -2786,6 +2984,93 @@ async function confirmToggleInstructorStatus(id) {
     } catch (err) {
         console.error('[Instructor] Toggle status error:', err);
         showToast('Unable to update instructor status.', 'error');
+    }
+}
+
+// ── Archive & Restore Instructor (Soft-Delete) ───────────────
+
+function openArchiveInstructorModal(id) {
+    if (id === currentUser?.id) {
+        showToast('You cannot archive your own account.', 'error');
+        return;
+    }
+    pendingArchiveInstructorId = id;
+    const user = allCachedInstructors.find(u => u.id === id || u._docId === id) || cachedUsers.find(u => u.id === id);
+    setText('archive-instructor-name', user ? user.fullName : 'this instructor');
+    const modal = $id('archive-instructor-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeArchiveInstructorModal() {
+    const modal = $id('archive-instructor-modal');
+    if (modal) modal.classList.add('hidden');
+    pendingArchiveInstructorId = null;
+}
+
+async function executeArchiveInstructor() {
+    if (!pendingArchiveInstructorId) {
+        closeArchiveInstructorModal();
+        return;
+    }
+    const id = pendingArchiveInstructorId;
+    if (id === currentUser?.id) {
+        showToast('You cannot archive your own account.', 'error');
+        closeArchiveInstructorModal();
+        return;
+    }
+    try {
+        const allUsers = cachedUsers.length ? cachedUsers : await refreshUsers();
+        const user = allUsers.find(u => u.id === id || u._docId === id);
+        if (!user) {
+            showToast('Instructor not found.', 'error');
+            closeArchiveInstructorModal();
+            return;
+        }
+        await dbUpdate(usersRef, user._docId || user.id, { status: 'archived' });
+        showToast(`Instructor ${user.fullName} has been archived.`, 'info');
+        closeArchiveInstructorModal();
+        await loadUsers();
+    } catch (err) {
+        console.error('[Instructor] Archive error:', err);
+        showToast('Failed to archive instructor.', 'error');
+    }
+}
+
+function openRestoreInstructorModal(id) {
+    pendingRestoreInstructorId = id;
+    const user = allCachedInstructors.find(u => u.id === id || u._docId === id) || cachedUsers.find(u => u.id === id);
+    setText('restore-instructor-name', user ? user.fullName : 'this instructor');
+    const modal = $id('restore-instructor-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeRestoreInstructorModal() {
+    const modal = $id('restore-instructor-modal');
+    if (modal) modal.classList.add('hidden');
+    pendingRestoreInstructorId = null;
+}
+
+async function executeRestoreInstructor() {
+    if (!pendingRestoreInstructorId) {
+        closeRestoreInstructorModal();
+        return;
+    }
+    const id = pendingRestoreInstructorId;
+    try {
+        const allUsers = cachedUsers.length ? cachedUsers : await refreshUsers();
+        const user = allUsers.find(u => u.id === id || u._docId === id);
+        if (!user) {
+            showToast('Instructor not found.', 'error');
+            closeRestoreInstructorModal();
+            return;
+        }
+        await dbUpdate(usersRef, user._docId || user.id, { status: 'active' });
+        showToast(`Instructor ${user.fullName} has been restored to Active status.`, 'success');
+        closeRestoreInstructorModal();
+        await loadUsers();
+    } catch (err) {
+        console.error('[Instructor] Restore error:', err);
+        showToast('Failed to restore instructor.', 'error');
     }
 }
 

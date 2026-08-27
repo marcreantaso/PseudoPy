@@ -1605,6 +1605,7 @@
               <option value="" selected>All Statuses</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
+              <option value="archived">Archived</option>
             </select>
           </div>
 
@@ -2044,6 +2045,7 @@
             <select id="inst-status" class="form-input">
               <option value="active" selected>Active</option>
               <option value="inactive">Inactive</option>
+              <option value="archived">Archived</option>
             </select>
           </div>
         </div>
@@ -2295,8 +2297,102 @@
     </div>
   </div>
 
+  <!-- ── Archive Instructor Confirmation Modal ── -->
+  <div id="archive-instructor-modal" class="modal-overlay hidden" style="z-index: 10004;">
+    <div class="modal" style="max-width: 460px;">
+      <div class="modal-header">
+        <h3>📦 Archive Instructor?</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeArchiveInstructorModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.95rem; color:var(--text-primary); margin-bottom:0.75rem;">
+          Archive instructor <strong id="archive-instructor-name">this instructor</strong>?
+        </p>
+        <p style="font-size:0.88rem; color:var(--text-secondary); line-height:1.5;">
+          This instructor will be moved to the archived accounts and will no longer be able to log in.
+        </p>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button class="btn btn-secondary" onclick="closeArchiveInstructorModal()">Cancel</button>
+        <button class="btn btn-warning" id="btn-confirm-archive" onclick="executeArchiveInstructor()">
+          📦 Archive Instructor
+        </button>
+      </div>
+    </div>
+  </div>
 
+  <!-- ── Restore Instructor Confirmation Modal ── -->
+  <div id="restore-instructor-modal" class="modal-overlay hidden" style="z-index: 10004;">
+    <div class="modal" style="max-width: 460px;">
+      <div class="modal-header">
+        <h3>🔄 Restore Instructor?</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeRestoreInstructorModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.95rem; color:var(--text-primary); margin-bottom:0.75rem;">
+          Restore instructor <strong id="restore-instructor-name">this instructor</strong>?
+        </p>
+        <p style="font-size:0.88rem; color:var(--text-secondary); line-height:1.5;">
+          This instructor will be restored and allowed to log in again.
+        </p>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button class="btn btn-secondary" onclick="closeRestoreInstructorModal()">Cancel</button>
+        <button class="btn btn-primary" id="btn-confirm-restore" onclick="executeRestoreInstructor()">
+          🔄 Restore Instructor
+        </button>
+      </div>
+    </div>
+  </div>
 
+  <!-- ════════════════════════════════════════
+       SESSION TIMEOUT WARNING MODAL
+       ════════════════════════════════════════ -->
+  <div id="session-timeout-overlay" class="modal-overlay hidden" style="z-index: 99999;" aria-modal="true" role="alertdialog" aria-labelledby="sto-title" aria-describedby="sto-desc">
+    <div class="modal sto-modal" style="max-width: 420px; text-align: center; overflow: visible;">
+
+      <!-- Pulsing icon ring + SVG countdown ring -->
+      <div class="sto-ring-wrap">
+        <svg class="sto-ring-svg" viewBox="0 0 100 100">
+          <circle class="sto-ring-track"    cx="50" cy="50" r="45" />
+          <circle class="sto-ring-progress" cx="50" cy="50" r="45" id="sto-ring-progress" />
+        </svg>
+        <div class="sto-ring-inner">
+          <div class="sto-clock-icon">⏱</div>
+          <div class="sto-countdown-label" id="sto-countdown-label">10s</div>
+        </div>
+      </div>
+
+      <div class="modal-body" style="padding: 1rem 2rem 1.5rem;">
+        <h3 id="sto-title" style="margin: 0 0 0.6rem; font-size: 1.25rem; font-weight: 700; color: var(--text-primary);">
+          Session Expiring Soon
+        </h3>
+        <p id="sto-desc" style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin: 0 0 1.5rem;">
+          Your session will expire in <strong id="sto-countdown-label-text">10 seconds</strong> due to inactivity.
+          Click below to stay logged in.
+        </p>
+
+        <button
+          id="sto-stay-btn"
+          class="btn btn-primary"
+          style="width: 100%; justify-content: center; gap: 0.5rem; font-size: 1rem; padding: 0.75rem 1.5rem;"
+          onclick="SessionTimeout.reset(); document.getElementById('session-timeout-overlay').classList.add('hidden');"
+          aria-label="Stay logged in and reset session timer"
+        >
+          ✅ Stay Logged In
+        </button>
+
+        <button
+          class="btn btn-ghost"
+          style="width: 100%; justify-content: center; margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted);"
+          onclick="handleLogout()"
+          aria-label="Log out now"
+        >
+          Log Out Now
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Database Config & Seed (Offline LocalStorage) -->
   <script src="database.js"></script>

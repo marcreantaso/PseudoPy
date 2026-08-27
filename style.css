@@ -1413,6 +1413,12 @@ h4 {
   color: #f87171;
 }
 
+.badge-archived {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
 .badge-success {
   background: rgba(16, 185, 129, 0.15);
   color: #10b981;
@@ -4287,6 +4293,105 @@ select.form-input {
   border-radius: 4px;
   font-size: 0.72rem;
 }
+
+
+/* ============================================================
+   SESSION TIMEOUT WARNING MODAL
+   ============================================================ */
+
+/* Countdown ring wrapper — sits above the modal card */
+.sto-ring-wrap {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  margin: -55px auto 0; /* Overlap the top edge of the modal */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Lift the modal card so the ring can overlap */
+.sto-modal {
+  margin-top: 60px !important;
+}
+
+/* SVG ring — full size of the wrapper */
+.sto-ring-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg); /* Start progress arc from the top */
+  filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.5));
+}
+
+/* Background track circle */
+.sto-ring-track {
+  fill: none;
+  stroke: var(--bg-card-hover, #16161f);
+  stroke-width: 8;
+}
+
+/* Animated countdown progress arc */
+.sto-ring-progress {
+  fill: none;
+  stroke: #f59e0b;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.9s linear;
+}
+
+/* Center content inside the ring */
+.sto-ring-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  z-index: 1;
+}
+
+.sto-clock-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  animation: sto-pulse 1s ease-in-out infinite;
+}
+
+@keyframes sto-pulse {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%       { transform: scale(1.15); opacity: 0.75; }
+}
+
+.sto-countdown-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #f59e0b;
+  line-height: 1;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Urgency: turn ring red in final seconds */
+.sto-ring-progress.urgent {
+  stroke: var(--error, #ef4444);
+  filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.6));
+}
+
+/* Responsive: small screens */
+@media (max-width: 480px) {
+  .sto-ring-wrap {
+    width: 90px;
+    height: 90px;
+    margin-top: -45px;
+  }
+  .sto-modal {
+    margin-top: 50px !important;
+  }
+  .sto-clock-icon {
+    font-size: 1.3rem;
+  }
+}
+
 
 
 
