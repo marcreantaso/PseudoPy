@@ -1,9 +1,9 @@
 // ============================================================
 // CENTRAL DATABASE CLIENT — PseudoPy
-// Firebase Firestore — Persistent Cross-Device Storage
+// Firebase Firestore + Resilient Local Fallback
 // ============================================================
 
-console.log('[Database] Initializing Firebase Firestore Client...');
+console.log('[Database] Initializing Central Database Client...');
 
 // ── Firebase Configuration ─────────────────────────────────
 const firebaseConfig = {
@@ -16,13 +16,18 @@ const firebaseConfig = {
     measurementId: "G-K0HKBVFEKD"
 };
 
-// Initialize Firebase (safe to call multiple times)
-if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
+let firestore = null;
+try {
+    if (typeof firebase !== 'undefined') {
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        firestore = firebase.firestore();
+        console.log('[Database] Firebase Firestore connected ✅ Project:', firebaseConfig.projectId);
+    }
+} catch (e) {
+    console.warn('[Database] Firebase init warning:', e);
 }
-const firestore = firebase.firestore();
-
-console.log('[Database] Firebase Firestore initialized. Project:', firebaseConfig.projectId);
 
 // ── Collection References ──────────────────────────────────
 const usersRef             = "pseudopy_users";
@@ -57,173 +62,7 @@ async function verifyPassword(inputPassword, storedHash, storedSalt) {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  CORE FIRESTORE CRUD FUNCTIONS
-// ══════════════════════════════════════════════════════════════
-
-/**
- * Get all documents from a collection.
- * @param {string} ref - Collection name
- * @param {number|null} limitCount - Max records to return
- * @param {number} offsetCount - Number of records to skip (client-side)
- * @returns {Promise<Array>}
- */
-async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
-    try {
-        const snapshot = await firestore.collection(ref).get();
-        let results = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
-
-        // Client-side sorting (mirrors original server-side logic)
-        if (ref === 'pseudopy_exercises') {
-            results.sort((a, b) => {
-                const aIsNew = (a._docId || '').startsWith('ex');
-                const bIsNew = (b._docId || '').startsWith('ex');
-                if (aIsNew && !bIsNew) return -1;
-                if (!aIsNew && bIsNew) return 1;
-                if (aIsNew && bIsNew) return (b._docId || '').localeCompare(a._docId || '');
-                const aNum = parseInt((a._docId || '').replace('algo_', '')) || 0;
-                const bNum = parseInt((b._docId || '').replace('algo_', '')) || 0;
-                return aNum - bNum;
-            });
-        }
-        if (ref === 'pseudopy_activity') {
-            results.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        }
-        if (ref === 'pseudopy_auditLog') {
-            results.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-        }
-        if (ref === 'pseudopy_notifications') {
-            results.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-        }
-
-        // Pagination (client-side)
-        if (limitCount !== null && limitCount !== undefined) {
-            const l = parseInt(limitCount, 10);
-            const o = parseInt(offsetCount, 10) || 0;
-            results = results.slice(o, o + l);
-        }
-
-        return results;
-    } catch (err) {
-        console.error(`[Database] Error getting all from ${ref}:`, err);
-        return [];
-    }
-}
-
-/**
- * Get a single document by ID.
- * @param {string} ref - Collection name
- * @param {string} docId - Document ID
- * @returns {Promise<Object|null>}
- */
-async function dbGet(ref, docId) {
-    try {
-        const doc = await firestore.collection(ref).doc(docId).get();
-        if (!doc.exists) return null;
-        return { _docId: doc.id, ...doc.data() };
-    } catch (err) {
-        console.error(`[Database] Error getting ${ref}/${docId}:`, err);
-        return null;
-    }
-}
-
-/**
- * Add a new document (auto-generates ID if none provided).
- * @param {string} ref - Collection name
- * @param {Object} data - Document data
- * @returns {Promise<string>} The document ID
- */
-async function dbAdd(ref, data) {
-    try {
-        const docId = data._docId || null;
-        if (docId) {
-            await firestore.collection(ref).doc(docId).set({ ...data, _docId: docId });
-            return docId;
-        } else {
-            const docRef = await firestore.collection(ref).add({ ...data });
-            await docRef.update({ _docId: docRef.id });
-            return docRef.id;
-        }
-    } catch (err) {
-        console.error(`[Database] Error adding to ${ref}:`, err);
-        throw err;
-    }
-}
-
-/**
- * Set (create or overwrite) a document with a specific ID.
- * @param {string} ref - Collection name
- * @param {string} docId - Document ID
- * @param {Object} data - Document data
- * @returns {Promise<Object>}
- */
-async function dbSet(ref, docId, data) {
-    try {
-        const docData = { ...data, _docId: docId };
-        await firestore.collection(ref).doc(docId).set(docData);
-        return docData;
-    } catch (err) {
-        console.error(`[Database] Error setting ${ref}/${docId}:`, err);
-        throw err;
-    }
-}
-
-/**
- * Partially update (merge) a document's fields.
- * @param {string} ref - Collection name
- * @param {string} docId - Document ID
- * @param {Object} data - Fields to update
- * @returns {Promise<Object>}
- */
-async function dbUpdate(ref, docId, data) {
-    try {
-        const docRef = firestore.collection(ref).doc(docId);
-        const existing = await docRef.get();
-        if (!existing.exists) {
-            await docRef.set({ ...data, _docId: docId });
-            return { ...data, _docId: docId };
-        }
-        await docRef.update(data);
-        const updated = await docRef.get();
-        return { _docId: docId, ...updated.data() };
-    } catch (err) {
-        console.error(`[Database] Error updating ${ref}/${docId}:`, err);
-        throw err;
-    }
-}
-
-/**
- * Delete a document by ID.
- * @param {string} ref - Collection name
- * @param {string} docId - Document ID
- * @returns {Promise<{success: boolean}>}
- */
-async function dbDelete(ref, docId) {
-    try {
-        await firestore.collection(ref).doc(docId).delete();
-        return { success: true };
-    } catch (err) {
-        console.error(`[Database] Error deleting ${ref}/${docId}:`, err);
-        throw err;
-    }
-}
-
-/**
- * Count all documents in a collection.
- * @param {string} ref - Collection name
- * @returns {Promise<number>}
- */
-async function dbCount(ref) {
-    try {
-        const snapshot = await firestore.collection(ref).get();
-        return snapshot.size;
-    } catch (err) {
-        console.error(`[Database] Error counting ${ref}:`, err);
-        return 0;
-    }
-}
-
-// ══════════════════════════════════════════════════════════════
-//  AUTOMATIC SEEDING LOGIC
+//  BUILT-IN SEED DATA (Guarantees immediate login access)
 // ══════════════════════════════════════════════════════════════
 
 const FILIPINO_NAMES = [
@@ -235,7 +74,7 @@ const FILIPINO_NAMES = [
     "Gabriel Santiago", "Abigail Ramos", "Ryan Ocampo", "Megan Custodio", "Kyle Dela Rosa"
 ];
 
-function buildSeedUsers() {
+function getInitialSeedUsers() {
     const users = [
         { _docId: 'u1', id: 'u1', fullName: 'Mark Bautista', username: 'mbautista_admin', email: 'bautista@university.edu.ph', password: 'admin123', role: 'admin', status: 'active', createdAt: '2025-07-01T08:00:00.000Z' },
         { _docId: 'u2', id: 'u2', fullName: 'Marc Reantaso', username: 'mreantaso_instructor', email: 'reantaso@university.edu.ph', password: 'pass123', role: 'instructor', status: 'active', createdBy: 'u1', createdAt: '2025-08-10T14:15:00.000Z' },
@@ -285,10 +124,243 @@ function makeSeedAct(id, student, studentId, exercise, difficulty, status, score
     };
 }
 
+const SEED_ACTIVITY_LIST = [
+    makeSeedAct('act_sp_1', 'John Cruz', '2024-001', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T10:15:00', null, '0.85s'),
+    makeSeedAct('act_sp_2', 'Maria Santos', '2024-002', 'Factorial Calculation', 'hard', 'Completed', '85%', '2025-08-08T10:32:00', null, '1.21s'),
+    makeSeedAct('act_sp_3', 'Kevin Ramos', '2024-003', 'Array Sum', 'easy', 'Failed', '0%', '2025-08-08T11:05:00', 'Syntax Error', '0.65s'),
+    makeSeedAct('act_sp_4', 'Anna Reyes', '2024-004', 'Prime Number Checker', 'moderate', 'Pending', '—', '2025-08-08T11:20:00', null, '—'),
+    makeSeedAct('act_sp_5', 'Joshua Garcia', '2024-005', 'String Reversal', 'easy', 'Completed', '90%', '2025-08-08T11:45:00', null, '0.42s'),
+    makeSeedAct('act_sp_em1', 'Eduard John Mirandilla', '2024-031', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T14:20:00', null, '0.78s'),
+    makeSeedAct('act_sp_em2', 'Eduard John Mirandilla', '2024-031', 'Factorial Calculation', 'hard', 'Completed', '95%', '2025-08-07T16:10:00', null, '1.10s'),
+    makeSeedAct('act_sp_md1', 'Mikaella Daet', '2024-032', 'Array Sum', 'easy', 'Completed', '90%', '2025-08-08T15:00:00', null, '0.52s'),
+    makeSeedAct('act_sp_md2', 'Mikaella Daet', '2024-032', 'Prime Number Checker', 'moderate', 'Completed', '100%', '2025-08-06T11:30:00', null, '0.89s'),
+];
+
+// Local Storage Fallback Map
+function getLocalCollection(ref) {
+    try {
+        const raw = localStorage.getItem(`pseudopy_local_${ref}`);
+        if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    
+    if (ref === usersRef) return getInitialSeedUsers();
+    if (ref === exercisesRef) return SEED_EXERCISES_LIST;
+    if (ref === activityRef) return SEED_ACTIVITY_LIST;
+    return [];
+}
+
+function setLocalCollection(ref, data) {
+    try {
+        localStorage.setItem(`pseudopy_local_${ref}`, JSON.stringify(data));
+    } catch (e) {}
+}
+
+// ══════════════════════════════════════════════════════════════
+//  CORE CRUD FUNCTIONS (Firestore + Local Sync)
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Get all documents from a collection.
+ */
+async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
+    let results = [];
+
+    // 1. Try Firestore
+    if (firestore) {
+        try {
+            const snapshot = await firestore.collection(ref).get();
+            if (snapshot && !snapshot.empty) {
+                results = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
+                setLocalCollection(ref, results);
+            }
+        } catch (err) {
+            console.warn(`[Database] Firestore fetch error on ${ref}, using local fallback:`, err.message);
+        }
+    }
+
+    // 2. Fallback to Local/Seed data if empty
+    if (!results || results.length === 0) {
+        results = getLocalCollection(ref);
+        // If Firestore is connected, seed it in the background
+        if (firestore && results.length > 0) {
+            seedDatabase().catch(e => console.warn('[Database] Background seed attempt:', e));
+        }
+    }
+
+    // Client-side sorting
+    if (ref === 'pseudopy_exercises') {
+        results.sort((a, b) => {
+            const aIsNew = (a._docId || '').startsWith('ex');
+            const bIsNew = (b._docId || '').startsWith('ex');
+            if (aIsNew && !bIsNew) return -1;
+            if (!aIsNew && bIsNew) return 1;
+            if (aIsNew && bIsNew) return (b._docId || '').localeCompare(a._docId || '');
+            const aNum = parseInt((a._docId || '').replace('algo_', '')) || 0;
+            const bNum = parseInt((b._docId || '').replace('algo_', '')) || 0;
+            return aNum - bNum;
+        });
+    }
+    if (ref === 'pseudopy_activity') {
+        results.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    }
+    if (ref === 'pseudopy_auditLog') {
+        results.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    }
+    if (ref === 'pseudopy_notifications') {
+        results.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    }
+
+    // Pagination
+    if (limitCount !== null && limitCount !== undefined) {
+        const l = parseInt(limitCount, 10);
+        const o = parseInt(offsetCount, 10) || 0;
+        results = results.slice(o, o + l);
+    }
+
+    return results;
+}
+
+/**
+ * Get a single document by ID.
+ */
+async function dbGet(ref, docId) {
+    if (firestore) {
+        try {
+            const doc = await firestore.collection(ref).doc(docId).get();
+            if (doc.exists) {
+                return { _docId: doc.id, ...doc.data() };
+            }
+        } catch (err) {
+            console.warn(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
+        }
+    }
+
+    // Local fallback
+    const local = getLocalCollection(ref);
+    return local.find(item => item._docId === docId || item.id === docId) || null;
+}
+
+/**
+ * Add a new document.
+ */
+async function dbAdd(ref, data) {
+    const docId = data._docId || ('doc_' + Date.now() + '_' + Math.floor(Math.random() * 1000));
+    const docData = { ...data, _docId: docId };
+
+    // Update local cache immediately
+    const local = getLocalCollection(ref);
+    const existingIdx = local.findIndex(item => item._docId === docId);
+    if (existingIdx >= 0) local[existingIdx] = docData;
+    else local.unshift(docData);
+    setLocalCollection(ref, local);
+
+    // Save to Firestore
+    if (firestore) {
+        try {
+            await firestore.collection(ref).doc(docId).set(docData);
+        } catch (err) {
+            console.error(`[Database] Error saving to Firestore ${ref}:`, err);
+        }
+    }
+
+    return docId;
+}
+
+/**
+ * Set (create or overwrite) a document with specific ID.
+ */
+async function dbSet(ref, docId, data) {
+    const docData = { ...data, _docId: docId };
+
+    // Update local cache immediately
+    const local = getLocalCollection(ref);
+    const existingIdx = local.findIndex(item => item._docId === docId);
+    if (existingIdx >= 0) local[existingIdx] = docData;
+    else local.push(docData);
+    setLocalCollection(ref, local);
+
+    // Save to Firestore
+    if (firestore) {
+        try {
+            await firestore.collection(ref).doc(docId).set(docData);
+        } catch (err) {
+            console.error(`[Database] Error setting to Firestore ${ref}/${docId}:`, err);
+        }
+    }
+
+    return docData;
+}
+
+/**
+ * Partially update a document.
+ */
+async function dbUpdate(ref, docId, data) {
+    const local = getLocalCollection(ref);
+    const existing = local.find(item => item._docId === docId || item.id === docId);
+    const merged = existing ? { ...existing, ...data, _docId: docId } : { ...data, _docId: docId };
+
+    // Update local cache immediately
+    const existingIdx = local.findIndex(item => item._docId === docId || item.id === docId);
+    if (existingIdx >= 0) local[existingIdx] = merged;
+    else local.push(merged);
+    setLocalCollection(ref, local);
+
+    // Save to Firestore
+    if (firestore) {
+        try {
+            const docRef = firestore.collection(ref).doc(docId);
+            await docRef.set(merged, { merge: true });
+        } catch (err) {
+            console.error(`[Database] Error updating Firestore ${ref}/${docId}:`, err);
+        }
+    }
+
+    return merged;
+}
+
+/**
+ * Delete a document by ID.
+ */
+async function dbDelete(ref, docId) {
+    // Update local cache
+    let local = getLocalCollection(ref);
+    local = local.filter(item => item._docId !== docId && item.id !== docId);
+    setLocalCollection(ref, local);
+
+    // Delete from Firestore
+    if (firestore) {
+        try {
+            await firestore.collection(ref).doc(docId).delete();
+        } catch (err) {
+            console.error(`[Database] Error deleting Firestore ${ref}/${docId}:`, err);
+        }
+    }
+
+    return { success: true };
+}
+
+/**
+ * Count documents.
+ */
+async function dbCount(ref) {
+    if (firestore) {
+        try {
+            const snapshot = await firestore.collection(ref).get();
+            if (snapshot) return snapshot.size;
+        } catch (err) {}
+    }
+    return getLocalCollection(ref).length;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  AUTOMATIC SEEDING LOGIC
+// ══════════════════════════════════════════════════════════════
+
 async function batchSeed(collectionName, items) {
+    if (!firestore) return;
     const batch = firestore.batch();
     items.forEach(item => {
-        const ref = firestore.collection(collectionName).doc(item._docId);
+        const ref = firestore.collection(collectionName).doc(item._docId || item.id);
         batch.set(ref, item);
     });
     await batch.commit();
@@ -296,40 +368,31 @@ async function batchSeed(collectionName, items) {
 
 async function seedDatabase() {
     try {
-        console.log('[Database] Checking if Firebase Firestore requires initial seed...');
-        const userCount = await dbCount(usersRef);
-        if (userCount === 0) {
+        if (!firestore) return true;
+        
+        console.log('[Database] Checking Firestore collections...');
+        const userSnap = await firestore.collection(usersRef).get();
+        if (userSnap.empty) {
             console.log('[Database] Seeding initial users into Firestore...');
-            await batchSeed(usersRef, buildSeedUsers());
+            await batchSeed(usersRef, getInitialSeedUsers());
             console.log('[Database] Users seeded ✅');
         }
 
-        const exCount = await dbCount(exercisesRef);
-        if (exCount === 0) {
+        const exSnap = await firestore.collection(exercisesRef).get();
+        if (exSnap.empty) {
             console.log('[Database] Seeding initial exercises into Firestore...');
             await batchSeed(exercisesRef, SEED_EXERCISES_LIST);
             console.log('[Database] Exercises seeded ✅');
         }
 
-        const actCount = await dbCount(activityRef);
-        if (actCount === 0) {
+        const actSnap = await firestore.collection(activityRef).get();
+        if (actSnap.empty) {
             console.log('[Database] Seeding sample activity into Firestore...');
-            const seedActs = [
-                makeSeedAct('act_sp_1', 'John Cruz', '2024-001', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T10:15:00', null, '0.85s'),
-                makeSeedAct('act_sp_2', 'Maria Santos', '2024-002', 'Factorial Calculation', 'hard', 'Completed', '85%', '2025-08-08T10:32:00', null, '1.21s'),
-                makeSeedAct('act_sp_3', 'Kevin Ramos', '2024-003', 'Array Sum', 'easy', 'Failed', '0%', '2025-08-08T11:05:00', 'Syntax Error', '0.65s'),
-                makeSeedAct('act_sp_4', 'Anna Reyes', '2024-004', 'Prime Number Checker', 'moderate', 'Pending', '—', '2025-08-08T11:20:00', null, '—'),
-                makeSeedAct('act_sp_5', 'Joshua Garcia', '2024-005', 'String Reversal', 'easy', 'Completed', '90%', '2025-08-08T11:45:00', null, '0.42s'),
-                makeSeedAct('act_sp_em1', 'Eduard John Mirandilla', '2024-031', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T14:20:00', null, '0.78s'),
-                makeSeedAct('act_sp_em2', 'Eduard John Mirandilla', '2024-031', 'Factorial Calculation', 'hard', 'Completed', '95%', '2025-08-07T16:10:00', null, '1.10s'),
-                makeSeedAct('act_sp_md1', 'Mikaella Daet', '2024-032', 'Array Sum', 'easy', 'Completed', '90%', '2025-08-08T15:00:00', null, '0.52s'),
-                makeSeedAct('act_sp_md2', 'Mikaella Daet', '2024-032', 'Prime Number Checker', 'moderate', 'Completed', '100%', '2025-08-06T11:30:00', null, '0.89s'),
-            ];
-            await batchSeed(activityRef, seedActs);
+            await batchSeed(activityRef, SEED_ACTIVITY_LIST);
             console.log('[Database] Activity seeded ✅');
         }
     } catch (err) {
-        console.warn('[Database] Seeding error (non-fatal):', err);
+        console.warn('[Database] Seeding notice (local fallback active):', err.message);
     }
     return true;
 }
@@ -373,4 +436,4 @@ class Database {
 
 const db = new Database();
 
-console.log('[Database] Firebase Firestore client ready ✅');
+console.log('[Database] PseudoPy Central Database client ready ✅');
