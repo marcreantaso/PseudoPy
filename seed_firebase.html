@@ -69,11 +69,337 @@
     }
 
     const EXERCISES = [
-        { _docId:'seed_easy_1', id:'seed_easy_1', title:'Multiply Array Elements', description:'Multiply every element in an array by 4 and output the transformed list.', difficulty:'easy', python_code:'values = [8, 4, 1, 6, 4, 13, 6]\nfor i in range(len(values)):\n    values[i] = values[i] * 4\nprint(values)', createdAt:'2025-08-08' },
-        { _docId:'seed_medium_1', id:'seed_medium_1', title:'Sum Odd Numbers', description:'Calculate the sum of odd numbers less than 100 and print the result.', difficulty:'moderate', python_code:'total = 0\ni = 1\nwhile i < 100:\n    total += i\n    i += 2\nprint(total)', createdAt:'2025-08-08' },
-        { _docId:'seed_medium_2', id:'seed_medium_2', title:'Count Multiples of 4 and 7', description:'Count numbers between 1 and 20 that are multiples of 4 or 7.', difficulty:'moderate', python_code:'count = 0\nfor i in range(1, 21):\n    if i % 4 == 0 or i % 7 == 0:\n        count += 1\nprint(count)', createdAt:'2025-08-08' },
-        { _docId:'seed_hard_1', id:'seed_hard_1', title:'Factorial Computation', description:'Compute the factorial of 6 using a loop and print the final result.', difficulty:'hard', python_code:'result = 1\nfor i in range(1, 7):\n    result *= i\nprint(result)', createdAt:'2025-08-08' }
-    ];
+    {
+        "_docId": "algo_1",
+        "id": "algo_1",
+        "title": "Sum of Odd Numbers Under 90",
+        "concept": "While Loop Mathematical Series",
+        "description": "Calculates the sum of odd numbers strictly less than 90.",
+        "difficulty": "moderate",
+        "pseudocode": "BEGIN\n  DECLARE maximum AS INTEGER\n  maximum = 0\n  DECLARE i AS INTEGER\n  i = 1\n  WHILE i < 90 DO\n    maximum = maximum + i\n    i = i + 2\n  ENDWHILE\n  PRINT maximum\nEND",
+        "python_code": "maximum = 0\ni = 1\nwhile i < 90:\n    maximum = maximum + i\n    i = i + 2\nprint(maximum)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_2",
+        "id": "algo_2",
+        "title": "Count Multiples of 4 and 7 (Small Range)",
+        "concept": "Modulo Branching Logic",
+        "description": "Iterates to 16, identifying multiples of 4 and 7.",
+        "difficulty": "moderate",
+        "pseudocode": "BEGIN\n  DECLARE count AS INTEGER\n  count = 0\n  DECLARE i AS INTEGER\n  FOR i FROM 1 TO 16 DO\n    IF i MOD 4 == 0 THEN\n      count = count + 1\n    ELSE IF i MOD 7 == 0 THEN\n      count = count + 2\n    ELSE\n      count = count - 1\n    ENDIF\n  ENDFOR\n  PRINT count\nEND",
+        "python_code": "count = 0\nfor i in range(1, 16 + 1):\n    if i % 4 == 0:\n        count = count + 1\n    elif i % 7 == 0:\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_3",
+        "id": "algo_3",
+        "title": "Count Multiples of 4 and 7 (Wide Range)",
+        "concept": "Modulo Branching Logic",
+        "description": "Iterates to 45, identifying multiples of 4 and 7.",
+        "difficulty": "moderate",
+        "pseudocode": "BEGIN\n  DECLARE count AS INTEGER\n  count = 0\n  DECLARE i AS INTEGER\n  FOR i FROM 1 TO 45 DO\n    IF i MOD 4 == 0 THEN\n      count = count + 1\n    ELSE IF i MOD 7 == 0 THEN\n      count = count + 2\n    ELSE\n      count = count - 1\n    ENDIF\n  ENDFOR\n  PRINT count\nEND",
+        "python_code": "count = 0\nfor i in range(1, 45 + 1):\n    if i % 4 == 0:\n        count = count + 1\n    elif i % 7 == 0:\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_4",
+        "id": "algo_4",
+        "title": "Multiply Array Elements by 4",
+        "concept": "In-Place Array Transformation",
+        "description": "Multiplies every element in the array iteratively by 4.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE values AS ARRAY\n  values = [8, 4, 1, 6, 4, 13, 6]\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 6 DO\n    values[i] = values[i] * 4\n  ENDFOR\n  PRINT values\nEND",
+        "python_code": "values = [8, 4, 1, 6, 4, 13, 6]\nfor i in range(0, 6 + 1):\n    values[i] = values[i] * 4\nprint(values)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_5",
+        "id": "algo_5",
+        "title": "Sum of Odd Numbers Under 95",
+        "concept": "While Loop Mathematical Series",
+        "description": "Calculates the sum of odd numbers strictly less than 95.",
+        "difficulty": "moderate",
+        "pseudocode": "BEGIN\n  DECLARE count AS INTEGER\n  count = 0\n  DECLARE i AS INTEGER\n  i = 1\n  WHILE i < 95 DO\n    count = count + i\n    i = i + 2\n  ENDWHILE\n  PRINT count\nEND",
+        "python_code": "count = 0\ni = 1\nwhile i < 95:\n    count = count + i\n    i = i + 2\nprint(count)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_6",
+        "id": "algo_6",
+        "title": "Multiply Array Elements by 5",
+        "concept": "In-Place Array Transformation",
+        "description": "Multiplies every element in the array iteratively by 5.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE collection AS ARRAY\n  collection = [11, 19, 15, 12]\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 3 DO\n    collection[i] = collection[i] * 5\n  ENDFOR\n  PRINT collection\nEND",
+        "python_code": "collection = [11, 19, 15, 12]\nfor i in range(0, 3 + 1):\n    collection[i] = collection[i] * 5\nprint(collection)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_7",
+        "id": "algo_7",
+        "title": "Factorial of 6 Computation",
+        "concept": "Factorial Computation",
+        "description": "Computes the factorial value iteratively up to 6.",
+        "difficulty": "hard",
+        "pseudocode": "BEGIN\n  DECLARE limit AS INTEGER\n  limit = 6\n  DECLARE factorial AS INTEGER\n  factorial = 1\n  DECLARE i AS INTEGER\n  FOR i FROM 1 TO limit DO\n    factorial = factorial * i\n  ENDFOR\n  PRINT factorial\nEND",
+        "python_code": "limit = 6\nfactorial = 1\nfor i in range(1, limit + 1):\n    factorial = factorial * i\nprint(factorial)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_8",
+        "id": "algo_8",
+        "title": "Factorial of 8 Computation",
+        "concept": "Factorial Computation",
+        "description": "Computes the factorial value iteratively up to 6.",
+        "difficulty": "hard",
+        "pseudocode": "BEGIN\n  DECLARE limit AS INTEGER\n  limit = 6\n  DECLARE factorial AS INTEGER\n  factorial = 1\n  DECLARE i AS INTEGER\n  FOR i FROM 1 TO limit DO\n    factorial = factorial * i\n  ENDFOR\n  PRINT factorial\nEND",
+        "python_code": "limit = 6\nfactorial = 1\nfor i in range(1, limit + 1):\n    factorial = factorial * i\nprint(factorial)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_9",
+        "id": "algo_9",
+        "title": "Sum of Odd Numbers Under 80",
+        "concept": "While Loop Mathematical Series",
+        "description": "Calculates the sum of odd numbers strictly less than 83.",
+        "difficulty": "moderate",
+        "pseudocode": "BEGIN\n  DECLARE target AS INTEGER\n  target = 0\n  DECLARE i AS INTEGER\n  i = 1\n  WHILE i < 83 DO\n    target = target + i\n    i = i + 2\n  ENDWHILE\n  PRINT target\nEND",
+        "python_code": "target = 0\ni = 1\nwhile i < 83:\n    target = target + i\n    i = i + 2\nprint(target)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_10",
+        "id": "algo_10",
+        "title": "Multiply Array Elements by 3",
+        "concept": "Array Filtering (Count)",
+        "description": "Counts the number of elements in an array that are strictly greater than 67.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE values AS ARRAY\n  values = [1, 114, 145, 99, 105, 39, 136]\n  DECLARE threshold AS INTEGER\n  threshold = 67\n  DECLARE count AS INTEGER\n  count = 0\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 6 DO\n    IF values[i] > threshold THEN\n      count = count + 1\n    ENDIF\n  ENDFOR\n  PRINT count\nEND",
+        "python_code": "values = [1, 114, 145, 99, 105, 39, 136]\nthreshold = 67\ncount = 0\nfor i in range(0, 6 + 1):\n    if values[i] > threshold:\n        count = count + 1\nprint(count)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_11",
+        "id": "algo_11",
+        "title": "Factorial of 5 Computation",
+        "concept": "Factorial Computation",
+        "description": "Computes the factorial value iteratively up to 9.",
+        "difficulty": "hard",
+        "pseudocode": "BEGIN\n  DECLARE limit AS INTEGER\n  limit = 9\n  DECLARE factorial AS INTEGER\n  factorial = 1\n  DECLARE i AS INTEGER\n  FOR i FROM 1 TO limit DO\n    factorial = factorial * i\n  ENDFOR\n  PRINT factorial\nEND",
+        "python_code": "limit = 9\nfactorial = 1\nfor i in range(1, limit + 1):\n    factorial = factorial * i\nprint(factorial)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_12",
+        "id": "algo_12",
+        "title": "Sum of Odd Numbers Under 60",
+        "concept": "Array Filtering (Count)",
+        "description": "Counts the number of elements in an array that are strictly greater than 10.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE collection AS ARRAY\n  collection = [41, 99, 122, 48, 65, 26, 49, 116]\n  DECLARE threshold AS INTEGER\n  threshold = 10\n  DECLARE count AS INTEGER\n  count = 0\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 7 DO\n    IF collection[i] > threshold THEN\n      count = count + 1\n    ENDIF\n  ENDFOR\n  PRINT count\nEND",
+        "python_code": "collection = [41, 99, 122, 48, 65, 26, 49, 116]\nthreshold = 10\ncount = 0\nfor i in range(0, 7 + 1):\n    if collection[i] > threshold:\n        count = count + 1\nprint(count)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_13",
+        "id": "algo_13",
+        "title": "Identify Multiples of 3 and 5",
+        "concept": "Array Filtering (Count)",
+        "description": "Counts the number of elements in an array that are strictly greater than 60.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE items AS ARRAY\n  items = [142, 132, 49, 117, 115, 110, 49, 138]\n  DECLARE threshold AS INTEGER\n  threshold = 60\n  DECLARE count AS INTEGER\n  count = 0\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 7 DO\n    IF items[i] > threshold THEN\n      count = count + 1\n    ENDIF\n  ENDFOR\n  PRINT count\nEND",
+        "python_code": "items = [142, 132, 49, 117, 115, 110, 49, 138]\nthreshold = 60\ncount = 0\nfor i in range(0, 7 + 1):\n    if items[i] > threshold:\n        count = count + 1\nprint(count)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_14",
+        "id": "algo_14",
+        "title": "Multiply Array Elements by 6",
+        "concept": "In-Place Array Transformation",
+        "description": "Multiplies every element in the array iteratively by 3.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE items AS ARRAY\n  items = [8, 8, 7, 5, 5, 12]\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 5 DO\n    items[i] = items[i] * 3\n  ENDFOR\n  PRINT items\nEND",
+        "python_code": "items = [8, 8, 7, 5, 5, 12]\nfor i in range(0, 5 + 1):\n    items[i] = items[i] * 3\nprint(items)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_15",
+        "id": "algo_15",
+        "title": "Factorial of 7 Computation",
+        "concept": "Array Filtering (Count)",
+        "description": "Counts the number of elements in an array that are strictly greater than 37.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE source AS ARRAY\n  source = [63, 71, 119, 44, 88, 37]\n  DECLARE threshold AS INTEGER\n  threshold = 37\n  DECLARE count AS INTEGER\n  count = 0\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 5 DO\n    IF source[i] > threshold THEN\n      count = count + 1\n    ENDIF\n  ENDFOR\n  PRINT count\nEND",
+        "python_code": "source = [63, 71, 119, 44, 88, 37]\nthreshold = 37\ncount = 0\nfor i in range(0, 5 + 1):\n    if source[i] > threshold:\n        count = count + 1\nprint(count)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_16",
+        "id": "algo_16",
+        "title": "Sum of Odd Numbers Under 70",
+        "concept": "Factorial Computation",
+        "description": "Computes the factorial value iteratively up to 5.",
+        "difficulty": "hard",
+        "pseudocode": "BEGIN\n  DECLARE limit AS INTEGER\n  limit = 5\n  DECLARE factorial AS INTEGER\n  factorial = 1\n  DECLARE i AS INTEGER\n  FOR i FROM 1 TO limit DO\n    factorial = factorial * i\n  ENDFOR\n  PRINT factorial\nEND",
+        "python_code": "limit = 5\nfactorial = 1\nfor i in range(1, limit + 1):\n    factorial = factorial * i\nprint(factorial)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_17",
+        "id": "algo_17",
+        "title": "Modulo Branching Logic (Range to 30)",
+        "concept": "Modulo Branching Logic",
+        "description": "Iterates to 21, identifying multiples of 2 and 7.",
+        "difficulty": "moderate",
+        "pseudocode": "BEGIN\n  DECLARE count AS INTEGER\n  count = 0\n  DECLARE i AS INTEGER\n  FOR i FROM 1 TO 21 DO\n    IF i MOD 2 == 0 THEN\n      count = count + 1\n    ELSE IF i MOD 7 == 0 THEN\n      count = count + 2\n    ELSE\n      count = count - 1\n    ENDIF\n  ENDFOR\n  PRINT count\nEND",
+        "python_code": "count = 0\nfor i in range(1, 21 + 1):\n    if i % 2 == 0:\n        count = count + 1\n    elif i % 7 == 0:\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_18",
+        "id": "algo_18",
+        "title": "Multiply Array Elements by 2",
+        "concept": "While Loop Mathematical Series",
+        "description": "Calculates the sum of odd numbers strictly less than 24.",
+        "difficulty": "moderate",
+        "pseudocode": "BEGIN\n  DECLARE val AS INTEGER\n  val = 0\n  DECLARE i AS INTEGER\n  i = 1\n  WHILE i < 24 DO\n    val = val + i\n    i = i + 2\n  ENDWHILE\n  PRINT val\nEND",
+        "python_code": "val = 0\ni = 1\nwhile i < 24:\n    val = val + i\n    i = i + 2\nprint(val)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_19",
+        "id": "algo_19",
+        "title": "Factorial of 4 Computation",
+        "concept": "Factorial Computation",
+        "description": "Computes the factorial value iteratively up to 9.",
+        "difficulty": "hard",
+        "pseudocode": "BEGIN\n  DECLARE limit AS INTEGER\n  limit = 9\n  DECLARE factorial AS INTEGER\n  factorial = 1\n  DECLARE i AS INTEGER\n  FOR i FROM 1 TO limit DO\n    factorial = factorial * i\n  ENDFOR\n  PRINT factorial\nEND",
+        "python_code": "limit = 9\nfactorial = 1\nfor i in range(1, limit + 1):\n    factorial = factorial * i\nprint(factorial)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_20",
+        "id": "algo_20",
+        "title": "Sum of Odd Numbers Under 50",
+        "concept": "Modulo Branching Logic",
+        "description": "Iterates to 49, identifying multiples of 4 and 6.",
+        "difficulty": "moderate",
+        "pseudocode": "BEGIN\n  DECLARE count AS INTEGER\n  count = 0\n  DECLARE i AS INTEGER\n  FOR i FROM 1 TO 49 DO\n    IF i MOD 4 == 0 THEN\n      count = count + 1\n    ELSE IF i MOD 6 == 0 THEN\n      count = count + 2\n    ELSE\n      count = count - 1\n    ENDIF\n  ENDFOR\n  PRINT count\nEND",
+        "python_code": "count = 0\nfor i in range(1, 49 + 1):\n    if i % 4 == 0:\n        count = count + 1\n    elif i % 6 == 0:\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_21",
+        "id": "algo_21",
+        "title": "Find Multiples of 4 and 6",
+        "concept": "In-Place Array Transformation",
+        "description": "Multiplies every element in the array iteratively by 3.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE collection AS ARRAY\n  collection = [3, 8, 2, 10, 3, 11, 9, 1]\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 7 DO\n    collection[i] = collection[i] * 3\n  ENDFOR\n  PRINT collection\nEND",
+        "python_code": "collection = [3, 8, 2, 10, 3, 11, 9, 1]\nfor i in range(0, 7 + 1):\n    collection[i] = collection[i] * 3\nprint(collection)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_22",
+        "id": "algo_22",
+        "title": "Multiply Array Elements by 7",
+        "concept": "Factorial Computation",
+        "description": "Computes the factorial value iteratively up to 4.",
+        "difficulty": "hard",
+        "pseudocode": "BEGIN\n  DECLARE limit AS INTEGER\n  limit = 4\n  DECLARE factorial AS INTEGER\n  factorial = 1\n  DECLARE i AS INTEGER\n  FOR i FROM 1 TO limit DO\n    factorial = factorial * i\n  ENDFOR\n  PRINT factorial\nEND",
+        "python_code": "limit = 4\nfactorial = 1\nfor i in range(1, limit + 1):\n    factorial = factorial * i\nprint(factorial)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_23",
+        "id": "algo_23",
+        "title": "Factorial of 9 Computation",
+        "concept": "In-Place Array Transformation",
+        "description": "Multiplies every element in the array iteratively by 5.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE list_vals AS ARRAY\n  list_vals = [2, 14, 20, 7, 7, 18]\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 5 DO\n    list_vals[i] = list_vals[i] * 5\n  ENDFOR\n  PRINT list_vals\nEND",
+        "python_code": "list_vals = [2, 14, 20, 7, 7, 18]\nfor i in range(0, 5 + 1):\n    list_vals[i] = list_vals[i] * 5\nprint(list_vals)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_24",
+        "id": "algo_24",
+        "title": "Sum of Odd Numbers Under 40",
+        "concept": "Array Filtering (Count)",
+        "description": "Counts the number of elements in an array that are strictly greater than 34.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE items AS ARRAY\n  items = [115, 109, 138, 39, 121, 127, 146]\n  DECLARE threshold AS INTEGER\n  threshold = 34\n  DECLARE count AS INTEGER\n  count = 0\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 6 DO\n    IF items[i] > threshold THEN\n      count = count + 1\n    ENDIF\n  ENDFOR\n  PRINT count\nEND",
+        "python_code": "items = [115, 109, 138, 39, 121, 127, 146]\nthreshold = 34\ncount = 0\nfor i in range(0, 6 + 1):\n    if items[i] > threshold:\n        count = count + 1\nprint(count)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_25",
+        "id": "algo_25",
+        "title": "Modulo Branching Logic (Range to 25)",
+        "concept": "Modulo Branching Logic",
+        "description": "Iterates to 45, identifying multiples of 2 and 6.",
+        "difficulty": "moderate",
+        "pseudocode": "BEGIN\n  DECLARE count AS INTEGER\n  count = 0\n  DECLARE i AS INTEGER\n  FOR i FROM 1 TO 45 DO\n    IF i MOD 2 == 0 THEN\n      count = count + 1\n    ELSE IF i MOD 6 == 0 THEN\n      count = count + 2\n    ELSE\n      count = count - 1\n    ENDIF\n  ENDFOR\n  PRINT count\nEND",
+        "python_code": "count = 0\nfor i in range(1, 45 + 1):\n    if i % 2 == 0:\n        count = count + 1\n    elif i % 6 == 0:\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_26",
+        "id": "algo_26",
+        "title": "Multiply Array Elements by 8",
+        "concept": "While Loop Mathematical Series",
+        "description": "Calculates the sum of odd numbers strictly less than 66.",
+        "difficulty": "moderate",
+        "pseudocode": "BEGIN\n  DECLARE maximum AS INTEGER\n  maximum = 0\n  DECLARE i AS INTEGER\n  i = 1\n  WHILE i < 66 DO\n    maximum = maximum + i\n    i = i + 2\n  ENDWHILE\n  PRINT maximum\nEND",
+        "python_code": "maximum = 0\ni = 1\nwhile i < 66:\n    maximum = maximum + i\n    i = i + 2\nprint(maximum)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_27",
+        "id": "algo_27",
+        "title": "Factorial of 10 Computation",
+        "concept": "In-Place Array Transformation",
+        "description": "Multiplies every element in the array iteratively by 3.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE data AS ARRAY\n  data = [4, 6, 11, 8, 3, 20, 3, 16]\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 7 DO\n    data[i] = data[i] * 3\n  ENDFOR\n  PRINT data\nEND",
+        "python_code": "data = [4, 6, 11, 8, 3, 20, 3, 16]\nfor i in range(0, 7 + 1):\n    data[i] = data[i] * 3\nprint(data)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_28",
+        "id": "algo_28",
+        "title": "Sum of Odd Numbers Under 30",
+        "concept": "In-Place Array Transformation",
+        "description": "Multiplies every element in the array iteratively by 5.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE data AS ARRAY\n  data = [1, 19, 12, 10, 13, 20, 18]\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 6 DO\n    data[i] = data[i] * 5\n  ENDFOR\n  PRINT data\nEND",
+        "python_code": "data = [1, 19, 12, 10, 13, 20, 18]\nfor i in range(0, 6 + 1):\n    data[i] = data[i] * 5\nprint(data)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_29",
+        "id": "algo_29",
+        "title": "Modulo Branching Logic (Range to 50)",
+        "concept": "In-Place Array Transformation",
+        "description": "Multiplies every element in the array iteratively by 5.",
+        "difficulty": "easy",
+        "pseudocode": "BEGIN\n  DECLARE numbers AS ARRAY\n  numbers = [16, 7, 16, 9, 20, 12, 20]\n  DECLARE i AS INTEGER\n  FOR i FROM 0 TO 6 DO\n    numbers[i] = numbers[i] * 5\n  ENDFOR\n  PRINT numbers\nEND",
+        "python_code": "numbers = [16, 7, 16, 9, 20, 12, 20]\nfor i in range(0, 6 + 1):\n    numbers[i] = numbers[i] * 5\nprint(numbers)",
+        "createdAt": "2025-08-08"
+    },
+    {
+        "_docId": "algo_30",
+        "id": "algo_30",
+        "title": "Multiply Array Elements by 9",
+        "concept": "Factorial Computation",
+        "description": "Computes the factorial value iteratively up to 5.",
+        "difficulty": "hard",
+        "pseudocode": "BEGIN\n  DECLARE limit AS INTEGER\n  limit = 5\n  DECLARE factorial AS INTEGER\n  factorial = 1\n  DECLARE i AS INTEGER\n  FOR i FROM 1 TO limit DO\n    factorial = factorial * i\n  ENDFOR\n  PRINT factorial\nEND",
+        "python_code": "limit = 5\nfactorial = 1\nfor i in range(1, limit + 1):\n    factorial = factorial * i\nprint(factorial)",
+        "createdAt": "2025-08-08"
+    }
+];
 
     function makeAct(id, student, studentId, exercise, difficulty, status, score, dateStr, errorType, procTime) {
         return { _docId:id, student, studentId, exercise, difficulty:difficulty||'moderate', status, score, time:dateStr, timestamp:new Date(dateStr).getTime(), errorType:errorType||null, processingTime:procTime||'0.0s', submittedCode:'BEGIN\n  PRINT "Hello World"\nEND', pseudocode:'BEGIN\n  PRINT "Hello World"\nEND', pythonCode:'print("Hello World")', python_code:'print("Hello World")', result:status==='Completed'?'Success':status==='Failed'?errorType:'Pending', output:status==='Failed'?`Error: ${errorType} during compilation`:'Execution successful.\n' };
