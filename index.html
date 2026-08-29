@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
   <meta charset="UTF-8">
@@ -8,9 +8,17 @@
   <meta name="description"
     content="Bridging Pseudocode and Python: An Algorithmic Approach to Automated Code Generation">
 
+  <!-- Immediate Dark Mode Initializer -->
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('pseudopy_theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    })();
+  </script>
+
   <!-- PWA Meta Tags -->
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#3b82f6">
+  <meta name="theme-color" content="#0f172a">
   <meta name="mobile-web-app-capable" content="yes">
 
   <!-- iOS PWA Meta Tags -->
