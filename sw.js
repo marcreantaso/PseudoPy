@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-v28';
+const CACHE_NAME = 'pseudopy-v29';
 const LOCAL_ASSETS = [
     './',
     './index.html',
@@ -23,7 +23,9 @@ const EXTERNAL_ASSETS = [
     'https://skulpt.org/js/skulpt.min.js',
     'https://skulpt.org/js/skulpt-stdlib.js',
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
+    'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
+    'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js'
 ];
 
 // Install — cache core assets

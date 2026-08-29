@@ -1,11 +1,30 @@
 // ============================================================
-// CENTRAL BACKEND CLIENT (REST API) — PseudoPy
-// Cross-Device Real-Time Database Client
+// CENTRAL DATABASE CLIENT — PseudoPy
+// Firebase Firestore — Persistent Cross-Device Storage
 // ============================================================
 
-console.log('[Database] Initializing Central Backend Client (Synchronized Mode)');
+console.log('[Database] Initializing Firebase Firestore Client...');
 
-// ── Collection References (API Endpoints) ──
+// ── Firebase Configuration ─────────────────────────────────
+const firebaseConfig = {
+    apiKey: "AIzaSyAkm5sWJpcF05QCDDSa8VciUTh3LOc5BU",
+    authDomain: "pseudopy-e7e74.firebaseapp.com",
+    projectId: "pseudopy-e7e74",
+    storageBucket: "pseudopy-e7e74.firebasestorage.app",
+    messagingSenderId: "442671972919",
+    appId: "1:442671972919:web:53fc4b941b37c484247ab2",
+    measurementId: "G-K0HKBVFEKD"
+};
+
+// Initialize Firebase (safe to call multiple times)
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const firestore = firebase.firestore();
+
+console.log('[Database] Firebase Firestore initialized. Project:', firebaseConfig.projectId);
+
+// ── Collection References ──────────────────────────────────
 const usersRef             = "pseudopy_users";
 const exercisesRef         = "pseudopy_exercises";
 const activityRef          = "pseudopy_activity";
@@ -14,28 +33,16 @@ const auditLogRef          = "pseudopy_auditLog";
 const notificationsRef     = "pseudopy_notifications";
 const devicesRef           = "pseudopy_devices";
 
-const API_BASE = '/api';
-
 // ══════════════════════════════════════════════════════════════
 //  PASSWORD HASHING — Web Crypto API (SHA-256 + Salt)
-//  NEVER store or compare plaintext passwords.
 // ══════════════════════════════════════════════════════════════
 
-/**
- * Generates a cryptographically random hex salt string.
- */
 function generateSalt() {
     const array = new Uint8Array(16);
     crypto.getRandomValues(array);
     return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Hashes a password with a salt using SHA-256 via Web Crypto API.
- * @param {string} password - The plaintext password
- * @param {string} salt - The hex salt string
- * @returns {Promise<string>} The hex-encoded hash
- */
 async function hashPassword(password, salt) {
     const encoder = new TextEncoder();
     const data = encoder.encode(password + salt);
@@ -44,114 +51,157 @@ async function hashPassword(password, salt) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Verifies a plaintext password against a stored hash and salt.
- * @param {string} inputPassword - The password entered by the user
- * @param {string} storedHash - The stored SHA-256 hex hash
- * @param {string} storedSalt - The stored hex salt
- * @returns {Promise<boolean>}
- */
 async function verifyPassword(inputPassword, storedHash, storedSalt) {
     const computedHash = await hashPassword(inputPassword, storedSalt);
     return computedHash === storedHash;
 }
 
 // ══════════════════════════════════════════════════════════════
-//  CENTRAL DATABASE API CLIENT FUNCTIONS
+//  CORE FIRESTORE CRUD FUNCTIONS
 // ══════════════════════════════════════════════════════════════
 
-async function initDB() {
-    return true;
-}
-
+/**
+ * Get all documents from a collection.
+ * @param {string} ref - Collection name
+ * @param {number|null} limitCount - Max records to return
+ * @param {number} offsetCount - Number of records to skip (client-side)
+ * @returns {Promise<Array>}
+ */
 async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
     try {
-        let url = `${API_BASE}/${ref}`;
-        const params = [];
-        if (limitCount !== null && limitCount !== undefined) params.push(`limit=${limitCount}`);
-        if (offsetCount) params.push(`offset=${offsetCount}`);
-        if (params.length > 0) url += `?${params.join('&')}`;
+        const snapshot = await firestore.collection(ref).get();
+        let results = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
 
-        const res = await fetch(url);
-        if (!res.ok) {
-            console.error(`[Database] Error fetching ${ref}:`, res.statusText);
-            return [];
+        // Client-side sorting (mirrors original server-side logic)
+        if (ref === 'pseudopy_exercises') {
+            results.sort((a, b) => {
+                const aIsNew = (a._docId || '').startsWith('ex');
+                const bIsNew = (b._docId || '').startsWith('ex');
+                if (aIsNew && !bIsNew) return -1;
+                if (!aIsNew && bIsNew) return 1;
+                if (aIsNew && bIsNew) return (b._docId || '').localeCompare(a._docId || '');
+                const aNum = parseInt((a._docId || '').replace('algo_', '')) || 0;
+                const bNum = parseInt((b._docId || '').replace('algo_', '')) || 0;
+                return aNum - bNum;
+            });
         }
-        return await res.json();
+        if (ref === 'pseudopy_activity') {
+            results.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        }
+        if (ref === 'pseudopy_auditLog') {
+            results.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+        }
+        if (ref === 'pseudopy_notifications') {
+            results.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        }
+
+        // Pagination (client-side)
+        if (limitCount !== null && limitCount !== undefined) {
+            const l = parseInt(limitCount, 10);
+            const o = parseInt(offsetCount, 10) || 0;
+            results = results.slice(o, o + l);
+        }
+
+        return results;
     } catch (err) {
-        console.error(`[Database] Network error fetching ${ref}:`, err);
+        console.error(`[Database] Error getting all from ${ref}:`, err);
         return [];
     }
 }
 
+/**
+ * Get a single document by ID.
+ * @param {string} ref - Collection name
+ * @param {string} docId - Document ID
+ * @returns {Promise<Object|null>}
+ */
 async function dbGet(ref, docId) {
     try {
-        const res = await fetch(`${API_BASE}/${ref}/${encodeURIComponent(docId)}`);
-        if (res.status === 404) return null;
-        if (!res.ok) {
-            console.error(`[Database] Error getting ${ref}/${docId}:`, res.statusText);
-            return null;
-        }
-        return await res.json();
+        const doc = await firestore.collection(ref).doc(docId).get();
+        if (!doc.exists) return null;
+        return { _docId: doc.id, ...doc.data() };
     } catch (err) {
-        console.error(`[Database] Network error getting ${ref}/${docId}:`, err);
+        console.error(`[Database] Error getting ${ref}/${docId}:`, err);
         return null;
     }
 }
 
+/**
+ * Add a new document (auto-generates ID if none provided).
+ * @param {string} ref - Collection name
+ * @param {Object} data - Document data
+ * @returns {Promise<string>} The document ID
+ */
 async function dbAdd(ref, data) {
     try {
-        const res = await fetch(`${API_BASE}/${ref}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (!res.ok) throw new Error(`Failed to add record: ${res.statusText}`);
-        const result = await res.json();
-        return result._docId || result.id;
+        const docId = data._docId || null;
+        if (docId) {
+            await firestore.collection(ref).doc(docId).set({ ...data, _docId: docId });
+            return docId;
+        } else {
+            const docRef = await firestore.collection(ref).add({ ...data });
+            await docRef.update({ _docId: docRef.id });
+            return docRef.id;
+        }
     } catch (err) {
         console.error(`[Database] Error adding to ${ref}:`, err);
         throw err;
     }
 }
 
+/**
+ * Set (create or overwrite) a document with a specific ID.
+ * @param {string} ref - Collection name
+ * @param {string} docId - Document ID
+ * @param {Object} data - Document data
+ * @returns {Promise<Object>}
+ */
 async function dbSet(ref, docId, data) {
     try {
-        const res = await fetch(`${API_BASE}/${ref}/${encodeURIComponent(docId)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (!res.ok) throw new Error(`Failed to set record: ${res.statusText}`);
-        return await res.json();
+        const docData = { ...data, _docId: docId };
+        await firestore.collection(ref).doc(docId).set(docData);
+        return docData;
     } catch (err) {
         console.error(`[Database] Error setting ${ref}/${docId}:`, err);
         throw err;
     }
 }
 
+/**
+ * Partially update (merge) a document's fields.
+ * @param {string} ref - Collection name
+ * @param {string} docId - Document ID
+ * @param {Object} data - Fields to update
+ * @returns {Promise<Object>}
+ */
 async function dbUpdate(ref, docId, data) {
     try {
-        const res = await fetch(`${API_BASE}/${ref}/${encodeURIComponent(docId)}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (!res.ok) throw new Error(`Failed to update record: ${res.statusText}`);
-        return await res.json();
+        const docRef = firestore.collection(ref).doc(docId);
+        const existing = await docRef.get();
+        if (!existing.exists) {
+            // Create if not exists
+            await docRef.set({ ...data, _docId: docId });
+            return { ...data, _docId: docId };
+        }
+        await docRef.update(data);
+        const updated = await docRef.get();
+        return { _docId: docId, ...updated.data() };
     } catch (err) {
         console.error(`[Database] Error updating ${ref}/${docId}:`, err);
         throw err;
     }
 }
 
+/**
+ * Delete a document by ID.
+ * @param {string} ref - Collection name
+ * @param {string} docId - Document ID
+ * @returns {Promise<{success: boolean}>}
+ */
 async function dbDelete(ref, docId) {
     try {
-        const res = await fetch(`${API_BASE}/${ref}/${encodeURIComponent(docId)}`, {
-            method: 'DELETE'
-        });
-        if (!res.ok) throw new Error(`Failed to delete record: ${res.statusText}`);
-        return await res.json();
+        await firestore.collection(ref).doc(docId).delete();
+        return { success: true };
     } catch (err) {
         console.error(`[Database] Error deleting ${ref}/${docId}:`, err);
         throw err;
@@ -159,14 +209,14 @@ async function dbDelete(ref, docId) {
 }
 
 /**
- * Counts all records in a collection from the central database.
+ * Count all documents in a collection.
+ * @param {string} ref - Collection name
+ * @returns {Promise<number>}
  */
 async function dbCount(ref) {
     try {
-        const res = await fetch(`${API_BASE}/${ref}/count`);
-        if (!res.ok) return 0;
-        const data = await res.json();
-        return data.count || 0;
+        const snapshot = await firestore.collection(ref).get();
+        return snapshot.size;
     } catch (err) {
         console.error(`[Database] Error counting ${ref}:`, err);
         return 0;
@@ -174,8 +224,12 @@ async function dbCount(ref) {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  APP-LEVEL REFRESH HELPERS (Called from app.js)
+//  APP-LEVEL HELPERS
 // ══════════════════════════════════════════════════════════════
+
+async function initDB() {
+    return true;
+}
 
 async function refreshPasswordHistory() {
     return await dbGetAll(passwordRequestsRef);
@@ -186,7 +240,7 @@ async function refreshAuditLog() {
 }
 
 async function seedDatabase() {
-    console.log('[Database] Connected to Central Backend.');
+    console.log('[Database] Connected to Firebase Firestore.');
     return true;
 }
 
@@ -195,13 +249,11 @@ async function seedDatabase() {
 // ══════════════════════════════════════════════════════════════
 
 class Database {
-    constructor() {
-        this.ready = true;
-    }
+    constructor() { this.ready = true; }
     async getUsers() { return await dbGetAll(usersRef); }
     async getUserByUsername(username) {
         const users = await dbGetAll(usersRef);
-        return users.find(u => u.username === username);
+        return users.find(u => u.username === username) || null;
     }
     async addUser(user) { return await dbAdd(usersRef, user); }
     async updateUser(userId, updates) { return await dbUpdate(usersRef, userId, updates); }
@@ -218,3 +270,5 @@ class Database {
 }
 
 const db = new Database();
+
+console.log('[Database] Firebase Firestore client ready ✅');

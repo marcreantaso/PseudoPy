@@ -1,10 +1,6 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/api/health", "destination": "/api/health" },
-    { "source": "/api/:collection/count", "destination": "/api/[collection]/count?collection=:collection" },
-    { "source": "/api/:collection/:id", "destination": "/api/[collection]/[id]?collection=:collection&id=:id" },
-    { "source": "/api/:collection", "destination": "/api/[collection]/index?collection=:collection" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
