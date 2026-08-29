@@ -12,3 +12,11 @@ desktop.ini
 
 # Generated
 icons/generate.html
+
+# SQLite database files (local only, not for Vercel)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Vercel output
+.vercel
