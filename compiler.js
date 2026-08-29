@@ -1177,8 +1177,12 @@ class CodeGenerator {
                 this.indentLevel--;  // indent_level decreases after END WHILE
                 break;
 
-            case 'ForStatement':
-                this.lines.push(this.ind() + 'for ' + node.iterator + ' in range(int(' + this.exprToStr(node.startExpr.tokens) + '), int(' + this.exprToStr(node.endExpr.tokens) + ') + 1):');
+            case 'ForStatement': {
+                const sStr = this.exprToStr(node.startExpr.tokens);
+                const eStr = this.exprToStr(node.endExpr.tokens);
+                const startFmt = /^[a-zA-Z0-9_]+$/.test(sStr) ? sStr : `int(${sStr})`;
+                const endFmt = /^[a-zA-Z0-9_]+$/.test(eStr) ? eStr : `int(${eStr})`;
+                this.lines.push(this.ind() + `for ${node.iterator} in range(${startFmt}, ${endFmt} + 1):`);
                 this.indentLevel++;
                 if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
                 else node.body.forEach(n => this.visitNode(n));

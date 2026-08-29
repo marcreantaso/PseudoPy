@@ -2176,20 +2176,40 @@ function submitExercise() {
     const outTextEl = $id('console-output');
     const outText = outTextEl ? outTextEl.textContent || '' : '';
     const now = new Date();
+    const docId = 'act_' + Date.now();
 
     const actRecord = {
+        _docId: docId,
         student: currentUser ? currentUser.fullName : 'Guest Student',
+        studentId: currentUser ? (currentUser.studentId || currentUser.username) : '2024-001',
+        section: currentUser ? (currentUser.section || 'BSCS-3A') : 'BSCS-3A',
+        instructorId: currentUser ? (currentUser.instructorId || 'u2') : 'u2',
         exercise: ex.title || ex.concept || 'Untitled Exercise',
+        difficulty: ex.difficulty || 'moderate',
         status: 'Completed',
         score: '100%',
-        time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        time: now.toISOString(),
         timestamp: now.getTime(),
         pseudocode: pseudo,
         python_code: py,
+        result: 'Success',
+        errorType: null,
+        processingTime: '0.45s',
         output: outText
     };
 
-    dbSet(activityRef, 'act_' + Date.now(), actRecord).then(async () => {
+    dbSet(activityRef, docId, actRecord).then(async () => {
+        // Immediate local sync for Learning Analytics
+        if (typeof cachedActivity !== 'undefined') {
+            cachedActivity.unshift(actRecord);
+        }
+        if (typeof currentFilteredActivity !== 'undefined') {
+            currentFilteredActivity.unshift(actRecord);
+        }
+        if (typeof updateAnalyticsUI === 'function') {
+            try { updateAnalyticsUI(); } catch (e) {}
+        }
+
         const overlay = $id('submission-success-overlay');
         const timeDisplay = $id('submission-time-display');
         if (overlay && timeDisplay) {

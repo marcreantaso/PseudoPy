@@ -324,8 +324,8 @@ class MetricsEngine {
             .split('\n')
             .map(line => line.replace(/\t/g, '    '))  // expand tabs → 4 spaces
             .map(line => {
-                // Preserve leading spaces (indentation) but strip trailing whitespace
-                const stripped = line.trimEnd();
+                // Strip comments before code comparison
+                let stripped = line.replace(/#.*$/, '').trimEnd();
                 // Normalise indentation: round to nearest 4-space boundary
                 const match = stripped.match(/^(\s*)(.*)/);
                 if (!match) return stripped;
@@ -518,3 +518,7 @@ class MetricsEngine {
 // ── Global Instance ──
 const metricsEngine = new MetricsEngine();
 console.log('[Metrics] MetricsEngine v2 initialized. Session:', metricsEngine.sessionId);
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { MetricsEngine, metricsEngine };
+}
