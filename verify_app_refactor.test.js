@@ -30,9 +30,41 @@ function bad() { document.getElementById('x'); document.querySelector('.foo'); }
   }
 }
 
+function testDeleteDoesNotRemovePersistedData() {
+  const window = {
+    localStorage: {
+      store: {},
+      getItem(k) { return this.store[k] || null; },
+      setItem(k, v) { this.store[k] = String(v); },
+      removeItem(k) { delete this.store[k]; }
+    }
+  };
+
+  const localStorage = window.localStorage;
+  const dbCode = fs.readFileSync(path.resolve(__dirname, 'database.js'), 'utf8');
+  const dbFunc = new Function('window', 'localStorage', 'console', `${dbCode}; return { dbDelete, dbSet, getLocalCollection, usersRef };`);
+  const dbModule = dbFunc(window, localStorage, console);
+
+  const ref = dbModule.usersRef;
+  const record = { _docId: 'u_temp_no_delete', id: 'u_temp_no_delete', username: 'no_delete_student', role: 'student', status: 'active' };
+
+  dbModule.dbSet(ref, record._docId, record);
+  const beforeList = dbModule.getLocalCollection(ref);
+  const beforeExists = beforeList.some(item => item._docId === record._docId);
+  const result = dbModule.dbDelete(ref, record._docId);
+  const afterList = dbModule.getLocalCollection(ref);
+  const afterExists = afterList.some(item => item._docId === record._docId);
+
+  assert.strictEqual(beforeExists, true, 'Record should be persisted before any delete attempt.');
+  assert.strictEqual(result.success, false, 'Delete requests must be blocked so persisted data stays safe.');
+  assert.strictEqual(afterExists, true, 'Delete requests must not remove persisted Firestore-backed data.');
+  console.log('✅ Delete protection passed.');
+}
+
 function runTests() {
   testAppJsPasses();
   testViolationDetection();
+  testDeleteDoesNotRemovePersistedData();
   console.log('All verification tests passed.');
 }
 
