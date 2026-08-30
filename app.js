@@ -3069,8 +3069,6 @@ async function approveAllPendingDevices() {
 
 // ── Add / Edit Instructor Modal ──────────────────────────────
 
-let editingInstructorId = null;
-
 function openInstructorAddModal() {
     editingInstructorId = null;
     setText('instructor-modal-title', '➕ Add Instructor');
