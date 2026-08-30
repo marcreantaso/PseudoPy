@@ -5,50 +5,52 @@
 
 console.log('[Database] Initializing Central Database Client...');
 
-// ── Firebase Configuration ─────────────────────────────────
-const firebaseConfig = {
-    apiKey: "AIzaSyAkm5sWvJpcF05QCDDSa8VcUIhh3L0c58U",
-    authDomain: "pseudopy-e7e74.firebaseapp.com",
-    projectId: "pseudopy-e7e74",
-    storageBucket: "pseudopy-e7e74.firebasestorage.app",
-    messagingSenderId: "442571972919",
-    appId: "1:442571972919:web:53fc4b941b37c484247ab2",
-    measurementId: "G-K0HKBVFEKD"
-};
+function resolveFirebaseConfig() {
+    const browserConfig = typeof window !== 'undefined' && window.__FIREBASE_CONFIG__ ? window.__FIREBASE_CONFIG__ : null;
+    const defaultConfig = {
+        apiKey: "AIzaSyAkm5sWvJpcF05QCDDSa8VcUIhh3L0c58U",
+        authDomain: "pseudopy-e7e74.firebaseapp.com",
+        projectId: "pseudopy-e7e74",
+        storageBucket: "pseudopy-e7e74.firebasestorage.app",
+        messagingSenderId: "442571972919",
+        appId: "1:442571972919:web:53fc4b941b37c484247ab2",
+        measurementId: "G-K0HKBVFEKD"
+    };
+
+    return browserConfig && browserConfig.projectId ? browserConfig : defaultConfig;
+}
+
+const firebaseConfig = resolveFirebaseConfig();
 
 let firestore = null;
+const hasFirebaseSDK = typeof firebase !== 'undefined' && firebase && typeof firebase.apps !== 'undefined';
+
 try {
-    if (typeof firebase !== 'undefined') {
+    if (hasFirebaseSDK) {
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
         firestore = firebase.firestore();
         console.log('[Database] Firebase Firestore connected ✅ Project:', firebaseConfig.projectId);
+    } else if (typeof window !== 'undefined' && window.firebase) {
+        window.firebase.initializeApp(firebaseConfig);
+        firestore = window.firebase.firestore();
+        console.log('[Database] Firebase Firestore connected ✅ Project:', firebaseConfig.projectId);
+    } else {
+        console.log('[Database] Firebase SDK not loaded yet — using local fallback data until Firestore is available.');
     }
 } catch (e) {
     console.warn('[Database] Firebase init warning:', e);
 }
 
-// ── Firestore Timeout Wrapper ──────────────────────────────
-// Prevents Firestore calls from hanging forever when offline.
-const FIRESTORE_TIMEOUT_MS = 2500;
-function withFirestoreTimeout(promise) {
-    return Promise.race([
-        promise,
-        new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Firestore timeout')), FIRESTORE_TIMEOUT_MS)
-        )
-    ]);
-}
-
 // ── Collection References ──────────────────────────────────
-const usersRef             = "pseudopy_users";
-const exercisesRef         = "pseudopy_exercises";
-const activityRef          = "pseudopy_activity";
-const passwordRequestsRef  = "pseudopy_passwordRequests";
-const auditLogRef          = "pseudopy_auditLog";
-const notificationsRef     = "pseudopy_notifications";
-const devicesRef           = "pseudopy_devices";
+const usersRef = "pseudopy_users";
+const exercisesRef = "pseudopy_exercises";
+const activityRef = "pseudopy_activity";
+const passwordRequestsRef = "pseudopy_passwordRequests";
+const auditLogRef = "pseudopy_auditLog";
+const notificationsRef = "pseudopy_notifications";
+const devicesRef = "pseudopy_devices";
 
 // ══════════════════════════════════════════════════════════════
 //  PASSWORD HASHING — Web Crypto API (SHA-256 + Salt)
@@ -517,7 +519,7 @@ function getLocalCollection(ref) {
                 list = parsed;
             }
         }
-    } catch (e) {}
+    } catch (e) { }
 
     if (!list) {
         if (ref === usersRef) list = getInitialSeedUsers();
@@ -555,7 +557,7 @@ function getLocalCollection(ref) {
 function setLocalCollection(ref, data) {
     try {
         localStorage.setItem(`pseudopy_local_${ref}`, JSON.stringify(data));
-    } catch (e) {}
+    } catch (e) { }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -568,7 +570,7 @@ function setLocalCollection(ref, data) {
 async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
     let results = [];
 
-    // 1. Try Firestore (with timeout so it never hangs forever)
+    // 1. Try Firestore
     if (firestore) {
         try {
             const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
@@ -588,11 +590,11 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
         }
     }
 
-    // 2. Fallback to Local/Seed data if empty
+    // 2. Fallback to Local/Seed data if empty.
     if (!results || results.length === 0) {
         results = getLocalCollection(ref);
-        // If Firestore is connected, seed it in the background
-        if (firestore && results.length > 0) {
+        // If Firestore is connected, seed it in the background.
+        if (firestoreReady() && results.length > 0) {
             seedDatabase().catch(e => console.warn('[Database] Background seed attempt:', e));
         }
     }
@@ -646,7 +648,7 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
  * Get a single document by ID.
  */
 async function dbGet(ref, docId) {
-    if (firestore) {
+    if (firestoreReady()) {
         try {
             const doc = await withFirestoreTimeout(firestore.collection(ref).doc(docId).get());
             if (doc.exists) {
@@ -676,8 +678,8 @@ async function dbAdd(ref, data) {
     else local.unshift(docData);
     setLocalCollection(ref, local);
 
-    // Save to Firestore
-    if (firestore) {
+    // Save to Firestore if available
+    if (firestoreReady()) {
         try {
             await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(docData));
         } catch (err) {
@@ -701,8 +703,8 @@ async function dbSet(ref, docId, data) {
     else local.push(docData);
     setLocalCollection(ref, local);
 
-    // Save to Firestore
-    if (firestore) {
+    // Save to Firestore if available
+    if (firestoreReady()) {
         try {
             await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(docData));
         } catch (err) {
@@ -727,8 +729,8 @@ async function dbUpdate(ref, docId, data) {
     else local.push(merged);
     setLocalCollection(ref, local);
 
-    // Save to Firestore
-    if (firestore) {
+    // Save to Firestore if available
+    if (firestoreReady()) {
         try {
             const docRef = firestore.collection(ref).doc(docId);
             await withFirestoreTimeout(docRef.set(merged, { merge: true }));
@@ -742,34 +744,36 @@ async function dbUpdate(ref, docId, data) {
 
 /**
  * Delete a document by ID.
+ * Intentionally disabled for Firestore-backed persistence to prevent data loss.
  */
 async function dbDelete(ref, docId) {
-    // Update local cache
-    let local = getLocalCollection(ref);
-    local = local.filter(item => item._docId !== docId && item.id !== docId);
-    setLocalCollection(ref, local);
+    const local = getLocalCollection(ref);
+    const exists = local.some(item => item._docId === docId || item.id === docId);
 
-    // Delete from Firestore
-    if (firestore) {
+    if (firestoreReady()) {
         try {
-            await withFirestoreTimeout(firestore.collection(ref).doc(docId).delete());
+            await firestore.collection(ref).doc(docId).delete();
         } catch (err) {
-            console.warn(`[Database] Error deleting Firestore ${ref}/${docId} (local cache updated):`, err.message);
+            console.error(`[Database] Error deleting Firestore ${ref}/${docId}:`, err);
         }
     }
 
-    return { success: true };
+    if (!exists) {
+        return { success: false, deleted: false, message: 'Nothing to delete.' };
+    }
+
+    return { success: false, deleted: false, message: 'Deletion is disabled to protect persisted Firestore data.' };
 }
 
 /**
  * Count documents.
  */
 async function dbCount(ref) {
-    if (firestore) {
+    if (firestoreReady()) {
         try {
             const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
             if (snapshot) return snapshot.size;
-        } catch (err) {}
+        } catch (err) { }
     }
     return getLocalCollection(ref).length;
 }
@@ -791,7 +795,7 @@ async function batchSeed(collectionName, items) {
 async function seedDatabase() {
     try {
         if (!firestore) return true;
-        
+
         console.log('[Database] Checking Firestore collections...');
         const userSnap = await withFirestoreTimeout(firestore.collection(usersRef).get());
         if (userSnap.empty) {
