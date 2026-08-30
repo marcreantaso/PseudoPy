@@ -844,10 +844,10 @@
               </svg>
             </div>
             <div class="an-kpi-body">
-              <div class="an-kpi-value" id="stat-students">10</div>
+              <div class="an-kpi-value" id="stat-students">0</div>
               <div class="an-kpi-label">Active Students</div>
               <div class="an-kpi-trend" id="stat-students-trend">
-                <span class="positive">↑ 3 this week</span> <span
+                <span class="positive">—</span> <span
                   style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">vs last week</span>
               </div>
             </div>
@@ -862,10 +862,10 @@
               </svg>
             </div>
             <div class="an-kpi-body">
-              <div class="an-kpi-value" id="stat-submissions">85</div>
+              <div class="an-kpi-value" id="stat-submissions">0</div>
               <div class="an-kpi-label">Total Submissions</div>
               <div class="an-kpi-trend" id="stat-submissions-trend">
-                <span class="positive">↑ 26 this week</span> <span
+                <span class="positive">—</span> <span
                   style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">vs last week</span>
               </div>
             </div>
@@ -878,10 +878,10 @@
               </svg>
             </div>
             <div class="an-kpi-body">
-              <div class="an-kpi-value" id="stat-success-rate">69%</div>
+              <div class="an-kpi-value" id="stat-success-rate">0%</div>
               <div class="an-kpi-label">Success Rate</div>
               <div class="an-kpi-trend" id="stat-success-trend">
-                <span class="positive">↑ 5%</span> <span
+                <span class="positive">—</span> <span
                   style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">vs last week</span>
               </div>
             </div>
@@ -895,10 +895,10 @@
               </svg>
             </div>
             <div class="an-kpi-body">
-              <div class="an-kpi-value" id="stat-common-errors">26</div>
+              <div class="an-kpi-value" id="stat-common-errors">0</div>
               <div class="an-kpi-label">Common Errors</div>
               <div class="an-kpi-trend" id="stat-errors-trend">
-                <span class="negative">↓ 2 this week</span> <span
+                <span class="negative">—</span> <span
                   style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">vs last week</span>
               </div>
             </div>
@@ -917,7 +917,7 @@
                   <span class="an-info-badge" title="Shows the number of student submissions per day">ⓘ</span>
                 </div>
                 <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem" id="an-chart-sub-label">Shows
-                  the number of student submissions based on the selected week (Aug 4 - Aug 10).</div>
+                  the number of student submissions based on the selected week.</div>
               </div>
               <div class="an-view-toggle">
                 <span style="font-size:0.8rem;color:var(--text-muted)">View by:</span>
@@ -953,7 +953,7 @@
               <div class="an-donut-chart" id="an-donut-chart">
                 <div class="an-donut-center" id="an-donut-center">
                   <div class="an-donut-total-label">Total</div>
-                  <div class="an-donut-total-num" id="an-donut-total">26</div>
+                  <div class="an-donut-total-num" id="an-donut-total">0</div>
                   <div class="an-donut-total-label">Errors</div>
                 </div>
               </div>
@@ -1949,11 +1949,18 @@
         </div>
         <div class="form-group">
           <label>Expected Pseudocode (Solution Key) <span style="color:var(--danger)">*</span></label>
-          <textarea id="ex-solution" class="form-input mono" rows="6" placeholder="BEGIN&#10;  ...&#10;END"
+          <textarea id="ex-solution" class="form-input mono" rows="5" placeholder="BEGIN&#10;  ...&#10;END"
             style="font-family:'JetBrains Mono',monospace;font-size:0.825rem"></textarea>
           <span id="ex-solution-error"
             style="display:none;color:var(--danger);font-size:0.78rem;margin-top:0.25rem">Expected Pseudocode (Solution
             Key) is required.</span>
+        </div>
+        <div class="form-group">
+          <label>Expected Output <span style="color:var(--danger)">*</span></label>
+          <textarea id="ex-expected-output" class="form-input mono" rows="3" placeholder="Expected terminal output when executed..."
+            style="font-family:'JetBrains Mono',monospace;font-size:0.825rem"></textarea>
+          <span id="ex-expected-output-error"
+            style="display:none;color:var(--danger);font-size:0.78rem;margin-top:0.25rem">Expected Output is required.</span>
         </div>
       </div>
       <div class="modal-footer">

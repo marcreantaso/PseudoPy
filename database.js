@@ -78,6 +78,7 @@ function getInitialSeedUsers() {
     const users = [
         { _docId: 'u1', id: 'u1', fullName: 'Mark Bautista', username: 'mbautista_admin', email: 'bautista@university.edu.ph', password: 'admin123', role: 'admin', status: 'active', createdAt: '2025-07-01T08:00:00.000Z' },
         { _docId: 'u2', id: 'u2', fullName: 'Marc Reantaso', username: 'mreantaso_instructor', email: 'reantaso@university.edu.ph', password: 'pass123', role: 'instructor', status: 'active', createdBy: 'u1', createdAt: '2025-08-10T14:15:00.000Z' },
+        { _docId: 'u_inst_1787787083396', id: 'u_inst_1787787083396', fullName: 'john dave dela cruz', username: 'cruz_admin', email: 'delacruz@gmail.com', password: 'Admin123', role: 'instructor', status: 'active', createdAt: '2026-08-26T23:31:23.396Z', lastLogin: null, createdBy: 'u1' },
         { _docId: 'u_stu_emirandilla', id: 'u_stu_emirandilla', studentId: '2024-031', fullName: 'Eduard John Mirandilla', username: 'emirandilla_student', email: 'mirandilla@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:30:00.000Z' },
         { _docId: 'u_stu_mdaet', id: 'u_stu_mdaet', studentId: '2024-032', fullName: 'Mikaella Daet', username: 'mdaet_student', email: 'daet@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:35:00.000Z' },
     ];
@@ -434,13 +435,14 @@ const SEED_EXERCISES_LIST = [
     }
 ];
 
-function makeSeedAct(id, student, studentId, exercise, difficulty, status, score, dateStr, errorType, procTime) {
+function makeSeedAct(id, student, studentId, exercise, difficulty, status, score, dateStr, errorType, procTime, instructorId = 'u2') {
     return {
         _docId: id, student, studentId, exercise,
         difficulty: difficulty || 'moderate', status, score,
         time: dateStr, timestamp: new Date(dateStr).getTime(),
         errorType: errorType || null,
         processingTime: procTime || '0.0s',
+        instructorId: instructorId || 'u2',
         submittedCode: 'BEGIN\n  PRINT "Hello World"\nEND',
         pseudocode: 'BEGIN\n  PRINT "Hello World"\nEND',
         pythonCode: 'print("Hello World")',
@@ -451,15 +453,15 @@ function makeSeedAct(id, student, studentId, exercise, difficulty, status, score
 }
 
 const SEED_ACTIVITY_LIST = [
-    makeSeedAct('act_sp_1', 'John Cruz', '2024-001', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T10:15:00', null, '0.85s'),
-    makeSeedAct('act_sp_2', 'Maria Santos', '2024-002', 'Factorial Calculation', 'hard', 'Completed', '85%', '2025-08-08T10:32:00', null, '1.21s'),
-    makeSeedAct('act_sp_3', 'Kevin Ramos', '2024-003', 'Array Sum', 'easy', 'Failed', '0%', '2025-08-08T11:05:00', 'Syntax Error', '0.65s'),
-    makeSeedAct('act_sp_4', 'Anna Reyes', '2024-004', 'Prime Number Checker', 'moderate', 'Pending', '—', '2025-08-08T11:20:00', null, '—'),
-    makeSeedAct('act_sp_5', 'Joshua Garcia', '2024-005', 'String Reversal', 'easy', 'Completed', '90%', '2025-08-08T11:45:00', null, '0.42s'),
-    makeSeedAct('act_sp_em1', 'Eduard John Mirandilla', '2024-031', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T14:20:00', null, '0.78s'),
-    makeSeedAct('act_sp_em2', 'Eduard John Mirandilla', '2024-031', 'Factorial Calculation', 'hard', 'Completed', '95%', '2025-08-07T16:10:00', null, '1.10s'),
-    makeSeedAct('act_sp_md1', 'Mikaella Daet', '2024-032', 'Array Sum', 'easy', 'Completed', '90%', '2025-08-08T15:00:00', null, '0.52s'),
-    makeSeedAct('act_sp_md2', 'Mikaella Daet', '2024-032', 'Prime Number Checker', 'moderate', 'Completed', '100%', '2025-08-06T11:30:00', null, '0.89s'),
+    makeSeedAct('act_sp_1', 'John Cruz', '2024-001', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T10:15:00', null, '0.85s', 'u2'),
+    makeSeedAct('act_sp_2', 'Maria Santos', '2024-002', 'Factorial Calculation', 'hard', 'Completed', '85%', '2025-08-08T10:32:00', null, '1.21s', 'u2'),
+    makeSeedAct('act_sp_3', 'Kevin Ramos', '2024-003', 'Array Sum', 'easy', 'Failed', '0%', '2025-08-08T11:05:00', 'Syntax Error', '0.65s', 'u2'),
+    makeSeedAct('act_sp_4', 'Anna Reyes', '2024-004', 'Prime Number Checker', 'moderate', 'Pending', '—', '2025-08-08T11:20:00', null, '—', 'u2'),
+    makeSeedAct('act_sp_5', 'Joshua Garcia', '2024-005', 'String Reversal', 'easy', 'Completed', '90%', '2025-08-08T11:45:00', null, '0.42s', 'u2'),
+    makeSeedAct('act_sp_em1', 'Eduard John Mirandilla', '2024-031', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T14:20:00', null, '0.78s', 'u2'),
+    makeSeedAct('act_sp_em2', 'Eduard John Mirandilla', '2024-031', 'Factorial Calculation', 'hard', 'Completed', '95%', '2025-08-07T16:10:00', null, '1.10s', 'u2'),
+    makeSeedAct('act_sp_md1', 'Mikaella Daet', '2024-032', 'Array Sum', 'easy', 'Completed', '90%', '2025-08-08T15:00:00', null, '0.52s', 'u2'),
+    makeSeedAct('act_sp_md2', 'Mikaella Daet', '2024-032', 'Prime Number Checker', 'moderate', 'Completed', '100%', '2025-08-06T11:30:00', null, '0.89s', 'u2'),
 ];
 
 // Local Storage Fallback Map
@@ -739,12 +741,29 @@ async function refreshAuditLog() {
     return await dbGetAll(auditLogRef);
 }
 
+function normalizeUsername(username) {
+    if (!username) return '';
+    const u = username.trim();
+    if (u === 'admin') return 'mbautista_admin';
+    if (u === 'emirandila_student') return 'emirandilla_student';
+    if (u === 'mdaet_stude') return 'mdaet_student';
+    return u;
+}
+
+// Ensure all seed exercises have instructor and creator assigned
+SEED_EXERCISES_LIST.forEach(e => {
+    if (!e.createdBy) e.createdBy = 'u2';
+    if (!e.instructorId) e.instructorId = 'u2';
+    if (!e.difficulty) e.difficulty = 'moderate';
+});
+
 class Database {
     constructor() { this.ready = true; }
     async getUsers() { return await dbGetAll(usersRef); }
     async getUserByUsername(username) {
         const users = await dbGetAll(usersRef);
-        return users.find(u => u.username === username) || null;
+        const norm = normalizeUsername(username);
+        return users.find(u => u.username === norm || u.username === username) || null;
     }
     async addUser(user) { return await dbAdd(usersRef, user); }
     async updateUser(userId, updates) { return await dbUpdate(usersRef, userId, updates); }

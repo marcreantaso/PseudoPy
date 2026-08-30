@@ -377,7 +377,8 @@ function fillLoginUser(username) {
 }
 
 async function handleLogin() {
-    const username = getValue('login-username').trim();
+    const rawUsername = getValue('login-username').trim();
+    const username = typeof normalizeUsername === 'function' ? normalizeUsername(rawUsername) : rawUsername;
     const password = getValue('login-password').trim();
 
     if (!username || !password) {
@@ -389,8 +390,8 @@ async function handleLogin() {
         // Refresh users from Offline Database
         await refreshUsers();
 
-        // Step 1: Find user by username only
-        const userByUsername = cachedUsers.find(u => u.username === username);
+        // Step 1: Find user by username or alias
+        const userByUsername = cachedUsers.find(u => u.username === username || u.username === rawUsername);
 
         if (!userByUsername) {
             showToast('User not found.', 'error');
@@ -1675,14 +1676,18 @@ function renderFeedback(feedback) {
 async function loadExercises(append = false) {
     if (!append) instructorExOffset = 0;
     const allExercises = await refreshExercises();
-    const exercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, instructorExOffset);
-    const tbody = $id('exercises-table-body');
-
-    // Update Exercise Stat Cards
-    const totalCount = allExercises.length;
-    const easyCount = allExercises.filter(e => (e.difficulty || '').toLowerCase() === 'easy').length;
-    const modCount = allExercises.filter(e => ['moderate', 'medium'].includes((e.difficulty || '').toLowerCase())).length;
-    const hardCount = allExercises.filter(e => (e.difficulty || '').toLowerCase() === 'hard').length;
+    const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
+    const instructorExercises = allExercises.filter(e =>
+        e.createdBy === currentUser?.id ||
+        e.createdBy === currentUser?._docId ||
+        e.instructorId === currentUser?.id ||
+        e.instructorId === currentUser?._docId ||
+        (isDefaultInst && (e._docId || '').startsWith('algo_'))
+    );
+    const totalCount = instructorExercises.length;
+    const easyCount = instructorExercises.filter(e => (e.difficulty || '').toLowerCase() === 'easy').length;
+    const modCount = instructorExercises.filter(e => ['moderate', 'medium'].includes((e.difficulty || '').toLowerCase())).length;
+    const hardCount = instructorExercises.filter(e => (e.difficulty || '').toLowerCase() === 'hard').length;
 
     setText('stat-exercise-total', String(totalCount));
     setText('stat-exercise-easy', String(easyCount));
@@ -1690,7 +1695,12 @@ async function loadExercises(append = false) {
     setText('stat-exercise-hard', String(hardCount));
     setText('stat-exercise-count-label', totalCount === 0 ? 'No exercises' : `${totalCount} exercise${totalCount !== 1 ? 's' : ''}`);
 
+    const tbody = $id('exercises-table-body');
     if (!tbody) return;
+
+    const exercises = append
+        ? instructorExercises.slice(instructorExOffset, instructorExOffset + EX_PAGE_LIMIT)
+        : instructorExercises.slice(0, EX_PAGE_LIMIT);
 
     if (exercises.length === 0 && !append) {
         tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-muted)"><div style="font-size:2rem">📋</div><div style="margin-top:0.5rem;font-weight:600">No Exercises Yet</div><div style="font-size:0.85rem">Click <strong>Add Exercise</strong> to get started.</div></td></tr>`;
@@ -1737,7 +1747,7 @@ async function loadExercises(append = false) {
         tbody.innerHTML = rows;
     }
 
-    if (exercises.length === EX_PAGE_LIMIT) {
+    if (instructorExercises.length > instructorExOffset + EX_PAGE_LIMIT) {
         instructorExOffset += EX_PAGE_LIMIT;
         tbody.insertAdjacentHTML('beforeend',
             `<tr id="exercises-load-more-row"><td colspan="5" style="text-align:center;padding:1rem">
@@ -1927,8 +1937,15 @@ async function loadStudentExercises(page = 1) {
     studentExCurrentPage = Math.max(1, page);
     const offset = (studentExCurrentPage - 1) * STUDENT_EX_PER_PAGE;
 
-    const exercises = await dbGetAll(exercisesRef, STUDENT_EX_PER_PAGE, offset);
-    const totalExercises = await dbCount(exercisesRef);
+    const allExercises = await refreshExercises();
+    const isDefaultStu = !currentUser || !currentUser.instructorId || currentUser.instructorId === 'u2';
+    const studentExercises = allExercises.filter(e =>
+        e.instructorId === currentUser?.instructorId ||
+        e.createdBy === currentUser?.instructorId ||
+        (isDefaultStu && (e._docId || '').startsWith('algo_'))
+    );
+    const totalExercises = studentExercises.length;
+    const exercises = studentExercises.slice(offset, offset + STUDENT_EX_PER_PAGE);
     const container = $id('student-exercises-list');
 
     if (!container) return;
@@ -1945,9 +1962,10 @@ async function loadStudentExercises(page = 1) {
     // Fetch completed exercise titles for current student
     const allActivity = await dbGetAll(activityRef);
     const studentName = currentUser ? currentUser.fullName : '';
+    const studentIdVal = currentUser ? (currentUser.id || currentUser._docId) : '';
     const completedIds = new Set(
         allActivity
-            .filter(a => a.student === studentName && a.status === 'Completed')
+            .filter(a => (a.student === studentName || a.studentId === studentIdVal) && a.status === 'Completed')
             .map(a => a.exercise)
     );
 
@@ -2002,31 +2020,30 @@ async function loadStudentExercises(page = 1) {
  * loadStudentProgress()
  * ─────────────────────────────────────────────────────────────────────
  * Fetches the REAL progress counters from the database:
- *   • totalExercises  — uses dbCount() (efficient, no full load)
- *   • completedCount  — unique exercises completed by current student,
- *                       duplicate submissions are NOT counted
- *
- * Updates all progress UI elements:
- *   • #student-completed-count   (Exercises & Tasks page counter)
- *   • #student-total-count       (Exercises & Tasks page counter)
- *   • #student-progress-fill     (Exercises & Tasks page progress bar)
- *   • #student-progress-pct      (Exercises & Tasks page percentage text)
- *   • #topbar-progress-pill      (Write Pseudocode page topbar pill)
+ *   • totalExercises  — dynamic count of exercises assigned to student
+ *   • completedCount  — unique exercises completed by current student
  * ─────────────────────────────────────────────────────────────────────
  */
 async function loadStudentProgress() {
     if (!currentUser || currentUser.role !== 'student') return;
 
     try {
-        // 1. Get REAL total from DB (O(1) count, no full load)
-        const totalExercises = await dbCount(exercisesRef);
+        const allExercises = await refreshExercises();
+        const isDefaultStu = !currentUser || !currentUser.instructorId || currentUser.instructorId === 'u2';
+        const studentExercises = allExercises.filter(e =>
+            e.instructorId === currentUser?.instructorId ||
+            e.createdBy === currentUser?.instructorId ||
+            (isDefaultStu && (e._docId || '').startsWith('algo_'))
+        );
+        const totalExercises = studentExercises.length;
 
         // 2. Fetch all activity for this student, collect unique completed exercise titles
         const allActivity = await dbGetAll(activityRef);
         const studentName = currentUser.fullName;
+        const studentIdVal = currentUser.id || currentUser._docId;
         const completedTitles = new Set(
             allActivity
-                .filter(a => a.student === studentName && a.status === 'Completed')
+                .filter(a => (a.student === studentName || a.studentId === studentIdVal) && a.status === 'Completed')
                 .map(a => a.exercise)
         );
         const completedCount = completedTitles.size;
@@ -2278,7 +2295,7 @@ function toggleExerciseInstructions() {
 }
 
 function _clearExerciseErrors() {
-    ['ex-title-error', 'ex-desc-error', 'ex-difficulty-error', 'ex-solution-error'].forEach(id => {
+    ['ex-title-error', 'ex-desc-error', 'ex-difficulty-error', 'ex-solution-error', 'ex-expected-output-error'].forEach(id => {
         const el = $id(id);
         if (el) el.style.display = 'none';
     });
@@ -2300,6 +2317,7 @@ async function openExerciseModal(id = null) {
             setValue('ex-desc', ex.description || '');
             setValue('ex-difficulty', rawDiff === 'medium' ? 'moderate' : rawDiff);
             setValue('ex-solution', ex.solution || ex.pseudocode || '');
+            setValue('ex-expected-output', ex.expectedOutput || ex.expected_output || '');
             const saveBtn = $id('exercise-save-btn');
             if (saveBtn) saveBtn.textContent = '💾 Save Changes';
         }
@@ -2309,6 +2327,7 @@ async function openExerciseModal(id = null) {
         setValue('ex-desc', '');
         setValue('ex-difficulty', 'moderate');
         setValue('ex-solution', '');
+        setValue('ex-expected-output', '');
         const saveBtn = $id('exercise-save-btn');
         if (saveBtn) saveBtn.textContent = '➕ Add Exercise';
     }
@@ -2328,6 +2347,7 @@ async function saveExercise() {
     const descVal = getValue('ex-desc').trim();
     const diffVal = getValue('ex-difficulty');
     const solutionVal = getValue('ex-solution').trim();
+    const expectedOutputVal = getValue('ex-expected-output').trim();
 
     // Per-field validation
     let hasError = false;
@@ -2351,15 +2371,23 @@ async function saveExercise() {
         if (el) el.style.display = 'block';
         hasError = true;
     }
+    if (!expectedOutputVal) {
+        const el = $id('ex-expected-output-error');
+        if (el) el.style.display = 'block';
+        hasError = true;
+    }
     if (hasError) return;
 
     try {
+        const instId = currentUser?.id || currentUser?._docId || 'u2';
         if (editingExerciseId) {
             await dbUpdate(exercisesRef, editingExerciseId, {
                 title: titleVal,
                 description: descVal,
                 difficulty: diffVal,
-                solution: solutionVal
+                solution: solutionVal,
+                expectedOutput: expectedOutputVal,
+                instructorId: instId
             });
             await createExerciseNotifications(editingExerciseId, titleVal, 'updated');
             showToast('Exercise updated successfully!', 'success');
@@ -2367,11 +2395,14 @@ async function saveExercise() {
             const newId = 'ex' + Date.now();
             await dbSet(exercisesRef, newId, {
                 id: newId,
+                _docId: newId,
                 title: titleVal,
                 description: descVal,
                 difficulty: diffVal,
                 solution: solutionVal,
-                createdBy: currentUser?.id || 'unknown',
+                expectedOutput: expectedOutputVal,
+                createdBy: instId,
+                instructorId: instId,
                 createdAt: new Date().toISOString().split('T')[0]
             });
             await createExerciseNotifications(newId, titleVal, 'added');
@@ -3096,7 +3127,12 @@ async function executeRestoreInstructor() {
 
 async function loadStudents() {
     const users = await refreshUsers();
-    const students = users.filter(u => u.role === 'student' && u.instructorId === currentUser.id);
+    const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
+    const students = users.filter(u => u.role === 'student' && (
+        u.instructorId === currentUser?.id ||
+        u.instructorId === currentUser?._docId ||
+        (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
+    ));
     const tbody = $id('students-table-body');
 
     setText('stat-student-total', String(students.length));
@@ -3281,15 +3317,49 @@ async function deleteUser(id) {
    ANALYTICS (Instructor)
    ============================================================ */
 
+let cachedInstructorActivity = [];
 let currentFilteredActivity = [];
 let analyticsCurrentPage = 1;
 const analyticsPageSize = 5;
 
 async function loadAnalytics() {
     cachedActivity = await refreshActivity();
-    currentFilteredActivity = [...cachedActivity];
+    cachedUsers = await refreshUsers();
+    cachedExercises = await refreshExercises();
 
-    // Set default filter values to match August 2025 (Week 2)
+    const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
+    const myStudents = cachedUsers.filter(u => u.role === 'student' && (
+        u.instructorId === currentUser?.id ||
+        u.instructorId === currentUser?._docId ||
+        (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
+    ));
+    const myExercises = cachedExercises.filter(e =>
+        e.createdBy === currentUser?.id ||
+        e.createdBy === currentUser?._docId ||
+        e.instructorId === currentUser?.id ||
+        e.instructorId === currentUser?._docId ||
+        (isDefaultInst && (e._docId || '').startsWith('algo_'))
+    );
+
+    const myStudentIds = new Set(myStudents.map(s => s.id || s._docId));
+    const myStudentEnrolledIds = new Set(myStudents.map(s => s.studentId).filter(Boolean));
+    const myStudentUsernames = new Set(myStudents.map(s => s.username).filter(Boolean));
+    const myStudentNames = new Set(myStudents.map(s => s.fullName).filter(Boolean));
+    const myExerciseTitles = new Set(myExercises.map(e => e.title).filter(Boolean));
+
+    cachedInstructorActivity = cachedActivity.filter(a => {
+        if (a.instructorId && (a.instructorId === currentUser?.id || a.instructorId === currentUser?._docId)) return true;
+        if (a.studentId && (myStudentIds.has(a.studentId) || myStudentEnrolledIds.has(a.studentId))) return true;
+        if (a.username && myStudentUsernames.has(a.username)) return true;
+        if (a.student && myStudentNames.has(a.student)) return true;
+        if (a.exercise && myExerciseTitles.has(a.exercise)) return true;
+        if (isDefaultInst && (a._docId || '').startsWith('act_sp_')) return true;
+        return false;
+    });
+
+    currentFilteredActivity = [...cachedInstructorActivity];
+
+    // Set default filter values
     const searchEl = $id('filter-search');
     const dateEl = $id('filter-date');
     const monthEl = $id('filter-month');
@@ -3298,8 +3368,8 @@ async function loadAnalytics() {
 
     if (searchEl) searchEl.value = '';
     if (dateEl) dateEl.value = '';
-    if (monthEl) monthEl.value = '7'; // August
-    if (weekEl) weekEl.value = '2';   // Week 2
+    if (monthEl) monthEl.value = '';
+    if (weekEl) weekEl.value = '';
     if (statusEl) statusEl.value = '';
 
     analyticsCurrentPage = 1;
@@ -3318,10 +3388,10 @@ function updateWeekDropdownLabels() {
     if (!weekSelect) return;
 
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const selectedMonth = monthSelect && monthSelect.value !== '' ? parseInt(monthSelect.value) : 7;
+    const selectedMonth = monthSelect && monthSelect.value !== '' ? parseInt(monthSelect.value) : new Date().getMonth();
     const mName = monthNames[selectedMonth] || 'Aug';
 
-    const currentVal = weekSelect.value || '2';
+    const currentVal = weekSelect.value || '';
     weekSelect.innerHTML = `
         <option value="">All Weeks</option>
         <option value="1">Week 1 (${mName} 1 – ${mName} 3)</option>
@@ -3342,7 +3412,9 @@ function applyAnalyticsFilters() {
 
     updateWeekDropdownLabels();
 
-    currentFilteredActivity = cachedActivity.filter(a => {
+    const sourceActivity = cachedInstructorActivity && cachedInstructorActivity.length ? cachedInstructorActivity : cachedActivity;
+
+    currentFilteredActivity = sourceActivity.filter(a => {
         const recordDate = new Date(a.timestamp || a.time);
 
         // 1. Search — student name, exercise title, student ID, submission ID, username, email
@@ -3374,7 +3446,7 @@ function applyAnalyticsFilters() {
             if (recordDate.getMonth() !== parseInt(monthVal)) return false;
         }
 
-        // 4. Week within month (Aug 4-10 is Week 2)
+        // 4. Week within month
         if (weekVal !== '') {
             if (isNaN(recordDate.getTime())) return false;
             const dayNum = recordDate.getDate();
@@ -3430,7 +3502,7 @@ function resetAnalyticsFilters() {
         if (el) el.value = '';
     });
     updateWeekDropdownLabels();
-    currentFilteredActivity = [...cachedActivity];
+    currentFilteredActivity = [...cachedInstructorActivity];
     analyticsCurrentPage = 1;
     updateAnalyticsUI();
 }
@@ -3439,8 +3511,15 @@ function updateAnalyticsUI() {
     const total = currentFilteredActivity.length;
 
     // Stat Cards
-    const uniqueStudents = new Set(currentFilteredActivity.map(a => a.student)).size;
-    setText('stat-students', String(uniqueStudents || (total > 0 ? 10 : 0)));
+    const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
+    const myStudents = (cachedUsers || []).filter(u => u.role === 'student' && (
+        u.instructorId === currentUser?.id ||
+        u.instructorId === currentUser?._docId ||
+        (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
+    ));
+    const activeStudents = myStudents.filter(u => u.status === 'active');
+
+    setText('stat-students', String(activeStudents.length));
     setText('stat-submissions', String(total));
 
     const completed = currentFilteredActivity.filter(a => a.status === 'Completed').length;
@@ -3449,6 +3528,32 @@ function updateAnalyticsUI() {
 
     const errCount = currentFilteredActivity.filter(a => a.errorType && a.errorType.trim() !== '').length;
     setText('stat-common-errors', String(errCount));
+
+    // Dynamic Trend Elements
+    const stuTrend = $id('stat-students-trend');
+    if (stuTrend) {
+        stuTrend.innerHTML = activeStudents.length > 0
+            ? `<span class="positive">${activeStudents.length} Active</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">enrolled</span>`
+            : `<span class="neutral">0 Active</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">enrolled</span>`;
+    }
+    const subTrend = $id('stat-submissions-trend');
+    if (subTrend) {
+        subTrend.innerHTML = total > 0
+            ? `<span class="positive">${total} total</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">evaluated</span>`
+            : `<span class="neutral">0</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">submissions</span>`;
+    }
+    const succTrend = $id('stat-success-trend');
+    if (succTrend) {
+        succTrend.innerHTML = total > 0
+            ? `<span class="positive">${completed} completed</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">of ${total}</span>`
+            : `<span class="neutral">—</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">no submissions</span>`;
+    }
+    const errTrend = $id('stat-errors-trend');
+    if (errTrend) {
+        errTrend.innerHTML = errCount > 0
+            ? `<span class="negative">${errCount} error${errCount !== 1 ? 's' : ''}</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">recorded</span>`
+            : `<span class="positive">0 errors</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">clean code</span>`;
+    }
 
     // Record count label
     const countLabel = $id('activity-count-label');
@@ -4635,13 +4740,18 @@ async function rejectRecoveryRequest() {
 async function createExerciseNotifications(exerciseId, exerciseTitle, actionType = 'added') {
     try {
         const users = await refreshUsers();
-        const students = users.filter(u => u.role === 'student');
+        const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
+        const students = users.filter(u => u.role === 'student' && (
+            u.instructorId === currentUser?.id ||
+            u.instructorId === currentUser?._docId ||
+            (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
+        ));
         if (students.length === 0) return;
 
         const isAdded = actionType === 'added';
         const title = isAdded ? 'New Exercise Added' : 'Exercise Updated';
         const message = isAdded
-            ? `Your instructor added a new exercise: ${exerciseTitle}.`
+            ? `Your instructor added a new exercise: "${exerciseTitle}".`
             : `Your instructor updated this exercise.`;
 
         const now = new Date().toISOString();
@@ -4651,6 +4761,7 @@ async function createExerciseNotifications(exerciseId, exerciseTitle, actionType
             await dbSet(notificationsRef, notifId, {
                 _docId: notifId,
                 studentId: s._docId || s.id,
+                instructorId: currentUser?.id || currentUser?._docId || 'u2',
                 exerciseId: exerciseId,
                 exerciseTitle: exerciseTitle,
                 title: title,

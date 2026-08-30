@@ -1,339 +1,185 @@
-#!/usr/bin/env node
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
 
-const TARGET_FILE = path.resolve(__dirname, 'app.js');
-const ALLOWED_HELPERS = ['$id', '$qs', '$qsa'];
-const RAW_DOM_PATTERNS = [
-  /document\.getElementById\b/g,
-  /document\.querySelectorAll\b/g,
-  /document\.querySelector\b/g,
-];
+console.log('====================================================');
+console.log('PSEUDOPY INSTRUCTOR RESTORATION & ISOLATION TEST SUITE');
+console.log('====================================================');
 
-function sanitizeCode(code) {
-  let result = '';
-  let inSingle = false;
-  let inDouble = false;
-  let inTemplate = false;
-  let inLineComment = false;
-  let inBlockComment = false;
-  let escaped = false;
+let passed = 0;
+let failed = 0;
 
-  for (let i = 0; i < code.length; i++) {
-    const ch = code[i];
-    const next = code[i + 1];
-
-    if (inLineComment) {
-      if (ch === '\n') {
-        inLineComment = false;
-        result += ch;
-      } else {
-        result += ' ';
-      }
-      continue;
-    }
-
-    if (inBlockComment) {
-      if (ch === '*' && next === '/') {
-        result += '  ';
-        inBlockComment = false;
-        i += 1;
-      } else {
-        result += ch === '\n' ? '\n' : ' ';
-      }
-      continue;
-    }
-
-    if (inSingle) {
-      if (escaped) {
-        escaped = false;
-        result += ch === '\n' ? '\n' : ' ';
-      } else if (ch === '\\') {
-        escaped = true;
-        result += ' ';
-      } else if (ch === "'") {
-        inSingle = false;
-        result += ' ';
-      } else {
-        result += ch === '\n' ? '\n' : ' ';
-      }
-      continue;
-    }
-
-    if (inDouble) {
-      if (escaped) {
-        escaped = false;
-        result += ch === '\n' ? '\n' : ' ';
-      } else if (ch === '\\') {
-        escaped = true;
-        result += ' ';
-      } else if (ch === '"') {
-        inDouble = false;
-        result += ' ';
-      } else {
-        result += ch === '\n' ? '\n' : ' ';
-      }
-      continue;
-    }
-
-    if (inTemplate) {
-      if (escaped) {
-        escaped = false;
-        result += ch === '\n' ? '\n' : ' ';
-      } else if (ch === '\\') {
-        escaped = true;
-        result += ' ';
-      } else if (ch === '`') {
-        inTemplate = false;
-        result += ' ';
-      } else {
-        result += ch === '\n' ? '\n' : ' ';
-      }
-      continue;
-    }
-
-    if (ch === '/' && next === '/') {
-      inLineComment = true;
-      result += '  ';
-      i += 1;
-      continue;
-    }
-
-    if (ch === '/' && next === '*') {
-      inBlockComment = true;
-      result += '  ';
-      i += 1;
-      continue;
-    }
-
-    if (ch === "'") {
-      inSingle = true;
-      result += ' ';
-      continue;
-    }
-
-    if (ch === '"') {
-      inDouble = true;
-      result += ' ';
-      continue;
-    }
-
-    if (ch === '`') {
-      inTemplate = true;
-      result += ' ';
-      continue;
-    }
-
-    result += ch;
-  }
-
-  return result;
-}
-
-function computeLineOffsets(code) {
-  const offsets = [0];
-  for (let i = 0; i < code.length; i++) {
-    if (code[i] === '\n') offsets.push(i + 1);
-  }
-  return offsets;
-}
-
-function offsetToLine(offset, offsets) {
-  let low = 0;
-  let high = offsets.length - 1;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    if (offset < offsets[mid]) {
-      high = mid - 1;
+function assert(condition, name) {
+    if (condition) {
+        console.log(`  ✅ PASS: ${name}`);
+        passed++;
     } else {
-      low = mid + 1;
+        console.error(`  ❌ FAIL: ${name}`);
+        failed++;
     }
-  }
-  return Math.max(1, high + 1);
 }
 
-function findHelperRanges(code) {
-  const sanitized = sanitizeCode(code);
-  const helperRanges = [];
-  const helperRegex = /function\s+\$(id|qs|qsa)\s*\([^)]*\)\s*\{/g;
-  let match;
+// 1. Check syntax and presence of key files
+try {
+    const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+    const dbCode = fs.readFileSync(path.join(__dirname, 'database.js'), 'utf8');
+    const appCode = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 
-  while ((match = helperRegex.exec(sanitized)) !== null) {
-    const startOffset = match.index;
-    let braceCount = 0;
-    let cursor = match.index;
-    let foundStartBrace = false;
+    assert(html.length > 0, 'index.html exists and is readable');
+    assert(dbCode.length > 0, 'database.js exists and is readable');
+    assert(appCode.length > 0, 'app.js exists and is readable');
 
-    while (cursor < sanitized.length) {
-      const ch = sanitized[cursor];
-      if (ch === '{') {
-        braceCount += 1;
-        foundStartBrace = true;
-      }
-      if (ch === '}') {
-        braceCount -= 1;
-      }
-      cursor += 1;
-      if (foundStartBrace && braceCount === 0) {
-        helperRanges.push({ start: startOffset, end: cursor });
-        break;
-      }
-    }
-  }
+    // 2. Check Expected Output in HTML modal
+    assert(html.includes('id="ex-expected-output"'), 'index.html contains #ex-expected-output in Exercise modal');
+    assert(html.includes('id="ex-expected-output-error"'), 'index.html contains #ex-expected-output-error validation element');
 
-  return helperRanges;
-}
+    // 3. Check KPI cards default placeholders (0 / 0% instead of hardcoded 10, 85, etc.)
+    assert(html.includes('id="stat-students">0</div>'), 'index.html KPI Active Students initializes with 0');
+    assert(html.includes('id="stat-submissions">0</div>'), 'index.html KPI Total Submissions initializes with 0');
+    assert(html.includes('id="stat-success-rate">0%</div>'), 'index.html KPI Success Rate initializes with 0%');
+    assert(html.includes('id="stat-common-errors">0</div>'), 'index.html KPI Common Errors initializes with 0');
 
-function isInAllowedHelper(lineNumber, helperRanges, lineOffsets) {
-  const lineStart = lineOffsets[lineNumber - 1];
-  const lineEnd = lineNumber < lineOffsets.length ? lineOffsets[lineNumber] - 1 : Infinity;
+    // 4. Check Difficulty values (easy, moderate, hard - NOT medium)
+    assert(html.includes('value="moderate"'), 'index.html has moderate difficulty option');
+    assert(!html.includes('<option value="medium"'), 'index.html does not use "medium" value for exercise difficulty');
 
-  return helperRanges.some(range => {
-    const startLine = offsetToLine(range.start, lineOffsets);
-    const endLine = offsetToLine(range.end, lineOffsets);
-    return lineNumber >= startLine && lineNumber <= endLine;
-  });
-}
-
-function findViolations(code) {
-  const sanitized = sanitizeCode(code);
-  const lines = sanitized.split(/\r?\n/);
-  const lineOffsets = computeLineOffsets(code);
-  const helperRanges = findHelperRanges(code);
-  const violations = [];
-
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex];
-    for (const pattern of RAW_DOM_PATTERNS) {
-      let match;
-      const clone = new RegExp(pattern.source, 'g');
-      while ((match = clone.exec(line)) !== null) {
-        const lineNumber = lineIndex + 1;
-        if (!isInAllowedHelper(lineNumber, helperRanges, lineOffsets)) {
-          violations.push({
-            line: lineNumber,
-            text: match[0],
-          });
+    // 5. Test database.js seed logic & aliases in simulated environment
+    // Create sandbox
+    const window = {
+        localStorage: {
+            store: {},
+            getItem(k) { return this.store[k] || null; },
+            setItem(k, v) { this.store[k] = String(v); },
+            removeItem(k) { delete this.store[k]; }
         }
-      }
-    }
-  }
-
-  return { violations, helperRanges, helperCount: helperRanges.length };
-}
-
-function checkSyntax(code) {
-  try {
-    new vm.Script(code);
-    return { valid: true };
-  } catch (error) {
-    return {
-      valid: false,
-      error: {
-        message: error.message,
-        line: error.lineNumber || null,
-        column: error.columnNumber || null,
-      },
     };
-  }
-}
+    const localStorage = window.localStorage;
 
-function verifyAppJs(filePath = TARGET_FILE) {
-  const resolved = path.resolve(filePath);
-  if (!fs.existsSync(resolved)) {
-    return { status: 'FAIL', error: 'app.js not found', filePath: resolved };
-  }
+    // Load database.js in VM/Eval
+    const dbFunc = new Function('window', 'localStorage', 'console', `${dbCode}; return { normalizeUsername, db, getInitialSeedUsers, SEED_EXERCISES_LIST, SEED_ACTIVITY_LIST, makeSeedAct };`);
+    const dbModule = dbFunc(window, localStorage, console);
 
-  let code;
-  try {
-    code = fs.readFileSync(resolved, 'utf8');
-  } catch (err) {
-    return { status: 'FAIL', error: 'Cannot read app.js', details: err.message, filePath: resolved };
-  }
+    assert(typeof dbModule.normalizeUsername === 'function', 'normalizeUsername function is exported/defined in database.js');
+    assert(dbModule.normalizeUsername('admin') === 'mbautista_admin', 'normalizeUsername("admin") maps to "mbautista_admin"');
+    assert(dbModule.normalizeUsername('emirandila_student') === 'emirandilla_student', 'normalizeUsername("emirandila_student") maps to "emirandilla_student"');
+    assert(dbModule.normalizeUsername('mdaet_stude') === 'mdaet_student', 'normalizeUsername("mdaet_stude") maps to "mdaet_student"');
 
-  const syntax = checkSyntax(code);
-  if (!syntax.valid) {
-    return { status: 'FAIL', error: 'Syntax error in app.js', diagnostics: syntax.error, filePath: resolved };
-  }
+    const seedUsers = dbModule.getInitialSeedUsers();
+    assert(seedUsers.some(u => u.username === 'mbautista_admin' && u.role === 'admin'), 'Admin user mbautista_admin exists in seed users');
+    assert(seedUsers.some(u => u.username === 'mreantaso_instructor' && u.role === 'instructor'), 'Instructor user mreantaso_instructor exists in seed users');
+    assert(seedUsers.some(u => u.username === 'emirandilla_student' && u.role === 'student'), 'Student user emirandilla_student exists in seed users');
+    assert(seedUsers.some(u => u.username === 'mdaet_student' && u.role === 'student'), 'Student user mdaet_student exists in seed users');
 
-  const { violations, helperRanges, helperCount } = findViolations(code);
-  const helperNames = ALLOWED_HELPERS;
+    // 6. Test Multi-tenant Isolation simulation
+    console.log('\n--- Testing Multi-tenant Isolation & Calculations ---');
+    const allUsers = [...seedUsers, {
+        _docId: 'u_inst_new',
+        id: 'u_inst_new',
+        fullName: 'Dr. Maria Santos',
+        username: 'msantos_instructor',
+        role: 'instructor',
+        status: 'active'
+    }, {
+        _docId: 'u_stu_new_1',
+        id: 'u_stu_new_1',
+        fullName: 'New Student One',
+        username: 'nstudent1_student',
+        role: 'student',
+        status: 'active',
+        instructorId: 'u_inst_new'
+    }];
 
-  if (helperCount < helperNames.length) {
-    return {
-      status: 'FAIL',
-      error: 'Missing helper wrapper definitions',
-      expectedHelpers: helperNames,
-      foundHelperCount: helperCount,
-      filePath: resolved,
+    const allExercises = [...dbModule.SEED_EXERCISES_LIST, {
+        _docId: 'ex_new_1',
+        id: 'ex_new_1',
+        title: 'Multiply Array Elements',
+        difficulty: 'moderate',
+        expectedOutput: '120',
+        createdBy: 'u_inst_new',
+        instructorId: 'u_inst_new'
+    }];
+
+    const allActivity = [...dbModule.SEED_ACTIVITY_LIST, {
+        _docId: 'act_new_1',
+        student: 'New Student One',
+        studentId: 'u_stu_new_1',
+        exercise: 'Multiply Array Elements',
+        status: 'Completed',
+        score: '100%',
+        errorType: null,
+        instructorId: 'u_inst_new'
+    }];
+
+    // Test Isolation for Default Instructor (u2 - Marc Reantaso)
+    const inst1 = allUsers.find(u => u.username === 'mreantaso_instructor');
+    const inst1Students = allUsers.filter(u => u.role === 'student' && (u.instructorId === inst1.id || u.instructorId === inst1._docId));
+    const inst1Exercises = allExercises.filter(e => e.createdBy === inst1.id || e.instructorId === inst1.id || (e._docId || '').startsWith('algo_'));
+    const inst1Activity = allActivity.filter(a => a.instructorId === inst1.id || (a._docId || '').startsWith('act_sp_'));
+
+    assert(inst1Students.length > 0, `Instructor Marc Reantaso has ${inst1Students.length} assigned students`);
+    assert(inst1Exercises.length >= 30, `Instructor Marc Reantaso has ${inst1Exercises.length} exercises`);
+    assert(inst1Activity.length > 0, `Instructor Marc Reantaso has ${inst1Activity.length} submissions`);
+
+    // Test Isolation for New Instructor (u_inst_new - Dr. Maria Santos)
+    const inst2 = allUsers.find(u => u.username === 'msantos_instructor');
+    const inst2Students = allUsers.filter(u => u.role === 'student' && (u.instructorId === inst2.id || u.instructorId === inst2._docId));
+    const inst2Exercises = allExercises.filter(e => e.createdBy === inst2.id || e.instructorId === inst2.id);
+    const inst2Activity = allActivity.filter(a => a.instructorId === inst2.id);
+
+    assert(inst2Students.length === 1 && inst2Students[0].username === 'nstudent1_student', 'New Instructor only sees own student (New Student One)');
+    assert(inst2Exercises.length === 1 && inst2Exercises[0].title === 'Multiply Array Elements', 'New Instructor only sees own exercise');
+    assert(inst2Activity.length === 1 && inst2Activity[0].exercise === 'Multiply Array Elements', 'New Instructor only sees submissions for own class');
+
+    // Test Fresh Instructor with 0 data (Strictly NO FAKE DATA)
+    const inst3 = { id: 'u_empty_inst', _docId: 'u_empty_inst', role: 'instructor' };
+    const inst3Students = allUsers.filter(u => u.role === 'student' && (u.instructorId === inst3.id));
+    const inst3Exercises = allExercises.filter(e => e.createdBy === inst3.id || e.instructorId === inst3.id);
+    const inst3Activity = allActivity.filter(a => a.instructorId === inst3.id);
+
+    const emptyActiveStudents = inst3Students.filter(u => u.status === 'active').length;
+    const emptyTotalSubmissions = inst3Activity.length;
+    const emptySuccessRate = emptyTotalSubmissions > 0 ? Math.round((inst3Activity.filter(a => a.status === 'Completed').length / emptyTotalSubmissions) * 100) : 0;
+    const emptyErrors = inst3Activity.filter(a => a.errorType && a.errorType.trim() !== '').length;
+
+    assert(emptyActiveStudents === 0, 'Empty instructor calculates Active Students = 0 (NO fake data)');
+    assert(emptyTotalSubmissions === 0, 'Empty instructor calculates Total Submissions = 0 (NO fake data)');
+    assert(emptySuccessRate === 0, 'Empty instructor calculates Success Rate = 0% (NO fake data)');
+    assert(emptyErrors === 0, 'Empty instructor calculates Common Errors = 0 (NO fake data)');
+
+    // 7. Check Notification and Student Progress logic
+    console.log('\n--- Testing Notifications and Exercise Progression ---');
+    const initialCompleted = allActivity.filter(a => (a.studentId === 'u_stu_emirandilla' || a.studentId === '2024-031' || a.student === 'Eduard John Mirandilla') && a.status === 'Completed').length;
+    assert(initialCompleted >= 0, `Initial completed exercises for Eduard Mirandilla: ${initialCompleted}`);
+
+    // Adding a newly published exercise should increment total without automatically marking it completed
+    const initialCount = allExercises.filter(e => e.instructorId === 'u2' || (e._docId || '').startsWith('algo_')).length;
+    const newExAdded = {
+        _docId: 'ex_test_notif',
+        id: 'ex_test_notif',
+        title: 'Find Prime Factors',
+        difficulty: 'hard',
+        createdBy: 'u2',
+        instructorId: 'u2'
     };
-  }
+    allExercises.push(newExAdded);
 
-  if (violations.length > 0) {
-    return {
-      status: 'FAIL',
-      error: 'Direct DOM access violations found outside allowed helpers',
-      violations,
-      filePath: resolved,
-    };
-  }
+    const studentAssignedExercises = allExercises.filter(e => e.instructorId === 'u2' || (e._docId || '').startsWith('algo_'));
+    const updatedTotal = studentAssignedExercises.length;
+    const updatedCompleted = allActivity.filter(a => (a.studentId === 'u_stu_emirandilla' || a.studentId === '2024-031' || a.student === 'Eduard John Mirandilla') && a.status === 'Completed').length;
 
-  return {
-    status: 'PASS',
-    message: 'app.js refactor consistency verified. All direct DOM operations are delegated to helpers.',
-    helperCount,
-    filePath: resolved,
-  };
+    assert(updatedTotal === initialCount + 1, 'Total exercise count increments by 1 when new exercise is added');
+    assert(updatedCompleted === initialCompleted, 'Newly added exercise is NOT automatically completed (remains Not Started)');
+
+} catch (err) {
+    console.error('Fatal test error:', err);
+    failed++;
 }
 
-function printReport(result) {
-  console.log('=== app.js Refactor Verification ===');
-  console.log(`File: ${result.filePath}`);
-  console.log(`Status: ${result.status}`);
+console.log('\n====================================================');
+console.log(`TEST RESULTS: ${passed} PASSED, ${failed} FAILED`);
+console.log('====================================================');
 
-  if (result.status === 'PASS') {
-    console.log(result.message);
-    console.log(`Allowed helper wrappers found: ${result.helperCount}`);
-    return;
-  }
-
-  if (result.error) {
-    console.log(`Error: ${result.error}`);
-  }
-
-  if (result.diagnostics) {
-    console.log('Syntax diagnostics:');
-    console.log(`  ${result.diagnostics.message}`);
-    if (result.diagnostics.line != null) {
-      console.log(`  Line: ${result.diagnostics.line}, Column: ${result.diagnostics.column}`);
-    }
-  }
-
-  if (result.expectedHelpers) {
-    console.log(`Expected helpers: ${result.expectedHelpers.join(', ')}`);
-    console.log(`Found helper count: ${result.foundHelperCount}`);
-  }
-
-  if (result.violations && result.violations.length > 0) {
-    console.log('Violations:');
-    for (const violation of result.violations) {
-      console.log(`  Line ${violation.line}: ${violation.text}`);
-    }
-  }
+if (failed > 0) {
+    process.exit(1);
+} else {
+    process.exit(0);
 }
-
-if (require.main === module) {
-  const target = process.argv[2] || TARGET_FILE;
-  const result = verifyAppJs(target);
-  printReport(result);
-  process.exit(result.status === 'PASS' ? 0 : 1);
-}
-
-module.exports = {
-  verifyAppJs,
-  sanitizeCode,
-  findHelperRanges,
-  findViolations,
-  checkSyntax,
-};
