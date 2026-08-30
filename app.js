@@ -2639,6 +2639,247 @@ function instructorGoPage(p) {
 
 // ── Instructor Device Management & Approvals ──────────────────
 
+let editingInstructorId = null;
+
+function openInstructorAddModal() {
+    editingInstructorId = null;
+    setText('instructor-modal-title', '➕ Add Instructor');
+    $id('inst-fullname').value = '';
+    $id('inst-username').value = '';
+    $id('inst-email').value = '';
+    $id('inst-password').value = '';
+    $id('inst-confirm-password').value = '';
+    $id('inst-status').value = 'active';
+    
+    $id('inst-password-group').style.display = 'block';
+    $id('inst-confirm-password-group').style.display = 'block';
+    $id('inst-form-alert').classList.add('hidden');
+    
+    $id('instructor-modal').classList.remove('hidden');
+}
+
+function closeInstructorModal() {
+    $id('instructor-modal').classList.add('hidden');
+    $id('inst-form-alert').classList.add('hidden');
+    editingInstructorId = null;
+}
+
+function openInstructorEditModal(id) {
+    const u = allCachedInstructors.find(user => user.id === id || user._docId === id);
+    if (!u) return;
+    editingInstructorId = u.id || u._docId;
+    
+    setText('instructor-modal-title', '✏️ Edit Instructor');
+    $id('inst-fullname').value = u.fullName || '';
+    $id('inst-username').value = u.username || '';
+    $id('inst-email').value = u.email || '';
+    $id('inst-status').value = u.status || 'active';
+    
+    $id('inst-password-group').style.display = 'none';
+    $id('inst-confirm-password-group').style.display = 'none';
+    $id('inst-form-alert').classList.add('hidden');
+    
+    $id('instructor-modal').classList.remove('hidden');
+}
+
+async function saveInstructor() {
+    const fullName = $id('inst-fullname').value.trim();
+    const username = $id('inst-username').value.trim();
+    const email = $id('inst-email').value.trim();
+    const status = $id('inst-status').value;
+    const alertBox = $id('inst-form-alert');
+    
+    const showError = (msg) => {
+        alertBox.textContent = msg;
+        alertBox.classList.remove('hidden');
+    };
+    
+    if (!fullName || !username || !email) {
+        return showError("Full Name, Username, and Email are required.");
+    }
+    
+    const users = await dbGetAll(usersRef);
+    
+    if (!editingInstructorId) {
+        // Adding new instructor
+        const password = $id('inst-password').value;
+        const confirmPass = $id('inst-confirm-password').value;
+        
+        if (!password || password.length < 6) return showError("Password must be at least 6 characters.");
+        if (password !== confirmPass) return showError("Passwords do not match.");
+        
+        const existingUsername = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+        if (existingUsername) return showError("Username already exists.");
+        
+        const existingEmail = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+        if (existingEmail) return showError("Email already exists.");
+        
+        const salt = generateSalt();
+        const hashedPassword = await hashPassword(password, salt);
+        
+        const newInstructor = {
+            fullName,
+            username,
+            email,
+            password: hashedPassword,
+            salt,
+            role: 'instructor',
+            status,
+            createdAt: new Date().toISOString(),
+            createdBy: currentUser.id || currentUser._docId,
+            lastLogin: null
+        };
+        
+        await dbAdd(usersRef, newInstructor);
+        if (typeof showToast === 'function') showToast("Instructor added successfully.", "success");
+    } else {
+        // Editing instructor
+        const existingUsername = users.find(u => (u.id !== editingInstructorId && u._docId !== editingInstructorId) && u.username.toLowerCase() === username.toLowerCase());
+        if (existingUsername) return showError("Username already exists.");
+        
+        const existingEmail = users.find(u => (u.id !== editingInstructorId && u._docId !== editingInstructorId) && u.email.toLowerCase() === email.toLowerCase());
+        if (existingEmail) return showError("Email already exists.");
+        
+        await dbUpdate(usersRef, editingInstructorId, {
+            fullName,
+            username,
+            email,
+            status
+        });
+        if (typeof showToast === 'function') showToast("Instructor updated successfully.", "success");
+    }
+    
+    closeInstructorModal();
+    await loadUsers();
+}
+
+async function viewInstructor(id) {
+    const u = allCachedInstructors.find(user => user.id === id || user._docId === id);
+    if (!u) return;
+    
+    const initial = (u.fullName || 'I').charAt(0).toUpperCase();
+    if ($id('idm-avatar')) {
+        $id('idm-avatar').textContent = initial;
+        $id('idm-avatar').style.background = `hsl(${(initial.charCodeAt(0) * 17) % 360},55%,45%)`;
+    }
+    setText('idm-name', u.fullName);
+    setText('idm-username', '@' + u.username);
+    setText('idm-email', u.email);
+    
+    // Status Badge
+    let statusBadge = `<span class="badge badge-inactive" style="font-size:0.75rem;padding:0.2rem 0.6rem">INACTIVE</span>`;
+    if (u.status === 'active') statusBadge = `<span class="badge badge-active" style="font-size:0.75rem;padding:0.2rem 0.6rem">ACTIVE</span>`;
+    else if (u.status === 'archived') statusBadge = `<span class="badge badge-archived" style="font-size:0.75rem;padding:0.2rem 0.6rem">ARCHIVED</span>`;
+    
+    const statusContainer = $id('idm-status');
+    if (statusContainer) statusContainer.innerHTML = statusBadge;
+    
+    setText('idm-date-added', _fmtDate(u.createdAt));
+    setText('idm-last-login', _fmtDate(u.lastLogin));
+    
+    // Calculate stats
+    const allUsers = await dbGetAll(usersRef);
+    const instStudents = allUsers.filter(s => s.role === 'student' && s.instructorId === (u.id || u._docId));
+    setText('idm-students', instStudents.length);
+    
+    const allExercises = await dbGetAll(exercisesRef);
+    const instExercises = allExercises.filter(ex => ex.instructorId === (u.id || u._docId) || ex.createdBy === (u.id || u._docId));
+    setText('idm-exercises', instExercises.length);
+    
+    const allActivity = await dbGetAll(activityRef);
+    const instActivity = allActivity.filter(act => {
+        const ex = instExercises.find(e => (e.id || e._docId) === act.exerciseId);
+        return ex !== undefined;
+    });
+    setText('idm-submissions', instActivity.length);
+    
+    $id('instructor-detail-modal').classList.remove('hidden');
+}
+
+function closeInstructorDetailModal() {
+    $id('instructor-detail-modal').classList.add('hidden');
+}
+
+async function confirmToggleInstructorStatus(id) {
+    const u = allCachedInstructors.find(user => user.id === id || user._docId === id);
+    if (!u) return;
+    
+    const newStatus = u.status === 'active' ? 'inactive' : 'active';
+    if (confirm(`Are you sure you want to ${newStatus === 'active' ? 'activate' : 'deactivate'} instructor ${u.fullName}?`)) {
+        await dbUpdate(usersRef, id, { status: newStatus });
+        if (typeof showToast === 'function') showToast(`Instructor ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully.`, "success");
+        await loadUsers();
+    }
+}
+
+async function openArchiveInstructorModal(id) {
+    const u = allCachedInstructors.find(user => user.id === id || user._docId === id);
+    if (!u) return;
+    
+    if (confirm(`Are you sure you want to archive instructor ${u.fullName}? They will no longer be able to log in, but their data will be preserved.`)) {
+        await dbUpdate(usersRef, id, { status: 'archived' });
+        if (typeof showToast === 'function') showToast("Instructor archived successfully.", "success");
+        await loadUsers();
+    }
+}
+
+async function openRestoreInstructorModal(id) {
+    const u = allCachedInstructors.find(user => user.id === id || user._docId === id);
+    if (!u) return;
+    
+    if (confirm(`Are you sure you want to restore instructor ${u.fullName}? They will be active and able to log in again.`)) {
+        await dbUpdate(usersRef, id, { status: 'active' });
+        if (typeof showToast === 'function') showToast("Instructor restored successfully.", "success");
+        await loadUsers();
+    }
+}
+
+function exportData(type) {
+    if (type !== 'users') return;
+    
+    // We export actual instructor data, omitting passwords
+    const exportList = allCachedInstructors.map(u => ({
+        "Full Name": u.fullName,
+        "Username": u.username,
+        "Email": u.email,
+        "Role": u.role,
+        "Status": u.status,
+        "Date Added": _fmtDate(u.createdAt),
+        "Last Login": _fmtDate(u.lastLogin)
+    }));
+    
+    if (exportList.length === 0) {
+        if (typeof showToast === 'function') showToast("No instructors to export.", "warning");
+        return;
+    }
+    
+    const headers = Object.keys(exportList[0]);
+    const csvRows = [headers.join(',')];
+    
+    for (const row of exportList) {
+        const values = headers.map(header => {
+            const val = row[header] ? String(row[header]).replace(/"/g, '""') : '';
+            return `"${val}"`;
+        });
+        csvRows.push(values.join(','));
+    }
+    
+    const csvString = csvRows.join('\\n');
+    const blob = new Blob([csvString], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pseudopy_instructors_export_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    if (typeof showToast === 'function') showToast("Instructors exported successfully.", "success");
+}
+
+// ── Instructor Device Management & Approvals ──────────────────
+
 async function openInstructorDevicesModal(instructorId) {
     activeDeviceInstructorId = instructorId;
     const instructor = allCachedInstructors.find(u => u.id === instructorId || u._docId === instructorId);
