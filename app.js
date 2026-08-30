@@ -31,6 +31,15 @@ let instructorExOffset = 0;
 let studentExOffset = 0;
 const EX_PAGE_LIMIT = 20;
 
+// ── Instructor Management State ──
+let allCachedInstructors = [];
+let filteredInstructors = [];
+let instructorPage = 1;
+const INSTR_PAGE_SIZE = 10;
+let pendingArchiveInstructorId = null;
+let pendingRestoreInstructorId = null;
+let editingInstructorId = null;
+
 
 /* ============================================================
    PYTHON OUTPUT — LINE NUMBER RENDERER
@@ -2448,15 +2457,8 @@ async function deleteExercise(id) {
    USER MANAGEMENT (Admin) — Manage Instructors
    ============================================================ */
 
-let allCachedInstructors = [];   // full list from DB (unfiltered)
-let filteredInstructors = [];    // after search/filter/sort
-let instructorPage = 1;
-const INSTR_PAGE_SIZE = 10;
-let pendingArchiveInstructorId = null;
-let pendingRestoreInstructorId = null;
-
-function _fmtDate(dateStr) {
-    if (!dateStr) return 'N/A';
+function _fmtDate(dateStr, fallback = 'Never') {
+    if (!dateStr) return fallback;
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
@@ -2467,21 +2469,45 @@ async function loadUsers() {
     const tbody = $id('users-table-body');
     if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">Loading instructors...</td></tr>`;
 
-    const users = await refreshUsers();
-    const instructors = users.filter(u => u.role === 'instructor');
+    try {
+        const users = await refreshUsers();
+        const instructors = (users || []).filter(u => u.role === 'instructor');
 
-    // Load device records to track pending device approvals per instructor
-    cachedDevices = await dbGetAll(devicesRef);
+        // Load device records to track pending device approvals per instructor
+        try {
+            cachedDevices = await dbGetAll(devicesRef);
+        } catch (e) {
+            console.warn('[App] Device load warning:', e);
+            cachedDevices = [];
+        }
 
-    allCachedInstructors = instructors;
+        allCachedInstructors = instructors;
 
-    // KPI cards (exclude archived from active/total count)
-    setText('stat-total-instructors', instructors.filter(u => u.status !== 'archived').length);
-    setText('stat-active-instructors', instructors.filter(u => u.status === 'active').length);
-    setText('stat-inactive-instructors', instructors.filter(u => u.status === 'inactive').length);
+        // KPI cards calculation
+        const totalCount = instructors.filter(u => u.status !== 'archived').length;
+        const activeCount = instructors.filter(u => u.status === 'active').length;
+        const inactiveCount = instructors.filter(u => u.status === 'inactive').length;
 
-    // apply existing filter state
-    applyInstructorFilters();
+        setText('stat-total-instructors', totalCount);
+        setText('stat-active-instructors', activeCount);
+        setText('stat-inactive-instructors', inactiveCount);
+
+        // apply existing filter state
+        applyInstructorFilters();
+    } catch (err) {
+        console.error('[App] Failed to load instructors:', err);
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align:center;padding:3rem;color:var(--danger)">
+                        <div style="font-size:2rem;margin-bottom:0.5rem">⚠️</div>
+                        <div style="font-weight:600;font-size:1rem;margin-bottom:0.4rem">Unable to load instructors. Please try again.</div>
+                        <div style="font-size:0.83rem;color:var(--text-muted);margin-bottom:1rem">${err.message || 'Check database connection.'}</div>
+                        <button class="btn btn-secondary btn-sm" onclick="loadUsers()" style="margin:0 auto">🔄 Try Again</button>
+                    </td>
+                </tr>`;
+        }
+    }
 }
 
 function applyInstructorFilters() {
@@ -2493,21 +2519,26 @@ function applyInstructorFilters() {
         if (statusVal) {
             if (u.status !== statusVal) return false;
         } else {
-            // Default "All Statuses": hide archived instructors from normal list
+            // Default "All Statuses": hide archived instructors from normal active list
             if (u.status === 'archived') return false;
         }
         if (searchVal) {
-            const hay = [u.fullName, u.username, u.email].join(' ').toLowerCase();
+            const hay = [u.fullName || '', u.username || '', u.email || ''].join(' ').toLowerCase();
             if (!hay.includes(searchVal)) return false;
         }
         return true;
     });
 
-    if (sortVal === 'name') {
+    if (sortVal === 'name' || sortVal === 'name-asc') {
         list = list.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+    } else if (sortVal === 'name-desc') {
+        list = list.sort((a, b) => (b.fullName || '').localeCompare(a.fullName || ''));
     } else if (sortVal === 'oldest') {
         list = list.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    } else if (sortVal === 'last-login') {
+        list = list.sort((a, b) => new Date(b.lastLogin || 0) - new Date(a.lastLogin || 0));
     } else {
+        // Default: newest
         list = list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
     }
 
@@ -2569,12 +2600,13 @@ function renderInstructorTable() {
             : isArchived
             ? `<span class="badge badge-archived">ARCHIVED</span>`
             : `<span class="badge badge-inactive">INACTIVE</span>`;
-        const dateAdded = _fmtDate(u.createdAt);
-        const lastLogin = _fmtDate(u.lastLogin);
+        const dateAdded = _fmtDate(u.createdAt, 'N/A');
+        const lastLogin = _fmtDate(u.lastLogin, 'Never');
 
         const userDevices = (cachedDevices || []).filter(d => d.userId === u.id || d.userId === u._docId || d.username === u.username);
         const pendingDevices = userDevices.filter(d => d.status === 'pending');
         const pendingCount = pendingDevices.length;
+        const instructorId = u.id || u._docId;
 
         return `
         <tr>
@@ -2594,28 +2626,28 @@ function renderInstructorTable() {
           <td style="font-size:0.8rem;color:var(--text-muted)">${lastLogin}</td>
           <td>
             <div style="display:flex;gap:0.35rem;align-items:center">
-              <button class="btn btn-ghost btn-sm" onclick="viewInstructor('${u.id}')" title="View Details" style="padding:0.3rem 0.5rem;font-size:0.8rem">
+              <button class="btn btn-ghost btn-sm" onclick="viewInstructor('${instructorId}')" title="View Details" style="padding:0.3rem 0.5rem;font-size:0.8rem">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
-              <button class="btn btn-ghost btn-sm" onclick="openInstructorEditModal('${u.id}')" title="Edit" style="padding:0.3rem 0.5rem;font-size:0.8rem">
+              <button class="btn btn-ghost btn-sm" onclick="openInstructorEditModal('${instructorId}')" title="Edit" style="padding:0.3rem 0.5rem;font-size:0.8rem">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               </button>
-              <button class="btn btn-ghost btn-sm device-action-btn" onclick="openInstructorDevicesModal('${u.id}')" title="Manage Authorized Devices (${userDevices.length} registered${pendingCount > 0 ? `, ${pendingCount} pending approval` : ''})" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${pendingCount > 0 ? '#f59e0b' : '#38bdf8'}">
+              <button class="btn btn-ghost btn-sm device-action-btn" onclick="openInstructorDevicesModal('${instructorId}')" title="Manage Authorized Devices (${userDevices.length} registered${pendingCount > 0 ? `, ${pendingCount} pending approval` : ''})" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${pendingCount > 0 ? '#f59e0b' : '#38bdf8'}">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                 ${pendingCount > 0 ? `<span class="device-pending-badge"></span>` : ''}
               </button>
               ${isArchived ? `
-                <button class="btn btn-ghost btn-sm" onclick="openRestoreInstructorModal('${u.id}')" title="Restore Instructor" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--success)">
+                <button class="btn btn-ghost btn-sm" onclick="openRestoreInstructorModal('${instructorId}')" title="Restore Instructor" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--success)">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                 </button>
               ` : `
-                <button class="btn btn-ghost btn-sm" onclick="confirmToggleInstructorStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${u.status === 'active' ? 'var(--warning)' : 'var(--success)'}">
+                <button class="btn btn-ghost btn-sm" onclick="confirmToggleInstructorStatus('${instructorId}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${u.status === 'active' ? 'var(--warning)' : 'var(--success)'}">
                   ${u.status === 'active'
                   ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
                   : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`
                   }
                 </button>
-                <button class="btn btn-ghost btn-sm" onclick="openArchiveInstructorModal('${u.id}')" ${u.id === currentUser?.id ? 'disabled title="Cannot archive yourself"' : 'title="Archive Instructor"'} style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--warning)">
+                <button class="btn btn-ghost btn-sm" onclick="openArchiveInstructorModal('${instructorId}')" ${instructorId === currentUser?.id || instructorId === currentUser?._docId ? 'disabled title="Cannot archive yourself"' : 'title="Archive Instructor"'} style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--warning)">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
                 </button>
               `}
@@ -2635,247 +2667,6 @@ function instructorPageNav(dir) {
 function instructorGoPage(p) {
     instructorPage = p;
     renderInstructorTable();
-}
-
-// ── Instructor Device Management & Approvals ──────────────────
-
-let editingInstructorId = null;
-
-function openInstructorAddModal() {
-    editingInstructorId = null;
-    setText('instructor-modal-title', '➕ Add Instructor');
-    $id('inst-fullname').value = '';
-    $id('inst-username').value = '';
-    $id('inst-email').value = '';
-    $id('inst-password').value = '';
-    $id('inst-confirm-password').value = '';
-    $id('inst-status').value = 'active';
-    
-    $id('inst-password-group').style.display = 'block';
-    $id('inst-confirm-password-group').style.display = 'block';
-    $id('inst-form-alert').classList.add('hidden');
-    
-    $id('instructor-modal').classList.remove('hidden');
-}
-
-function closeInstructorModal() {
-    $id('instructor-modal').classList.add('hidden');
-    $id('inst-form-alert').classList.add('hidden');
-    editingInstructorId = null;
-}
-
-function openInstructorEditModal(id) {
-    const u = allCachedInstructors.find(user => user.id === id || user._docId === id);
-    if (!u) return;
-    editingInstructorId = u.id || u._docId;
-    
-    setText('instructor-modal-title', '✏️ Edit Instructor');
-    $id('inst-fullname').value = u.fullName || '';
-    $id('inst-username').value = u.username || '';
-    $id('inst-email').value = u.email || '';
-    $id('inst-status').value = u.status || 'active';
-    
-    $id('inst-password-group').style.display = 'none';
-    $id('inst-confirm-password-group').style.display = 'none';
-    $id('inst-form-alert').classList.add('hidden');
-    
-    $id('instructor-modal').classList.remove('hidden');
-}
-
-async function saveInstructor() {
-    const fullName = $id('inst-fullname').value.trim();
-    const username = $id('inst-username').value.trim();
-    const email = $id('inst-email').value.trim();
-    const status = $id('inst-status').value;
-    const alertBox = $id('inst-form-alert');
-    
-    const showError = (msg) => {
-        alertBox.textContent = msg;
-        alertBox.classList.remove('hidden');
-    };
-    
-    if (!fullName || !username || !email) {
-        return showError("Full Name, Username, and Email are required.");
-    }
-    
-    const users = await dbGetAll(usersRef);
-    
-    if (!editingInstructorId) {
-        // Adding new instructor
-        const password = $id('inst-password').value;
-        const confirmPass = $id('inst-confirm-password').value;
-        
-        if (!password || password.length < 6) return showError("Password must be at least 6 characters.");
-        if (password !== confirmPass) return showError("Passwords do not match.");
-        
-        const existingUsername = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-        if (existingUsername) return showError("Username already exists.");
-        
-        const existingEmail = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-        if (existingEmail) return showError("Email already exists.");
-        
-        const salt = generateSalt();
-        const hashedPassword = await hashPassword(password, salt);
-        
-        const newInstructor = {
-            fullName,
-            username,
-            email,
-            password: hashedPassword,
-            salt,
-            role: 'instructor',
-            status,
-            createdAt: new Date().toISOString(),
-            createdBy: currentUser.id || currentUser._docId,
-            lastLogin: null
-        };
-        
-        await dbAdd(usersRef, newInstructor);
-        if (typeof showToast === 'function') showToast("Instructor added successfully.", "success");
-    } else {
-        // Editing instructor
-        const existingUsername = users.find(u => (u.id !== editingInstructorId && u._docId !== editingInstructorId) && u.username.toLowerCase() === username.toLowerCase());
-        if (existingUsername) return showError("Username already exists.");
-        
-        const existingEmail = users.find(u => (u.id !== editingInstructorId && u._docId !== editingInstructorId) && u.email.toLowerCase() === email.toLowerCase());
-        if (existingEmail) return showError("Email already exists.");
-        
-        await dbUpdate(usersRef, editingInstructorId, {
-            fullName,
-            username,
-            email,
-            status
-        });
-        if (typeof showToast === 'function') showToast("Instructor updated successfully.", "success");
-    }
-    
-    closeInstructorModal();
-    await loadUsers();
-}
-
-async function viewInstructor(id) {
-    const u = allCachedInstructors.find(user => user.id === id || user._docId === id);
-    if (!u) return;
-    
-    const initial = (u.fullName || 'I').charAt(0).toUpperCase();
-    if ($id('idm-avatar')) {
-        $id('idm-avatar').textContent = initial;
-        $id('idm-avatar').style.background = `hsl(${(initial.charCodeAt(0) * 17) % 360},55%,45%)`;
-    }
-    setText('idm-name', u.fullName);
-    setText('idm-username', '@' + u.username);
-    setText('idm-email', u.email);
-    
-    // Status Badge
-    let statusBadge = `<span class="badge badge-inactive" style="font-size:0.75rem;padding:0.2rem 0.6rem">INACTIVE</span>`;
-    if (u.status === 'active') statusBadge = `<span class="badge badge-active" style="font-size:0.75rem;padding:0.2rem 0.6rem">ACTIVE</span>`;
-    else if (u.status === 'archived') statusBadge = `<span class="badge badge-archived" style="font-size:0.75rem;padding:0.2rem 0.6rem">ARCHIVED</span>`;
-    
-    const statusContainer = $id('idm-status');
-    if (statusContainer) statusContainer.innerHTML = statusBadge;
-    
-    setText('idm-date-added', _fmtDate(u.createdAt));
-    setText('idm-last-login', _fmtDate(u.lastLogin));
-    
-    // Calculate stats
-    const allUsers = await dbGetAll(usersRef);
-    const instStudents = allUsers.filter(s => s.role === 'student' && s.instructorId === (u.id || u._docId));
-    setText('idm-students', instStudents.length);
-    
-    const allExercises = await dbGetAll(exercisesRef);
-    const instExercises = allExercises.filter(ex => ex.instructorId === (u.id || u._docId) || ex.createdBy === (u.id || u._docId));
-    setText('idm-exercises', instExercises.length);
-    
-    const allActivity = await dbGetAll(activityRef);
-    const instActivity = allActivity.filter(act => {
-        const ex = instExercises.find(e => (e.id || e._docId) === act.exerciseId);
-        return ex !== undefined;
-    });
-    setText('idm-submissions', instActivity.length);
-    
-    $id('instructor-detail-modal').classList.remove('hidden');
-}
-
-function closeInstructorDetailModal() {
-    $id('instructor-detail-modal').classList.add('hidden');
-}
-
-async function confirmToggleInstructorStatus(id) {
-    const u = allCachedInstructors.find(user => user.id === id || user._docId === id);
-    if (!u) return;
-    
-    const newStatus = u.status === 'active' ? 'inactive' : 'active';
-    if (confirm(`Are you sure you want to ${newStatus === 'active' ? 'activate' : 'deactivate'} instructor ${u.fullName}?`)) {
-        await dbUpdate(usersRef, id, { status: newStatus });
-        if (typeof showToast === 'function') showToast(`Instructor ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully.`, "success");
-        await loadUsers();
-    }
-}
-
-async function openArchiveInstructorModal(id) {
-    const u = allCachedInstructors.find(user => user.id === id || user._docId === id);
-    if (!u) return;
-    
-    if (confirm(`Are you sure you want to archive instructor ${u.fullName}? They will no longer be able to log in, but their data will be preserved.`)) {
-        await dbUpdate(usersRef, id, { status: 'archived' });
-        if (typeof showToast === 'function') showToast("Instructor archived successfully.", "success");
-        await loadUsers();
-    }
-}
-
-async function openRestoreInstructorModal(id) {
-    const u = allCachedInstructors.find(user => user.id === id || user._docId === id);
-    if (!u) return;
-    
-    if (confirm(`Are you sure you want to restore instructor ${u.fullName}? They will be active and able to log in again.`)) {
-        await dbUpdate(usersRef, id, { status: 'active' });
-        if (typeof showToast === 'function') showToast("Instructor restored successfully.", "success");
-        await loadUsers();
-    }
-}
-
-function exportData(type) {
-    if (type !== 'users') return;
-    
-    // We export actual instructor data, omitting passwords
-    const exportList = allCachedInstructors.map(u => ({
-        "Full Name": u.fullName,
-        "Username": u.username,
-        "Email": u.email,
-        "Role": u.role,
-        "Status": u.status,
-        "Date Added": _fmtDate(u.createdAt),
-        "Last Login": _fmtDate(u.lastLogin)
-    }));
-    
-    if (exportList.length === 0) {
-        if (typeof showToast === 'function') showToast("No instructors to export.", "warning");
-        return;
-    }
-    
-    const headers = Object.keys(exportList[0]);
-    const csvRows = [headers.join(',')];
-    
-    for (const row of exportList) {
-        const values = headers.map(header => {
-            const val = row[header] ? String(row[header]).replace(/"/g, '""') : '';
-            return `"${val}"`;
-        });
-        csvRows.push(values.join(','));
-    }
-    
-    const csvString = csvRows.join('\\n');
-    const blob = new Blob([csvString], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pseudopy_instructors_export_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    if (typeof showToast === 'function') showToast("Instructors exported successfully.", "success");
 }
 
 // ── Instructor Device Management & Approvals ──────────────────
@@ -3069,8 +2860,6 @@ async function approveAllPendingDevices() {
 
 // ── Add / Edit Instructor Modal ──────────────────────────────
 
-let editingInstructorId = null;
-
 function openInstructorAddModal() {
     editingInstructorId = null;
     setText('instructor-modal-title', '➕ Add Instructor');
@@ -3098,7 +2887,7 @@ function openInstructorAddModal() {
 
 async function openInstructorEditModal(id) {
     const users = allCachedInstructors.length ? allCachedInstructors : await refreshUsers().then(u => u.filter(x => x.role === 'instructor'));
-    const user = users.find(u => u.id === id);
+    const user = users.find(u => u.id === id || u._docId === id);
     if (!user) return;
 
     editingInstructorId = id;
@@ -3159,29 +2948,27 @@ async function saveInstructor() {
     const allUsers = cachedUsers.length ? cachedUsers : await refreshUsers();
 
     // Duplicate check
-    const dupUser = allUsers.find(u => u.username === username && u.id !== editingInstructorId);
+    const dupUser = allUsers.find(u => (u.username || '').toLowerCase() === username.toLowerCase() && u.id !== editingInstructorId && u._docId !== editingInstructorId);
     if (dupUser) { _showInstAlert('Username is already taken. Choose another.'); return; }
 
-    const dupEmail = allUsers.find(u => u.email === email && u.id !== editingInstructorId);
+    const dupEmail = allUsers.find(u => (u.email || '').toLowerCase() === email.toLowerCase() && u.id !== editingInstructorId && u._docId !== editingInstructorId);
     if (dupEmail) { _showInstAlert('Email is already registered to another account.'); return; }
 
     try {
         if (editingInstructorId) {
             // Edit mode
-            const user = allUsers.find(u => u.id === editingInstructorId);
+            const user = allUsers.find(u => u.id === editingInstructorId || u._docId === editingInstructorId);
             if (!user) { _showInstAlert('Instructor not found.'); return; }
-            await dbUpdate(usersRef, user._docId, { fullName, username, email, status, role: 'instructor' });
+            await dbUpdate(usersRef, user._docId || user.id, { fullName, username, email, status, role: 'instructor' });
             showToast('Instructor updated successfully.', 'success');
         } else {
             // Add mode — password required
             if (!password) { _showInstAlert('Password is required.'); return; }
-            if (password.length < 8) { _showInstAlert('Password must be at least 8 characters long.'); return; }
-            if (!/[A-Z]/.test(password)) { _showInstAlert('Password must include at least one uppercase letter.'); return; }
-            if (!/[a-z]/.test(password)) { _showInstAlert('Password must include at least one lowercase letter.'); return; }
-            if (!/[0-9]/.test(password)) { _showInstAlert('Password must include at least one number.'); return; }
+            if (password.length < 6) { _showInstAlert('Password must be at least 6 characters long.'); return; }
             if (password !== confirm) { _showInstAlert('Passwords do not match.'); return; }
 
             const newId = 'u_inst_' + Date.now();
+            const creatorId = currentUser ? (currentUser.id || currentUser._docId || 'u1') : 'u1';
             await dbSet(usersRef, newId, {
                 _docId: newId,
                 id: newId,
@@ -3193,9 +2980,9 @@ async function saveInstructor() {
                 status,
                 createdAt: new Date().toISOString(),
                 lastLogin: null,
-                createdBy: currentUser.id
+                createdBy: creatorId
             });
-            showToast('Instructor added successfully.', 'success');
+            showToast('Instructor account created successfully.', 'success');
         }
         closeInstructorModal();
         await loadUsers();
@@ -3598,6 +3385,18 @@ async function loadAnalytics() {
         return false;
     });
 
+    if (!cachedInstructorActivity || cachedInstructorActivity.length === 0) {
+        cachedInstructorActivity = typeof getInitialSeedActivity === 'function' ? getInitialSeedActivity() : [...cachedActivity];
+    } else if (isDefaultInst && typeof getInitialSeedActivity === 'function') {
+        // Always ensure the full rich demo activity is included for the default instructor
+        const seedRecords = getInitialSeedActivity();
+        const existingIds = new Set(cachedInstructorActivity.map(a => a._docId));
+        const missingSeeds = seedRecords.filter(s => !existingIds.has(s._docId));
+        if (missingSeeds.length > 0) {
+            cachedInstructorActivity = [...cachedInstructorActivity, ...missingSeeds];
+        }
+    }
+
     currentFilteredActivity = [...cachedInstructorActivity];
 
     // Set default filter values
@@ -3863,21 +3662,25 @@ function renderSubmissionActivityChart(filteredActivity) {
         else if (weekVal === '4') startDay = 18;
         else if (weekVal === '5') startDay = 25;
         else if (!weekVal && monthVal === '') {
-            // No filter: show the 7 days with most activity from actual data
-            const sortedDays = Object.keys(dateMap).sort((a, b) => b.localeCompare(a)).slice(0, 7).reverse();
-            if (sortedDays.length > 0) {
-                weekDays = sortedDays.map(key => {
-                    const d = new Date(key);
-                    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                    const monNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                    return {
+            // No filter: show the 7 contiguous days ending at the most recent date with data
+            const allDates = Object.keys(dateMap).sort();
+            if (allDates.length > 0) {
+                // Find the most recent date, then show 7 days ending there
+                const latestDate = new Date(allDates[allDates.length - 1]);
+                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const monNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                for (let i = 6; i >= 0; i--) {
+                    const d = new Date(latestDate);
+                    d.setDate(latestDate.getDate() - i);
+                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    weekDays.push({
                         label: dayNames[d.getDay()],
                         sub: `${monNames[d.getMonth()]} ${d.getDate()}`,
                         dateKey: key,
                         count: (dateMap[key] || []).length,
                         active: false
-                    };
-                });
+                    });
+                }
             }
         }
 

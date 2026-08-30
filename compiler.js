@@ -1189,6 +1189,7 @@ class CodeGenerator {
 
                 this.indentLevel--;
                 break;
+            }
 
             case 'ForEachStatement':
                 this.lines.push(this.ind() + 'for ' + node.iterator + ' in ' + this.exprToStr(node.iterable.tokens) + ':');

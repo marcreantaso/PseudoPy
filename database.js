@@ -29,6 +29,18 @@ try {
     console.warn('[Database] Firebase init warning:', e);
 }
 
+// ── Firestore Timeout Wrapper ──────────────────────────────
+// Prevents Firestore calls from hanging forever when offline.
+const FIRESTORE_TIMEOUT_MS = 2500;
+function withFirestoreTimeout(promise) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Firestore timeout')), FIRESTORE_TIMEOUT_MS)
+        )
+    ]);
+}
+
 // ── Collection References ──────────────────────────────────
 const usersRef             = "pseudopy_users";
 const exercisesRef         = "pseudopy_exercises";
@@ -452,29 +464,92 @@ function makeSeedAct(id, student, studentId, exercise, difficulty, status, score
     };
 }
 
-const SEED_ACTIVITY_LIST = [
-    makeSeedAct('act_sp_1', 'John Cruz', '2024-001', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T10:15:00', null, '0.85s', 'u2'),
-    makeSeedAct('act_sp_2', 'Maria Santos', '2024-002', 'Factorial Calculation', 'hard', 'Completed', '85%', '2025-08-08T10:32:00', null, '1.21s', 'u2'),
-    makeSeedAct('act_sp_3', 'Kevin Ramos', '2024-003', 'Array Sum', 'easy', 'Failed', '0%', '2025-08-08T11:05:00', 'Syntax Error', '0.65s', 'u2'),
-    makeSeedAct('act_sp_4', 'Anna Reyes', '2024-004', 'Prime Number Checker', 'moderate', 'Pending', '—', '2025-08-08T11:20:00', null, '—', 'u2'),
-    makeSeedAct('act_sp_5', 'Joshua Garcia', '2024-005', 'String Reversal', 'easy', 'Completed', '90%', '2025-08-08T11:45:00', null, '0.42s', 'u2'),
-    makeSeedAct('act_sp_em1', 'Eduard John Mirandilla', '2024-031', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T14:20:00', null, '0.78s', 'u2'),
-    makeSeedAct('act_sp_em2', 'Eduard John Mirandilla', '2024-031', 'Factorial Calculation', 'hard', 'Completed', '95%', '2025-08-07T16:10:00', null, '1.10s', 'u2'),
-    makeSeedAct('act_sp_md1', 'Mikaella Daet', '2024-032', 'Array Sum', 'easy', 'Completed', '90%', '2025-08-08T15:00:00', null, '0.52s', 'u2'),
-    makeSeedAct('act_sp_md2', 'Mikaella Daet', '2024-032', 'Prime Number Checker', 'moderate', 'Completed', '100%', '2025-08-06T11:30:00', null, '0.89s', 'u2'),
-];
+function getInitialSeedActivity() {
+    const list = [
+        makeSeedAct('act_sp_1', 'John Cruz', '2024-001', 'Sum of Odd Numbers Under 90', 'moderate', 'Completed', '100%', '2025-08-08T10:15:00', null, '0.85s', 'u2'),
+        makeSeedAct('act_sp_2', 'Maria Santos', '2024-002', 'Factorial of 6 Computation', 'hard', 'Completed', '85%', '2025-08-08T10:32:00', null, '1.21s', 'u2'),
+        makeSeedAct('act_sp_3', 'Kevin Ramos', '2024-003', 'Multiply Array Elements by 4', 'easy', 'Failed', '0%', '2025-08-08T11:05:00', 'Syntax Error', '0.65s', 'u2'),
+        makeSeedAct('act_sp_4', 'Anna Reyes', '2024-004', 'Count Multiples of 4 and 7', 'moderate', 'Pending', '—', '2025-08-08T11:20:00', null, '—', 'u2'),
+        makeSeedAct('act_sp_5', 'Joshua Garcia', '2024-005', 'Multiply Array Elements by 5', 'easy', 'Completed', '90%', '2025-08-08T11:45:00', null, '0.42s', 'u2'),
+        makeSeedAct('act_sp_6', 'Carlo Mendoza', '2024-006', 'Factorial of 8 Computation', 'hard', 'Failed', '0%', '2025-08-07T09:15:00', 'Missing END', '0.51s', 'u2'),
+        makeSeedAct('act_sp_7', 'Patricia Flores', '2024-007', 'Sum of Odd Numbers Under 95', 'moderate', 'Completed', '100%', '2025-08-07T11:20:00', null, '0.74s', 'u2'),
+        makeSeedAct('act_sp_8', 'Mark Bautista', '2024-008', 'Count Multiples of 4 and 7', 'moderate', 'Failed', '0%', '2025-08-07T14:40:00', 'Logic Error', '0.88s', 'u2'),
+        makeSeedAct('act_sp_9', 'Nicole Dela Cruz', '2024-009', 'Factorial of 5 Computation', 'hard', 'Completed', '95%', '2025-08-07T15:10:00', null, '1.05s', 'u2'),
+        makeSeedAct('act_sp_10', 'Michael Reyes', '2024-009', 'Multiply Array Elements by 3', 'easy', 'Failed', '0%', '2025-08-06T10:00:00', 'Indentation Error', '0.45s', 'u2'),
+        makeSeedAct('act_sp_11', 'Christian Alde', '2024-010', 'Sum of Odd Numbers Under 60', 'easy', 'Completed', '100%', '2025-08-06T11:15:00', null, '0.62s', 'u2'),
+        makeSeedAct('act_sp_12', 'Jessica Pascual', '2024-011', 'Identify Multiples of 3 and 5', 'easy', 'Failed', '0%', '2025-08-06T13:25:00', 'Type Error', '0.59s', 'u2'),
+        makeSeedAct('act_sp_13', 'Aldrin Castro', '2024-012', 'Factorial of 7 Computation', 'hard', 'Completed', '90%', '2025-08-06T14:50:00', null, '1.15s', 'u2'),
+        makeSeedAct('act_sp_14', 'Kenneth Santos', '2024-013', 'Multiply Array Elements by 6', 'easy', 'Completed', '100%', '2025-08-05T09:30:00', null, '0.38s', 'u2'),
+        makeSeedAct('act_sp_15', 'Jasmine Aquino', '2024-014', 'Modulo Branching Logic', 'moderate', 'Failed', '0%', '2025-08-05T10:45:00', 'Syntax Error', '0.71s', 'u2'),
+        makeSeedAct('act_sp_16', 'Justin Ferrer', '2024-015', 'Multiply Array Elements by 2', 'moderate', 'Completed', '85%', '2025-08-05T13:10:00', null, '0.82s', 'u2'),
+        makeSeedAct('act_sp_17', 'Bianca De Leon', '2024-016', 'Sum of Odd Numbers Under 80', 'moderate', 'Failed', '0%', '2025-08-05T15:20:00', 'Missing END', '0.49s', 'u2'),
+        makeSeedAct('act_sp_18', 'Aaron Dizon', '2024-017', 'Factorial of 4 Computation', 'hard', 'Completed', '100%', '2025-08-04T08:50:00', null, '0.95s', 'u2'),
+        makeSeedAct('act_sp_19', 'Camille Valenzuela', '2024-018', 'Sum of Odd Numbers Under 50', 'moderate', 'Failed', '0%', '2025-08-04T10:15:00', 'Logic Error', '0.77s', 'u2'),
+        makeSeedAct('act_sp_20', 'Dominic Ramos', '2024-019', 'Find Multiples of 4 and 6', 'easy', 'Completed', '90%', '2025-08-04T11:40:00', null, '0.41s', 'u2'),
+        makeSeedAct('act_sp_21', 'Ella Salvador', '2024-020', 'Multiply Array Elements by 7', 'hard', 'Completed', '100%', '2025-08-04T14:05:00', null, '1.30s', 'u2'),
+        makeSeedAct('act_sp_22', 'Adrian Tolentino', '2024-021', 'Factorial of 9 Computation', 'easy', 'Failed', '0%', '2025-08-04T15:30:00', 'Syntax Error', '0.66s', 'u2'),
+        makeSeedAct('act_sp_23', 'Sofia Corpuz', '2024-022', 'Sum of Odd Numbers Under 40', 'easy', 'Completed', '100%', '2025-08-03T09:10:00', null, '0.55s', 'u2'),
+        makeSeedAct('act_sp_24', 'Patrick Hernandez', '2024-023', 'Modulo Branching Logic', 'moderate', 'Failed', '0%', '2025-08-03T11:25:00', 'Indentation Error', '0.48s', 'u2'),
+        makeSeedAct('act_sp_25', 'Hazel Gonzales', '2024-024', 'Multiply Array Elements by 8', 'moderate', 'Completed', '95%', '2025-08-03T13:40:00', null, '0.80s', 'u2'),
+        makeSeedAct('act_sp_26', 'Gabriel Santiago', '2024-025', 'Factorial of 10 Computation', 'easy', 'Completed', '100%', '2025-08-02T10:00:00', null, '0.44s', 'u2'),
+        makeSeedAct('act_sp_27', 'Abigail Ramos', '2024-026', 'Sum of Odd Numbers Under 30', 'easy', 'Failed', '0%', '2025-08-02T11:15:00', 'Logic Error', '0.69s', 'u2'),
+        makeSeedAct('act_sp_28', 'Ryan Ocampo', '2024-027', 'Modulo Branching Logic', 'easy', 'Completed', '85%', '2025-08-02T14:30:00', null, '0.58s', 'u2'),
+        makeSeedAct('act_sp_29', 'Megan Custodio', '2024-028', 'Multiply Array Elements by 9', 'hard', 'Failed', '0%', '2025-08-01T09:45:00', 'Syntax Error', '0.83s', 'u2'),
+        makeSeedAct('act_sp_30', 'Kyle Dela Rosa', '2024-029', 'Sum of Odd Numbers Under 90', 'moderate', 'Completed', '100%', '2025-08-01T11:00:00', null, '0.72s', 'u2'),
+        makeSeedAct('act_sp_em1', 'Eduard John Mirandilla', '2024-031', 'Sum of Odd Numbers Under 90', 'moderate', 'Completed', '100%', '2025-08-08T14:20:00', null, '0.78s', 'u2'),
+        makeSeedAct('act_sp_em2', 'Eduard John Mirandilla', '2024-031', 'Factorial of 6 Computation', 'hard', 'Completed', '95%', '2025-08-07T16:10:00', null, '1.10s', 'u2'),
+        makeSeedAct('act_sp_md1', 'Mikaella Daet', '2024-032', 'Multiply Array Elements by 4', 'easy', 'Completed', '90%', '2025-08-08T15:00:00', null, '0.52s', 'u2'),
+        makeSeedAct('act_sp_md2', 'Mikaella Daet', '2024-032', 'Count Multiples of 4 and 7', 'moderate', 'Completed', '100%', '2025-08-06T11:30:00', null, '0.89s', 'u2'),
+    ];
+    return list;
+}
+
+const SEED_ACTIVITY_LIST = getInitialSeedActivity();
 
 // Local Storage Fallback Map
 function getLocalCollection(ref) {
+    let list = null;
     try {
         const raw = localStorage.getItem(`pseudopy_local_${ref}`);
-        if (raw) return JSON.parse(raw);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                list = parsed;
+            }
+        }
     } catch (e) {}
-    
-    if (ref === usersRef) return getInitialSeedUsers();
-    if (ref === exercisesRef) return SEED_EXERCISES_LIST;
-    if (ref === activityRef) return SEED_ACTIVITY_LIST;
-    return [];
+
+    if (!list) {
+        if (ref === usersRef) list = getInitialSeedUsers();
+        else if (ref === exercisesRef) list = SEED_EXERCISES_LIST;
+        else if (ref === activityRef) list = getInitialSeedActivity();
+        else list = [];
+    }
+
+    // Guarantee that standard seed instructor exists in user list
+    if (ref === usersRef && Array.isArray(list)) {
+        const hasMarc = list.some(u => u.username === 'mreantaso_instructor' || u.id === 'u2' || u._docId === 'u2');
+        if (!hasMarc) {
+            const marc = getInitialSeedUsers().find(u => u.username === 'mreantaso_instructor');
+            if (marc) list.splice(1, 0, marc);
+        }
+    }
+
+    // Guarantee that activity list always has the full rich demo dataset merged in
+    if (ref === activityRef && Array.isArray(list)) {
+        if (list.length < 15) {
+            list = getInitialSeedActivity();
+        } else {
+            // Merge missing seed records so chart always has all demo bars
+            const seedRecords = getInitialSeedActivity();
+            const existingIds = new Set(list.map(a => a._docId));
+            const missingSeeds = seedRecords.filter(s => !existingIds.has(s._docId));
+            if (missingSeeds.length > 0) list = [...list, ...missingSeeds];
+        }
+    }
+
+    setLocalCollection(ref, list);
+    return list;
 }
 
 function setLocalCollection(ref, data) {
@@ -493,12 +568,19 @@ function setLocalCollection(ref, data) {
 async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
     let results = [];
 
-    // 1. Try Firestore
+    // 1. Try Firestore (with timeout so it never hangs forever)
     if (firestore) {
         try {
-            const snapshot = await firestore.collection(ref).get();
+            const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
             if (snapshot && !snapshot.empty) {
                 results = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
+                // For activity, always merge with full seed demo data so charts are rich
+                if (ref === activityRef) {
+                    const seedRecords = getInitialSeedActivity();
+                    const existingIds = new Set(results.map(r => r._docId));
+                    const missingSeeds = seedRecords.filter(s => !existingIds.has(s._docId));
+                    if (missingSeeds.length > 0) results = [...results, ...missingSeeds];
+                }
                 setLocalCollection(ref, results);
             }
         } catch (err) {
@@ -512,6 +594,18 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
         // If Firestore is connected, seed it in the background
         if (firestore && results.length > 0) {
             seedDatabase().catch(e => console.warn('[Database] Background seed attempt:', e));
+        }
+    }
+
+    // Ensure instructor mreantaso_instructor is present in users
+    if (ref === usersRef && Array.isArray(results)) {
+        const hasMarc = results.some(u => u.username === 'mreantaso_instructor' || u.id === 'u2' || u._docId === 'u2');
+        if (!hasMarc) {
+            const marc = getInitialSeedUsers().find(u => u.username === 'mreantaso_instructor');
+            if (marc) {
+                results.splice(1, 0, marc);
+                setLocalCollection(ref, results);
+            }
         }
     }
 
@@ -554,7 +648,7 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
 async function dbGet(ref, docId) {
     if (firestore) {
         try {
-            const doc = await firestore.collection(ref).doc(docId).get();
+            const doc = await withFirestoreTimeout(firestore.collection(ref).doc(docId).get());
             if (doc.exists) {
                 return { _docId: doc.id, ...doc.data() };
             }
@@ -585,9 +679,9 @@ async function dbAdd(ref, data) {
     // Save to Firestore
     if (firestore) {
         try {
-            await firestore.collection(ref).doc(docId).set(docData);
+            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(docData));
         } catch (err) {
-            console.error(`[Database] Error saving to Firestore ${ref}:`, err);
+            console.warn(`[Database] Error saving to Firestore ${ref} (local cache updated):`, err.message);
         }
     }
 
@@ -610,9 +704,9 @@ async function dbSet(ref, docId, data) {
     // Save to Firestore
     if (firestore) {
         try {
-            await firestore.collection(ref).doc(docId).set(docData);
+            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(docData));
         } catch (err) {
-            console.error(`[Database] Error setting to Firestore ${ref}/${docId}:`, err);
+            console.warn(`[Database] Error setting to Firestore ${ref}/${docId} (local cache updated):`, err.message);
         }
     }
 
@@ -637,9 +731,9 @@ async function dbUpdate(ref, docId, data) {
     if (firestore) {
         try {
             const docRef = firestore.collection(ref).doc(docId);
-            await docRef.set(merged, { merge: true });
+            await withFirestoreTimeout(docRef.set(merged, { merge: true }));
         } catch (err) {
-            console.error(`[Database] Error updating Firestore ${ref}/${docId}:`, err);
+            console.warn(`[Database] Error updating Firestore ${ref}/${docId} (local cache updated):`, err.message);
         }
     }
 
@@ -658,9 +752,9 @@ async function dbDelete(ref, docId) {
     // Delete from Firestore
     if (firestore) {
         try {
-            await firestore.collection(ref).doc(docId).delete();
+            await withFirestoreTimeout(firestore.collection(ref).doc(docId).delete());
         } catch (err) {
-            console.error(`[Database] Error deleting Firestore ${ref}/${docId}:`, err);
+            console.warn(`[Database] Error deleting Firestore ${ref}/${docId} (local cache updated):`, err.message);
         }
     }
 
@@ -673,7 +767,7 @@ async function dbDelete(ref, docId) {
 async function dbCount(ref) {
     if (firestore) {
         try {
-            const snapshot = await firestore.collection(ref).get();
+            const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
             if (snapshot) return snapshot.size;
         } catch (err) {}
     }
@@ -691,7 +785,7 @@ async function batchSeed(collectionName, items) {
         const ref = firestore.collection(collectionName).doc(item._docId || item.id);
         batch.set(ref, item);
     });
-    await batch.commit();
+    await withFirestoreTimeout(batch.commit());
 }
 
 async function seedDatabase() {
@@ -699,21 +793,21 @@ async function seedDatabase() {
         if (!firestore) return true;
         
         console.log('[Database] Checking Firestore collections...');
-        const userSnap = await firestore.collection(usersRef).get();
+        const userSnap = await withFirestoreTimeout(firestore.collection(usersRef).get());
         if (userSnap.empty) {
             console.log('[Database] Seeding initial users into Firestore...');
             await batchSeed(usersRef, getInitialSeedUsers());
             console.log('[Database] Users seeded ✅');
         }
 
-        const exSnap = await firestore.collection(exercisesRef).get();
+        const exSnap = await withFirestoreTimeout(firestore.collection(exercisesRef).get());
         if (exSnap.size < 30) {
             console.log('[Database] Seeding initial exercises into Firestore...');
             await batchSeed(exercisesRef, SEED_EXERCISES_LIST);
             console.log('[Database] Exercises seeded ✅');
         }
 
-        const actSnap = await firestore.collection(activityRef).get();
+        const actSnap = await withFirestoreTimeout(firestore.collection(activityRef).get());
         if (actSnap.empty) {
             console.log('[Database] Seeding sample activity into Firestore...');
             await batchSeed(activityRef, SEED_ACTIVITY_LIST);
