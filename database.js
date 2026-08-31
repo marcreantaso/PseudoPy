@@ -43,6 +43,16 @@ try {
     console.warn('[Database] Firebase init warning:', e);
 }
 
+const firestoreReady = () => !!(firestore && typeof firestore.collection === 'function');
+
+function withFirestoreTimeout(promise, ms = 4000) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Firestore operation timed out after ${ms}ms`)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 // ── Collection References ──────────────────────────────────
 const usersRef = "pseudopy_users";
 const exercisesRef = "pseudopy_exercises";
@@ -571,7 +581,7 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
     let results = [];
 
     // 1. Try Firestore
-    if (firestore) {
+    if (firestoreReady()) {
         try {
             const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
             if (snapshot && !snapshot.empty) {
@@ -783,7 +793,7 @@ async function dbCount(ref) {
 // ══════════════════════════════════════════════════════════════
 
 async function batchSeed(collectionName, items) {
-    if (!firestore) return;
+    if (!firestoreReady()) return;
     const batch = firestore.batch();
     items.forEach(item => {
         const ref = firestore.collection(collectionName).doc(item._docId || item.id);
@@ -794,7 +804,7 @@ async function batchSeed(collectionName, items) {
 
 async function seedDatabase() {
     try {
-        if (!firestore) return true;
+        if (!firestoreReady()) return true;
 
         console.log('[Database] Checking Firestore collections...');
         const userSnap = await withFirestoreTimeout(firestore.collection(usersRef).get());

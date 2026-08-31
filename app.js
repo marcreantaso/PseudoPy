@@ -5901,7 +5901,7 @@ function installPWA() {
     }
 }
 
-if (window.navigator.standalone === true) {
+if (typeof window !== 'undefined' && window.navigator && window.navigator.standalone === true) {
     document.body.classList.add('ios-standalone');
 }
 
