@@ -215,7 +215,7 @@
               <label>New Password <span style="color:var(--danger)">*</span></label>
               <div style="position:relative; display:flex; align-items:center;">
                 <input type="password" id="fp-reset-new-password" class="form-input"
-                  placeholder="Minimum 8 characters" style="padding-right:2.5rem; width:100%;">
+                  placeholder="Enter new password" style="padding-right:2.5rem; width:100%;">
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('fp-reset-new-password', this)"
                   style="position:absolute; right:0.25rem; background:transparent; border:none; font-size:1.1rem; opacity:0.7; cursor:pointer;">•••</button>
@@ -231,10 +231,7 @@
                   style="position:absolute; right:0.25rem; background:transparent; border:none; font-size:1.1rem; opacity:0.7; cursor:pointer;">•••</button>
               </div>
             </div>
-            <div class="fp-requirements">
-              <div>✓ Minimum 8 characters</div>
               <div>✓ Passwords must match</div>
-            </div>
             <div style="display:flex; gap:0.75rem; margin-top:1.25rem;">
               <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">← Cancel</button>
               <button class="btn btn-primary" onclick="submitPasswordReset()" style="flex:2">🔐 Reset Password</button>
@@ -1709,7 +1706,7 @@
             <div class="form-group">
               <label>New Password</label>
               <div style="position: relative; display: flex; align-items: center;">
-                <input type="password" id="cp-new-password" class="form-input" placeholder="Minimum 6 characters"
+                <input type="password" id="cp-new-password" class="form-input" placeholder="Enter new password"
                   style="padding-right: 2.5rem; width: 100%;">
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('cp-new-password', this)"
@@ -1734,7 +1731,6 @@
               <div class="cp-req-title" style="margin-top: 1rem; font-weight: 600;">Password Requirements:</div>
               <ul
                 style="margin-top: 0.25rem; margin-bottom: 1rem; padding-left: 1.25rem; font-size: 0.85rem; color: var(--text-muted);">
-                <li>Minimum 6 characters</li>
                 <li>Must not be the same as current password</li>
               </ul>
             </div>

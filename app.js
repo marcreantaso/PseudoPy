@@ -4144,10 +4144,7 @@ async function submitPasswordChangeRequest() {
         showToast('Please fill in both password fields.', 'error');
         return;
     }
-    if (newPassword.length < 8) {
-        showToast('Password must be at least 8 characters.', 'error');
-        return;
-    }
+
     if (newPassword !== confirmPassword) {
         showToast('Passwords do not match.', 'error');
         return;
@@ -4478,10 +4475,7 @@ async function submitPasswordReset() {
         showToast('Please fill in both password fields.', 'error');
         return;
     }
-    if (newPwd.length < 8) {
-        showToast('Password must be at least 8 characters.', 'error');
-        return;
-    }
+
     if (newPwd !== confirmPwd) {
         showToast('Passwords do not match.', 'error');
         return;
@@ -6207,10 +6201,7 @@ async function handleChangePassword() {
         return;
     }
 
-    if (newParam.length < 8) {
-        showToast('New password must be at least 8 characters.', 'error');
-        return;
-    }
+
 
     if (newParam !== confirmParam) {
         showToast('New passwords do not match.', 'error');
