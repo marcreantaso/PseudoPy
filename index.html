@@ -165,14 +165,14 @@
         <div id="forgot-password-panel" class="hidden">
           <div class="login-card-header">
             <h2>🔐 Forgot Password?</h2>
-            <p>Submit a recovery request. Your instructor will authorize the reset.</p>
+            <p>Submit a recovery request. Your instructor or administrator will authorize the reset.</p>
           </div>
 
-          <!-- Step 1: Student Identification -->
+          <!-- Step 1: User Identification -->
           <div id="fp-step-1">
             <div class="form-group">
-              <label>Username or Student ID</label>
-              <input type="text" id="fp-username-input" class="form-input" placeholder="e.g. mdaet_student or 2024-032">
+              <label>Username, Email, or Student ID</label>
+              <input type="text" id="fp-username-input" class="form-input" placeholder="e.g. mdaet_student, mreantaso_instructor or 2024-032">
             </div>
             <div style="display:flex; gap:0.75rem; margin-top:1rem;">
               <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">Cancel</button>
@@ -187,13 +187,13 @@
               <h3>Request Submitted</h3>
               <p>Your recovery request for <strong id="fp-submitted-name">your account</strong> has been submitted.</p>
               <p style="margin-top:0.5rem; font-size:0.85rem; color:var(--text-muted);">
-                Ask your instructor to review and approve the request in the <strong>Password Recovery</strong> panel.
+                Ask your instructor or administrator to review and approve the request in the <strong>Password Requests</strong> panel.
                 Then return here and check your status.
               </p>
             </div>
             <div class="form-group" style="margin-top:1rem;">
-              <label>Check Status &mdash; Enter your Username or Student ID</label>
-              <input type="text" id="fp-check-username" class="form-input" placeholder="e.g. mdaet_student or 2024-032">
+              <label>Check Status &mdash; Enter your Username, Email, or Student ID</label>
+              <input type="text" id="fp-check-username" class="form-input" placeholder="e.g. mdaet_student, mreantaso_instructor or 2024-032">
             </div>
             <div style="display:flex; gap:0.75rem; margin-top:1rem;">
               <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">← Back to Login</button>
@@ -324,8 +324,9 @@
           <button class="nav-item active" onclick="navigateTo('manage-users')">
             <span class="nav-icon">👥</span> Manage Instructors
           </button>
-          <button class="nav-item" onclick="navigateTo('password-requests')">
-            <span class="nav-icon">🔑</span> Password History
+          <button class="nav-item" onclick="navigateTo('password-requests')" style="position:relative;">
+            <span class="nav-icon">🔑</span> Password Requests
+            <span id="nav-admin-recovery-badge" style="display:none; position:absolute; right:0.75rem; top:50%; transform:translateY(-50%); background:var(--danger); color:#fff; border-radius:999px; font-size:0.7rem; font-weight:700; min-width:18px; height:18px; align-items:center; justify-content:center; padding:0 4px;"></span>
           </button>
 
         </div>
@@ -1883,12 +1884,22 @@
       <div id="page-password-requests" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>🔒 Security Audit Log</h2>
-            <p>View a complete log of all password security events. No passwords are displayed.</p>
+            <h2>🔑 Password Requests &amp; Security Audit</h2>
+            <p>Review and authorize instructor password recovery requests and view security audit logs.</p>
           </div>
         </div>
 
         <div class="stats-grid" style="margin-bottom:1.5rem">
+          <div class="stat-card">
+            <div class="stat-icon">⏳</div>
+            <div class="stat-value" id="stat-admin-recovery-pending" style="color:var(--warning)">0</div>
+            <div class="stat-label">Pending Instructor Requests</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-value" id="stat-admin-recovery-total">0</div>
+            <div class="stat-label">Total Instructor Requests</div>
+          </div>
           <div class="stat-card">
             <div class="stat-icon">📋</div>
             <div class="stat-value" id="stat-total-changes">0</div>
@@ -1896,9 +1907,30 @@
           </div>
         </div>
 
+        <!-- Instructor Password Recovery Requests Panel -->
+        <div class="data-table-container" style="margin-bottom:2rem">
+          <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>🔑 Instructor Password Recovery Requests</h3>
+            <span style="font-size:0.8rem; color:var(--text-muted);">Admin Authorization Panel</span>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Instructor</th>
+                <th>Username</th>
+                <th>Requested At</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="admin-recovery-requests-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Security Event Log Panel -->
         <div class="data-table-container">
           <div class="panel-header">
-            <h3>Security Event Log</h3>
+            <h3>🔒 Security Audit Log</h3>
           </div>
           <table class="data-table">
             <thead>
@@ -2204,6 +2236,48 @@
       <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.75rem;">
         <button class="btn btn-secondary" onclick="closeRecoveryConfirm()">Cancel</button>
         <button class="btn btn-primary" onclick="approveRecoveryRequest()">Approve Password Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Instructor Password Recovery Review Modal -->
+  <div id="admin-recovery-review-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3>🔍 Instructor Verification &amp; Recovery Review</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeAdminRecoveryReview()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="admin-recovery-review-content"></div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; gap:0.75rem;">
+        <button class="btn btn-secondary" onclick="closeAdminRecoveryReview()">Close</button>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn btn-danger" id="admin-recovery-reject-btn" onclick="rejectAdminRecoveryRequest()">❌ Reject Request</button>
+          <button class="btn btn-primary" id="admin-recovery-approve-btn" onclick="confirmApproveAdminRecovery()">✅ Approve Password Reset</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Instructor Password Recovery Confirmation Dialog -->
+  <div id="admin-recovery-confirm-dialog" class="modal-overlay hidden" style="z-index: 10001;">
+    <div class="modal" style="max-width: 460px;">
+      <div class="modal-header">
+        <h3>⚠️ Confirm Instructor Password Reset</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeAdminRecoveryConfirm()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:1rem; margin-bottom:0.75rem;">
+          Approve password reset for <strong id="admin-recovery-confirm-name">this instructor</strong>?
+        </p>
+        <p style="font-size:0.85rem; color:var(--text-muted); line-height:1.5;">
+          After approval, the instructor will be allowed to create a new password within 30 minutes. The existing password will not be revealed.
+        </p>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button class="btn btn-secondary" onclick="closeAdminRecoveryConfirm()">Cancel</button>
+        <button class="btn btn-primary" onclick="approveAdminRecoveryRequest()">Approve Password Reset</button>
       </div>
     </div>
   </div>

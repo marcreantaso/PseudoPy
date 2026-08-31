@@ -797,6 +797,8 @@ function showApp() {
     navigateTo(defaults[currentUser.role]);
 
     if (currentUser.role === 'admin') {
+        updateAdminPendingRequestsBadge();
+    } else if (currentUser.role === 'instructor') {
         updatePendingRequestsBadge();
     }
 }
@@ -4297,42 +4299,47 @@ function cancelForgotPassword() {
 }
 
 /**
- * Student submits a password recovery request.
+ * Submits a password recovery request for student (instructor approval) or instructor (admin approval).
  */
 async function submitRecoveryRequest() {
-    const usernameOrId = getValue('fp-username-input').trim();
+    const rawInput = getValue('fp-username-input').trim();
+    const usernameOrId = typeof normalizeUsername === 'function' ? normalizeUsername(rawInput) : rawInput;
     if (!usernameOrId) {
-        showToast('Please enter your username or Student ID.', 'error');
+        showToast('Please enter your username, email, or Student ID.', 'error');
         return;
     }
 
     await refreshUsers();
-    const student = cachedUsers.find(u =>
-        (u.username === usernameOrId || u.studentId === usernameOrId) && u.role === 'student'
+    const targetUser = cachedUsers.find(u =>
+        (u.username === usernameOrId || u.username === rawInput || u.studentId === rawInput || u.email === rawInput) &&
+        (u.role === 'student' || u.role === 'instructor')
     );
 
-    if (!student) {
-        showToast('Student account not found. Check your username or Student ID.', 'error');
+    if (!targetUser) {
+        showToast('Account not found. Check your username, email, or Student ID.', 'error');
         return;
     }
 
-    if (student.status === 'inactive') {
-        showToast('Your account is inactive. Please contact your instructor.', 'error');
+    if (targetUser.status === 'inactive' || targetUser.status === 'archived') {
+        const contactRole = targetUser.role === 'instructor' ? 'administrator' : 'instructor';
+        showToast(`Your account is ${targetUser.status}. Please contact your ${contactRole}.`, 'error');
         return;
     }
+
+    const isInstructor = targetUser.role === 'instructor';
+    const approver = isInstructor ? 'administrator' : 'instructor';
 
     // Check for existing pending request to avoid duplicates
     const existing = await dbGetAll(passwordRequestsRef);
     const alreadyPending = existing.find(r =>
-        r.type === 'recovery' && r.studentId === student._docId && r.status === 'pending'
+        r.type === 'recovery' && (r.studentId === targetUser._docId || r.userId === targetUser._docId) && r.status === 'pending'
     );
 
     if (alreadyPending) {
-        // Show the check-status step instead
-        setText('fp-submitted-name', student.fullName);
+        setText('fp-submitted-name', targetUser.fullName);
         hide('fp-step-1');
         show('fp-step-2');
-        showToast('You already have a pending recovery request. Ask your instructor to approve it.', 'info');
+        showToast(`You already have a pending recovery request. Ask your ${approver} to approve it.`, 'info');
         return;
     }
 
@@ -4341,11 +4348,15 @@ async function submitRecoveryRequest() {
     await dbSet(passwordRequestsRef, reqId, {
         _docId: reqId,
         type: 'recovery',
-        studentId: student._docId,
-        studentName: student.fullName,
-        studentUsername: student.username,
-        studentEnrolledId: student.studentId || '—',
-        instructorId: student.instructorId || null,
+        userRole: targetUser.role,
+        targetRole: targetUser.role,
+        userId: targetUser._docId,
+        studentId: targetUser._docId, // for backward compatibility
+        studentName: targetUser.fullName,
+        studentUsername: targetUser.username,
+        studentEnrolledId: targetUser.studentId || (isInstructor ? 'INSTRUCTOR' : '—'),
+        email: targetUser.email || null,
+        instructorId: targetUser.instructorId || null,
         status: 'pending',
         requestedAt: new Date().toISOString(),
         reviewedAt: null,
@@ -4358,45 +4369,54 @@ async function submitRecoveryRequest() {
 
     await logAuditAction({
         action: 'password_reset_requested',
-        studentId: student._docId,
-        studentName: student.fullName,
-        username: student.username,
+        studentId: targetUser._docId,
+        studentName: targetUser.fullName,
+        username: targetUser.username,
+        userRole: targetUser.role,
         requestId: reqId
     });
 
-    setText('fp-submitted-name', student.fullName);
+    setText('fp-submitted-name', targetUser.fullName);
     hide('fp-step-1');
     show('fp-step-2');
-    showToast('Recovery request submitted! Ask your instructor to approve it.', 'success');
+    showToast(`Recovery request submitted! Ask your ${approver} to approve it.`, 'success');
 
-    // Update instructor badge
-    updatePendingRequestsBadge();
+    // Update badges
+    if (isInstructor) {
+        updateAdminPendingRequestsBadge();
+    } else {
+        updatePendingRequestsBadge();
+    }
 }
 
 /**
- * Student checks if their recovery request has been approved,
- * then shows the reset password form if a valid token exists.
+ * Checks if recovery request has been approved, then shows the reset password form if a valid token exists.
  */
 async function checkRecoveryStatus() {
     const usernameOrId = getValue('fp-username-input').trim() ||
         (getValue('fp-check-username') || '').trim();
     const checkInput = getValue('fp-check-username').trim();
-    const lookupVal = checkInput || usernameOrId;
+    const rawLookup = checkInput || usernameOrId;
+    const lookupVal = typeof normalizeUsername === 'function' ? normalizeUsername(rawLookup) : rawLookup;
 
     if (!lookupVal) {
-        showToast('Please enter your username or Student ID.', 'error');
+        showToast('Please enter your username, email, or Student ID.', 'error');
         return;
     }
 
     await refreshUsers();
-    const student = cachedUsers.find(u =>
-        (u.username === lookupVal || u.studentId === lookupVal) && u.role === 'student'
+    const targetUser = cachedUsers.find(u =>
+        (u.username === lookupVal || u.username === rawLookup || u.studentId === rawLookup || u.email === rawLookup) &&
+        (u.role === 'student' || u.role === 'instructor')
     );
 
-    if (!student) {
-        showToast('Student account not found.', 'error');
+    if (!targetUser) {
+        showToast('Account not found.', 'error');
         return;
     }
+
+    const isInstructor = targetUser.role === 'instructor';
+    const approver = isInstructor ? 'administrator' : 'instructor';
 
     // Find the most recent approved (unused, non-expired) recovery request
     const requests = await dbGetAll(passwordRequestsRef);
@@ -4405,7 +4425,7 @@ async function checkRecoveryStatus() {
     const approvedReq = requests
         .filter(r =>
             r.type === 'recovery' &&
-            r.studentId === student._docId &&
+            (r.studentId === targetUser._docId || r.userId === targetUser._docId) &&
             r.status === 'approved' &&
             !r.tokenUsed &&
             r.tokenExpiresAt && r.tokenExpiresAt > now
@@ -4416,7 +4436,7 @@ async function checkRecoveryStatus() {
         // Check if there's an expired one
         const expiredReq = requests.find(r =>
             r.type === 'recovery' &&
-            r.studentId === student._docId &&
+            (r.studentId === targetUser._docId || r.userId === targetUser._docId) &&
             r.status === 'approved' &&
             (!r.tokenExpiresAt || r.tokenExpiresAt <= now)
         );
@@ -4425,7 +4445,7 @@ async function checkRecoveryStatus() {
             await dbUpdate(passwordRequestsRef, expiredReq._docId, { status: 'expired' });
             showToast('Your recovery authorization has expired. Please submit a new request.', 'error');
         } else {
-            showToast('No approved recovery request found. Please ask your instructor to approve it.', 'info');
+            showToast(`No approved recovery request found. Please ask your ${approver} to approve it.`, 'info');
         }
         return;
     }
@@ -4433,7 +4453,7 @@ async function checkRecoveryStatus() {
     // Show reset password form
     // Store the request ID in a hidden field on the form
     setValue('fp-reset-request-id', approvedReq._docId);
-    setValue('fp-reset-student-id', student._docId);
+    setValue('fp-reset-student-id', targetUser._docId);
     setValue('fp-reset-new-password', '');
     setValue('fp-reset-confirm-password', '');
 
@@ -4969,19 +4989,88 @@ async function markAllNotificationsAsRead(event) {
 }
 
 /* ============================================================
-   ADMIN: SECURITY AUDIT LOG
+   ADMIN: INSTRUCTOR PASSWORD REQUESTS & SECURITY AUDIT LOG
    ============================================================ */
 
+let currentAdminReviewRequestId = null;
+
+async function updateAdminPendingRequestsBadge() {
+    try {
+        const requests = await dbGetAll(passwordRequestsRef);
+        const pending = requests.filter(r => r.type === 'recovery' && (r.userRole === 'instructor' || r.targetRole === 'instructor') && r.status === 'pending');
+        const badge = $id('nav-admin-recovery-badge');
+        if (badge) {
+            badge.textContent = pending.length > 0 ? String(pending.length) : '';
+            badge.style.display = pending.length > 0 ? 'inline-flex' : 'none';
+        }
+    } catch (e) { /* non-critical */ }
+}
+
 /**
- * Loads the Security Audit Log for the admin panel.
- * Replaces the old simple password-change history.
+ * Loads both Instructor Password Requests (with Admin approval actions)
+ * and the Security Audit Log for the admin panel.
  */
 async function loadPasswordRequests() {
-    // Load both audit log and legacy password change history
-    const auditLogs = await refreshAuditLog();
-    const recoveryReqs = await dbGetAll(passwordRequestsRef);
+    // 1. Instructor Password Recovery Requests
+    const allRequests = await dbGetAll(passwordRequestsRef);
+    const now = Date.now();
 
-    // Combine legacy change-history records (changedAt field) with audit log
+    const instructorRecovery = allRequests
+        .filter(r => r.type === 'recovery' && (r.userRole === 'instructor' || r.targetRole === 'instructor'))
+        .sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
+
+    // Auto-expire old approved tokens
+    for (const r of instructorRecovery) {
+        if (r.status === 'approved' && r.tokenExpiresAt && r.tokenExpiresAt <= now && !r.tokenUsed) {
+            await dbUpdate(passwordRequestsRef, r._docId, { status: 'expired' });
+            r.status = 'expired';
+        }
+    }
+
+    const pendingInstructorReqs = instructorRecovery.filter(r => r.status === 'pending');
+    setText('stat-admin-recovery-pending', String(pendingInstructorReqs.length));
+    setText('stat-admin-recovery-total', String(instructorRecovery.length));
+
+    const adminRecoveryTbody = $id('admin-recovery-requests-body');
+    if (adminRecoveryTbody) {
+        if (instructorRecovery.length === 0) {
+            adminRecoveryTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">No instructor password recovery requests yet.</td></tr>';
+        } else {
+            const statusMap = {
+                pending: { cls: 'badge-recovery-pending', label: '⏳ Pending' },
+                approved: { cls: 'badge-recovery-approved', label: '✅ Approved' },
+                rejected: { cls: 'badge-recovery-rejected', label: '❌ Rejected' },
+                completed: { cls: 'badge-recovery-completed', label: '✔️ Completed' },
+                expired: { cls: 'badge-recovery-expired', label: '⏱️ Expired' }
+            };
+            adminRecoveryTbody.innerHTML = instructorRecovery.map(r => {
+                const s = statusMap[r.status] || { cls: '', label: r.status };
+                const dt = r.requestedAt ? new Date(r.requestedAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+                const canReview = r.status === 'pending';
+                const name = r.studentName || r.instructorName || 'Unknown';
+                const username = r.studentUsername || r.instructorUsername || '—';
+                return `
+                <tr>
+                  <td><div class="user-cell"><div class="avatar-sm">${name.charAt(0)}</div><div>
+                    <div style="font-weight:600;color:var(--text-primary)">${name}</div>
+                    <div style="font-size:0.75rem;color:var(--text-muted)">${r.email || 'Instructor'}</div>
+                  </div></div></td>
+                  <td>@${username}</td>
+                  <td>${dt}</td>
+                  <td><span class="badge ${s.cls}">${s.label}</span></td>
+                  <td>
+                    ${canReview
+                        ? `<button class="btn btn-primary btn-sm" onclick="openAdminRecoveryReview('${r._docId}')">🔍 Review</button>`
+                        : `<button class="btn btn-ghost btn-sm" onclick="openAdminRecoveryReview('${r._docId}')">👁️ View</button>`
+                    }
+                  </td>
+                </tr>`;
+            }).join('');
+        }
+    }
+
+    // 2. Load Security Audit Log
+    const auditLogs = await refreshAuditLog();
     const legacyHistory = (await dbGetAll(passwordRequestsRef))
         .filter(r => r.changedAt && !r.type)
         .map(r => ({
@@ -5000,39 +5089,207 @@ async function loadPasswordRequests() {
     setText('stat-total-changes', allLogs.length);
 
     const tbody = $id('password-requests-body');
-    if (!tbody) return;
+    if (tbody) {
+        if (allLogs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">No security events recorded yet.</td></tr>';
+        } else {
+            const actionLabels = {
+                'password_changed': { icon: '🔑', label: 'Password Changed', cls: 'badge-approved' },
+                'password_reset_requested': { icon: '📩', label: 'Reset Requested', cls: 'badge-recovery-pending' },
+                'password_reset_approved': { icon: '✅', label: 'Reset Approved', cls: 'badge-recovery-approved' },
+                'password_reset_rejected': { icon: '❌', label: 'Reset Rejected', cls: 'badge-recovery-rejected' },
+                'password_reset_completed': { icon: '🎉', label: 'Reset Completed', cls: 'badge-recovery-completed' }
+            };
 
-    if (allLogs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">No security events recorded yet.</td></tr>';
+            tbody.innerHTML = allLogs.map(r => {
+                const a = actionLabels[r.action] || { icon: '📋', label: r.action || 'Unknown', cls: '' };
+                const dt = r.timestamp
+                    ? new Date(r.timestamp).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+                    : '—';
+                const name = r.studentName || r.instructorName || 'Unknown';
+                const username = r.username || '—';
+                return `
+                <tr>
+                  <td><div class="user-cell"><div class="avatar-sm">${name.charAt(0)}</div>
+                    <div>
+                      <div style="font-weight:600;color:var(--text-primary)">${name}</div>
+                      <div style="font-size:0.75rem;color:var(--text-muted)">@${username}</div>
+                    </div>
+                  </div></td>
+                  <td><span class="badge ${a.cls}">${a.icon} ${a.label}</span></td>
+                  <td>${r.instructorName || '—'}</td>
+                  <td>${dt}</td>
+                </tr>`;
+            }).join('');
+        }
+    }
+
+    updateAdminPendingRequestsBadge();
+}
+
+/**
+ * Opens Admin review modal for an instructor's password recovery request.
+ */
+async function openAdminRecoveryReview(requestId) {
+    const req = await dbGet(passwordRequestsRef, requestId);
+    if (!req) { showToast('Request not found.', 'error'); return; }
+
+    currentAdminReviewRequestId = requestId;
+
+    const userDocId = req.studentId || req.userId;
+    const instructor = cachedUsers.find(u => u._docId === userDocId) ||
+        (await refreshUsers()).find(u => u._docId === userDocId);
+
+    const dt = req.requestedAt
+        ? new Date(req.requestedAt).toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short' })
+        : '—';
+
+    const statusMap = {
+        pending: { cls: 'badge-recovery-pending', label: '⏳ Pending' },
+        approved: { cls: 'badge-recovery-approved', label: '✅ Approved' },
+        rejected: { cls: 'badge-recovery-rejected', label: '❌ Rejected' },
+        completed: { cls: 'badge-recovery-completed', label: '✔️ Completed' },
+        expired: { cls: 'badge-recovery-expired', label: '⏱️ Expired' }
+    };
+    const s = statusMap[req.status] || { cls: '', label: req.status };
+    const instName = req.studentName || req.instructorName || 'Unknown';
+    const instUsername = req.studentUsername || req.instructorUsername || '—';
+
+    setHtml('admin-recovery-review-content', `
+        <div class="recovery-info-grid">
+          <div class="recovery-info-row">
+            <span class="recovery-info-label">👤 Instructor Name</span>
+            <span class="recovery-info-value">${instName}</span>
+          </div>
+          <div class="recovery-info-row">
+            <span class="recovery-info-label">📧 Email</span>
+            <span class="recovery-info-value">${req.email || (instructor ? instructor.email : '—')}</span>
+          </div>
+          <div class="recovery-info-row">
+            <span class="recovery-info-label">👤 Username</span>
+            <span class="recovery-info-value">@${instUsername}</span>
+          </div>
+          <div class="recovery-info-row">
+            <span class="recovery-info-label">🟢 Account Status</span>
+            <span class="recovery-info-value">${instructor ? instructor.status : 'Active'}</span>
+          </div>
+          <div class="recovery-info-row">
+            <span class="recovery-info-label">📅 Request Date</span>
+            <span class="recovery-info-value">${dt}</span>
+          </div>
+          <div class="recovery-info-row">
+            <span class="recovery-info-label">📋 Request Status</span>
+            <span class="recovery-info-value"><span class="badge ${s.cls}">${s.label}</span></span>
+          </div>
+        </div>
+        <div class="recovery-security-notice">
+          🔒 <strong>Security Notice:</strong> No password information is displayed. 
+          The administrator only authorizes the instructor to create a new password.
+        </div>
+    `);
+
+    const approveBtn = $id('admin-recovery-approve-btn');
+    const rejectBtn = $id('admin-recovery-reject-btn');
+    if (approveBtn) approveBtn.style.display = req.status === 'pending' ? 'inline-flex' : 'none';
+    if (rejectBtn) rejectBtn.style.display = req.status === 'pending' ? 'inline-flex' : 'none';
+
+    show('admin-recovery-review-modal');
+}
+
+function closeAdminRecoveryReview() {
+    hide('admin-recovery-review-modal');
+    currentAdminReviewRequestId = null;
+}
+
+function confirmApproveAdminRecovery() {
+    if (!currentAdminReviewRequestId) return;
+    const modal = $id('admin-recovery-review-modal');
+    const nameEl = modal ? modal.querySelector('.recovery-info-value') : null;
+    const instructorName = nameEl ? nameEl.textContent : 'this instructor';
+
+    setText('admin-recovery-confirm-name', instructorName);
+    show('admin-recovery-confirm-dialog');
+}
+
+function closeAdminRecoveryConfirm() {
+    hide('admin-recovery-confirm-dialog');
+}
+
+async function approveAdminRecoveryRequest() {
+    hide('admin-recovery-confirm-dialog');
+    if (!currentAdminReviewRequestId) return;
+
+    const req = await dbGet(passwordRequestsRef, currentAdminReviewRequestId);
+    if (!req || req.status !== 'pending') {
+        showToast('This request is no longer pending.', 'error');
+        closeAdminRecoveryReview();
         return;
     }
 
-    const actionLabels = {
-        'password_changed': { icon: '🔑', label: 'Password Changed', cls: 'badge-approved' },
-        'password_reset_requested': { icon: '📩', label: 'Reset Requested', cls: 'badge-recovery-pending' },
-        'password_reset_approved': { icon: '✅', label: 'Reset Approved', cls: 'badge-recovery-approved' },
-        'password_reset_rejected': { icon: '❌', label: 'Reset Rejected', cls: 'badge-recovery-rejected' },
-        'password_reset_completed': { icon: '🎉', label: 'Reset Completed', cls: 'badge-recovery-completed' }
-    };
+    const tokenBytes = new Uint8Array(32);
+    crypto.getRandomValues(tokenBytes);
+    const resetToken = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    const tokenExpiresAt = Date.now() + (30 * 60 * 1000); // 30 minutes
 
-    tbody.innerHTML = allLogs.map(r => {
-        const a = actionLabels[r.action] || { icon: '📋', label: r.action || 'Unknown', cls: '' };
-        const dt = r.timestamp
-            ? new Date(r.timestamp).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
-            : '—';
-        return `
-        <tr>
-          <td><div class="user-cell"><div class="avatar-sm">${(r.studentName || '?').charAt(0)}</div>
-            <div>
-              <div style="font-weight:600;color:var(--text-primary)">${r.studentName || 'Unknown'}</div>
-              <div style="font-size:0.75rem;color:var(--text-muted)">@${r.username || '—'}</div>
-            </div>
-          </div></td>
-          <td><span class="badge ${a.cls}">${a.icon} ${a.label}</span></td>
-          <td>${r.instructorName || '—'}</td>
-          <td>${dt}</td>
-        </tr>`;
-    }).join('');
+    const adminId = currentUser ? (currentUser._docId || currentUser.id) : 'admin';
+    const adminName = currentUser ? currentUser.fullName : 'Administrator';
+
+    await dbUpdate(passwordRequestsRef, req._docId, {
+        status: 'approved',
+        resetToken: resetToken,
+        tokenExpiresAt: tokenExpiresAt,
+        tokenUsed: false,
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: adminId,
+        reviewedByName: adminName
+    });
+
+    await logAuditAction({
+        action: 'password_reset_approved',
+        studentId: req.studentId || req.userId,
+        studentName: req.studentName || req.instructorName,
+        username: req.studentUsername || req.instructorUsername,
+        instructorId: adminId,
+        instructorName: adminName,
+        requestId: req._docId
+    });
+
+    const instName = req.studentName || req.instructorName || 'Instructor';
+    closeAdminRecoveryReview();
+    showToast(`Password reset approved for ${instName}. Token valid for 30 minutes.`, 'success');
+    await loadPasswordRequests();
+}
+
+async function rejectAdminRecoveryRequest() {
+    if (!currentAdminReviewRequestId) return;
+
+    const req = await dbGet(passwordRequestsRef, currentAdminReviewRequestId);
+    if (!req) return;
+
+    const adminId = currentUser ? (currentUser._docId || currentUser.id) : 'admin';
+    const adminName = currentUser ? currentUser.fullName : 'Administrator';
+
+    await dbUpdate(passwordRequestsRef, req._docId, {
+        status: 'rejected',
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: adminId,
+        reviewedByName: adminName
+    });
+
+    await logAuditAction({
+        action: 'password_reset_rejected',
+        studentId: req.studentId || req.userId,
+        studentName: req.studentName || req.instructorName,
+        username: req.studentUsername || req.instructorUsername,
+        instructorId: adminId,
+        instructorName: adminName,
+        requestId: req._docId
+    });
+
+    const instName = req.studentName || req.instructorName || 'Instructor';
+    closeAdminRecoveryReview();
+    showToast(`Recovery request for ${instName} has been rejected.`, 'info');
+    await loadPasswordRequests();
 }
 
 
@@ -5983,6 +6240,16 @@ async function handleChangePassword() {
             cachedUsers[uIndex].passwordHash = hash;
             cachedUsers[uIndex].passwordSalt = salt;
         }
+
+        await logAuditAction({
+            action: 'password_changed',
+            studentId: currentUser._docId || currentUser.id,
+            studentName: currentUser.fullName,
+            username: currentUser.username,
+            instructorId: null,
+            instructorName: null,
+            requestId: null
+        });
 
         showToast('Password updated successfully!', 'success');
 
