@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>PseudoPy — Firebase Seed Tool</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     body { font-family: monospace; background: #0f172a; color: #e2e8f0; padding: 2rem; }
     h1 { color: #3b82f6; }
@@ -452,5 +453,39 @@
         btn.textContent = '▶ Seed Again';
     }
   </script>
+    <script>
+        const seedIconMap = {
+            '🔥': 'flame', '▶': 'play', '✅': 'circle-check', '⏳': 'hourglass',
+            '🎉': 'party-popper', '👉': 'arrow-right', '❌': 'circle-x'
+        };
+        function hydrateSeedIcons(root) {
+            const walker = document.createTreeWalker(root || document.body, NodeFilter.SHOW_TEXT);
+            const nodes = [];
+            let node;
+            while ((node = walker.nextNode())) {
+                if (node.parentElement && !['SCRIPT', 'STYLE', 'TEXTAREA', 'PRE', 'CODE'].includes(node.parentElement.tagName) &&
+                        Object.keys(seedIconMap).some(glyph => node.nodeValue.includes(glyph))) nodes.push(node);
+            }
+            nodes.forEach(textNode => {
+                const fragment = document.createDocumentFragment();
+                let text = textNode.nodeValue;
+                while (text) {
+                    const matches = Object.keys(seedIconMap).map(glyph => ({ glyph, index: text.indexOf(glyph) }))
+                        .filter(match => match.index >= 0).sort((a, b) => a.index - b.index || b.glyph.length - a.glyph.length);
+                    if (!matches.length) { fragment.appendChild(document.createTextNode(text)); break; }
+                    const match = matches[0];
+                    if (match.index) fragment.appendChild(document.createTextNode(text.slice(0, match.index)));
+                    const icon = document.createElement('i');
+                    icon.dataset.lucide = seedIconMap[match.glyph];
+                    icon.setAttribute('aria-hidden', 'true');
+                    fragment.appendChild(icon);
+                    text = text.slice(match.index + match.glyph.length);
+                }
+                textNode.replaceWith(fragment);
+            });
+            if (window.lucide) lucide.createIcons({ root: root || document });
+        }
+        window.addEventListener('DOMContentLoaded', () => hydrateSeedIcons(document.body));
+    </script>
 </body>
 </html>

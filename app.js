@@ -918,6 +918,16 @@ window.addEventListener('resize', () => {
    PSEUDOCODE → PYTHON TRANSLATION ENGINE
    ============================================================ */
 
+function icon(name, label) {
+    const aria = label ? ` aria-label="${label}"` : ' aria-hidden="true"';
+    return `<i data-lucide="${name}"${aria}></i>`;
+}
+
+function refreshIcons(root) {
+    if (typeof lucide === 'undefined') return;
+    lucide.createIcons({ root: root || document });
+}
+
 function checkIncompleteExpression(lineText, lineNum, errors) {
     if (!lineText) return;
     const trimmed = lineText.trim();
