@@ -948,9 +948,10 @@ const uiEmojiIconMap = {
 
 function replaceUiEmojiIcons(root) {
     const container = root || document.body;
-    if (!container) return;
+    if (!container || container.nodeType !== Node.ELEMENT_NODE) return false;
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
     const textNodes = [];
+    let replaced = false;
     let current;
     while ((current = walker.nextNode())) {
         const parent = current.parentElement;
@@ -978,22 +979,38 @@ function replaceUiEmojiIcons(root) {
             text = text.slice(match.index + match.glyph.length);
         }
         textNode.replaceWith(fragment);
+        replaced = true;
     });
-    refreshIcons(container);
+    if (replaced) refreshIcons(container);
+    return replaced;
 }
 
 function observeUiEmojiIcons() {
     replaceUiEmojiIcons(document.body);
-    const observer = new MutationObserver(records => records.forEach(record => {
-        record.addedNodes.forEach(node => {
-            if (node.nodeType === Node.ELEMENT_NODE) replaceUiEmojiIcons(node);
-        });
-    }));
+    let pendingRoots = new Set();
+    let scheduled = false;
+    const flush = () => {
+        scheduled = false;
+        const roots = pendingRoots;
+        pendingRoots = new Set();
+        roots.forEach(root => replaceUiEmojiIcons(root));
+    };
+    const observer = new MutationObserver(records => {
+        records.forEach(record => record.addedNodes.forEach(node => {
+            if (node.nodeType === Node.ELEMENT_NODE && node.nodeName !== 'SVG') pendingRoots.add(node);
+        }));
+        if (pendingRoots.size && !scheduled) {
+            scheduled = true;
+            requestAnimationFrame(flush);
+        }
+    });
     observer.observe(document.body, { childList: true, subtree: true });
 }
 
 function animateAnalyticsCards() {
-    if (typeof anime === 'undefined' || typeof anime.animate !== 'function') return;
+    if (typeof anime === 'undefined' || typeof anime.animate !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const analyticsPage = $id('page-analytics');
+    if (!analyticsPage || analyticsPage.classList.contains('hidden')) return;
     anime.animate('.an-kpi-card', {
         opacity: [0, 1],
         translateY: [14, 0],
@@ -1004,7 +1021,9 @@ function animateAnalyticsCards() {
 }
 
 function animateAnalyticsCharts() {
-    if (typeof anime === 'undefined' || typeof anime.animate !== 'function') return;
+    if (typeof anime === 'undefined' || typeof anime.animate !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const analyticsPage = $id('page-analytics');
+    if (!analyticsPage || analyticsPage.classList.contains('hidden')) return;
     const bars = document.querySelectorAll('#chart-submissions .an-bar-inner');
     if (bars.length) {
         anime.animate(bars, {
