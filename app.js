@@ -1142,6 +1142,12 @@ if __name__ == "__main__":
     }
 
     const result = compilerEngine.compile(pseudocode);
+    if (result && typeof result.python === 'string') {
+        result.python = result.python
+            .replace(/\u2265/g, '>=')
+            .replace(/\u2264/g, '<=')
+            .replace(/\u2260/g, '!=');
+    }
 
     // ── Panel 1: Record translation metrics ──
     if (typeof metricsEngine !== 'undefined') {

@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-v37';
+const CACHE_NAME = 'pseudopy-v38';
 const LOCAL_ASSETS = [
     './',
     './index.html',
