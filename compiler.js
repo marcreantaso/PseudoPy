@@ -988,6 +988,23 @@ class SemanticAnalyzer {
 //
 // The generated code is compatible with Skulpt's print() capture.
 // ══════════════════════════════════════════════════════════════
+const PYTHON_OPERATOR_MAP = {
+    '\u2265': '>=',
+    '\u2264': '<=',
+    '\u2260': '!=',
+    '==': '==',
+    '\u2261': '==',
+    '\u2248': '==',
+    '\u00D7': '*',
+    '\u2715': '*',
+    '\u22C5': '*',
+    '\u00F7': '/',
+    '\u2011': '-',
+    '\u2212': '-',
+    '\u2013': '-',
+    '\u2014': '-'
+};
+
 class CodeGenerator {
     constructor(symbolTable) {
         this.indentLevel = 0;   // Global indent_level
@@ -997,6 +1014,10 @@ class CodeGenerator {
 
     ind() {
         return '    '.repeat(this.indentLevel);
+    }
+
+    normalizeOperator(rawOperator) {
+        return PYTHON_OPERATOR_MAP[rawOperator] || rawOperator;
     }
 
     // Translate expression tokens to Python string
@@ -1038,11 +1059,12 @@ class CodeGenerator {
                     }
                     break;
                 case TOKEN_TYPES.OPERATOR:
-                    if (t.value === '<>') parts.push('!=');
-                    else if (t.value === '=' && i > 0 && i < tokens.length - 1) parts.push('=='); // comparison context
-                    // Safety-net: catch any Unicode operators that survived to code-gen
-                    else if (Lexer.UNICODE_OPERATOR_MAP[t.value]) parts.push(Lexer.UNICODE_OPERATOR_MAP[t.value]);
-                    else parts.push(t.value);
+                    {
+                        const normalizedOperator = this.normalizeOperator(t.value);
+                        if (normalizedOperator === '<>') parts.push('!=');
+                        else if (normalizedOperator === '=' && i > 0 && i < tokens.length - 1) parts.push('=='); // comparison context
+                        else parts.push(normalizedOperator);
+                    }
                     break;
                 default:
                     parts.push(t.value);
