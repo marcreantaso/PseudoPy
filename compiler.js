@@ -114,6 +114,29 @@ class Lexer {
         this.tokens = [];
     }
 
+    // ── Unicode → ASCII Operator Normalization Map ──
+    // Maps common Unicode mathematical symbols to strict Python-compatible ASCII.
+    // Applied at the lexer level so the parser and code generator only ever see
+    // standard operators, preventing SyntaxErrors in Skulpt at runtime.
+    static UNICODE_OPERATOR_MAP = {
+        '\u2265': '>=',   // ≥  GREATER-THAN OR EQUAL TO
+        '\u2264': '<=',   // ≤  LESS-THAN OR EQUAL TO
+        '\u2260': '!=',   // ≠  NOT EQUAL TO
+        '\u2254': '=',    // ≔  COLON EQUALS (assignment)
+        '\u00D7': '*',    // ×  MULTIPLICATION SIGN
+        '\u2715': '*',    // ✕  MULTIPLICATION X
+        '\u22C5': '*',    // ⋅  DOT OPERATOR (scalar multiply)
+        '\u00F7': '/',    // ÷  DIVISION SIGN
+        '\u2190': '=',    // ←  LEFTWARDS ARROW (assignment)
+        '\u2192': '->',   // →  RIGHTWARDS ARROW
+        '\u2261': '==',   // ≡  IDENTICAL TO
+        '\u2248': '==',   // ≈  ALMOST EQUAL TO (treat as ==)
+        '\u2011': '-',    // ‑  NON-BREAKING HYPHEN
+        '\u2212': '-',    // −  MINUS SIGN
+        '\u2013': '-',    // –  EN DASH (often typed as minus)
+        '\u2014': '-',    // —  EM DASH
+    };
+
     peek() {
         return this.pos < this.input.length ? this.input[this.pos] : null;
     }
@@ -203,6 +226,17 @@ class Lexer {
             // ── Single-char operators & punctuation ──
             if ('+-*/%,()[]:.'.includes(ch)) {
                 this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: this.advance(), line: this.line });
+                continue;
+            }
+
+            // ── Unicode Operator Normalization ──
+            // Intercept Unicode math symbols BEFORE the unknown-char fallthrough.
+            // The normalized ASCII value is emitted so the parser/code generator
+            // never encounters raw Unicode operators.
+            if (Lexer.UNICODE_OPERATOR_MAP[ch]) {
+                const normalized = Lexer.UNICODE_OPERATOR_MAP[ch];
+                this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: normalized, line: this.line });
+                this.advance();
                 continue;
             }
 
@@ -1006,6 +1040,8 @@ class CodeGenerator {
                 case TOKEN_TYPES.OPERATOR:
                     if (t.value === '<>') parts.push('!=');
                     else if (t.value === '=' && i > 0 && i < tokens.length - 1) parts.push('=='); // comparison context
+                    // Safety-net: catch any Unicode operators that survived to code-gen
+                    else if (Lexer.UNICODE_OPERATOR_MAP[t.value]) parts.push(Lexer.UNICODE_OPERATOR_MAP[t.value]);
                     else parts.push(t.value);
                     break;
                 default:
