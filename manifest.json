@@ -1,7 +1,7 @@
 {
     "name": "PseudoPy — Automated Code Generation",
     "short_name": "PseudoPy",
-    "description": "Bridging Pseudocode and Python: An Algorithmic Approach to Automated Code Generation",
+    "description": "Translating Pseudocode to Python: An Algorithmic Approach to Automated Code Generation",
     "start_url": "/index.html",
     "display": "standalone",
     "background_color": "#06060b",
