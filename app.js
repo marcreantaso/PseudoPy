@@ -925,7 +925,110 @@ function icon(name, label) {
 
 function refreshIcons(root) {
     if (typeof lucide === 'undefined') return;
-    lucide.createIcons({ root: root || document });
+    lucide.createIcons({ root: root || document, icons: lucide.icons });
+}
+
+const uiEmojiIconMap = {
+    '📊': 'chart-column', '📈': 'trending-up', '📉': 'trending-down', '📄': 'file-text', '📋': 'clipboard-list',
+    '📑': 'files', '📥': 'download', '📦': 'package', '📅': 'calendar', '📧': 'mail', '🗓️': 'calendar-days', '🗓': 'calendar-days',
+    '📆': 'calendar-range', '🔍': 'search', '🔄': 'refresh-cw', '🔁': 'repeat-2', '🔃': 'refresh-cw',
+    '👥': 'users', '👤': 'user', '💡': 'lightbulb', '🔧': 'wrench', '⚡': 'zap', '🪄': 'wand-sparkles',
+    '📝': 'notebook-pen', '✏️': 'pencil', '✏': 'pencil', '🐍': 'code-2', '🧪': 'flask-conical', '⚙️': 'settings', '⚙': 'settings',
+    '🔑': 'key-round', '🔐': 'lock-keyhole', '🔒': 'lock', '🔓': 'unlock', '🔔': 'bell', '🔕': 'bell-off',
+    '👁️': 'eye', '👁': 'eye', '🙈': 'eye-off', '✅': 'circle-check', '☑️': 'square-check', '✔️': 'check',
+    '✔': 'check', '✓': 'check', '❌': 'circle-x', '⚠️': 'triangle-alert', '⚠': 'triangle-alert',
+    '⏳': 'hourglass', '⏱️': 'timer', '⏱': 'timer', '🎯': 'target', '🎉': 'party-popper', '🏆': 'trophy',
+    '📍': 'map-pin', '📱': 'smartphone', '💻': 'laptop', '🛡️': 'shield-check', '🛡': 'shield-check',
+    '✉️': 'mail', '✉': 'mail', '📩': 'mail', '🎓': 'graduation-cap', '💬': 'message-circle', '🔥': 'flame',
+    '➕': 'plus', '✕': 'x', '👉': 'arrow-right', '☰': 'menu', '🌓': 'sun-moon', '☀️': 'sun', '☀': 'sun',
+    '🎭': 'masks', '🕒': 'clock-3', '🪪': 'badge', '🔢': 'hash', '🧩': 'puzzle', '🔬': 'search',
+    '📡': 'radio', '🏫': 'school', '🧠': 'brain', '📟': 'panel-top', '🔴': 'circle', '🟢': 'circle',
+    '🟡': 'circle', '🔵': 'circle'
+};
+
+function replaceUiEmojiIcons(root) {
+    const container = root || document.body;
+    if (!container) return;
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    let current;
+    while ((current = walker.nextNode())) {
+        const parent = current.parentElement;
+        if (!parent || ['SCRIPT', 'STYLE', 'TEXTAREA', 'PRE', 'CODE', 'SVG'].includes(parent.tagName)) continue;
+        if (Object.keys(uiEmojiIconMap).some(glyph => current.nodeValue.includes(glyph))) textNodes.push(current);
+    }
+    textNodes.forEach(textNode => {
+        const fragment = document.createDocumentFragment();
+        let text = textNode.nodeValue;
+        while (text) {
+            const matches = Object.keys(uiEmojiIconMap)
+                .map(glyph => ({ glyph, index: text.indexOf(glyph) }))
+                .filter(match => match.index >= 0)
+                .sort((a, b) => a.index - b.index || b.glyph.length - a.glyph.length);
+            if (!matches.length) {
+                fragment.appendChild(document.createTextNode(text));
+                break;
+            }
+            const match = matches[0];
+            if (match.index > 0) fragment.appendChild(document.createTextNode(text.slice(0, match.index)));
+            const iconElement = document.createElement('i');
+            iconElement.setAttribute('data-lucide', uiEmojiIconMap[match.glyph]);
+            iconElement.setAttribute('aria-hidden', 'true');
+            fragment.appendChild(iconElement);
+            text = text.slice(match.index + match.glyph.length);
+        }
+        textNode.replaceWith(fragment);
+    });
+    refreshIcons(container);
+}
+
+function observeUiEmojiIcons() {
+    replaceUiEmojiIcons(document.body);
+    const observer = new MutationObserver(records => records.forEach(record => {
+        record.addedNodes.forEach(node => {
+            if (node.nodeType === Node.ELEMENT_NODE) replaceUiEmojiIcons(node);
+        });
+    }));
+    observer.observe(document.body, { childList: true, subtree: true });
+}
+
+function animateAnalyticsCards() {
+    if (typeof anime === 'undefined' || typeof anime.animate !== 'function') return;
+    anime.animate('.an-kpi-card', {
+        opacity: [0, 1],
+        translateY: [14, 0],
+        delay: anime.stagger(70),
+        duration: 500,
+        ease: 'outCubic'
+    });
+}
+
+function animateAnalyticsCharts() {
+    if (typeof anime === 'undefined' || typeof anime.animate !== 'function') return;
+    const bars = document.querySelectorAll('#chart-submissions .an-bar-inner');
+    if (bars.length) {
+        anime.animate(bars, {
+            scaleY: [0, 1],
+            opacity: [0, 1],
+            delay: anime.stagger(55),
+            duration: 550,
+            ease: 'outCubic'
+        });
+    }
+    const donut = $id('an-donut-chart');
+    const legend = $id('an-donut-legend');
+    if (donut) anime.animate(donut, { scale: [0.8, 1], opacity: [0, 1], duration: 600, ease: 'outBack' });
+    if (legend) anime.animate(legend, { opacity: [0, 1], translateX: [12, 0], duration: 450, delay: 180, ease: 'outCubic' });
+}
+
+function initializeLucideIcons() {
+    observeUiEmojiIcons();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeLucideIcons);
+} else {
+    initializeLucideIcons();
 }
 
 function checkIncompleteExpression(lineText, lineNum, errors) {
@@ -3623,6 +3726,7 @@ function updateAnalyticsUI() {
 
     // Render Paginated Table
     renderFilteredActivityTable(currentFilteredActivity);
+    animateAnalyticsCards();
 }
 
 function renderSubmissionActivityChart(filteredActivity) {
@@ -3744,6 +3848,8 @@ function renderSubmissionActivityChart(filteredActivity) {
             </div>
         `;
     }).join('');
+
+    animateAnalyticsCharts();
 
     // Attach Hover and Click Handlers
     container.querySelectorAll('.an-bar-col').forEach((col, idx) => {
@@ -3890,13 +3996,14 @@ function renderFilteredActivityTable(activityList) {
 
     if (totalRecords === 0) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:2.5rem;color:var(--text-muted)">
-            <div style="font-size:1.5rem;margin-bottom:0.5rem">📊</div>
+            <div class="analytics-empty-icon"><i data-lucide="chart-column" aria-hidden="true"></i></div>
             No matching student submissions found for the selected filters.
         </td></tr>`;
         if (pageInfo) pageInfo.textContent = 'Showing 0 of 0 results';
         if (prevBtn) prevBtn.disabled = true;
         if (nextBtn) nextBtn.disabled = true;
         if (pageNumbers) pageNumbers.innerHTML = '';
+        refreshIcons(tbody);
         return;
     }
 
@@ -3977,12 +4084,13 @@ function renderFilteredActivityTable(activityList) {
           <td style="color:var(--text-muted);font-size:0.82rem">${a.processingTime || '—'}</td>
           <td>${resultBadge(a)}</td>
           <td>
-            <button class="an-eye-btn" title="View Details" onclick="viewSubmissionDetail('${docId}')">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <button class="an-eye-btn" title="View Details" onclick="viewSubmissionDetail('${docId}')">
+                            <i data-lucide="eye" aria-hidden="true"></i>
             </button>
           </td>
         </tr>`;
     }).join('');
+    refreshIcons(tbody);
 }
 
 function viewSubmissionDetail(docId) {
@@ -4044,10 +4152,14 @@ function viewSubmissionDetail(docId) {
     }
 
     // Modal title
-    setText('sdm-title', `📄 ${a.student} — ${a.exercise}`);
+    const title = $id('sdm-title');
+    if (title) title.innerHTML = `${icon('file-text')} ${a.student} — ${a.exercise}`;
 
     const modal = $id('submission-detail-modal');
-    if (modal) modal.classList.remove('hidden');
+    if (modal) {
+        modal.classList.remove('hidden');
+        refreshIcons(modal);
+    }
 }
 
 function closeSubmissionDetail() {
@@ -6183,8 +6295,12 @@ function togglePasswordVisibility(inputId, btn) {
 
     if (input.type === 'password') {
         input.type = 'text';
-        btn.textContent = '🙈'; // Closed eye
+        btn.innerHTML = '<i data-lucide="eye-off" aria-hidden="true"></i>';
+    } else {
+        input.type = 'password';
+        btn.innerHTML = '<i data-lucide="eye" aria-hidden="true"></i>';
     }
+    refreshIcons(btn);
 }
 window.togglePasswordVisibility = togglePasswordVisibility;
 
@@ -6333,7 +6449,11 @@ function toggleTheme() {
     document.documentElement.setAttribute('data-theme', newTheme);
     localStorage.setItem('pseudopy_theme', newTheme);
 
-    const icon = newTheme === 'dark' ? '🌓' : '☀️';
+    const themeButton = $id('theme-toggle-btn');
+    if (themeButton) {
+        themeButton.innerHTML = `<i data-lucide="${newTheme === 'dark' ? 'sun-moon' : 'sun'}" aria-hidden="true"></i>`;
+        refreshIcons(themeButton);
+    }
     showToast(`Switched to ${newTheme} mode`, 'info');
 }
 

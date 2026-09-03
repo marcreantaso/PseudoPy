@@ -683,6 +683,39 @@ h4 {
   border-radius: var(--radius-sm);
 }
 
+svg.lucide {
+  width: 1.1em;
+  height: 1.1em;
+  display: inline-block;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.btn,
+.login-hint-header > span,
+.hint-badge,
+.login-hint-tip,
+.login-card-header h2 {
+  align-items: center;
+}
+
+svg.lucide {
+  width: 1.1em;
+  height: 1.1em;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.login-hint-header > span,
+.hint-badge,
+.login-hint-tip,
+.btn,
+.login-card-header h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 /* ============================================================
    APP LAYOUT (Post-login)
    ============================================================ */
@@ -797,6 +830,14 @@ h4 {
   width: 20px;
   text-align: center;
   flex-shrink: 0;
+}
+
+.nav-item .nav-icon svg.lucide,
+.sidebar-header .brand-icon svg.lucide {
+  width: 18px;
+  height: 18px;
+  display: block;
+  margin: 0 auto;
 }
 
 .sidebar-footer {
@@ -1698,6 +1739,7 @@ h4 {
   flex-grow: 1;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -3075,6 +3117,41 @@ select.form-input {
 .an-page-icon {
   font-size: 2rem;
 }
+
+.an-header-icon-box svg.lucide,
+.an-filter-label svg.lucide,
+.an-info-badge svg.lucide,
+.an-chart-footer svg.lucide,
+.an-kpi-icon-wrap svg.lucide,
+.an-page-btn svg.lucide,
+.an-tip-bar svg.lucide,
+.an-modal-title svg.lucide {
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.an-header-icon-box,
+.an-filter-label,
+.an-info-badge,
+.an-chart-footer,
+.an-tip-bar,
+.an-modal-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.an-kpi-icon-wrap svg.lucide {
+  width: 24px;
+  height: 24px;
+}
+
+.an-eye-btn svg.lucide {
+  width: 15px;
+  height: 15px;
+}
 .an-page-title {
   font-size: 1.5rem;
   font-weight: 800;
@@ -3307,6 +3384,7 @@ select.form-input {
 .an-bar-inner {
   width: 70%;
   max-width: 44px;
+  transform-origin: center bottom;
   background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%);
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s, opacity 0.2s;
@@ -4394,4 +4472,4 @@ select.form-input {
 
 
 
-
+

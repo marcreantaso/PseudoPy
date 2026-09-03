@@ -8,6 +8,7 @@
     "dev": "node server.js"
   },
   "dependencies": {
+    "animejs": "^4.5.0",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "firebase": "^12.18.0"

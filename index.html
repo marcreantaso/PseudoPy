@@ -32,7 +32,7 @@
 
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.js"></script>
 </head>
 
 <body>
@@ -92,8 +92,8 @@
           <!-- ── Login Credentials Guide ── -->
           <div class="login-hint-box">
             <div class="login-hint-header" onclick="toggleLoginHint(this)">
-              <span>💡 How to log in</span>
-              <span class="login-hint-arrow">▾</span>
+              <span><i data-lucide="lightbulb" aria-hidden="true"></i> How to log in</span>
+              <span class="login-hint-arrow"><i data-lucide="chevron-down" aria-hidden="true"></i></span>
             </div>
             <div class="login-hint-body">
               <p class="login-hint-note">
@@ -107,26 +107,26 @@
                 </div>
                 <div class="login-hint-row hint-row-2col">
                   <span class="hint-username" onclick="fillLoginUser('mbautista_admin')">mbautista_admin</span>
-                  <span class="hint-badge hint-admin">🔧 Admin</span>
+                  <span class="hint-badge hint-admin"><i data-lucide="wrench" aria-hidden="true"></i> Admin</span>
                 </div>
                 <div class="login-hint-row hint-row-2col">
                   <span class="hint-username" onclick="fillLoginUser('mreantaso_instructor')">mreantaso_instructor</span>
-                  <span class="hint-badge hint-instructor">👨‍🏫 Instructor</span>
+                  <span class="hint-badge hint-instructor"><i data-lucide="graduation-cap" aria-hidden="true"></i> Instructor</span>
                 </div>
                 <div class="login-hint-row hint-row-2col">
                   <span class="hint-username" onclick="fillLoginUser('cruz_admin')">cruz_instructor</span>
-                  <span class="hint-badge hint-instructor">👨‍🏫 Instructor</span>
+                  <span class="hint-badge hint-instructor"><i data-lucide="graduation-cap" aria-hidden="true"></i> Instructor</span>
                 </div>
                 <div class="login-hint-row hint-row-2col">
                   <span class="hint-username" onclick="fillLoginUser('emirandilla_student')">emirandilla_student</span>
-                  <span class="hint-badge hint-student">🎓 Student</span>
+                  <span class="hint-badge hint-student"><i data-lucide="graduation-cap" aria-hidden="true"></i> Student</span>
                 </div>
                 <div class="login-hint-row hint-row-2col">
                   <span class="hint-username" onclick="fillLoginUser('mdaet_student')">mdaet_student</span>
-                  <span class="hint-badge hint-student">🎓 Student</span>
+                  <span class="hint-badge hint-student"><i data-lucide="graduation-cap" aria-hidden="true"></i> Student</span>
                 </div>
               </div>
-              <p class="login-hint-tip">💬 Click any username to auto-fill it.</p>
+              <p class="login-hint-tip"><i data-lucide="message-circle" aria-hidden="true"></i> Click any username to auto-fill it.</p>
             </div>
           </div>
 
@@ -142,18 +142,18 @@
               <button type="button" class="btn btn-ghost btn-icon"
                 onclick="togglePasswordVisibility('login-password', this)"
                 style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
-                👁️
+                <i data-lucide="eye" aria-hidden="true"></i>
               </button>
             </div>
           </div>
 
           <button class="btn btn-primary" onclick="handleLogin()">
-            Sign In →
+            Sign In <i data-lucide="arrow-right" aria-hidden="true"></i>
           </button>
 
           <div style="text-align:center; margin-top: 1rem;">
             <button class="btn btn-ghost btn-sm" onclick="showForgotPassword()" style="font-size:0.85rem; color:var(--text-muted);">
-              🔐 Forgot your password?
+              <i data-lucide="lock-keyhole" aria-hidden="true"></i> Forgot your password?
             </button>
           </div>
 
@@ -165,7 +165,7 @@
         <!-- ── Forgot Password Panel (hidden by default) ── -->
         <div id="forgot-password-panel" class="hidden">
           <div class="login-card-header">
-            <h2>🔐 Forgot Password?</h2>
+            <h2><i data-lucide="lock-keyhole" aria-hidden="true"></i> Forgot Password?</h2>
             <p>Submit a recovery request. Your instructor or administrator will authorize the reset.</p>
           </div>
 
@@ -177,7 +177,7 @@
             </div>
             <div style="display:flex; gap:0.75rem; margin-top:1rem;">
               <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">Cancel</button>
-              <button class="btn btn-primary" onclick="submitRecoveryRequest()" style="flex:2">📩 Request Recovery</button>
+              <button class="btn btn-primary" onclick="submitRecoveryRequest()" style="flex:2"><i data-lucide="mail" aria-hidden="true"></i> Request Recovery</button>
             </div>
           </div>
 
@@ -264,7 +264,7 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <div class="brand">
-          <div class="brand-icon">⚡</div>
+          <div class="brand-icon"><i data-lucide="zap" aria-hidden="true"></i></div>
           <div class="brand-text">
             <h3>PseudoPy</h3>
             <span>Code Generation</span>
@@ -277,18 +277,18 @@
         <div id="nav-student" class="hidden">
           <div class="nav-section-label">Student</div>
           <button class="nav-item active" onclick="navigateTo('write-pseudocode')">
-            <span class="nav-icon">✏️</span> Write Pseudocode
+            <span class="nav-icon"><i data-lucide="pencil" aria-hidden="true"></i></span> Write Pseudocode
           </button>
 
           <button class="nav-item" onclick="navigateTo('feedback')">
-            <span class="nav-icon">💡</span> Feedback &amp; Suggestions
+            <span class="nav-icon"><i data-lucide="lightbulb" aria-hidden="true"></i></span> Feedback &amp; Suggestions
           </button>
           <button class="nav-item" onclick="navigateTo('exercises-student')">
-            <span class="nav-icon">📝</span> Exercises &amp; Tasks
+            <span class="nav-icon"><i data-lucide="notebook-pen" aria-hidden="true"></i></span> Exercises &amp; Tasks
           </button>
 
           <button class="nav-item" onclick="navigateTo('student-settings')">
-            <span class="nav-icon">⚙️</span> Settings
+            <span class="nav-icon"><i data-lucide="settings" aria-hidden="true"></i></span> Settings
           </button>
         </div>
 
@@ -296,22 +296,22 @@
         <div id="nav-instructor" class="hidden">
           <div class="nav-section-label">Instructor</div>
           <button class="nav-item active" onclick="navigateTo('analytics')">
-            <span class="nav-icon">📊</span> Learning Analytics
+            <span class="nav-icon"><i data-lucide="chart-column" aria-hidden="true"></i></span> Learning Analytics
           </button>
           <button class="nav-item" onclick="navigateTo('manage-students')">
-            <span class="nav-icon">👥</span> Manage Students
+            <span class="nav-icon"><i data-lucide="users" aria-hidden="true"></i></span> Manage Students
           </button>
           <button class="nav-item" onclick="navigateTo('manage-exercises')">
-            <span class="nav-icon">📋</span> Manage Exercises
+            <span class="nav-icon"><i data-lucide="clipboard-list" aria-hidden="true"></i></span> Manage Exercises
           </button>
           <button class="nav-item" onclick="navigateTo('generate-code')">
-            <span class="nav-icon">🐍</span> Generate Python Code
+            <span class="nav-icon"><i data-lucide="code-2" aria-hidden="true"></i></span> Generate Python Code
           </button>
           <button class="nav-item" onclick="navigateTo('compiler-metrics')">
-            <span class="nav-icon">🧪</span> Compiler Metrics
+            <span class="nav-icon"><i data-lucide="flask-conical" aria-hidden="true"></i></span> Compiler Metrics
           </button>
           <button class="nav-item" onclick="navigateTo('password-recovery')" style="position:relative;">
-            <span class="nav-icon">🔑</span> Password Recovery
+            <span class="nav-icon"><i data-lucide="key-round" aria-hidden="true"></i></span> Password Recovery
             <span id="nav-recovery-badge" style="display:none; position:absolute; right:0.75rem; top:50%; transform:translateY(-50%); background:var(--danger); color:#fff; border-radius:999px; font-size:0.7rem; font-weight:700; min-width:18px; height:18px; align-items:center; justify-content:center; padding:0 4px;"></span>
           </button>
         </div>
@@ -320,10 +320,10 @@
         <div id="nav-admin" class="hidden">
           <div class="nav-section-label">Administration</div>
           <button class="nav-item active" onclick="navigateTo('manage-users')">
-            <span class="nav-icon">👥</span> Manage Instructors
+            <span class="nav-icon"><i data-lucide="users" aria-hidden="true"></i></span> Manage Instructors
           </button>
           <button class="nav-item" onclick="navigateTo('password-requests')" style="position:relative;">
-            <span class="nav-icon">🔑</span> Password Requests
+            <span class="nav-icon"><i data-lucide="key-round" aria-hidden="true"></i></span> Password Requests
             <span id="nav-admin-recovery-badge" style="display:none; position:absolute; right:0.75rem; top:50%; transform:translateY(-50%); background:var(--danger); color:#fff; border-radius:999px; font-size:0.7rem; font-weight:700; min-width:18px; height:18px; align-items:center; justify-content:center; padding:0 4px;"></span>
           </button>
 
@@ -339,7 +339,7 @@
           </div>
         </div>
         <button class="btn btn-ghost btn-sm" style="width:100%" onclick="handleLogout()">
-          🚪 Sign Out
+          <i data-lucide="log-out" aria-hidden="true"></i> Sign Out
         </button>
       </div>
     </aside>
@@ -351,7 +351,7 @@
     <div class="topbar">
       <div style="display:flex;align-items:center;gap:0.75rem">
         <button id="hamburger-btn" class="btn btn-ghost btn-icon hamburger-btn" onclick="toggleMobileSidebar()">
-          <span class="hamburger-icon">☰</span>
+          <span class="hamburger-icon"><i data-lucide="menu" aria-hidden="true"></i></span>
         </button>
         <div class="topbar-title" id="topbar-title">Write Pseudocode</div>
       </div>
@@ -365,13 +365,13 @@
         <div class="topbar-notifications" id="topbar-notifications" style="position:relative; display:none;">
           <button class="btn btn-ghost btn-icon" id="notif-bell-btn" onclick="toggleNotificationDropdown(event)"
             title="Notifications" style="position:relative; font-size:1.1rem; padding:0.4rem 0.55rem;">
-            🔔
+            <i data-lucide="bell" aria-hidden="true"></i>
             <span id="notif-badge" class="notif-badge hidden">0</span>
           </button>
           <div id="notif-dropdown" class="notif-dropdown hidden">
             <div class="notif-dropdown-header">
               <div class="notif-dropdown-title">
-                <span>🔔 Notifications</span>
+                <span><i data-lucide="bell" aria-hidden="true"></i> Notifications</span>
                 <span id="notif-unread-count" class="notif-unread-count">0 unread</span>
               </div>
               <button class="notif-mark-all-btn" onclick="markAllNotificationsAsRead(event)">Mark all as read</button>
@@ -384,7 +384,7 @@
 
         <button class="btn btn-ghost btn-icon" id="theme-toggle-btn" onclick="toggleTheme()"
           title="Toggle Dark/Light Mode">
-          🌓
+          <i data-lucide="sun-moon" aria-hidden="true"></i>
         </button>
         <span style="font-size:0.8rem;color:var(--text-muted);margin-left:0.5rem" id="topbar-time"></span>
       </div>
@@ -763,11 +763,7 @@
         <!-- Page Header -->
         <div class="an-page-header">
           <div class="an-header-icon-box">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <rect x="3" y="12" width="4" height="9" rx="1.5" fill="#f43f5e" />
-              <rect x="9" y="8" width="4" height="13" rx="1.5" fill="#a855f7" />
-              <rect x="15" y="3" width="4" height="18" rx="1.5" fill="#06b6d4" />
-            </svg>
+            <i data-lucide="chart-column" aria-hidden="true"></i>
           </div>
           <div>
             <h2 class="an-page-title">Learning Analytics</h2>
@@ -778,22 +774,19 @@
         <!-- Filter Bar -->
         <div class="an-filter-bar">
           <div class="an-filter-item an-filter-search">
-            <span class="an-filter-label">🔍 SEARCH</span>
+            <span class="an-filter-label"><i data-lucide="search" aria-hidden="true"></i> SEARCH</span>
             <div class="an-search-wrap">
-              <svg class="an-search-icon" viewBox="0 0 20 20" fill="none">
-                <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.6" />
-                <path d="M13 13l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-              </svg>
+              <i class="an-search-icon" data-lucide="search" aria-hidden="true"></i>
               <input type="text" id="filter-search" class="an-input"
                 placeholder="Search student, exercise, or submission..." oninput="applyAnalyticsFilters()">
             </div>
           </div>
           <div class="an-filter-item" style="width:160px">
-            <span class="an-filter-label">📅 DATE</span>
+            <span class="an-filter-label"><i data-lucide="calendar" aria-hidden="true"></i> DATE</span>
             <input type="date" id="filter-date" class="an-input" onchange="applyAnalyticsFilters()">
           </div>
           <div class="an-filter-item" style="width:160px">
-            <span class="an-filter-label">🗓 MONTH</span>
+            <span class="an-filter-label"><i data-lucide="calendar-days" aria-hidden="true"></i> MONTH</span>
             <select id="filter-month" class="an-input" onchange="applyAnalyticsFilters()">
               <option value="">All Months</option>
               <option value="0">January 2025</option>
@@ -811,7 +804,7 @@
             </select>
           </div>
           <div class="an-filter-item" style="width:210px">
-            <span class="an-filter-label">📆 WEEK</span>
+            <span class="an-filter-label"><i data-lucide="calendar-range" aria-hidden="true"></i> WEEK</span>
             <select id="filter-week" class="an-input" onchange="applyAnalyticsFilters()">
               <option value="">All Weeks</option>
               <option value="1">Week 1 (Aug 1 - Aug 3)</option>
@@ -822,7 +815,7 @@
             </select>
           </div>
           <div class="an-filter-item" style="width:150px">
-            <span class="an-filter-label">✔ STATUS</span>
+            <span class="an-filter-label"><i data-lucide="list-filter" aria-hidden="true"></i> STATUS</span>
             <select id="filter-submission" class="an-input" onchange="applyAnalyticsFilters()">
               <option value="" selected>All Statuses</option>
               <option value="Completed">Completed</option>
@@ -831,7 +824,7 @@
             </select>
           </div>
           <button class="btn btn-primary an-reset-btn" onclick="resetAnalyticsFilters()">
-            🔄 Reset Filters
+            <i data-lucide="rotate-ccw" aria-hidden="true"></i> Reset Filters
           </button>
         </div>
 
@@ -839,12 +832,7 @@
         <div class="an-kpi-grid">
           <div class="an-kpi-card">
             <div class="an-kpi-icon-wrap" style="background:#3b0764">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
+              <i data-lucide="users" aria-hidden="true"></i>
             </div>
             <div class="an-kpi-body">
               <div class="an-kpi-value" id="stat-students">0</div>
@@ -857,12 +845,7 @@
           </div>
           <div class="an-kpi-card">
             <div class="an-kpi-icon-wrap" style="background:#ffffff">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-              </svg>
+              <i data-lucide="file-text" aria-hidden="true" style="color:#0f172a"></i>
             </div>
             <div class="an-kpi-body">
               <div class="an-kpi-value" id="stat-submissions">0</div>
@@ -875,10 +858,7 @@
           </div>
           <div class="an-kpi-card">
             <div class="an-kpi-icon-wrap" style="background:#065f46">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="3" />
-                <path d="M9 12l2 2 4-4" />
-              </svg>
+              <i data-lucide="circle-check" aria-hidden="true"></i>
             </div>
             <div class="an-kpi-body">
               <div class="an-kpi-value" id="stat-success-rate">0%</div>
@@ -891,11 +871,7 @@
           </div>
           <div class="an-kpi-card">
             <div class="an-kpi-icon-wrap" style="background:#451a03">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
+              <i data-lucide="triangle-alert" aria-hidden="true"></i>
             </div>
             <div class="an-kpi-body">
               <div class="an-kpi-value" id="stat-common-errors">0</div>
@@ -917,7 +893,7 @@
                 <div style="display:flex;align-items:center;gap:0.5rem">
                   <span style="font-weight:700;font-size:0.95rem;color:var(--text-primary)">Student Submission
                     Activity</span>
-                  <span class="an-info-badge" title="Shows the number of student submissions per day">ⓘ</span>
+                  <span class="an-info-badge" title="Shows the number of student submissions per day"><i data-lucide="info" aria-hidden="true"></i></span>
                 </div>
                 <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem" id="an-chart-sub-label">Shows
                   the number of student submissions based on the selected week.</div>
@@ -936,7 +912,7 @@
               <div class="an-bar-y-axis" id="an-bar-y-axis"></div>
               <div class="an-bar-chart-area" id="chart-submissions"></div>
             </div>
-            <div class="an-chart-footer">ⓘ Click on any bar to view detailed submissions for that day.</div>
+            <div class="an-chart-footer"><i data-lucide="info" aria-hidden="true"></i> Click on any bar to view detailed submissions for that day.</div>
             <div id="an-bar-tooltip" class="an-bar-tooltip hidden"></div>
           </div>
 
@@ -946,7 +922,7 @@
               <div>
                 <div style="display:flex;align-items:center;gap:0.5rem">
                   <span style="font-weight:700;font-size:0.95rem;color:var(--text-primary)">Error Distribution</span>
-                  <span class="an-info-badge" title="Shows the percentage distribution of error types">ⓘ</span>
+                  <span class="an-info-badge" title="Shows the percentage distribution of error types"><i data-lucide="info" aria-hidden="true"></i></span>
                 </div>
                 <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem">Shows the percentage
                   distribution of error types.</div>
@@ -962,7 +938,7 @@
               </div>
               <div class="an-donut-legend" id="an-donut-legend"></div>
             </div>
-            <div class="an-chart-footer">ⓘ Percentages may not total 100% due to rounding.</div>
+            <div class="an-chart-footer"><i data-lucide="info" aria-hidden="true"></i> Percentages may not total 100% due to rounding.</div>
           </div>
         </div>
 
@@ -982,7 +958,7 @@
                 <tr>
                   <th>Student Name</th>
                   <th>Student ID</th>
-                  <th>Exercise ↕</th>
+                  <th>Exercise <i data-lucide="arrow-down-up" aria-hidden="true"></i></th>
                   <th>Difficulty</th>
                   <th>Status</th>
                   <th>Score</th>
@@ -999,13 +975,13 @@
           <div class="an-pagination-row">
             <span id="an-page-info" class="an-page-info">Showing 1 to 5 of 10 results</span>
             <div class="an-page-controls">
-              <button id="an-prev-btn" class="an-page-btn" onclick="analyticsPageNav(-1)">‹ Previous</button>
+              <button id="an-prev-btn" class="an-page-btn" onclick="analyticsPageNav(-1)"><i data-lucide="chevron-left" aria-hidden="true"></i> Previous</button>
               <span id="an-page-numbers" class="an-page-numbers"></span>
-              <button id="an-next-btn" class="an-page-btn" onclick="analyticsPageNav(1)">Next ›</button>
+              <button id="an-next-btn" class="an-page-btn" onclick="analyticsPageNav(1)">Next <i data-lucide="chevron-right" aria-hidden="true"></i></button>
             </div>
           </div>
           <div class="an-tip-bar">
-            💡 <strong>Tip:</strong> Use the filters above to view specific data. Click the eye icon to view full
+            <i data-lucide="lightbulb" aria-hidden="true"></i> <strong>Tip:</strong> Use the filters above to view specific data. Click the eye icon to view full
             submission details including pseudocode, Python code, and errors.
           </div>
         </div>
@@ -1015,8 +991,8 @@
       <div id="submission-detail-modal" class="modal-overlay hidden">
         <div class="modal" style="max-width:780px;width:95%">
           <div class="modal-header">
-            <h3 id="sdm-title" class="modal-title">📄 Submission Details</h3>
-            <button class="modal-close" onclick="closeSubmissionDetail()">✕</button>
+            <h3 id="sdm-title" class="modal-title"><i data-lucide="file-text" aria-hidden="true"></i> Submission Details</h3>
+            <button class="modal-close" onclick="closeSubmissionDetail()"><i data-lucide="x" aria-hidden="true"></i></button>
           </div>
           <div class="modal-body" style="max-height:75vh;overflow-y:auto">
             <!-- Student Info -->
@@ -1058,26 +1034,26 @@
             <!-- Error (if any) -->
             <div id="sdm-error-row"
               style="margin-bottom:1rem;padding:0.75rem 1rem;border-radius:var(--radius);background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3)">
-              <span style="font-size:0.75rem;color:var(--danger);font-weight:700">⚠️ ERROR DETECTED: </span>
+              <span style="font-size:0.75rem;color:var(--danger);font-weight:700"><i data-lucide="triangle-alert" aria-hidden="true"></i> ERROR DETECTED: </span>
               <span id="sdm-error-type" style="color:var(--danger);font-weight:600"></span>
             </div>
             <!-- Pseudocode -->
             <div style="margin-bottom:1rem">
-              <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;margin-bottom:0.4rem">📝 SUBMITTED
+              <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;margin-bottom:0.4rem"><i data-lucide="notebook-pen" aria-hidden="true"></i> SUBMITTED
                 PSEUDOCODE</div>
               <pre id="sdm-pseudo"
                 style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.82rem;line-height:1.6;white-space:pre-wrap;overflow-x:auto;color:var(--text-primary);margin:0"></pre>
             </div>
             <!-- Python Output -->
             <div style="margin-bottom:1rem">
-              <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;margin-bottom:0.4rem">🐍 GENERATED
+              <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;margin-bottom:0.4rem"><i data-lucide="code-2" aria-hidden="true"></i> GENERATED
                 PYTHON CODE</div>
               <pre id="sdm-python"
                 style="background:#0f1117;border:1px solid var(--border);border-radius:var(--radius);padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.82rem;line-height:1.6;white-space:pre-wrap;overflow-x:auto;color:#a5f3fc;margin:0"></pre>
             </div>
             <!-- Compiler Output -->
             <div>
-              <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;margin-bottom:0.4rem">⚙️ COMPILER
+              <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;margin-bottom:0.4rem"><i data-lucide="settings" aria-hidden="true"></i> COMPILER
                 OUTPUT</div>
               <pre id="sdm-output"
                 style="background:#070a0f;border:1px solid var(--border);border-radius:var(--radius);padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.82rem;line-height:1.6;white-space:pre-wrap;overflow-x:auto;color:#86efac;margin:0"></pre>
@@ -2081,7 +2057,7 @@
             <label>Password <span style="color:var(--danger)">*</span></label>
             <div style="position: relative; display: flex; align-items: center;">
               <input type="password" id="inst-password" class="form-input" placeholder="Enter password" style="padding-right: 2.5rem; width: 100%;">
-              <button type="button" class="btn btn-ghost btn-icon" onclick="togglePasswordVisibility('inst-password', this)" style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">👁️</button>
+              <button type="button" class="btn btn-ghost btn-icon" onclick="togglePasswordVisibility('inst-password', this)" style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;"><i data-lucide="eye" aria-hidden="true"></i></button>
             </div>
           </div>
 
@@ -2512,12 +2488,16 @@
   <!-- PDF.js for PDF text extraction -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+  <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
 
   <!-- App Logic -->
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=20260903"></script>
+  <script src="app.js?v=20260905"></script>
+  <script>
+    if (window.lucide) lucide.createIcons({ icons: lucide.icons });
+  </script>
 
   <!-- Service Worker Registration -->
   <script>
