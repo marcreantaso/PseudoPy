@@ -480,22 +480,22 @@
             <div class="panel-footer">
               <button class="btn btn-primary" id="btn-translate-pseudocode" style="width:auto"
                 onclick="translatePseudocode()">
-                🔄 Translate to Python
+                <i data-lucide="refresh-cw" aria-hidden="true"></i> Translate to Python
               </button>
               <button class="btn btn-secondary btn-sm" onclick="newFile()">
-                📄 New File
+                <i data-lucide="file-plus-2" aria-hidden="true"></i> New File
               </button>
 
               <button class="btn btn-secondary btn-sm" onclick="uploadPseudocode()">
-                📂 Upload
+                <i data-lucide="folder-open" aria-hidden="true"></i> Upload
               </button>
               <button class="btn btn-secondary btn-sm" onclick="savePseudocodeAsFile()">
-                💾 Save as File
+                <i data-lucide="save" aria-hidden="true"></i> Save as File
               </button>
 
               <button class="btn btn-ghost btn-sm" onclick="autoFormatPseudocode()"
                 title="Auto-Format Pseudocode (Fix Indentation)">
-                🪄 Format
+                <i data-lucide="wand-sparkles" aria-hidden="true"></i> Format
               </button>
 
               <input type="file" id="pseudocode-file-input" accept=".txt,.pseudo,.ps,.text" style="display:none"
@@ -507,8 +507,8 @@
 
           <div class="editor-panel">
             <div class="panel-header">
-              <h3>🐍 Python Output <span class="lang-badge python">Python</span></h3>
-              <button class="btn btn-sm btn-ghost" onclick="copyPython()" title="Copy to clipboard">📋 Copy</button>
+              <h3><i data-lucide="code-2" aria-hidden="true"></i> Python Output <span class="lang-badge python">Python</span></h3>
+              <button class="btn btn-sm btn-ghost" onclick="copyPython()" title="Copy to clipboard"><i data-lucide="clipboard" aria-hidden="true"></i> Copy</button>
             </div>
             <div class="panel-body">
               <div class="editor-with-gutter">
@@ -520,10 +520,10 @@
             </div>
             <div class="panel-footer">
               <button class="btn btn-success btn-sm" id="btn-run-code" onclick="executePython()">
-                ▶️ Run Code
+                <i data-lucide="play" aria-hidden="true"></i> Run Code
               </button>
               <button class="btn btn-secondary btn-sm" onclick="downloadPython()">
-                💾 Download .py
+                <i data-lucide="download" aria-hidden="true"></i> Download .py
               </button>
             </div>
           </div>
@@ -533,7 +533,7 @@
         <div style="margin-top:1.5rem">
           <div class="output-container">
             <div class="panel-header">
-              <h3>📟 Console Output</h3>
+              <h3><i data-lucide="terminal" aria-hidden="true"></i> Console Output</h3>
               <button class="btn btn-ghost btn-sm" onclick="clearOutput()">Clear</button>
             </div>
             <div id="console-output" class="output-content">Ready. Write pseudocode and click "Translate to Python" to
@@ -585,7 +585,7 @@
                 placeholder="Python code appears here after translation..."></textarea>
             </div>
             <div class="panel-footer">
-              <button class="btn btn-success btn-sm" onclick="executeFromTranslate()">▶️ Run</button>
+              <button class="btn btn-success btn-sm" onclick="executeFromTranslate()"><i data-lucide="play" aria-hidden="true"></i> Run</button>
               <button class="btn btn-secondary btn-sm" onclick="copyTranslateOutput()">📋 Copy</button>
             </div>
           </div>
@@ -606,7 +606,7 @@
       <div id="page-execute" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>▶️ Execute Generated Code</h2>
+            <h2><i data-lucide="play-circle" aria-hidden="true"></i> Execute Generated Code</h2>
             <p>Run Python code directly in the browser and see results instantly.</p>
           </div>
         </div>
@@ -620,7 +620,7 @@
           </div>
           <div class="panel-footer">
             <button class="btn btn-success" style="width:auto" onclick="executeFromExecPage()">
-              ▶️ Execute Code
+              <i data-lucide="play" aria-hidden="true"></i> Execute Code
             </button>
             <button class="btn btn-secondary btn-sm" onclick="document.getElementById('execute-editor').value=''">🗑️
               Clear</button>
@@ -716,7 +716,7 @@
           <div class="guidelines-header" onclick="toggleStudentGuidelines()">
             <div class="guidelines-title">
               <div class="guidelines-icon-box">
-                <span>ℹ️</span>
+                <i data-lucide="info" aria-hidden="true"></i>
               </div>
               <h3>Instructions &amp; Guidelines</h3>
             </div>
@@ -1080,22 +1080,22 @@
         </div>
         <div class="stats-grid" style="margin-bottom:1.5rem">
           <div class="stat-card">
-            <div class="stat-icon">📋</div>
+            <div class="stat-icon stat-icon-total"><i data-lucide="clipboard-list" aria-hidden="true"></i></div>
             <div class="stat-value" id="stat-exercise-total">0</div>
             <div class="stat-label">Total Exercises</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">🟢</div>
+            <div class="stat-icon stat-icon-easy"><i data-lucide="circle" aria-hidden="true"></i></div>
             <div class="stat-value" id="stat-exercise-easy">0</div>
             <div class="stat-label">Easy Exercises</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">🟡</div>
+            <div class="stat-icon stat-icon-moderate"><i data-lucide="circle" aria-hidden="true"></i></div>
             <div class="stat-value" id="stat-exercise-moderate">0</div>
             <div class="stat-label">Moderate Exercises</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">🔴</div>
+            <div class="stat-icon stat-icon-hard"><i data-lucide="circle" aria-hidden="true"></i></div>
             <div class="stat-value" id="stat-exercise-hard">0</div>
             <div class="stat-label">Hard Exercises</div>
           </div>
@@ -1141,17 +1141,17 @@
 
         <div class="stats-grid" style="margin-bottom:1.5rem">
           <div class="stat-card">
-            <div class="stat-icon">👥</div>
+            <div class="stat-icon stat-icon-total"><i data-lucide="users" aria-hidden="true"></i></div>
             <div class="stat-value" id="stat-student-total">0</div>
             <div class="stat-label">Total Students</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">🟢</div>
+            <div class="stat-icon stat-icon-active"><i data-lucide="circle" aria-hidden="true"></i></div>
             <div class="stat-value" id="stat-student-active">0</div>
             <div class="stat-label">Active Students</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">🔴</div>
+            <div class="stat-icon stat-icon-inactive"><i data-lucide="circle" aria-hidden="true"></i></div>
             <div class="stat-value" id="stat-student-inactive">0</div>
             <div class="stat-label">Inactive Students</div>
           </div>
@@ -1217,7 +1217,7 @@
                 placeholder="Generated Python code..."></textarea>
             </div>
             <div class="panel-footer">
-              <button class="btn btn-success btn-sm" onclick="instructorExecute()">▶️ Run</button>
+              <button class="btn btn-success btn-sm" onclick="instructorExecute()"><i data-lucide="play" aria-hidden="true"></i> Run</button>
               <button class="btn btn-secondary btn-sm" onclick="copyInstructorOutput()">📋 Copy</button>
             </div>
           </div>
@@ -1276,39 +1276,39 @@
         </div>
         <div class="stats-grid" style="margin-bottom:1.5rem">
           <div class="stat-card">
-            <div class="stat-icon">🔄</div>
+            <div class="stat-icon"><i data-lucide="refresh-cw" aria-hidden="true"></i></div>
             <div class="stat-value" id="metric-total-translations">0</div>
             <div class="stat-label">Total Translations</div>
             <div class="stat-change" id="metric-error-trend">— Stable</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">✅</div>
+            <div class="stat-icon"><i data-lucide="circle-check" aria-hidden="true"></i></div>
             <div class="stat-value" id="metric-compilation-rate">0%</div>
             <div class="stat-label">Compilation Success Rate</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">% of translations with no errors
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">❌</div>
+            <div class="stat-icon"><i data-lucide="circle-x" aria-hidden="true"></i></div>
             <div class="stat-value" id="metric-runtime-error-rate">0%</div>
             <div class="stat-label">Runtime Error Rate</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">% of executions that crashed</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">⏱️</div>
+            <div class="stat-icon"><i data-lucide="timer" aria-hidden="true"></i></div>
             <div class="stat-value" id="metric-avg-gen-time">0ms</div>
             <div class="stat-label">Avg Generation Time</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Mean compile time per translation
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">⚠️</div>
+            <div class="stat-icon"><i data-lucide="triangle-alert" aria-hidden="true"></i></div>
             <div class="stat-value" id="metric-total-errors">0</div>
             <div class="stat-label">Total Errors</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Cumulative compiler errors</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">▶️</div>
+            <div class="stat-icon"><i data-lucide="play-circle" aria-hidden="true"></i></div>
             <div class="stat-value" id="metric-total-executions">0</div>
             <div class="stat-label">Total Executions</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Python runs via Skulpt engine</div>
@@ -1661,7 +1661,7 @@
       <div id="page-change-password" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>🔑 Change Password</h2>
+            <h2><i data-lucide="key-round" aria-hidden="true"></i> Change Password</h2>
             <p>Update your account password. You must enter your current password for verification.</p>
           </div>
         </div>
@@ -1724,7 +1724,7 @@
       <div id="page-admin-execute" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>▶️ Execute Generated Code</h2>
+            <h2><i data-lucide="play-circle" aria-hidden="true"></i> Execute Generated Code</h2>
             <p>Test and run code submissions from the system.</p>
           </div>
         </div>
@@ -1737,7 +1737,7 @@
               placeholder="Paste Python code here to execute..."></textarea>
           </div>
           <div class="panel-footer">
-            <button class="btn btn-success" style="width:auto" onclick="adminExecute()">▶️ Execute Code</button>
+            <button class="btn btn-success" style="width:auto" onclick="adminExecute()"><i data-lucide="play" aria-hidden="true"></i> Execute Code</button>
             <button class="btn btn-secondary btn-sm"
               onclick="document.getElementById('admin-execute-editor').value=''">🗑️ Clear</button>
           </div>
@@ -1786,7 +1786,7 @@
               <span class="detail-value" id="settings-role">Student</span>
             </div>
             <div class="profile-detail-row">
-              <span class="detail-label">🟢 Status</span>
+              <span class="detail-label"><i data-lucide="circle" aria-hidden="true"></i> Status</span>
               <span class="detail-value" id="settings-status">Active</span>
             </div>
           </div>
@@ -1795,13 +1795,13 @@
         <!-- Change Password Section -->
         <div class="settings-section">
           <div class="section-header">
-            <h3>🔑 Change Password</h3>
+            <h3><i data-lucide="key-round" aria-hidden="true"></i> Change Password</h3>
             <p>Change your account password. You can change it once every 30 days.</p>
           </div>
 
           <!-- 30-day cooldown warning -->
           <div id="password-cooldown-warning" class="cooldown-warning hidden">
-            <span class="cooldown-icon">⏳</span>
+            <span class="cooldown-icon"><i data-lucide="hourglass" aria-hidden="true"></i></span>
             <div>
               <strong>Password change cooldown active</strong>
               <p id="cooldown-message">You can request a new password change after 30 days from your last change.</p>
@@ -1816,7 +1816,7 @@
                   placeholder="Enter new password (min 6 characters)" style="padding-right: 2.5rem; width: 100%;">
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('new-password', this)"
-                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">👁️</button>
+                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;"><i data-lucide="eye" aria-hidden="true"></i></button>
               </div>
             </div>
             <div class="form-group">
@@ -1826,12 +1826,12 @@
                   style="padding-right: 2.5rem; width: 100%;">
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('confirm-new-password', this)"
-                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">👁️</button>
+                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;"><i data-lucide="eye" aria-hidden="true"></i></button>
               </div>
             </div>
             <button class="btn btn-primary" style="width:auto" id="submit-password-request-btn"
               onclick="submitPasswordChangeRequest()">
-              🔑 Change Password
+              <i data-lucide="key-round" aria-hidden="true"></i> Change Password
             </button>
           </div>
         </div>
@@ -1902,8 +1902,11 @@
 
         <!-- Security Event Log Panel -->
         <div class="data-table-container">
-          <div class="panel-header">
-            <h3>🔒 Security Audit Log</h3>
+          <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">
+            <h3><i data-lucide="lock" aria-hidden="true"></i> Security Audit Log</h3>
+            <button class="btn btn-danger btn-sm" onclick="clearSecurityAuditHistory()" title="Clear security audit history">
+              <i data-lucide="trash-2" aria-hidden="true"></i> Clear History
+            </button>
           </div>
           <table class="data-table">
             <thead>
@@ -2494,7 +2497,7 @@
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=20260906"></script>
+  <script src="app.js?v=20260907"></script>
   <script>
     if (window.lucide) lucide.createIcons({ icons: lucide.icons });
   </script>

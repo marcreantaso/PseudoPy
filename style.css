@@ -1329,6 +1329,19 @@ svg.lucide {
   margin-bottom: 0.75rem;
 }
 
+.stat-card .stat-icon svg.lucide {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.stat-icon-total { color: var(--accent); }
+.stat-icon-active,
+.stat-icon-easy { color: var(--success); }
+.stat-icon-inactive,
+.stat-icon-hard { color: var(--error); }
+.stat-icon-moderate { color: var(--warning); }
+
 .stat-card .stat-value {
   font-size: 1.75rem;
   font-weight: 800;
@@ -1569,6 +1582,47 @@ svg.lucide {
   align-items: center;
   justify-content: center;
   font-size: 1rem;
+}
+
+.guidelines-icon-box svg.lucide,
+.ex-date-row svg.lucide,
+.ex-completed-badge svg.lucide,
+.ex-start-btn svg.lucide,
+.panel-header h3 svg.lucide,
+.panel-footer .btn svg.lucide,
+#topbar-progress-pill svg.lucide {
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.ex-completed-badge.active {
+  color: var(--success);
+}
+
+.ex-start-btn.inactive {
+  color: #fff;
+}
+
+.account-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.account-status svg.lucide {
+  width: 0.75em;
+  height: 0.75em;
+  fill: currentColor;
+}
+
+.account-status.is-active {
+  color: var(--success);
+}
+
+.account-status.is-inactive {
+  color: var(--error);
 }
 
 .guidelines-title h3 {

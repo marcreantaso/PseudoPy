@@ -1843,6 +1843,7 @@ async function loadExercises(append = false) {
     setText('stat-exercise-moderate', String(modCount));
     setText('stat-exercise-hard', String(hardCount));
     setText('stat-exercise-count-label', totalCount === 0 ? 'No exercises' : `${totalCount} exercise${totalCount !== 1 ? 's' : ''}`);
+    refreshIcons($id('page-manage-exercises'));
 
     const tbody = $id('exercises-table-body');
     if (!tbody) return;
@@ -2147,20 +2148,21 @@ async function loadStudentExercises(page = 1) {
       </div>
       <p class="ex-desc">${exDesc}</p>
       <div class="ex-date-row">
-        <span>📅</span>
+        <i data-lucide="calendar" aria-hidden="true"></i>
         <span>${exDate}</span>
       </div>
       <hr class="ex-divider" />
       <div class="ex-card-footer">
         ${isCompleted
-                ? `<span class="ex-completed-badge">✅ Completed</span>`
-                : `<button class="ex-start-btn" onclick="attemptExercise('${ex._docId}')"><span>▶</span> Start Exercise</button>`
+                ? `<span class="ex-completed-badge active"><i data-lucide="circle-check" aria-hidden="true"></i> Completed</span>`
+                : `<button class="ex-start-btn inactive" onclick="attemptExercise('${ex._docId}')"><i data-lucide="play" aria-hidden="true"></i> Start Exercise</button>`
             }
       </div>
     </div>`;
     }).join('');
 
     container.innerHTML = html;
+    refreshIcons(container);
     renderStudentPaginationControls(totalExercises, studentExCurrentPage);
 }
 
@@ -2213,7 +2215,8 @@ async function loadStudentProgress() {
         // 5. Update Write Pseudocode topbar progress pill + mini bar
         const pill = $id('topbar-progress-pill');
         if (pill) {
-            pill.textContent = `✅ ${completedCount} / ${totalExercises} Completed`;
+            pill.innerHTML = `<i data-lucide="circle-check" aria-hidden="true"></i> ${completedCount} / ${totalExercises} Completed`;
+            refreshIcons(pill);
         }
         const topbarFill = $id('topbar-progress-fill');
         if (topbarFill) {
@@ -3306,6 +3309,7 @@ async function loadStudents() {
     setText('stat-student-total', String(students.length));
     setText('stat-student-active', String(students.filter(u => u.status === 'active').length));
     setText('stat-student-inactive', String(students.filter(u => u.status === 'inactive').length));
+    refreshIcons($id('page-manage-students'));
 
     if (students.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">No students enrolled under your class yet.</td></tr>`;
@@ -4210,7 +4214,13 @@ async function loadStudentSettings() {
     setText('settings-username', '@' + currentUser.username);
     setText('settings-email', currentUser.email);
     setText('settings-role', currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1));
-    setText('settings-status', (currentUser.status || 'active').charAt(0).toUpperCase() + (currentUser.status || 'active').slice(1));
+        const status = (currentUser.status || 'active').toLowerCase();
+        const statusEl = $id('settings-status');
+        if (statusEl) {
+            statusEl.className = `detail-value account-status ${status === 'active' ? 'is-active' : 'is-inactive'}`;
+            statusEl.innerHTML = `<i data-lucide="circle" aria-hidden="true"></i> ${status.charAt(0).toUpperCase() + status.slice(1)}`;
+            refreshIcons(statusEl);
+        }
 
     const roleBadge = $id('settings-role-badge');
     if (roleBadge) {
@@ -5135,6 +5145,22 @@ async function markAllNotificationsAsRead(event) {
 
 let currentAdminReviewRequestId = null;
 
+async function clearSecurityAuditHistory() {
+    if (!window.confirm('Clear all security audit history? Password recovery requests will remain unchanged.')) return;
+    const button = document.querySelector('[onclick="clearSecurityAuditHistory()"]');
+    if (button) button.disabled = true;
+    try {
+        await dbClearCollection(auditLogRef);
+        showToast('Security audit history cleared.', 'success');
+        await loadPasswordRequests();
+    } catch (error) {
+        console.error('[Audit] Clear history failed:', error);
+        showToast('Unable to clear security audit history.', 'error');
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
 async function updateAdminPendingRequestsBadge() {
     try {
         const requests = await dbGetAll(passwordRequestsRef);
@@ -5178,11 +5204,11 @@ async function loadPasswordRequests() {
             adminRecoveryTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">No instructor password recovery requests yet.</td></tr>';
         } else {
             const statusMap = {
-                pending: { cls: 'badge-recovery-pending', label: '⏳ Pending' },
-                approved: { cls: 'badge-recovery-approved', label: '✅ Approved' },
-                rejected: { cls: 'badge-recovery-rejected', label: '❌ Rejected' },
-                completed: { cls: 'badge-recovery-completed', label: '✔️ Completed' },
-                expired: { cls: 'badge-recovery-expired', label: '⏱️ Expired' }
+                pending: { cls: 'badge-recovery-pending', label: '<i data-lucide="hourglass" aria-hidden="true"></i> Pending' },
+                approved: { cls: 'badge-recovery-approved', label: '<i data-lucide="circle-check" aria-hidden="true"></i> Approved' },
+                rejected: { cls: 'badge-recovery-rejected', label: '<i data-lucide="circle-x" aria-hidden="true"></i> Rejected' },
+                completed: { cls: 'badge-recovery-completed', label: '<i data-lucide="check" aria-hidden="true"></i> Completed' },
+                expired: { cls: 'badge-recovery-expired', label: '<i data-lucide="timer" aria-hidden="true"></i> Expired' }
             };
             adminRecoveryTbody.innerHTML = instructorRecovery.map(r => {
                 const s = statusMap[r.status] || { cls: '', label: r.status };
@@ -5201,8 +5227,8 @@ async function loadPasswordRequests() {
                   <td><span class="badge ${s.cls}">${s.label}</span></td>
                   <td>
                     ${canReview
-                        ? `<button class="btn btn-primary btn-sm" onclick="openAdminRecoveryReview('${r._docId}')">🔍 Review</button>`
-                        : `<button class="btn btn-ghost btn-sm" onclick="openAdminRecoveryReview('${r._docId}')">👁️ View</button>`
+                        ? `<button class="btn btn-primary btn-sm" onclick="openAdminRecoveryReview('${r._docId}')"><i data-lucide="search" aria-hidden="true"></i> Review</button>`
+                        : `<button class="btn btn-ghost btn-sm" onclick="openAdminRecoveryReview('${r._docId}')"><i data-lucide="eye" aria-hidden="true"></i> View</button>`
                     }
                   </td>
                 </tr>`;
@@ -5235,15 +5261,15 @@ async function loadPasswordRequests() {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">No security events recorded yet.</td></tr>';
         } else {
             const actionLabels = {
-                'password_changed': { icon: '🔑', label: 'Password Changed', cls: 'badge-approved' },
-                'password_reset_requested': { icon: '📩', label: 'Reset Requested', cls: 'badge-recovery-pending' },
-                'password_reset_approved': { icon: '✅', label: 'Reset Approved', cls: 'badge-recovery-approved' },
-                'password_reset_rejected': { icon: '❌', label: 'Reset Rejected', cls: 'badge-recovery-rejected' },
-                'password_reset_completed': { icon: '🎉', label: 'Reset Completed', cls: 'badge-recovery-completed' }
+                'password_changed': { icon: 'key-round', label: 'Password Changed', cls: 'badge-approved' },
+                'password_reset_requested': { icon: 'mail', label: 'Reset Requested', cls: 'badge-recovery-pending' },
+                'password_reset_approved': { icon: 'circle-check', label: 'Reset Approved', cls: 'badge-recovery-approved' },
+                'password_reset_rejected': { icon: 'circle-x', label: 'Reset Rejected', cls: 'badge-recovery-rejected' },
+                'password_reset_completed': { icon: 'party-popper', label: 'Reset Completed', cls: 'badge-recovery-completed' }
             };
 
             tbody.innerHTML = allLogs.map(r => {
-                const a = actionLabels[r.action] || { icon: '📋', label: r.action || 'Unknown', cls: '' };
+                const a = actionLabels[r.action] || { icon: 'clipboard-list', label: r.action || 'Unknown', cls: '' };
                 const dt = r.timestamp
                     ? new Date(r.timestamp).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
                     : '—';
@@ -5257,7 +5283,7 @@ async function loadPasswordRequests() {
                       <div style="font-size:0.75rem;color:var(--text-muted)">@${username}</div>
                     </div>
                   </div></td>
-                  <td><span class="badge ${a.cls}">${a.icon} ${a.label}</span></td>
+                  <td><span class="badge ${a.cls}"><i data-lucide="${a.icon}" aria-hidden="true"></i> ${a.label}</span></td>
                   <td>${r.instructorName || '—'}</td>
                   <td>${dt}</td>
                 </tr>`;
@@ -5789,6 +5815,7 @@ function validatePseudocode(code) {
                 message: `Unrecognized statement: "${trimmed}".`,
                 suggestion: 'Use valid pseudocode keywords: SET, DISPLAY, IF, FOR, WHILE, CALL, RETURN, etc.'
             });
+            refreshIcons(tbody);
         }
     }
 

@@ -775,6 +775,27 @@ async function dbDelete(ref, docId) {
     return { success: false, deleted: false, message: 'Deletion is disabled to protect persisted Firestore data.' };
 }
 
+async function dbClearCollection(ref) {
+    setLocalCollection(ref, []);
+    if (!firestoreReady()) return;
+
+    const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
+    if (snapshot.empty) return;
+
+    let batch = firestore.batch();
+    let batchSize = 0;
+    for (const doc of snapshot.docs) {
+        batch.delete(doc.ref);
+        batchSize++;
+        if (batchSize === 400) {
+            await withFirestoreTimeout(batch.commit());
+            batch = firestore.batch();
+            batchSize = 0;
+        }
+    }
+    if (batchSize > 0) await withFirestoreTimeout(batch.commit());
+}
+
 /**
  * Count documents.
  */
