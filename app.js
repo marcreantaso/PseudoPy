@@ -739,7 +739,7 @@ const ROLE_LABELS = { student: 'Student', instructor: 'Instructor', admin: 'Admi
 const ROLE_BADGES = { student: 'badge-student', instructor: 'badge-instructor', admin: 'badge-admin' };
 
 function checkAccess(role, pageId) {
-    const adminPages = ['manage-users', 'password-requests', 'admin-execute'];
+    const adminPages = ['manage-users', 'password-requests', 'admin-execute', 'developer-options'];
     const instructorPages = ['analytics', 'manage-exercises', 'generate-code', 'compiler-metrics', 'manage-students', 'password-recovery'];
     const studentPages = ['write-pseudocode', 'translate', 'execute', 'feedback', 'exercises-student', 'student-settings', 'change-password'];
 
@@ -864,7 +864,8 @@ function navigateTo(pageId) {
         'student-settings': 'Settings',
         'password-requests': 'Security Audit Log',
         'password-recovery': 'Password Recovery',
-        'compiler-metrics': 'Compiler Metrics & Evaluation'
+        'compiler-metrics': 'Compiler Metrics & Evaluation',
+        'developer-options': 'Developer Options'
     };
     setText('topbar-title', titles[pageId] || 'Dashboard');
 
@@ -878,6 +879,7 @@ function navigateTo(pageId) {
     if (pageId === 'password-requests') loadPasswordRequests();
     if (pageId === 'password-recovery') loadPasswordRecovery();
     if (pageId === 'compiler-metrics') loadCompilerMetrics();
+    if (pageId === 'developer-options' && typeof initDevTools === 'function') initDevTools();
     // Refresh student progress pill whenever the Write Pseudocode page is shown
     if (pageId === 'write-pseudocode' && currentUser && currentUser.role === 'student') loadStudentProgress();
 }
