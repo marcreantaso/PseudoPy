@@ -326,6 +326,12 @@
             <span class="nav-icon"><i data-lucide="key-round" aria-hidden="true"></i></span> Password Requests
             <span id="nav-admin-recovery-badge" style="display:none; position:absolute; right:0.75rem; top:50%; transform:translateY(-50%); background:var(--danger); color:#fff; border-radius:999px; font-size:0.7rem; font-weight:700; min-width:18px; height:18px; align-items:center; justify-content:center; padding:0 4px;"></span>
           </button>
+          <button class="nav-item" onclick="navigateTo('admin-execute')">
+            <span class="nav-icon"><i data-lucide="play-circle" aria-hidden="true"></i></span> Execute Code
+          </button>
+          <button class="nav-item" onclick="navigateTo('developer-options')">
+            <span class="nav-icon"><i data-lucide="bug" aria-hidden="true"></i></span> Developer Options
+          </button>
 
         </div>
       </nav>
@@ -1719,6 +1725,158 @@
       </div>
 
       <!-- ═══════════════════════════════════
+           PAGE: Developer Options (Admin Only)
+           Compiler Debugger & Algorithm Flow
+           ═══════════════════════════════════ -->
+      <div id="page-developer-options" class="page-view hidden">
+        <div class="page-header">
+          <div>
+            <h2><i data-lucide="bug" aria-hidden="true"></i> Developer Options — Compiler Debugger</h2>
+            <p>Inspect exactly how the compiler processes pseudocode from input through Python execution and output.</p>
+          </div>
+        </div>
+
+        <!-- Controls Bar -->
+        <div class="devtools-controls">
+          <button class="btn btn-primary" id="devtools-run-btn" onclick="devToolsRunPipeline()"><i data-lucide="play" aria-hidden="true"></i> Run Pipeline</button>
+          <button class="btn btn-secondary" id="devtools-step-btn" onclick="devToolsStepThrough()" disabled><i data-lucide="step-forward" aria-hidden="true"></i> Step Through</button>
+          <button class="btn btn-secondary" id="devtools-reset-btn" onclick="devToolsReset()"><i data-lucide="rotate-ccw" aria-hidden="true"></i> Reset</button>
+          <button class="btn btn-ghost btn-sm" onclick="devToolsClearTrace()">Clear Trace</button>
+          <button class="btn btn-ghost btn-sm" onclick="devToolsExportTrace()">Export Trace</button>
+          <button class="btn btn-ghost btn-sm" onclick="devToolsSwitchTab('rawjson')">View Raw JSON</button>
+        </div>
+
+        <!-- Pipeline Visualizer -->
+        <div class="devtools-pipeline" id="devtools-pipeline">
+          <div class="pipeline-stage" data-stage="PREPROCESSING" id="pipe-preprocess"><div class="pipe-status-dot"></div><div class="pipe-label">Preprocessing</div><div class="pipe-func">preprocessPseudocode()</div><div class="pipe-time" id="pipe-preprocess-time">—</div></div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-stage" data-stage="NLP_MAPPING" id="pipe-nlp"><div class="pipe-status-dot"></div><div class="pipe-label">NLP Mapping</div><div class="pipe-func">nlpMapper.map()</div><div class="pipe-time" id="pipe-nlp-time">—</div></div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-stage" data-stage="LEXICAL_ANALYSIS" id="pipe-lexer"><div class="pipe-status-dot"></div><div class="pipe-label">Lexical Analysis</div><div class="pipe-func">Lexer.tokenize()</div><div class="pipe-time" id="pipe-lexer-time">—</div></div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-stage" data-stage="SYNTAX_ANALYSIS" id="pipe-parser"><div class="pipe-status-dot"></div><div class="pipe-label">Syntax Analysis</div><div class="pipe-func">Parser.parse()</div><div class="pipe-time" id="pipe-parser-time">—</div></div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-stage" data-stage="SEMANTIC_ANALYSIS" id="pipe-semantic"><div class="pipe-status-dot"></div><div class="pipe-label">Semantic Analysis</div><div class="pipe-func">SemanticAnalyzer.analyze()</div><div class="pipe-time" id="pipe-semantic-time">—</div></div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-stage" data-stage="CODE_GENERATION" id="pipe-codegen"><div class="pipe-status-dot"></div><div class="pipe-label">Code Generation</div><div class="pipe-func">CodeGenerator.generate()</div><div class="pipe-time" id="pipe-codegen-time">—</div></div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-stage" data-stage="EXECUTION" id="pipe-runtime"><div class="pipe-status-dot"></div><div class="pipe-label">Python Runtime</div><div class="pipe-func">Skulpt</div><div class="pipe-time" id="pipe-runtime-time">—</div></div>
+        </div>
+
+        <!-- Three-Column Layout -->
+        <div class="devtools-columns">
+          <div class="devtools-col devtools-col-left">
+            <div class="devtools-panel"><div class="devtools-panel-header"><h3>📝 Source Pseudocode</h3></div>
+              <div class="devtools-panel-body"><textarea id="devtools-pseudocode" class="code-editor devtools-editor" spellcheck="false" placeholder="Enter pseudocode here...&#10;&#10;Example:&#10;BEGIN&#10;  DECLARE x AS INTEGER&#10;  SET x TO 5&#10;  IF x > 0 THEN&#10;    DISPLAY &quot;Positive&quot;&#10;  END IF&#10;END"></textarea></div>
+            </div>
+          </div>
+          <div class="devtools-col devtools-col-center">
+            <div class="devtools-panel"><div class="devtools-panel-header"><h3>⚙️ Active Stage</h3><span class="devtools-stage-badge" id="devtools-active-stage-badge">IDLE</span></div>
+              <div class="devtools-panel-body devtools-stage-detail" id="devtools-stage-detail">
+                <div class="devtools-idle-message"><div style="font-size:2rem;margin-bottom:0.5rem">🔬</div><p>Enter pseudocode and click <strong>Run Pipeline</strong> to begin compiler analysis.</p></div>
+              </div>
+            </div>
+          </div>
+          <div class="devtools-col devtools-col-right">
+            <div class="devtools-panel"><div class="devtools-panel-header"><h3>🐍 Generated Python</h3><button class="btn btn-ghost btn-sm" onclick="devToolsCopyPython()" title="Copy">📋</button></div>
+              <div class="devtools-panel-body"><pre id="devtools-python-output" class="devtools-python-pre">Waiting for compilation...</pre></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabbed Inspector Panels -->
+        <div class="devtools-tabs">
+          <div class="devtools-tab-bar" id="devtools-tab-bar">
+            <button class="devtools-tab active" data-tab="tokens" onclick="devToolsSwitchTab('tokens')">Tokens</button>
+            <button class="devtools-tab" data-tab="ast" onclick="devToolsSwitchTab('ast')">AST</button>
+            <button class="devtools-tab" data-tab="symboltable" onclick="devToolsSwitchTab('symboltable')">Symbol Table</button>
+            <button class="devtools-tab" data-tab="parser" onclick="devToolsSwitchTab('parser')">Parser State</button>
+            <button class="devtools-tab" data-tab="semantic" onclick="devToolsSwitchTab('semantic')">Semantic</button>
+            <button class="devtools-tab" data-tab="translation" onclick="devToolsSwitchTab('translation')">Translation</button>
+            <button class="devtools-tab" data-tab="errors" onclick="devToolsSwitchTab('errors')">Errors</button>
+            <button class="devtools-tab" data-tab="runtime" onclick="devToolsSwitchTab('runtime')">Runtime</button>
+            <button class="devtools-tab" data-tab="trace" onclick="devToolsSwitchTab('trace')">Exec Trace</button>
+            <button class="devtools-tab" data-tab="attempts" onclick="devToolsSwitchTab('attempts')">Attempts</button>
+            <button class="devtools-tab" data-tab="eventlog" onclick="devToolsSwitchTab('eventlog')">Event Log</button>
+            <button class="devtools-tab" data-tab="metrics" onclick="devToolsSwitchTab('metrics')">Metrics</button>
+            <button class="devtools-tab" data-tab="rawjson" onclick="devToolsSwitchTab('rawjson')">Raw JSON</button>
+          </div>
+
+          <div class="devtools-tab-panel active" id="devtools-panel-tokens">
+            <div class="devtools-panel-toolbar">
+              <input type="text" class="devtools-filter" id="devtools-token-filter" placeholder="Filter tokens..." oninput="devToolsFilterTokens()">
+              <select class="devtools-filter" id="devtools-token-type-filter" onchange="devToolsFilterTokens()"><option value="">All Types</option><option value="KEYWORD">KEYWORD</option><option value="IDENTIFIER">IDENTIFIER</option><option value="NUMBER">NUMBER</option><option value="STRING">STRING</option><option value="OPERATOR">OPERATOR</option><option value="NEWLINE">NEWLINE</option><option value="EOF">EOF</option></select>
+              <span class="devtools-count" id="devtools-token-count">0 tokens</span>
+            </div>
+            <div class="devtools-table-wrap"><table class="devtools-table" id="devtools-token-table"><thead><tr><th>Line</th><th>Type</th><th>Value</th></tr></thead><tbody id="devtools-token-tbody"></tbody></table></div>
+          </div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-ast"><div class="devtools-ast-tree" id="devtools-ast-tree"><div class="devtools-idle-message"><p>No AST generated yet.</p></div></div></div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-symboltable"><div class="devtools-table-wrap"><table class="devtools-table"><thead><tr><th>Variable</th><th>Type</th><th>Status</th></tr></thead><tbody id="devtools-symbol-tbody"></tbody></table></div></div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-parser"><div id="devtools-parser-state"><div class="devtools-idle-message"><p>No parser state available.</p></div></div></div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-semantic"><div id="devtools-semantic-output"><div class="devtools-idle-message"><p>No semantic analysis data.</p></div></div></div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-translation"><div id="devtools-translation-view"><div class="devtools-idle-message"><p>Run the pipeline to see AST → Python translation mapping.</p></div></div></div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-errors">
+            <div class="devtools-panel-toolbar">
+              <select class="devtools-filter" id="devtools-error-filter" onchange="devToolsFilterErrors()"><option value="">All Categories</option><option value="LEXICAL">Lexical</option><option value="SYNTAX">Syntax</option><option value="SEMANTIC">Semantic</option><option value="CODEGEN">CodeGen</option><option value="RUNTIME">Runtime</option><option value="VALIDATION">Validation</option></select>
+              <span class="devtools-count" id="devtools-error-count">0 issues</span>
+            </div>
+            <div class="devtools-table-wrap"><table class="devtools-table"><thead><tr><th>Category</th><th>Stage</th><th>Line</th><th>Message</th><th>Suggestion</th></tr></thead><tbody id="devtools-error-tbody"></tbody></table></div>
+          </div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-runtime">
+            <div class="devtools-runtime-info"><div class="devtools-kv"><span class="devtools-kv-key">Status:</span> <span id="devtools-runtime-status">Not executed</span></div><div class="devtools-kv"><span class="devtools-kv-key">Execution Time:</span> <span id="devtools-runtime-time">—</span></div></div>
+            <div class="devtools-runtime-panels"><div class="devtools-runtime-section"><h4>stdout</h4><pre id="devtools-runtime-stdout" class="devtools-output-pre">—</pre></div><div class="devtools-runtime-section"><h4>stderr / Errors</h4><pre id="devtools-runtime-stderr" class="devtools-output-pre">—</pre></div></div>
+          </div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-trace"><div id="devtools-exec-trace"><div class="devtools-idle-message"><p>Run the pipeline and execute to see a step-by-step trace.</p></div></div></div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-attempts"><div id="devtools-attempt-history"><div class="devtools-idle-message"><p>No compilation attempts yet.</p></div></div></div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-eventlog"><div class="devtools-event-log" id="devtools-event-log"><div class="devtools-idle-message"><p>No events recorded.</p></div></div></div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-metrics">
+            <div class="devtools-metrics-grid" id="devtools-metrics-grid">
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Lex Time</div><div class="devtools-metric-value" id="dm-lex-time">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Parse Time</div><div class="devtools-metric-value" id="dm-parse-time">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Semantic Time</div><div class="devtools-metric-value" id="dm-semantic-time">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">CodeGen Time</div><div class="devtools-metric-value" id="dm-codegen-time">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Total Time</div><div class="devtools-metric-value" id="dm-total-time">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Execution Time</div><div class="devtools-metric-value" id="dm-exec-time">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Token Count</div><div class="devtools-metric-value" id="dm-token-count">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">AST Nodes</div><div class="devtools-metric-value" id="dm-ast-nodes">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Complexity</div><div class="devtools-metric-value" id="dm-complexity">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Attempt #</div><div class="devtools-metric-value" id="dm-attempt-num">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Auto-Fix Count</div><div class="devtools-metric-value" id="dm-autofix-count">—</div></div>
+            </div>
+          </div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-rawjson">
+            <div class="devtools-raw-sections">
+              <details class="devtools-raw-detail"><summary>Raw Tokens</summary><pre id="devtools-raw-tokens" class="devtools-raw-pre">—</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw AST</summary><pre id="devtools-raw-ast" class="devtools-raw-pre">—</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw Symbol Table</summary><pre id="devtools-raw-symtable" class="devtools-raw-pre">—</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw Compiler Result</summary><pre id="devtools-raw-result" class="devtools-raw-pre">—</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw Runtime Result</summary><pre id="devtools-raw-runtime" class="devtools-raw-pre">—</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw Trace Events</summary><pre id="devtools-raw-events" class="devtools-raw-pre">—</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw Metrics</summary><pre id="devtools-raw-metrics" class="devtools-raw-pre">—</pre></details>
+            </div>
+          </div>
+        </div>
+
+        <!-- Auto-Fix Detail -->
+        <div class="devtools-autofix-panel hidden" id="devtools-autofix-panel">
+          <div class="devtools-panel-header"><h3>🔧 Validation-Driven Refinement</h3></div>
+          <div id="devtools-autofix-content"></div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════
            PAGE: Admin Execute Code
            ═══════════════════════════════════ -->
       <div id="page-admin-execute" class="page-view hidden">
@@ -2498,6 +2656,7 @@
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
   <script src="app.js?v=20260907"></script>
+  <script src="devtools.js?v=20260909"></script>
   <script>
     if (window.lucide) lucide.createIcons({ icons: lucide.icons });
   </script>

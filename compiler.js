@@ -34,6 +34,51 @@ const TOKEN_TYPES = {
     EOF: 'EOF'
 };
 
+// ══════════════════════════════════════════════════════════════
+// COMPILER TRACE — Non-Invasive Event Instrumentation
+// Emits timestamped events during compilation for the Admin
+// Developer Options debugger. Does NOT alter compiler behavior.
+// ══════════════════════════════════════════════════════════════
+class CompilerTrace {
+    constructor() {
+        this.events = [];
+        this.listeners = [];
+        this.enabled = false;
+    }
+
+    enable()  { this.enabled = true; }
+    disable() { this.enabled = false; }
+
+    reset() {
+        this.events = [];
+    }
+
+    emit(event) {
+        if (!this.enabled) return;
+        const entry = {
+            ...event,
+            timestamp: performance.now(),
+            timeISO: new Date().toISOString()
+        };
+        this.events.push(entry);
+        for (const fn of this.listeners) {
+            try { fn(entry); } catch (e) { /* listener error — ignore */ }
+        }
+    }
+
+    onEvent(fn) {
+        this.listeners.push(fn);
+        return () => { this.listeners = this.listeners.filter(l => l !== fn); };
+    }
+
+    getEvents() {
+        return this.events.slice();
+    }
+}
+
+// Global singleton — shared across compiler stages
+const compilerTrace = new CompilerTrace();
+
 // ── Terminal Symbols (Σ) ─────────────────────────────────────
 const COMPILER_KEYWORDS = new Set([
     'BEGIN', 'END', 'DECLARE', 'AS',
@@ -146,6 +191,7 @@ class Lexer {
     }
 
     tokenize() {
+        compilerTrace.emit({ type: 'LEXER_START', stage: 'LEXICAL_ANALYSIS', status: 'RUNNING', data: { inputLength: this.input.length } });
         while (this.pos < this.input.length) {
             const ch = this.peek();
 
@@ -245,6 +291,7 @@ class Lexer {
         }
 
         this.tokens.push({ type: TOKEN_TYPES.EOF, value: '', line: this.line });
+        compilerTrace.emit({ type: 'LEXER_COMPLETE', stage: 'LEXICAL_ANALYSIS', status: 'SUCCESS', data: { tokenCount: this.tokens.length, tokens: this.tokens } });
         return this.tokens;
     }
 }
@@ -310,6 +357,7 @@ class Parser {
 
     // ── CFG Rule: Program → BEGIN StatementList END ──
     parse() {
+        compilerTrace.emit({ type: 'PARSER_START', stage: 'SYNTAX_ANALYSIS', status: 'RUNNING', data: { tokenCount: this.tokens.length } });
         const body = [];
         this.skipNewlines();
 
@@ -372,7 +420,9 @@ class Parser {
             });
         }
 
-        return { type: 'Program', body: body, errors: this.errors };
+        const astResult = { type: 'Program', body: body, errors: this.errors };
+        compilerTrace.emit({ type: 'AST_CREATED', stage: 'SYNTAX_ANALYSIS', status: this.errors.length > 0 ? 'ERROR' : 'SUCCESS', data: { nodeCount: body.length, errorCount: this.errors.length, errors: this.errors, blockStack: this.blockStack.slice() } });
+        return astResult;
     }
 
     parseStatement() {
@@ -819,7 +869,9 @@ class SemanticAnalyzer {
 
 
     analyze(ast) {
+        compilerTrace.emit({ type: 'SEMANTIC_START', stage: 'SEMANTIC_ANALYSIS', status: 'RUNNING', data: {} });
         this.visitNode(ast);
+        compilerTrace.emit({ type: 'SEMANTIC_COMPLETE', stage: 'SEMANTIC_ANALYSIS', status: this.warnings.length > 0 ? 'WARNING' : 'SUCCESS', data: { warningCount: this.warnings.length, warnings: this.warnings, symbolTable: Object.fromEntries(this.symbolTable) } });
         return this.warnings;
     }
 
@@ -1139,12 +1191,16 @@ class CodeGenerator {
     }
 
     generate(ast) {
+        compilerTrace.emit({ type: 'CODEGEN_START', stage: 'CODE_GENERATION', status: 'RUNNING', data: { nodeCount: ast.body ? ast.body.length : 0 } });
         this.lines = [];
         this.indentLevel = 0;
         for (const node of ast.body) {
+            compilerTrace.emit({ type: 'CODEGEN_VISIT', stage: 'CODE_GENERATION', status: 'RUNNING', data: { nodeType: node.type, line: node.line } });
             this.visitNode(node);
         }
-        return this.lines.join('\n');
+        const result = this.lines.join('\n');
+        compilerTrace.emit({ type: 'CODEGEN_COMPLETE', stage: 'CODE_GENERATION', status: 'SUCCESS', data: { lineCount: this.lines.length, python: result } });
+        return result;
     }
 
     visitNode(node) {
@@ -1317,14 +1373,23 @@ class PseudocodeCompiler {
      */
     compile(rawCode) {
         const pipelineStart = performance.now();
+        const autoFixes = [];
+
+        compilerTrace.emit({ type: 'COMPILER_START', stage: 'PIPELINE', status: 'RUNNING', data: { rawCodeLength: rawCode.length } });
 
         // Preprocess to strip leading line numbers
+        compilerTrace.emit({ type: 'PREPROCESS_START', stage: 'PREPROCESSING', status: 'RUNNING', data: {} });
         const cleanRawCode = preprocessPseudocode(rawCode);
+        compilerTrace.emit({ type: 'PREPROCESS_COMPLETE', stage: 'PREPROCESSING', status: 'SUCCESS', data: { input: rawCode, output: cleanRawCode } });
 
         // ── Stage 0: Natural Language Mapping ──
         let code = cleanRawCode;
         if (typeof nlpMapper !== 'undefined') {
+            compilerTrace.emit({ type: 'NLP_MAP_START', stage: 'NLP_MAPPING', status: 'RUNNING', data: {} });
             code = nlpMapper.map(cleanRawCode);
+            compilerTrace.emit({ type: 'NLP_MAP_COMPLETE', stage: 'NLP_MAPPING', status: 'SUCCESS', data: { input: cleanRawCode, output: code, changed: code !== cleanRawCode } });
+        } else {
+            compilerTrace.emit({ type: 'NLP_MAP_SKIPPED', stage: 'NLP_MAPPING', status: 'SKIPPED', data: { reason: 'nlpMapper not available' } });
         }
 
         // ── Stage 1: Lexical Analysis ──
@@ -1341,7 +1406,7 @@ class PseudocodeCompiler {
 
         // ── Stage 3: Semantic Analysis (pre-execution variable check) ──
         const t3 = performance.now();
-        const semanticAnalyzer = new SemanticAnalyzer();
+        let semanticAnalyzer = new SemanticAnalyzer();
         let warnings = semanticAnalyzer.analyze(ast);
         const semanticTime = performance.now() - t3;
 
@@ -1367,11 +1432,14 @@ class PseudocodeCompiler {
                     if (match && match[1]) {
                         autoFixedCode += '\n' + match[1];
                         fixesApplied++;
+                        autoFixes.push({ detected: err.message, suggested: match[1], action: match[1] + ' appended' });
                     }
                 }
             }
 
             if (fixesApplied > 0) {
+                compilerTrace.emit({ type: 'AUTOFIX_START', stage: 'VALIDATION_REFINEMENT', status: 'RETRYING', data: { fixesApplied, autoFixes, originalCode: code, fixedCode: autoFixedCode } });
+
                 // Re-run pipeline with auto-fixed code
                 const retryLexer = new Lexer(autoFixedCode);
                 const retryParser = new Parser(retryLexer.tokenize());
@@ -1380,14 +1448,17 @@ class PseudocodeCompiler {
                 // If it passes now, accept the fixed AST but add a warning
                 if (retryAst.errors.length === 0) {
                     ast = retryAst;
-                    const retrySemanticAnalyzer = new SemanticAnalyzer();
-                    warnings = retrySemanticAnalyzer.analyze(ast);
+                    semanticAnalyzer = new SemanticAnalyzer();
+                    warnings = semanticAnalyzer.analyze(ast);
                     warnings.push({
                         line: ast.body.length + 1,
                         message: `Validation-Driven Refinement applied ${fixesApplied} auto-fix(es) to close blocks.`,
 
                         suggestion: "Always ensure your BEGIN/END and control blocks are properly closed."
                     });
+                    compilerTrace.emit({ type: 'AUTOFIX_SUCCESS', stage: 'VALIDATION_REFINEMENT', status: 'SUCCESS', data: { fixesApplied } });
+                } else {
+                    compilerTrace.emit({ type: 'AUTOFIX_FAILED', stage: 'VALIDATION_REFINEMENT', status: 'ERROR', data: { remainingErrors: retryAst.errors } });
                 }
             }
         }
@@ -1395,7 +1466,8 @@ class PseudocodeCompiler {
         // Syntax errors are hard stops — no code generation (if auto-fix failed)
         if (ast.errors.length > 0) {
             metrics.totalTime = parseFloat((performance.now() - pipelineStart).toFixed(3));
-            return { valid: false, python: '', errors: ast.errors, warnings: warnings, metrics: metrics, mappedCode: code };
+            compilerTrace.emit({ type: 'COMPILATION_FAILURE', stage: 'PIPELINE', status: 'ERROR', data: { errorCount: ast.errors.length, errors: ast.errors } });
+            return { valid: false, python: '', errors: ast.errors, warnings: warnings, metrics: metrics, mappedCode: code, tokens: tokens, ast: ast, symbolTable: Object.fromEntries(semanticAnalyzer.symbolTable), autoFixes: autoFixes };
         }
 
         // ── Stage 4: Code Generation (SDT tree-walk) ──
@@ -1406,7 +1478,9 @@ class PseudocodeCompiler {
 
         metrics.totalTime = parseFloat((performance.now() - pipelineStart).toFixed(3));
 
-        return { valid: true, python: pythonCode, errors: [], warnings: warnings, metrics: metrics, mappedCode: code };
+        compilerTrace.emit({ type: 'COMPILATION_SUCCESS', stage: 'PIPELINE', status: 'SUCCESS', data: { totalTime: metrics.totalTime } });
+
+        return { valid: true, python: pythonCode, errors: [], warnings: warnings, metrics: metrics, mappedCode: code, tokens: tokens, ast: ast, symbolTable: Object.fromEntries(semanticAnalyzer.symbolTable), autoFixes: autoFixes };
     }
 
     /**
@@ -1450,5 +1524,5 @@ class PseudocodeCompiler {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { PseudocodeCompiler, preprocessPseudocode };
+    module.exports = { PseudocodeCompiler, preprocessPseudocode, CompilerTrace, compilerTrace };
 }
