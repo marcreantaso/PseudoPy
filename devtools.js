@@ -498,51 +498,27 @@ function devToolsFilterTokens() {
 
 function _updateASTInspector(ast) {
     const container = document.getElementById('devtools-ast-tree');
-    if (!container || !ast) { container.innerHTML = '<div class="devtools-idle-message"><p>No AST.</p></div>'; return; }
+    if (!container) return;
+    if (!ast) { container.innerHTML = '<div class="devtools-idle-message"><p>No AST.</p></div>'; return; }
     container.innerHTML = '<div class="ast-node-root">' + _renderASTNode(ast, 0) + '</div>';
 }
 
 function _renderASTNode(node, depth) {
     if (!node || typeof node !== 'object') return '';
-    const indent = '  '.repeat(depth);
-    let html = '';
-
-    if (node.type) {
-        const props = Object.entries(node)
-            .filter(([k]) => !['type', 'body', 'elseBody', 'elseIfs', 'condition', 'expr', 'startExpr', 'endExpr', 'iterable', 'params', 'value', 'index', 'args', 'tokens', 'errors'].includes(k))
-            .map(([k, v]) => `<span class="ast-prop">${k}: <code>${_esc(String(v))}</code></span>`)
-            .join(' ');
-
-        html += `<details class="ast-node" open>
-            <summary class="ast-node-summary">
-                <span class="ast-type">${node.type}</span> ${props}
-            </summary>
-            <div class="ast-children">`;
-
-        // Render child arrays
-        const childArrays = ['body', 'elseBody', 'elseIfs'];
-        for (const key of childArrays) {
-            if (Array.isArray(node[key]) && node[key].length > 0) {
-                html += `<div class="ast-child-label">${key}:</div>`;
-                for (const child of node[key]) {
-                    html += _renderASTNode(child, depth + 1);
-                }
-            }
-        }
-
-        // Render expressions
-        const exprKeys = ['condition', 'expr', 'startExpr', 'endExpr', 'iterable', 'value', 'index', 'args', 'params'];
-        for (const key of exprKeys) {
-            if (node[key] && node[key].tokens) {
-                const tokStr = node[key].tokens.map(t => t.value).join(' ');
-                html += `<div class="ast-expr"><span class="ast-prop">${key}:</span> <code>${_esc(tokStr)}</code></div>`;
-            }
-        }
-
-        html += '</div></details>';
+    const entries = Object.entries(node).filter(([key]) => !['tokens', 'errors'].includes(key));
+    const props = entries.filter(([key, value]) => key !== 'type' && value !== null && typeof value !== 'object')
+        .map(([key, value]) => `<span class="ast-prop">${_esc(key)}: <code>${_esc(String(value))}</code></span>`).join(' ');
+    let html = `<details class="ast-node" ${depth < 4 ? 'open' : ''}><summary class="ast-node-summary"><span class="ast-type">${_esc(node.type || 'Branch')}</span> ${props}</summary><div class="ast-children">`;
+    // Expression nodes retain both source tokens and an actual precedence tree.
+    if (node.tokens) html += `<div class="ast-expr"><code>${_esc(node.tokens.map(t => t.value).join(' '))}</code></div>`;
+    for (const [key, value] of entries) {
+        if (!value || typeof value !== 'object') continue;
+        html += `<div class="ast-child-label">${_esc(key)}:</div>`;
+        if (Array.isArray(value)) {
+            for (const child of value) html += typeof child === 'object' ? _renderASTNode(child, depth + 1) : `<code>${_esc(String(child))}</code> `;
+        } else html += _renderASTNode(value, depth + 1);
     }
-
-    return html;
+    return html + '</div></details>';
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -985,3 +961,4 @@ function _setText(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
 }
+

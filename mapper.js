@@ -77,13 +77,13 @@ class NaturalLanguageMapper {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('#')) return line;
 
-        let result = line;
-        for (const rule of this.comparisonPhrases) {
-            result = result.replace(rule.pattern, rule.replacement);
-        }
-        for (const rule of this.arithmeticPhrases) {
-            result = result.replace(rule.pattern, rule.replacement);
-        }
+        // Protect strings and inline # comments from word-phrase replacement.
+        const segments = line.split(/((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|#.*$)/g);
+        const result = segments.map(segment => {
+            if (!segment || /^["'#]/.test(segment)) return segment || '';
+            for (const rule of [...this.comparisonPhrases, ...this.arithmeticPhrases]) segment = segment.replace(rule.pattern, rule.replacement);
+            return segment;
+        }).join('');
         return result;
     }
 
@@ -109,6 +109,9 @@ class NaturalLanguageMapper {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('#')) return line; // preserve whitespace and comments
 
+        // Structured pseudocode must keep its explicit sentinels. Never append a
+        // second DO or silently supply a missing THEN during assessment.
+        if (/^(BEGIN|END|DECLARE|SET|DISPLAY|PRINT|OUTPUT|INPUT|READ|IF|ELSE|WHILE|FOR|FUNCTION|PROCEDURE|RETURN|CALL|INCREMENT|DECREMENT|APPEND)\b/i.test(trimmed)) return line;
         let result = trimmed;
         for (const rule of this.rules) {
             if (rule.pattern.test(result)) {
@@ -126,3 +129,4 @@ class NaturalLanguageMapper {
 // Global instance
 const nlpMapper = new NaturalLanguageMapper();
 console.log('[Mapper] NaturalLanguageMapper initialized.');
+
