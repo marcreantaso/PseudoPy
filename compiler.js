@@ -88,8 +88,8 @@ const COMPILER_KEYWORDS = new Set([
     'FOR', 'FROM', 'TO', 'EACH', 'IN', 'DO', 'ENDFOR',
     'WHILE', 'ENDWHILE',
     'SET', 'DISPLAY', 'PRINT', 'OUTPUT', 'INPUT', 'READ',
-    'AND', 'OR', 'NOT', 'MOD',
-    'TRUE', 'FALSE', 'NULL',
+    'AND', 'OR', 'NOT', 'MOD', 'DIV', 'STEP',
+    'TRUE', 'FALSE', 'NULL', 'NONE',
     'IS',
     'FUNCTION', 'PROCEDURE', 'RETURN', 'CALL',
     'INCREMENT', 'DECREMENT', 'APPEND',
@@ -104,7 +104,7 @@ function preprocessPseudocode(code) {
     if (!code) return '';
     return code.split('\n').map(line => {
         // Strip leading line numbers: e.g. "1 BEGIN" -> "BEGIN", "2  PRINT" -> " PRINT"
-        return line.replace(/^\s*\d+[.:)]?[ \t]?/, '');
+        return line.replace(/^\s*\d+(?:[.:)]\s*|[ \t]+)(?=[A-Za-z_])/, '');
     }).join('\n');
 }
 
@@ -157,6 +157,7 @@ class Lexer {
         this.pos = 0;
         this.line = 1;
         this.tokens = [];
+        this.errors = [];
     }
 
     // ── Unicode → ASCII Operator Normalization Map ──
@@ -175,7 +176,6 @@ class Lexer {
         '\u2190': '=',    // ←  LEFTWARDS ARROW (assignment)
         '\u2192': '->',   // →  RIGHTWARDS ARROW
         '\u2261': '==',   // ≡  IDENTICAL TO
-        '\u2248': '==',   // ≈  ALMOST EQUAL TO (treat as ==)
         '\u2011': '-',    // ‑  NON-BREAKING HYPHEN
         '\u2212': '-',    // −  MINUS SIGN
         '\u2013': '-',    // –  EN DASH (often typed as minus)
@@ -208,7 +208,8 @@ class Lexer {
             if (ch === ' ' || ch === '\t') { this.advance(); continue; }
 
             // ── Comments: // or # ──
-            if (ch === '/' && this.pos + 1 < this.input.length && this.input[this.pos + 1] === '/') {
+            if (ch === '/' && this.input[this.pos + 1] === '/' &&
+                (!this.tokens.length || this.tokens[this.tokens.length - 1].type === TOKEN_TYPES.NEWLINE)) {
                 while (this.pos < this.input.length && this.input[this.pos] !== '\n') this.advance();
                 continue;
             }
@@ -233,44 +234,39 @@ class Lexer {
                 continue;
             }
 
-            // ── Numbers ──
-            if (/[0-9]/.test(ch)) {
-                let num = '';
-                const startLine = this.line;
-                while (this.pos < this.input.length && /[0-9.]/.test(this.input[this.pos])) {
-                    num += this.advance();
-                }
-                this.tokens.push({ type: TOKEN_TYPES.NUMBER, value: num, line: startLine });
+            // Decimal/scientific literals; malformed numbers are rejected by expression parsing.
+            if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(this.input[this.pos + 1] || ''))) {
+                const match = this.input.slice(this.pos).match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
+                this.tokens.push({ type: TOKEN_TYPES.NUMBER, value: match[0], line: this.line });
+                this.pos += match[0].length;
                 continue;
             }
 
-            // ── Strings ──
+            // Preserve quotes and escapes exactly. Never rewrite the contents of a literal.
             if (ch === '"' || ch === "'") {
                 const quote = this.advance();
-                let str = '';
+                let value = quote;
                 const startLine = this.line;
-                while (this.pos < this.input.length && this.input[this.pos] !== quote) {
-                    if (this.input[this.pos] === '\n') this.line++;
-                    str += this.advance();
+                let closed = false;
+                while (this.pos < this.input.length && this.peek() !== '\n') {
+                    const c = this.advance();
+                    value += c;
+                    if (c === quote) { closed = true; break; }
+                    if (c === '\\' && this.pos < this.input.length && this.peek() !== '\n') value += this.advance();
                 }
-                if (this.pos < this.input.length) this.advance(); // closing quote
-                this.tokens.push({ type: TOKEN_TYPES.STRING, value: '"' + str + '"', line: startLine });
+                if (!closed) this.errors.push({ line: startLine, message: 'Unterminated string literal.', suggestion: 'Close the string with a matching quote on the same line.' });
+                this.tokens.push({ type: TOKEN_TYPES.STRING, value, line: startLine });
                 continue;
             }
 
-            // ── Multi-char operators: ==, !=, <=, >=, <> ──
-            if ('<>=!'.includes(ch)) {
-                let op = this.advance();
-                const startLine = this.line;
-                if (this.pos < this.input.length && '=<>'.includes(this.input[this.pos])) {
-                    op += this.advance();
-                }
-                this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: op, line: startLine });
+            // Longest match keeps **, // and shifts atomic.
+            const pair = this.input.slice(this.pos, this.pos + 2);
+            if (['**', '//', '<<', '>>', '==', '!=', '<=', '>=', '<>', ':=', '<-'].includes(pair)) {
+                this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: [':=', '<-'].includes(pair) ? '=' : pair, line: this.line });
+                this.pos += 2;
                 continue;
             }
-
-            // ── Single-char operators & punctuation ──
-            if ('+-*/%,()[]:.'.includes(ch)) {
+            if ('+-*/%,()[]:.<>=&|^~'.includes(ch)) {
                 this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: this.advance(), line: this.line });
                 continue;
             }
@@ -286,12 +282,12 @@ class Lexer {
                 continue;
             }
 
-            // ── Unknown char — skip ──
+            this.errors.push({ line: this.line, message: 'Unsupported character: ' + ch, suggestion: 'Use a supported Python operator; exponentiation is ** and XOR is ^.' });
             this.advance();
         }
 
         this.tokens.push({ type: TOKEN_TYPES.EOF, value: '', line: this.line });
-        compilerTrace.emit({ type: 'LEXER_COMPLETE', stage: 'LEXICAL_ANALYSIS', status: 'SUCCESS', data: { tokenCount: this.tokens.length, tokens: this.tokens } });
+        compilerTrace.emit({ type: 'LEXER_COMPLETE', stage: 'LEXICAL_ANALYSIS', status: this.errors.length ? 'ERROR' : 'SUCCESS', data: { tokenCount: this.tokens.length, tokens: this.tokens, errors: this.errors } });
         return this.tokens;
     }
 }
@@ -311,6 +307,192 @@ class Lexer {
 // Uses a LIFO blockStack to validate nested block closures.
 // Integrates Levenshtein for sentinel keyword suggestions.
 // ══════════════════════════════════════════════════════════════
+// Python-compatible expression AST. Binding powers follow the Python language reference:
+// https://docs.python.org/3/reference/expressions.html#operator-precedence
+class ExpressionParser {
+    constructor(tokens) { this.tokens = tokens; this.pos = 0; }
+    peek(offset = 0) { return this.tokens[this.pos + offset]?.value; }
+    take(value) { if (this.peek() === value) { this.pos++; return true; } return false; }
+    expect(value) { if (!this.take(value)) throw new Error('Expected ' + value + ' in expression.'); }
+    parse() {
+        if (!this.tokens.length) throw new Error('Expected an expression.');
+        const items = [this.expression(0)];
+        let tuple = false;
+        while (this.take(',')) {
+            tuple = true;
+            if (this.pos === this.tokens.length) break;
+            items.push(this.expression(0));
+        }
+        if (this.pos !== this.tokens.length) throw new Error('Unexpected token in expression: ' + this.peek());
+        return tuple ? { type: 'TupleExpression', items } : items[0];
+    }
+    operator() {
+        const raw = this.peek();
+        const aliases = { '=': '==', '<>': '!=', MOD: '%', DIV: '//', AND: 'and', OR: 'or', IS: 'is', IN: 'in' };
+        let op = aliases[raw] || raw, count = 1;
+        if (raw === 'NOT' && this.peek(1) === 'IN') { op = 'not in'; count = 2; }
+        if (raw === 'IS' && this.peek(1) === 'NOT') { op = 'is not'; count = 2; }
+        const precedence = { or: 10, and: 20, '==': 40, '!=': 40, '<': 40, '<=': 40, '>': 40, '>=': 40,
+            is: 40, 'is not': 40, in: 40, 'not in': 40, '|': 50, '^': 60, '&': 70, '<<': 80, '>>': 80,
+            '+': 90, '-': 90, '*': 100, '/': 100, '//': 100, '%': 100, '**': 120 };
+        return { op, count, power: precedence[op] };
+    }
+    expression(minPower) {
+        const token = this.tokens[this.pos++];
+        if (!token) throw new Error('Missing operand.');
+        let left;
+        if (['+', '-', '~', 'NOT'].includes(token.value)) {
+            if (token.value === 'NOT' && minPower > 30) throw new Error('NOT requires parentheses in an arithmetic expression.');
+            const op = token.value === 'NOT' ? 'not' : token.value;
+            left = { type: 'UnaryExpression', operator: op, argument: this.expression(op === 'not' ? 30 : 110) };
+        } else if (token.value === '(' || token.value === '[') {
+            const close = token.value === '(' ? ')' : ']';
+            const items = [];
+            let tuple = false;
+            if (!this.take(close)) {
+                items.push(this.expression(0));
+                while (this.take(',')) { tuple = true; if (this.peek() === close) break; items.push(this.expression(0)); }
+                this.expect(close);
+            }
+            left = token.value === '[' ? { type: 'ListExpression', items } :
+                { type: 'GroupExpression', expression: items.length === 1 && !tuple ? items[0] : { type: 'TupleExpression', items } };
+        } else if (token.type === TOKEN_TYPES.NUMBER || token.type === TOKEN_TYPES.STRING) {
+            if (token.type === TOKEN_TYPES.NUMBER && /^0\d+$/.test(token.value) && /[1-9]/.test(token.value)) throw new Error('Leading zeros are not allowed in decimal integers.');
+            left = { type: 'Literal', value: token.value, kind: token.type };
+        } else if (['TRUE', 'FALSE', 'NULL', 'NONE'].includes(token.value)) {
+            left = { type: 'Literal', value: { TRUE: 'True', FALSE: 'False', NULL: 'None', NONE: 'None' }[token.value], kind: 'CONSTANT' };
+        } else if (token.type === TOKEN_TYPES.IDENTIFIER || ['STRING', 'INTEGER', 'FLOAT', 'BOOL'].includes(token.value)) {
+            const value = { STRING: 'str', INTEGER: 'int', FLOAT: 'float', BOOL: 'bool' }[token.value] || token.value;
+            left = { type: 'Identifier', name: value };
+        } else throw new Error('Expected operand, found ' + token.value + '.');
+
+        while (this.pos < this.tokens.length) {
+            if (this.peek() === '(' && 130 >= minPower) {
+                this.pos++;
+                const args = [];
+                if (!this.take(')')) {
+                    args.push(this.expression(0));
+                    while (this.take(',')) { if (this.peek() === ')') break; args.push(this.expression(0)); }
+                    this.expect(')');
+                }
+                left = { type: 'CallExpression', callee: left, arguments: args };
+                continue;
+            }
+            if (this.peek() === '[' && 130 >= minPower) {
+                this.pos++;
+                let index = this.peek() === ':' ? null : this.expression(0);
+                if (this.take(':')) {
+                    const stop = [':', ']'].includes(this.peek()) ? null : this.expression(0);
+                    const step = this.take(':') ? (this.peek() === ']' ? null : this.expression(0)) : null;
+                    index = { type: 'SliceExpression', start: index, stop, step };
+                }
+                this.expect(']');
+                left = { type: 'SubscriptExpression', object: left, index };
+                continue;
+            }
+            if (this.peek() === '.' && 130 >= minPower) {
+                this.pos++;
+                const attribute = this.tokens[this.pos++];
+                if (!attribute || !/^[A-Za-z_]\w*$/.test(attribute.value)) throw new Error('Expected attribute name after dot.');
+                left = { type: 'AttributeExpression', object: left, attribute: attribute.type === TOKEN_TYPES.KEYWORD ? attribute.value.toLowerCase() : attribute.value };
+                continue;
+            }
+            // Retain the documented natural-language numeric predicate as an explicit node.
+            if (this.peek() === 'IS' && 40 >= minPower) {
+                const remaining = this.tokens.slice(this.pos + 1).map(t => t.value.toUpperCase());
+                const negated = remaining[0] === 'NOT';
+                const offset = negated ? 1 : 0;
+                const length = remaining[offset] === 'NUMERIC' ? 1 : (remaining[offset] === 'A' && remaining[offset + 1] === 'NUMBER' ? 2 : 0);
+                if (length) {
+                    this.pos += 1 + offset + length;
+                    left = { type: 'NumericPredicate', argument: left, negated };
+                    continue;
+                }
+            }
+            const { op, count, power } = this.operator();
+            if (power === undefined || power < minPower) break;
+            this.pos += count;
+            const right = this.expression(op === '**' ? 110 : power + 1);
+            if (power === 40) {
+                if (left.type === 'CompareExpression') { left.operators.push(op); left.comparators.push(right); }
+                else left = { type: 'CompareExpression', left, operators: [op], comparators: [right] };
+            } else left = { type: 'BinaryExpression', operator: op, left, right };
+        }
+        return left;
+    }
+}
+
+function emitExpression(node, nested = true) {
+    const emit = n => emitExpression(n);
+    const wrap = text => nested ? '(' + text + ')' : text;
+    switch (node.type) {
+        case 'Literal': return node.value;
+        case 'Identifier': return node.name;
+        case 'GroupExpression': return '(' + emitExpression(node.expression, false) + ')';
+        case 'BinaryExpression': return wrap(emit(node.left) + ' ' + node.operator + ' ' + emit(node.right));
+        case 'UnaryExpression': return wrap(node.operator + (node.operator === 'not' ? ' ' : '') + emit(node.argument));
+        case 'CompareExpression': return wrap(emit(node.left) + node.operators.map((op, i) => ' ' + op + ' ' + emit(node.comparators[i])).join(''));
+        case 'TupleExpression': return (nested ? '(' : '') + node.items.map(emit).join(', ') + (node.items.length === 1 ? ',' : '') + (nested ? ')' : '');
+        case 'ListExpression': return '[' + node.items.map(emit).join(', ') + ']';
+        case 'CallExpression': return emit(node.callee) + '(' + node.arguments.map(emit).join(', ') + ')';
+        case 'AttributeExpression': return emit(node.object) + '.' + node.attribute;
+        case 'SubscriptExpression': return emit(node.object) + '[' + emit(node.index) + ']';
+        case 'SliceExpression': return (node.start ? emit(node.start) : '') + ':' + (node.stop ? emit(node.stop) : '') + (node.step ? ':' + emit(node.step) : '');
+        case 'NumericPredicate': return (node.negated ? 'not ' : '') + 'str(' + emit(node.argument) + ').lstrip("-").replace(".", "", 1).isdigit()';
+        default: throw new Error('Unsupported expression node: ' + node.type);
+    }
+}
+
+// Validate every expression, including branches and function bodies; retain source tokens
+// for the existing symbol-table, diagnostics and admin trace consumers.
+function countAstNodes(node) {
+    if (!node || typeof node !== 'object') return 0;
+    if (Array.isArray(node)) return node.reduce((count, child) => count + countAstNodes(child), 0);
+    return (node.type ? 1 : 0) + Object.entries(node).reduce((count, [key, child]) =>
+        count + (['tokens', 'errors', 'arguments'].includes(key) ? 0 : countAstNodes(child)), 0);
+}
+
+function validateExpressionTree(ast) {
+    const error = (node, message) => ast.errors.push({ line: node.line || 1, message, suggestion: 'Check the syntax guide and the reported line.' });
+    const expression = (expr, allowEmpty = false) => {
+        if (!expr) return;
+        try { expr.ast = !expr.tokens.length && allowEmpty ? null : new ExpressionParser(expr.tokens).parse(); }
+        catch (e) { error(expr, e.message); }
+    };
+    const walk = (nodes, inFunction = false) => {
+        for (const node of nodes) {
+            for (const key of ['id', 'name', 'iterator', 'target']) {
+                if (key in node && (!/^[A-Za-z_]\w*$/.test(node[key]) || node[key].startsWith('_pseudopy_') ||
+                    ['class', 'def', 'lambda', 'try', 'except', 'finally', 'raise', 'yield', 'import', 'del', 'with', 'assert', 'pass', 'break', 'continue', 'global', 'nonlocal', 'async', 'await'].includes(node[key]))) error(node, 'Invalid or reserved identifier: ' + node[key]);
+            }
+            if (node.type === 'ReturnStatement' && !inFunction) error(node, 'RETURN is only valid inside FUNCTION or PROCEDURE.');
+            for (const key of ['expr', 'condition', 'index', 'value', 'startExpr', 'endExpr', 'stepExpr', 'iterable']) {
+                expression(node[key], key === 'expr' && ['PrintStatement', 'ReturnStatement'].includes(node.type));
+            }
+            if (node.type === 'ForStatement' && node.stepExpr?.ast?.type === 'Literal' && Number(node.stepExpr.ast.value) === 0) error(node, 'FOR STEP must not be zero.');
+            if (node.type === 'FunctionDef') {
+                const params = node.params.tokens;
+                const names = params.filter((_, i) => i % 2 === 0).map(t => t.value);
+                if (params.some((t, i) => i % 2 ? t.value !== ',' : t.type !== TOKEN_TYPES.IDENTIFIER) || (params.length && params.length % 2 === 0) || new Set(names).size !== names.length) error(node, 'Function parameters must be unique names separated by commas.');
+            }
+            if (node.type === 'CallStatement') {
+                let tokens = node.args.tokens;
+                // Parse as an actual call to preserve multiple arguments and nested calls.
+                if (!tokens.length || tokens[0].value !== '(') tokens = [{ type: TOKEN_TYPES.OPERATOR, value: '(' }, ...tokens, { type: TOKEN_TYPES.OPERATOR, value: ')' }];
+                try {
+                    const call = new ExpressionParser([{ type: TOKEN_TYPES.IDENTIFIER, value: node.name }, ...tokens]).parse();
+                    if (call.type !== 'CallExpression') throw new Error('CALL requires a function and arguments.');
+                    node.arguments = call.arguments;
+                } catch (e) { error(node, e.message); }
+            }
+            if (node.body) walk(node.body, inFunction || node.type === 'FunctionDef');
+            if (node.elseBody) walk(node.elseBody, inFunction);
+            for (const branch of node.elseIfs || []) { expression(branch.condition); walk(branch.body, inFunction); }
+        }
+    };
+    walk(ast.body);
+}
+
 class Parser {
     constructor(tokens) {
         this.tokens = tokens;
@@ -346,10 +528,12 @@ class Parser {
         const collected = [];
         const stops = new Set((stopKeywords || []).map(function (k) { return k.toUpperCase(); }));
 
-        while (this.peek().type !== TOKEN_TYPES.EOF &&
-            this.peek().type !== TOKEN_TYPES.NEWLINE) {
-            // Fix: Check stops for any token value (case-insensitive), not just KEYWORDs.
-            if (stops.has(this.peek().value.toUpperCase())) break;
+        let depth = 0;
+        while (this.peek().type !== TOKEN_TYPES.EOF && this.peek().type !== TOKEN_TYPES.NEWLINE) {
+            const token = this.peek();
+            if (depth === 0 && token.type !== TOKEN_TYPES.STRING && stops.has(token.value.toUpperCase())) break;
+            if (token.value === '(' || token.value === '[') depth++;
+            if (token.value === ')' || token.value === ']') depth--;
             collected.push(this.consume());
         }
         return { type: 'Expression', tokens: collected, line: line };
@@ -404,6 +588,11 @@ class Parser {
             this.skipNewlines();
         }
 
+        this.skipNewlines();
+        if (foundEnd && this.peek().type !== TOKEN_TYPES.EOF) {
+            this.errors.push({ line: this.peek().line, message: 'Unexpected code after END.', suggestion: 'END must be the last statement.' });
+        }
+
         // ▸ MANDATORY BOOKEND: Reject if END is missing
         if (!foundEnd) {
             const lastLine = this.tokens.length > 0 ? this.tokens[this.tokens.length - 1].line : 1;
@@ -421,7 +610,8 @@ class Parser {
         }
 
         const astResult = { type: 'Program', body: body, errors: this.errors };
-        compilerTrace.emit({ type: 'AST_CREATED', stage: 'SYNTAX_ANALYSIS', status: this.errors.length > 0 ? 'ERROR' : 'SUCCESS', data: { nodeCount: body.length, errorCount: this.errors.length, errors: this.errors, blockStack: this.blockStack.slice() } });
+        validateExpressionTree(astResult);
+        compilerTrace.emit({ type: 'AST_CREATED', stage: 'SYNTAX_ANALYSIS', status: this.errors.length > 0 ? 'ERROR' : 'SUCCESS', data: { nodeCount: countAstNodes(astResult), errorCount: this.errors.length, errors: this.errors, blockStack: this.blockStack.slice() } });
         return astResult;
     }
 
@@ -462,6 +652,9 @@ class Parser {
             }
         }
 
+        if (t.type !== TOKEN_TYPES.NEWLINE && t.type !== TOKEN_TYPES.EOF) {
+            this.errors.push({ line: t.line, message: 'Unrecognized statement: ' + t.value, suggestion: 'Use a supported statement such as SET, DISPLAY, IF, FOR or WHILE.' });
+        }
         return null;
     }
 
@@ -476,7 +669,9 @@ class Parser {
         if (!this.match(TOKEN_TYPES.KEYWORD, 'AS')) {
             this.errors.push({ line: kw.line, message: 'Expected AS after variable name in DECLARE.', suggestion: 'Example: DECLARE ' + id.value + ' AS INTEGER' });
         }
-        const typeToken = this.consume();
+        const typeToken = this.peek();
+        if (['INTEGER', 'FLOAT', 'REAL', 'STRING', 'CHAR', 'CHARACTER', 'BOOLEAN', 'BOOL', 'ARRAY'].includes(typeToken.value)) this.consume();
+        else this.errors.push({ line: kw.line, message: 'Unsupported or missing declaration type.', suggestion: 'Use INTEGER, FLOAT, REAL, STRING, BOOLEAN or ARRAY.' });
         return { type: 'DeclareStatement', id: id.value, varType: typeToken ? typeToken.value : 'UNKNOWN', line: kw.line };
     }
 
@@ -500,6 +695,9 @@ class Parser {
             if (!this.match(TOKEN_TYPES.OPERATOR, '=')) {
                 // Levenshtein: did they misspell TO?
                 const nextTok = this.peek();
+                if (nextTok.type !== TOKEN_TYPES.KEYWORD && nextTok.type !== TOKEN_TYPES.IDENTIFIER) {
+                    this.errors.push({ line: kw.line, message: 'Expected TO or = after variable name.' });
+                }
                 if (nextTok.type === TOKEN_TYPES.KEYWORD || nextTok.type === TOKEN_TYPES.IDENTIFIER) {
                     const hint = suggestSentinel(nextTok.value, ['TO']);
                     if (hint) {
@@ -531,6 +729,7 @@ class Parser {
         this.consume(); // [
         const indexExpr = this.collectLineTokens([']']);
         if (this.peek().value === ']') this.consume();
+        else this.errors.push({ line: id.line, message: 'Missing closing ] in assignment.' });
 
         // Support either '=' or 'TO' as the assignment operator
         const assignOp = this.peek();
@@ -698,7 +897,8 @@ class Parser {
         if (this.peek().value === 'EACH') {
             this.consume();
             const id = this.match(TOKEN_TYPES.IDENTIFIER);
-            this.match(TOKEN_TYPES.KEYWORD, 'IN');
+            if (!id) this.errors.push({ line: kw.line, message: 'FOR EACH requires an iterator name.' });
+            if (!this.match(TOKEN_TYPES.KEYWORD, 'IN')) this.errors.push({ line: kw.line, message: 'FOR EACH requires IN.' });
             const iterable = this.collectLineTokens(['DO']);
             if (!this.match(TOKEN_TYPES.KEYWORD, 'DO')) {
                 this.errors.push({ line: kw.line, message: 'FOR EACH missing sentinel keyword DO.', suggestion: 'Use: FOR EACH item IN list DO' });
@@ -711,10 +911,12 @@ class Parser {
 
         // FOR i FROM start TO end DO
         const id = this.match(TOKEN_TYPES.IDENTIFIER);
-        this.match(TOKEN_TYPES.KEYWORD, 'FROM');
+        if (!id) this.errors.push({ line: kw.line, message: 'FOR requires an iterator name.' });
+        if (!this.match(TOKEN_TYPES.KEYWORD, 'FROM')) this.errors.push({ line: kw.line, message: 'FOR requires FROM.' });
         const startExpr = this.collectLineTokens(['TO']);
-        this.match(TOKEN_TYPES.KEYWORD, 'TO');
-        const endExpr = this.collectLineTokens(['DO']);
+        if (!this.match(TOKEN_TYPES.KEYWORD, 'TO')) this.errors.push({ line: kw.line, message: 'FOR requires TO.' });
+        const endExpr = this.collectLineTokens(['STEP', 'DO']);
+        const stepExpr = this.match(TOKEN_TYPES.KEYWORD, 'STEP') ? this.collectLineTokens(['DO']) : null;
         if (!this.match(TOKEN_TYPES.KEYWORD, 'DO')) {
             this.errors.push({ line: kw.line, message: 'FOR statement missing sentinel keyword DO.', suggestion: 'Use: FOR i FROM 1 TO 10 DO' });
         }
@@ -722,7 +924,7 @@ class Parser {
         const body = this.parseBlock(['ENDFOR', 'END']);
         this.consumeEndBlock('FOR', kw.line);
 
-        return { type: 'ForStatement', iterator: id ? id.value : '_', startExpr: startExpr, endExpr: endExpr, body: body, line: kw.line };
+        return { type: 'ForStatement', iterator: id ? id.value : '_', startExpr: startExpr, endExpr: endExpr, stepExpr: stepExpr, body: body, line: kw.line };
     }
 
     // ── RETURN expr ──
@@ -887,7 +1089,7 @@ class SemanticAnalyzer {
                 if (['INTEGER', 'FLOAT', 'NUMERIC', 'REAL', 'NUMBER'].includes(typeUpper)) symType = 'numeric';
                 else if (['STRING', 'CHAR', 'CHARACTER'].includes(typeUpper)) symType = 'string';
                 else if (['ARRAY'].includes(typeUpper)) symType = 'array';
-                this.symbolTable.set(node.id, { type: symType });
+                this.symbolTable.set(node.id, { type: symType, declaredType: node.varType });
                 break;
             }
 
@@ -916,12 +1118,14 @@ class SemanticAnalyzer {
                             }
                         }
                     }
-                    this.symbolTable.set(node.id, { type: inferredType });
+                    this.symbolTable.set(node.id, { ...this.symbolTable.get(node.id), type: inferredType });
                 }
                 this.checkExpr(node.expr);
                 break;
 
             case 'ArrayAssignStatement':
+                this.checkExpr(node.index);
+                this.checkExpr(node.expr);
                 if (!this.symbolTable.has(node.id)) {
                     this.warnings.push({ line: node.line, message: "Array '" + node.id + "' not declared.", suggestion: 'Add: DECLARE ' + node.id + ' AS ARRAY' });
                 }
@@ -932,7 +1136,8 @@ class SemanticAnalyzer {
                 this.checkExpr(node.expr);
                 break;
             case 'InputStatement':
-                // Do not force type yet
+                node.inputType = this.symbolTable.get(node.id)?.declaredType || '';
+                if (!this.symbolTable.has(node.id)) this.symbolTable.set(node.id, { type: 'string' });
                 break;
 
             case 'IfStatement':
@@ -954,24 +1159,30 @@ class SemanticAnalyzer {
                 this.symbolTable.set(node.iterator, { type: 'unknown' }); // loop var implicitly declared
                 this.checkExpr(node.startExpr);
                 this.checkExpr(node.endExpr);
+                this.checkExpr(node.stepExpr);
                 node.body.forEach(n => this.visitNode(n));
                 break;
             case 'ForEachStatement':
+                this.checkExpr(node.iterable);
                 this.symbolTable.set(node.iterator, { type: 'unknown' });
                 node.body.forEach(n => this.visitNode(n));
                 break;
-            case 'FunctionDef':
-                this.symbolTable.set(node.name, { type: 'unknown' });
-                // Register function parameters in the symbol table so they
-                // don't trigger false "undeclared variable" warnings inside the body
-                if (node.params && node.params.tokens) {
-                    for (const pt of node.params.tokens) {
-                        if (pt.type === TOKEN_TYPES.IDENTIFIER) {
-                            this.symbolTable.set(pt.value, { type: 'unknown' });
-                        }
-                    }
+            case 'FunctionDef': {
+                this.symbolTable.set(node.name, { type: 'function' });
+                const outerScope = this.symbolTable;
+                this.symbolTable = new Map(outerScope);
+                for (const token of node.params.tokens) {
+                    if (token.type === TOKEN_TYPES.IDENTIFIER) this.symbolTable.set(token.value, { type: 'unknown' });
                 }
                 node.body.forEach(n => this.visitNode(n));
+                this.symbolTable = outerScope;
+                break;
+            }
+            case 'ReturnStatement':
+                this.checkExpr(node.expr);
+                break;
+            case 'CallStatement':
+                this.checkExpr(node.args);
                 break;
             case 'IncDecStatement':
                 if (!this.symbolTable.has(node.id)) {
@@ -991,38 +1202,17 @@ class SemanticAnalyzer {
         if (!exprNode || !exprNode.tokens) return;
         const tokens = exprNode.tokens;
 
-        // If the expression contains a string literal, '+' is string concatenation, not math
-        const hasStringLiteral = tokens.some(t => t.type === TOKEN_TYPES.STRING);
-
-        // Strict math ops: -, *, /, ^ always require numeric operands
-        const STRICT_MATH = ['-', '*', '/', '^'];
-        let hasMath = tokens.some(
-            t => (t.type === TOKEN_TYPES.OPERATOR && STRICT_MATH.includes(t.value)) ||
-                (t.type === TOKEN_TYPES.KEYWORD && t.value.toUpperCase() === 'MOD')
-        );
-        // '+' is only numeric-math when there are no string literals present
-        if (!hasStringLiteral && tokens.some(t => t.type === TOKEN_TYPES.OPERATOR && t.value === '+')) {
-            hasMath = true;
-        }
-
-        for (const t of tokens) {
-            if (t.type === TOKEN_TYPES.IDENTIFIER) {
-                const info = this.symbolTable.get(t.value);
-                if (!info) {
-                    this.warnings.push({
-                        line: exprNode.line,
-                        message: "Undeclared variable '" + t.value + "' in expression.",
-                        suggestion: 'Declare it with DECLARE ' + t.value + ' AS INTEGER'
-                    });
-                } else if (hasMath && info.type !== 'numeric' && info.type !== 'unknown') {
-                    // Symbol Table Verification: Verify marker as numeric type for math ops
-                    this.warnings.push({
-                        line: exprNode.line,
-                        message: "Mathematical operation used on non-numeric variable '" + t.value + "'.",
-                        suggestion: 'Ensure ' + t.value + ' is declared as a NUMBER or initialized with a value.'
-                    });
-                }
-            }
+        const builtins = new Set(['str', 'int', 'float', 'bool', 'len', 'range', 'abs', 'min', 'max', 'sum', 'round', 'sorted', 'list', 'tuple', 'set', 'dict', 'enumerate', 'zip', 'reversed', 'all', 'any', 'pow', 'chr', 'ord', 'isinstance', 'input', 'print']);
+        for (let i = 0; i < tokens.length; i++) {
+            const t = tokens[i];
+            if (t.type !== TOKEN_TYPES.IDENTIFIER || tokens[i - 1]?.value === '.' || builtins.has(t.value)) continue;
+            // Natural-language predicate words are grammar, not variable references.
+            if (['A', 'NUMBER', 'NUMERIC'].includes(t.value.toUpperCase()) && tokens.some(t => t.value === 'IS')) continue;
+            if (!this.symbolTable.has(t.value)) this.warnings.push({
+                line: exprNode.line,
+                message: "Undeclared variable '" + t.value + "' in expression.",
+                suggestion: 'Assign or declare ' + t.value + ' before using it.'
+            });
         }
     }
 
@@ -1046,7 +1236,6 @@ const PYTHON_OPERATOR_MAP = {
     '\u2260': '!=',
     '==': '==',
     '\u2261': '==',
-    '\u2248': '==',
     '\u00D7': '*',
     '\u2715': '*',
     '\u22C5': '*',
@@ -1072,122 +1261,16 @@ class CodeGenerator {
         return PYTHON_OPERATOR_MAP[rawOperator] || rawOperator;
     }
 
-    // Translate expression tokens to Python string
+    // Parse and emit the same expression grammar used by validation and the AST viewer.
     exprToStr(tokens) {
         if (!tokens || tokens.length === 0) return '';
-        const parts = [];
-        for (let i = 0; i < tokens.length; i++) {
-            const t = tokens[i];
-            switch (t.type) {
-                case TOKEN_TYPES.KEYWORD:
-                    switch (t.value) {
-                        case 'AND': parts.push('and'); break;
-                        case 'OR': parts.push('or'); break;
-                        case 'NOT': parts.push('not'); break;
-                        case 'MOD': parts.push('%'); break;
-                        case 'TRUE': parts.push('True'); break;
-                        case 'FALSE': parts.push('False'); break;
-                        case 'NULL': parts.push('None'); break;
-                        // IS NOT A NUMBER / IS A NUMBER → Python numeric check
-                        case 'IS': {
-                            // Look ahead for NOT A NUMBER / A NUMBER / NUMERIC
-                            const rest = tokens.slice(i + 1).map(x => x.value).join(' ').toUpperCase();
-                            if (rest.startsWith('NOT A NUMBER') || rest.startsWith('NOT NUMERIC')) {
-                                // Find the variable before IS
-                                const varName = parts.pop() || '';
-                                parts.push('not str(' + varName + ').lstrip("-").replace(".", "", 1).isdigit()');
-                                // Skip the consumed tokens: NOT, A, NUMBER (or NOT, NUMERIC)
-                                i += rest.startsWith('NOT A NUMBER') ? 3 : 2;
-                            } else if (rest.startsWith('A NUMBER') || rest.startsWith('NUMERIC')) {
-                                const varName = parts.pop() || '';
-                                parts.push('str(' + varName + ').lstrip("-").replace(".", "", 1).isdigit()');
-                                i += rest.startsWith('A NUMBER') ? 2 : 1;
-                            } else {
-                                parts.push('is');
-                            }
-                            break;
-                        }
-                        default: parts.push(t.value.toLowerCase()); break;
-                    }
-                    break;
-                case TOKEN_TYPES.OPERATOR:
-                    {
-                        const normalizedOperator = this.normalizeOperator(t.value);
-                        if (normalizedOperator === '<>') parts.push('!=');
-                        else if (normalizedOperator === '=' && i > 0 && i < tokens.length - 1) parts.push('=='); // comparison context
-                        else parts.push(normalizedOperator);
-                    }
-                    break;
-                default:
-                    parts.push(t.value);
-                    break;
-            }
-        }
-        // Join tokens with smart spacing:
-        // • No space before ',' or ')' or after '('
-        // • Operators like +, -, *, /, ==, !=, <, > etc. get spaces around them
-        let result = '';
-        for (let j = 0; j < parts.length; j++) {
-            const cur = parts[j];
-            const prev = j > 0 ? parts[j - 1] : '';
-            // No leading space before comma or closing paren
-            if (cur === ',' || cur === ')' || cur === ']') {
-                result += cur;
-                // No space before opening bracket if it follows an identifier or closing paren/bracket
-            } else if (cur === '[' && prev && /^[a-zA-Z0-9_)\]]+$/.test(prev)) {
-                result += cur;
-                // No trailing space after opening paren/bracket
-            } else if (prev === '(' || prev === '[') {
-                result += cur;
-                // First token — no space
-            } else if (j === 0) {
-                result += cur;
-            } else {
-                result += ' ' + cur;
-            }
-        }
-        return result;
+        return emitExpression(new ExpressionParser(tokens).parse(), false);
     }
 
-    /**
-     * Smart print expression builder.
-     *
-     * Rules:
-     *   • Pure expression (no string literal) → emit as-is: print(expr)
-     *   • Mixed string-literal + variable/number with '+' →
-     *       wrap each non-string segment in str() so Python doesn't throw
-     *       TypeError: can only concatenate str (not "int") to str
-     *       e.g.  DISPLAY "Value: " + x  →  print("Value: " + str(x))
-     */
     smartPrintExpr(tokens) {
-        if (!tokens || tokens.length === 0) return '""';
-
-        const hasStringLiteral = tokens.some(t => t.type === TOKEN_TYPES.STRING);
-        const hasPlus = tokens.some(t => t.type === TOKEN_TYPES.OPERATOR && t.value === '+');
-
-        if (!hasStringLiteral || !hasPlus) {
-            // No mixed concatenation — emit the expression normally
-            return this.exprToStr(tokens);
-        }
-
-        // Mixed string + non-string with '+':
-        // For each segment between '+' operators, wrap identifiers and numbers in str()
-        // but leave string literals as-is.
-        const parts = [];
-        for (let i = 0; i < tokens.length; i++) {
-            const t = tokens[i];
-            if (t.type === TOKEN_TYPES.OPERATOR && t.value === '+') {
-                parts.push('+');
-            } else if (t.type === TOKEN_TYPES.STRING) {
-                parts.push(t.value);
-            } else if (t.type === TOKEN_TYPES.IDENTIFIER || t.type === TOKEN_TYPES.NUMBER) {
-                parts.push('str(' + t.value + ')');
-            } else {
-                // keywords (AND/OR/NOT etc.) or other operators — translate normally
-                parts.push(this.exprToStr([t]));
-            }
-        }
-        return parts.join(' ');
+        if (!tokens || tokens.length === 0) return '';
+        // DISPLAY follows Python expression semantics; use commas or str() for mixed types.
+        return this.exprToStr(tokens);
     }
 
     generate(ast) {
@@ -1197,6 +1280,13 @@ class CodeGenerator {
         for (const node of ast.body) {
             compilerTrace.emit({ type: 'CODEGEN_VISIT', stage: 'CODE_GENERATION', status: 'RUNNING', data: { nodeType: node.type, line: node.line } });
             this.visitNode(node);
+        }
+        if (this.lines.some(line => line.includes(' in _pseudopy_range('))) {
+            this.lines.unshift('def _pseudopy_range(start, stop, step):',
+                '    if not all(isinstance(value, int) for value in (start, stop, step)):',
+                '        raise TypeError("FOR bounds and STEP must be integers")',
+                '    if step == 0:', '        raise ValueError("FOR STEP must not be zero")',
+                '    return range(start, stop + (1 if step > 0 else -1), step)', '');
         }
         const result = this.lines.join('\n');
         compilerTrace.emit({ type: 'CODEGEN_COMPLETE', stage: 'CODE_GENERATION', status: 'SUCCESS', data: { lineCount: this.lines.length, python: result } });
@@ -1234,8 +1324,9 @@ class CodeGenerator {
 
 
             case 'InputStatement': {
-                const symInfo = this.symbolTable.get(node.id);
-                const isStringNode = (symInfo && symInfo.type === 'string') || /name|str|txt|text|msg|message|char/i.test(node.id);
+                const inputType = (node.inputType || '').toUpperCase();
+                const isStringNode = !['INTEGER', 'FLOAT', 'REAL'].includes(inputType);
+                const converter = inputType === 'INTEGER' ? 'int' : 'float';
                 if (isStringNode) {
                     if (node.prompt && node.prompt.length > 0) {
                         this.lines.push(this.ind() + node.id + ' = input(' + node.prompt[0].value + ')');
@@ -1244,9 +1335,9 @@ class CodeGenerator {
                     }
                 } else {
                     if (node.prompt && node.prompt.length > 0) {
-                        this.lines.push(this.ind() + node.id + ' = float(input(' + node.prompt[0].value + '))');
+                        this.lines.push(this.ind() + node.id + ' = ' + converter + '(input(' + node.prompt[0].value + '))');
                     } else {
-                        this.lines.push(this.ind() + node.id + ' = float(input("Please enter ' + node.id + ': "))');
+                        this.lines.push(this.ind() + node.id + ' = ' + converter + '(input("Please enter ' + node.id + ': "))');
                     }
                 }
                 break;
@@ -1294,9 +1385,9 @@ class CodeGenerator {
             case 'ForStatement': {
                 const sStr = this.exprToStr(node.startExpr.tokens);
                 const eStr = this.exprToStr(node.endExpr.tokens);
-                const startFmt = /^[a-zA-Z0-9_]+$/.test(sStr) ? sStr : `int(${sStr})`;
-                const endFmt = /^[a-zA-Z0-9_]+$/.test(eStr) ? eStr : `int(${eStr})`;
-                this.lines.push(this.ind() + `for ${node.iterator} in range(${startFmt}, ${endFmt} + 1):`);
+                const step = node.stepExpr ? this.exprToStr(node.stepExpr.tokens) : '1';
+                // Bind bounds once: inclusive stop for either direction, without truncating floats.
+                this.lines.push(this.ind() + `for ${node.iterator} in _pseudopy_range(${sStr}, ${eStr}, ${step}):`);
                 this.indentLevel++;
                 if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
                 else node.body.forEach(n => this.visitNode(n));
@@ -1319,7 +1410,7 @@ class CodeGenerator {
                 break;
 
             case 'CallStatement':
-                this.lines.push(this.ind() + node.name + '(' + this.exprToStr(node.args.tokens) + ')');
+                this.lines.push(this.ind() + node.name + '(' + node.arguments.map(arg => emitExpression(arg, false)).join(', ') + ')');
                 break;
 
             case 'IncDecStatement':
@@ -1332,7 +1423,7 @@ class CodeGenerator {
 
             case 'FunctionDef': {
                 // Build param list: identifiers joined by ', ' (commas from tokens are preserved by exprToStr)
-                const paramStr = this.exprToStr(node.params.tokens);
+                const paramStr = node.params.tokens.map(t => t.value).join(' ');
                 this.lines.push(this.ind() + 'def ' + node.name + '(' + paramStr + '):');
                 this.indentLevel++;
                 if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
@@ -1401,6 +1492,7 @@ class PseudocodeCompiler {
         // ── Stage 2: Syntax Analysis (CFG + LIFO stack validation) ──
         const t2 = performance.now();
         const parser = new Parser(tokens);
+        parser.errors.push(...lexer.errors);
         let ast = parser.parse();
         const parseTime = performance.now() - t2;
 
@@ -1418,50 +1510,8 @@ class PseudocodeCompiler {
             codeGenTime: 0,
             totalTime: 0,
             tokenCount: tokens.length,
-            astNodeCount: ast.body ? ast.body.length : 0
+            astNodeCount: countAstNodes(ast)
         };
-
-        // ── Validation-Driven Refinement (Auto-Fix) ──
-        // If there are errors related to unclosed blocks, try to append the missing closures
-        if (ast.errors.length > 0) {
-            let autoFixedCode = code;
-            let fixesApplied = 0;
-            for (const err of ast.errors) {
-                if (err.message.startsWith('Unclosed') && err.suggestion.startsWith('Add END')) {
-                    const match = err.suggestion.match(/Add (END [A-Z]+)/);
-                    if (match && match[1]) {
-                        autoFixedCode += '\n' + match[1];
-                        fixesApplied++;
-                        autoFixes.push({ detected: err.message, suggested: match[1], action: match[1] + ' appended' });
-                    }
-                }
-            }
-
-            if (fixesApplied > 0) {
-                compilerTrace.emit({ type: 'AUTOFIX_START', stage: 'VALIDATION_REFINEMENT', status: 'RETRYING', data: { fixesApplied, autoFixes, originalCode: code, fixedCode: autoFixedCode } });
-
-                // Re-run pipeline with auto-fixed code
-                const retryLexer = new Lexer(autoFixedCode);
-                const retryParser = new Parser(retryLexer.tokenize());
-                const retryAst = retryParser.parse();
-
-                // If it passes now, accept the fixed AST but add a warning
-                if (retryAst.errors.length === 0) {
-                    ast = retryAst;
-                    semanticAnalyzer = new SemanticAnalyzer();
-                    warnings = semanticAnalyzer.analyze(ast);
-                    warnings.push({
-                        line: ast.body.length + 1,
-                        message: `Validation-Driven Refinement applied ${fixesApplied} auto-fix(es) to close blocks.`,
-
-                        suggestion: "Always ensure your BEGIN/END and control blocks are properly closed."
-                    });
-                    compilerTrace.emit({ type: 'AUTOFIX_SUCCESS', stage: 'VALIDATION_REFINEMENT', status: 'SUCCESS', data: { fixesApplied } });
-                } else {
-                    compilerTrace.emit({ type: 'AUTOFIX_FAILED', stage: 'VALIDATION_REFINEMENT', status: 'ERROR', data: { remainingErrors: retryAst.errors } });
-                }
-            }
-        }
 
         // Syntax errors are hard stops — no code generation (if auto-fix failed)
         if (ast.errors.length > 0) {
@@ -1496,7 +1546,10 @@ class PseudocodeCompiler {
 
         for (const t of tokens) {
             if (t.type === TOKEN_TYPES.KEYWORD) {
-                if (t.value === 'FOR' || t.value === 'WHILE') {
+                if (prevWasEnd && (t.value === 'FOR' || t.value === 'WHILE')) {
+                    depth = Math.max(0, depth - 1);
+                    prevWasEnd = false;
+                } else if (t.value === 'FOR' || t.value === 'WHILE') {
                     depth++;
                     if (depth > maxDepth) maxDepth = depth;
                     prevWasEnd = false;
@@ -1526,3 +1579,4 @@ class PseudocodeCompiler {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { PseudocodeCompiler, preprocessPseudocode, CompilerTrace, compilerTrace };
 }
+

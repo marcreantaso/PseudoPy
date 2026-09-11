@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-v48';
+const CACHE_NAME = 'pseudopy-v49';
 const LOCAL_ASSETS = [
     './',
     './index.html',
@@ -91,3 +91,4 @@ self.addEventListener('message', (event) => {
         self.skipWaiting();
     }
 });
+

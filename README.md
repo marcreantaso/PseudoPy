@@ -50,3 +50,8 @@ Then open [http://localhost:8080](http://localhost:8080)
 ## 📄 License
 
 MIT
+
+
+## Compiler rules and regression checks
+
+See [the supported language and verification notes](docs/compiler-language.md) for exact operator semantics, loop bounds, syntax rules and test limitations. Run `npm test` with Node.js 20+ and Python 3 to check the compiler and role navigation behavior.
