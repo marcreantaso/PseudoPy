@@ -557,7 +557,8 @@ h4 {
 
 @media (max-width: 768px) {
   .login-page {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
   }
 
