@@ -1,5 +1,13 @@
 # PseudoPy — Automated Code Generation System
 
+## Current implementation and study boundaries
+
+The backend-free educational entry point is **`offline.html`**. It supports manual/TXT/example input, local drafts, deterministic translation, AST/symbol inspection, Skulpt execution, and labeled reference metrics. Serve the public folder through HTTPS or localhost; opening files directly is not a supported worker/PWA deployment. After a successful installation, public lab assets are cached for offline use.
+
+The separate connected Student/Instructor/Admin coursework mode requires a configured server and Firebase. Old sample credentials below are historical documentation, not accounts created by this version. Do not use a static file server for authenticated coursework or expose the repository root publicly.
+
+Read [study scope and limitations](docs/study-scope.md) and [academic deployment/migration requirements](docs/academic-workflows.md) before rollout. Run `npm test` and `npm run build`. Deploy only the generated `public` assets for the standalone lab. Use Node.js 22+ for the Firebase-backed mode.
+
 > **Translating Pseudocode and Python: An Algorithmic Approach to Automated Code Generation**
 
 A web-based system that translates pseudocode into executable Python code, built as a Progressive Web App (PWA) with full mobile responsiveness.

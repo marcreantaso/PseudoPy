@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>PseudoPy Offline Lab</title>
+    <link rel="stylesheet" href="./academic.css" />
+    <link rel="manifest" href="./manifest.json" />
+  </head>
+  <body>
+    <main class="stack">
+      <header>
+        <a href="./">PseudoPy</a>
+        <h1>Offline Logic Lab</h1>
+        <p>
+          Validate, translate, and execute on this device without an account or
+          backend. Local practice records are not verified grades or submitted
+          coursework.
+        </p>
+      </header>
+      <section class="card row">
+        <label
+          >Guided example<select id="example">
+            <option value="sum">Accumulator and inclusive loop</option>
+            <option value="decision">Input and decision</option>
+          </select></label
+        ><button id="example-load">Load Example</button
+        ><label
+          >Open TXT/pseudocode<input
+            id="file"
+            type="file"
+            accept=".txt,.pseudo,.pseudocode" /></label
+        ><button id="save">Save Local Draft</button
+        ><button id="export">Export Pseudocode</button>
+      </section>
+      <div class="split">
+        <section class="card">
+          <label
+            >Pseudocode<textarea
+              id="source"
+              rows="16"
+              spellcheck="false"
+              maxlength="30000"
+            ></textarea>
+          </label>
+        </section>
+        <section class="card">
+          <label
+            >Generated Python · read only<textarea
+              id="python"
+              rows="16"
+              readonly
+            ></textarea>
+          </label>
+        </section>
+      </div>
+      <div class="row">
+        <button id="translate" class="primary">Validate and Translate</button
+        ><button id="run" disabled>Run Python</button
+        ><button id="download" disabled>Download Python</button
+        ><button id="inspect">Inspect AST and Symbols</button>
+      </div>
+      <p id="status" role="status" aria-live="polite">
+        Translation starts only when requested.
+      </p>
+      <section class="card">
+        <h2>Validation feedback</h2>
+        <div id="feedback">No validation yet.</div>
+      </section>
+      <section class="card">
+        <label
+          >Console input · one value per INPUT<textarea
+            id="stdin"
+            rows="3"
+          ></textarea>
+        </label>
+        <h2>Execution output</h2>
+        <pre id="output">No execution yet.</pre>
+      </section>
+      <details class="card">
+        <summary>AST and symbol table</summary>
+        <pre id="ast">Inspect source to view the parser output.</pre>
+      </details>
+      <section class="card">
+        <h2>Benchmark evaluation</h2>
+        <p>
+          Upload researcher-labeled JSON cases with pseudocode and
+          expectedPython fields. Exact-match accuracy and line-overlap
+          precision/recall/F1 measure reference agreement—not logical
+          equivalence or mastery.
+        </p>
+        <label
+          >Ground-truth JSON<input id="benchmark" type="file" accept=".json"
+        /></label>
+        <pre id="benchmark-output">No dataset evaluated.</pre>
+      </section>
+      <section class="card">
+        <h2>Scope and limitations</h2>
+        <p>
+          This is a deterministic rule-based translator, not a neural
+          Transformer. Levenshtein suggestions flag keyword typos; they do not
+          silently repair answers. Manual text, TXT/pseudocode files, and guided
+          examples are supported here. PDF/DOCX extraction is not yet
+          implemented in this offline lab.
+        </p>
+        <p>
+          AST validation cannot prove arbitrary correctness, termination, or
+          optimal efficiency. No complex libraries, file I/O, OOP, or
+          unrestricted natural-language interpretation. Skulpt is a browser
+          Python subset with execution time and output limits.
+        </p>
+        <p id="readiness">Checking offline installation…</p>
+      </section>
+    </main>
+    <script src="./mapper.js"></script>
+    <script src="./compiler.js"></script>
+    <script src="./offline-metrics.js"></script>
+    <script src="./offline.js"></script>
+  </body>
+</html>

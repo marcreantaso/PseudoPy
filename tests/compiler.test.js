@@ -81,9 +81,7 @@ const algorithms = {
 };
 for (const [name, [source, expected]] of Object.entries(algorithms)) test('algorithm execution: ' + name, () => assert.equal(run(source), expected));
 // Execute every built-in exercise against the repository's reference Python.
-const databaseSource = fs.readFileSync(path.join(__dirname, '../database.js'), 'utf8');
-const seedStart = databaseSource.indexOf('const SEED_EXERCISES_LIST = ') + 'const SEED_EXERCISES_LIST = '.length;
-const seeds = JSON.parse(databaseSource.slice(seedStart, databaseSource.indexOf('\n];', seedStart) + 2));
+const seeds = require('./fixtures/legacy-exercises.json');
 for (const exercise of seeds) test('built-in exercise parity: ' + exercise.id, () => {
     const result = compile(exercise.pseudocode);
     assert.equal(result.valid, true, JSON.stringify(result.errors));

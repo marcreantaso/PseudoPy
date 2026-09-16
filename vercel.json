@@ -1,7 +1,11 @@
 {
   "version": 2,
+  "buildCommand": "node scripts/build-public.js",
+  "outputDirectory": "public",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "/api/handler" },
+    { "source": "/student/:path*", "destination": "/index.html" },
+    { "source": "/instructor/:path*", "destination": "/index.html" },
+    { "source": "/admin/:path*", "destination": "/index.html" }
   ]
 }
