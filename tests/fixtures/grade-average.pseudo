@@ -1,0 +1,20 @@
+BEGIN
+SET grade1 = 0
+SET grade2 = 0
+SET grade3 = 0
+SET average = 0
+PRINT "Enter the PRELIM grade:"
+INPUT grade1
+PRINT "Enter the MIDTERM grade:"
+INPUT grade2
+PRINT "Enter the FINALS grade:"
+INPUT grade3
+SET average = (grade1 + grade2 + grade3) / 3
+PRINT "The calculated average is:"
+PRINT average
+IF average >= 60 THEN
+PRINT "Status: PASSED"
+ELSE
+PRINT "Status: FAILED"
+END IF
+END

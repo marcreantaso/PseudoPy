@@ -93,3 +93,35 @@ test('function locals do not leak into outer scope', () => {
 });
 test('reject NOT as an unparenthesized arithmetic operand', () => assert.equal(compile('BEGIN\nDISPLAY 2 + NOT 1\nEND').valid, false));
 test('empty tuple assignment stays an expression', () => assert.equal(run('SET x TO ()\nDISPLAY x'), '()'));
+
+test('grade example converts initialized numeric INPUT and retains ASCII operators', () => {
+    const result = compile(fs.readFileSync(path.join(__dirname, 'fixtures/grade-average.pseudo'), 'utf8'));
+    assert.equal(result.valid, true);
+    assert.match(result.python, /grade1 = float\(input\(/);
+    assert.match(result.python, /average >= 60/);
+    assert.match(python(result.python, '55\n65\n55\n'), /58\.33333333333333[0-9]*\nStatus: FAILED$/);
+    assert.match(python(result.python, '60\n60\n60\n'), /60\.0\nStatus: PASSED$/);
+    assert.match(python(result.python, '60.5\n60.5\n60.5\n'), /60\.5\nStatus: PASSED$/);
+});
+test('numeric inference follows AST results, not numeric tokens', () => {
+    for (const expr of ['[1, 2]', '1 < 2', '"a" * 2', '(1, 2)', 'len([1, 2])']) {
+        assert.match(run('SET x = ' + expr + '\nINPUT x\nPRINT x', 'hello\n'), /hello$/);
+    }
+    assert.match(run('SET a = -2\nSET x = (a + 3) / 2\nINPUT x\nPRINT x + 1', '2.5\n'), /3\.5$/);
+    assert.match(run('DECLARE x AS INTEGER\nSET x = 0\nINPUT x\nPRINT x', '3\n'), /3$/);
+});
+test('input inference does not leak from conditional or repeating assignments', () => {
+    for (const body of [
+        'IF FALSE THEN\nSET x = 0\nEND IF',
+        'IF TRUE THEN\nSET x = "text"\nELSE\nSET x = 0\nEND IF',
+        'WHILE FALSE DO\nSET x = 0\nEND WHILE',
+        'FOR i FROM 2 TO 1 DO\nSET x = 0\nEND FOR'
+    ]) assert.match(run(body + '\nINPUT x\nPRINT x', 'hello\n'), /hello$/);
+});
+test('all comparison operators preserve exact Python spelling and boundary semantics', () => {
+    for (const op of ['<', '<=', '>', '>=', '==', '!=']) {
+        const result = compile('BEGIN\nPRINT 60 ' + op + ' 60\nEND');
+        assert.ok(result.python.includes('60 ' + op + ' 60'));
+        assert.equal(python(result.python), python('print(60 ' + op + ' 60)'));
+    }
+});

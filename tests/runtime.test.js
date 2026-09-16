@@ -68,3 +68,16 @@ test("grammar rejects unrestricted runtime access", () => {
       source,
     );
 });
+
+test("grade average executes decimal input and pass/fail boundary in bundled Skulpt", async () => {
+  const source = fs.readFileSync(path.join(__dirname, "fixtures/grade-average.pseudo"), "utf8").replace(/^BEGIN\s*|\s*END\s*$/g, "");
+  for (const [input, ending] of [
+    [["55", "65", "55"], /58\.3333333333\d*\nStatus: FAILED$/],
+    [["60", "60", "60"], /60\.0\nStatus: PASSED$/],
+    [["60.5", "60.5", "60.5"], /60\.5\nStatus: PASSED$/],
+  ]) {
+    const result = await execute(source, input);
+    assert.equal(result.success, true, result.output);
+    assert.match(result.output.trim(), ending);
+  }
+});

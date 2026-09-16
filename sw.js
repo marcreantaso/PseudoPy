@@ -1,5 +1,5 @@
 "use strict";
-const CACHE = "pseudopy-offline-lab-v1";
+const CACHE = "pseudopy-offline-lab-v2";
 const ASSETS = [
   "./offline.html",
   "./offline.js",

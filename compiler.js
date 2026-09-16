@@ -1080,6 +1080,50 @@ class SemanticAnalyzer {
         return this.warnings;
     }
 
+    // Infer from expression structure, never from the presence of a number token:
+    // [1, 2], x < 3 and "a" * 2 are not numeric input declarations.
+    expressionType(node) {
+        if (!node) return 'unknown';
+        if (node.type === 'Literal') return node.kind === TOKEN_TYPES.NUMBER ? 'numeric' : node.kind === TOKEN_TYPES.STRING ? 'string' : 'unknown';
+        if (node.type === 'Identifier') return this.symbolTable.get(node.name)?.type || 'unknown';
+        if (node.type === 'GroupExpression') return this.expressionType(node.expression);
+        if (node.type === 'ListExpression') return 'array';
+        if (node.type === 'UnaryExpression' && node.operator !== 'not') return this.expressionType(node.argument) === 'numeric' ? 'numeric' : 'unknown';
+        if (node.type === 'BinaryExpression') {
+            const left = this.expressionType(node.left), right = this.expressionType(node.right);
+            if (left === 'numeric' && right === 'numeric') return 'numeric';
+            if (node.operator === '+' && left === 'string' && right === 'string') return 'string';
+            if (node.operator === '*' && ((left === 'string' && right === 'numeric') || (left === 'numeric' && right === 'string'))) return 'string';
+        }
+        return 'unknown';
+    }
+
+    mergeScopes(scopes) {
+        const merged = new Map();
+        for (const id of new Set(scopes.flatMap(scope => [...scope.keys()]))) {
+            const entries = scopes.map(scope => scope.get(id));
+            const first = entries[0];
+            merged.set(id, {
+                type: first && entries.every(info => info?.type === first.type) ? first.type : 'unknown',
+                declaredType: first && entries.every(info => info?.declaredType === first.declaredType) ? first.declaredType : undefined
+            });
+        }
+        this.symbolTable = merged;
+    }
+
+    forgetLoopTypes(body) {
+        for (const node of body) {
+            if (['AssignmentStatement', 'InputStatement', 'ArrayAssignStatement'].includes(node.type) && this.symbolTable.has(node.id)) {
+                this.symbolTable.set(node.id, { ...this.symbolTable.get(node.id), type: 'unknown' });
+            }
+            if (node.type !== 'FunctionDef') {
+                if (node.body) this.forgetLoopTypes(node.body);
+                if (node.elseBody) this.forgetLoopTypes(node.elseBody);
+                for (const branch of node.elseIfs || []) this.forgetLoopTypes(branch.body);
+            }
+        }
+    }
+
     visitNode(node) {
         if (!node) return;
         switch (node.type) {
@@ -1104,25 +1148,10 @@ class SemanticAnalyzer {
                         suggestion: 'Add: DECLARE ' + node.id + ' AS INTEGER (or appropriate type)'
                     });
                 }
-                // Infer type from the assigned expression
-                {
-                    const exprToks = node.expr ? node.expr.tokens : [];
-                    const hasStrTok = exprToks.some(t => t.type === TOKEN_TYPES.STRING);
-                    const hasNumTok = exprToks.some(t => t.type === TOKEN_TYPES.NUMBER);
-                    let inferredType = 'unknown';
-                    if (hasStrTok) inferredType = 'string';
-                    else if (hasNumTok) inferredType = 'numeric';
-                    else {
-                        // Propagate from referenced variable types
-                        for (const et of exprToks) {
-                            if (et.type === TOKEN_TYPES.IDENTIFIER) {
-                                const info = this.symbolTable.get(et.value);
-                                if (info && info.type === 'numeric') { inferredType = 'numeric'; break; }
-                            }
-                        }
-                    }
-                    this.symbolTable.set(node.id, { ...this.symbolTable.get(node.id), type: inferredType });
-                }
+                this.symbolTable.set(node.id, {
+                    ...this.symbolTable.get(node.id),
+                    type: this.expressionType(node.expr?.ast)
+                });
                 this.checkExpr(node.expr);
                 break;
 
@@ -1139,36 +1168,51 @@ class SemanticAnalyzer {
                 this.checkExpr(node.expr);
                 break;
             case 'InputStatement':
-                node.inputType = this.symbolTable.get(node.id)?.declaredType || '';
-                if (!this.symbolTable.has(node.id)) this.symbolTable.set(node.id, { type: 'string' });
+                node.inputType = this.symbolTable.get(node.id)?.declaredType ||
+                    (this.symbolTable.get(node.id)?.type === 'numeric' ? 'REAL' : '');
+                this.symbolTable.set(node.id, {
+                    ...this.symbolTable.get(node.id),
+                    type: ['INTEGER', 'FLOAT', 'REAL', 'NUMBER', 'NUMERIC'].includes(node.inputType.toUpperCase()) ? 'numeric' : 'string'
+                });
                 break;
 
-            case 'IfStatement':
+            case 'IfStatement': {
                 this.checkExpr(node.condition);
-                node.body.forEach(n => this.visitNode(n));
-                if (node.elseIfs) {
-                    node.elseIfs.forEach(eif => {
-                        this.checkExpr(eif.condition);
-                        eif.body.forEach(n => this.visitNode(n));
-                    });
+                const entry = new Map(this.symbolTable);
+                const exits = [];
+                for (const branch of [{ body: node.body }, ...(node.elseIfs || []), { body: node.elseBody || [] }]) {
+                    this.symbolTable = new Map(entry);
+                    this.checkExpr(branch.condition);
+                    branch.body.forEach(n => this.visitNode(n));
+                    exits.push(this.symbolTable);
                 }
-                if (node.elseBody) node.elseBody.forEach(n => this.visitNode(n));
+                this.mergeScopes(exits);
                 break;
+            }
             case 'WhileStatement':
+                this.forgetLoopTypes(node.body);
+                const whileEntry = new Map(this.symbolTable);
                 this.checkExpr(node.condition);
                 node.body.forEach(n => this.visitNode(n));
+                this.mergeScopes([whileEntry, this.symbolTable]);
                 break;
             case 'ForStatement':
+                this.forgetLoopTypes(node.body);
+                const ForStatementEntry = new Map(this.symbolTable);
                 this.symbolTable.set(node.iterator, { type: 'unknown' }); // loop var implicitly declared
                 this.checkExpr(node.startExpr);
                 this.checkExpr(node.endExpr);
                 this.checkExpr(node.stepExpr);
                 node.body.forEach(n => this.visitNode(n));
+                this.mergeScopes([ForStatementEntry, this.symbolTable]);
                 break;
             case 'ForEachStatement':
+                this.forgetLoopTypes(node.body);
+                const ForEachStatementEntry = new Map(this.symbolTable);
                 this.checkExpr(node.iterable);
                 this.symbolTable.set(node.iterator, { type: 'unknown' });
                 node.body.forEach(n => this.visitNode(n));
+                this.mergeScopes([ForEachStatementEntry, this.symbolTable]);
                 break;
             case 'FunctionDef': {
                 this.symbolTable.set(node.name, { type: 'function' });
@@ -1328,7 +1372,7 @@ class CodeGenerator {
 
             case 'InputStatement': {
                 const inputType = (node.inputType || '').toUpperCase();
-                const isStringNode = !['INTEGER', 'FLOAT', 'REAL'].includes(inputType);
+                const isStringNode = !['INTEGER', 'FLOAT', 'REAL', 'NUMBER', 'NUMERIC'].includes(inputType);
                 const converter = inputType === 'INTEGER' ? 'int' : 'float';
                 if (isStringNode) {
                     if (node.prompt && node.prompt.length > 0) {

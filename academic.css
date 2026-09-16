@@ -637,3 +637,9 @@ ul {
     scroll-behavior: auto !important;
   }
 }
+
+/* Keep code characters identical to copied/downloaded Python (no >=/<= ligatures). */
+pre, code, textarea, .code-editor, .editor-highlights, .editor-gutter {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0, "clig" 0;
+}

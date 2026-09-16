@@ -28,3 +28,18 @@ A browser-only app can store local exercises and practice observations, but cann
 ## Verification status
 
 Automated tests cover compiler/operator behavior, reference-metric edge cases, offline-cache selection and navigation fallback, and restricted Skulpt execution. A real browser airplane-mode reload after installation still needs to be checked on the intended university/device browsers. Do not equate a service-worker unit test with completed field evaluation.
+
+### Numeric input and visible operators
+
+Code surfaces disable font ligatures so ASCII `<=`, `>=`, `!=` and `==`
+remain visibly identical to copied and downloaded code. Unicode pseudocode aliases
+continue to translate to Python operators; string contents remain unchanged.
+
+`INPUT` uses an explicit declaration when available (`INTEGER` → `int`,
+`REAL`/`FLOAT` → `float`). A preceding definitely numeric assignment, such as
+`SET grade = 0`, makes an undeclared input numeric using `float`, allowing decimal
+grades. Expression AST structure determines numeric type; a number inside a list,
+comparison or string expression does not make that expression numeric. Unknown
+and text inputs remain strings. Inference is conservative across branches and
+loops; use `DECLARE` when the type cannot be established statically. Invalid
+numeric text produces Python's conversion error rather than silently becoming zero.

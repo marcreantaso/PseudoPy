@@ -5140,3 +5140,9 @@ select.form-input {
 
 .ast-node-summary, .ast-expr, .devtools-trans-python { overflow-wrap: anywhere; }
 .ast-expr, .devtools-trans-python { max-width: 100%; overflow-x: auto; }
+
+/* Keep code characters identical to copied/downloaded Python (no >=/<= ligatures). */
+pre, code, textarea, .code-editor, .editor-highlights, .editor-gutter {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0, "clig" 0;
+}
