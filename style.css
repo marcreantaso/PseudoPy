@@ -5953,3 +5953,46 @@ select.form-input {
   max-width: 100%;
   overflow-x: auto;
 }
+
+/* ── PWA Update Banner ── */
+.pwa-update-banner {
+  position: fixed;
+  bottom: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius-lg);
+  z-index: 99999;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  transition: bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border: 1px solid var(--border-accent);
+  width: max-content;
+  max-width: 90vw;
+}
+
+.pwa-update-banner.show {
+  bottom: 24px;
+}
+
+.pwa-update-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.pwa-update-content i {
+  color: var(--accent);
+}
+
+.pwa-update-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}

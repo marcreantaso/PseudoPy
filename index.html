@@ -2701,9 +2701,21 @@
             const installingWorker = reg.installing;
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                // New update available! Show notification
-                if (confirm('A new version of PseudoPy is available. Update now?')) {
-                  installingWorker.postMessage({ type: 'SKIP_WAITING' });
+                // New update available! Show custom banner
+                const updateBanner = document.getElementById('pwa-update-banner');
+                const updateBtn = document.getElementById('pwa-update-btn');
+                const dismissBtn = document.getElementById('pwa-dismiss-btn');
+                
+                if (updateBanner && updateBtn && dismissBtn) {
+                  updateBanner.classList.add('show');
+                  
+                  updateBtn.addEventListener('click', () => {
+                    installingWorker.postMessage({ type: 'SKIP_WAITING' });
+                  });
+                  
+                  dismissBtn.addEventListener('click', () => {
+                    updateBanner.classList.remove('show');
+                  });
                 }
               }
             };
@@ -2721,6 +2733,19 @@
       });
     }
   </script>
+
+  <!-- PWA Update Banner -->
+  <div id="pwa-update-banner" class="pwa-update-banner">
+    <div class="pwa-update-content">
+      <i data-lucide="download-cloud" aria-hidden="true"></i>
+      <span>A new version is available!</span>
+    </div>
+    <div class="pwa-update-actions">
+      <button id="pwa-update-btn" class="btn btn-primary btn-sm">Update Now</button>
+      <button id="pwa-dismiss-btn" class="btn btn-ghost btn-sm" style="color: rgba(255,255,255,0.7); padding: 0.5rem;"><i data-lucide="x" aria-hidden="true"></i></button>
+    </div>
+  </div>
+
 </body>
 
 </html>
