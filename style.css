@@ -558,15 +558,28 @@ h4 {
 @media (max-width: 768px) {
   .login-page {
     grid-template-columns: 1fr;
+    overflow-y: auto;
   }
 
   .login-hero {
-    display: none;
+    padding: 3rem 1.5rem;
+  }
+
+  .hero-tagline {
+    font-size: 2.5rem;
+  }
+
+  .hero-logo {
+    margin-bottom: 1.5rem;
+  }
+
+  .hero-subtitle {
+    margin-bottom: 2rem;
   }
 
   .login-form-section {
-    min-height: 100vh;
-    padding: 2rem 1.5rem;
+    min-height: auto;
+    padding: 2rem 1.5rem 4rem;
   }
 
   .login-form-section::before {
