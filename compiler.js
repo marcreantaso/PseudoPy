@@ -1288,6 +1288,17 @@ class CodeGenerator {
                 '    if step == 0:', '        raise ValueError("FOR STEP must not be zero")',
                 '    return range(start, stop + (1 if step > 0 else -1), step)', '');
         }
+        if (this.lines.some(line => line.includes('_pseudopy_input_cast('))) {
+            this.lines.unshift('def _pseudopy_input_cast(prompt):',
+                '    val = input(prompt)',
+                '    try:',
+                '        return int(val)',
+                '    except ValueError:',
+                '        try:',
+                '            return float(val)',
+                '        except ValueError:',
+                '            return val', '');
+        }
         const result = this.lines.join('\n');
         compilerTrace.emit({ type: 'CODEGEN_COMPLETE', stage: 'CODE_GENERATION', status: 'SUCCESS', data: { lineCount: this.lines.length, python: result } });
         return result;
@@ -1325,20 +1336,24 @@ class CodeGenerator {
 
             case 'InputStatement': {
                 const inputType = (node.inputType || '').toUpperCase();
-                const isStringNode = !['INTEGER', 'FLOAT', 'REAL'].includes(inputType);
+                const isStringNode = inputType === 'STRING';
+                const isExplicitNumeric = ['INTEGER', 'FLOAT', 'REAL'].includes(inputType);
                 const converter = inputType === 'INTEGER' ? 'int' : 'float';
-                if (isStringNode) {
-                    if (node.prompt && node.prompt.length > 0) {
-                        this.lines.push(this.ind() + node.id + ' = input(' + node.prompt[0].value + ')');
-                    } else {
-                        this.lines.push(this.ind() + node.id + ' = input("Please enter ' + node.id + ': ")');
-                    }
+                
+                let promptStr;
+                if (node.prompt && node.prompt.length > 0) {
+                    promptStr = node.prompt[0].value;
                 } else {
-                    if (node.prompt && node.prompt.length > 0) {
-                        this.lines.push(this.ind() + node.id + ' = ' + converter + '(input(' + node.prompt[0].value + '))');
-                    } else {
-                        this.lines.push(this.ind() + node.id + ' = ' + converter + '(input("Please enter ' + node.id + ': "))');
-                    }
+                    promptStr = '"Please enter ' + node.id + ': "';
+                }
+
+                if (isExplicitNumeric) {
+                    this.lines.push(this.ind() + node.id + ' = ' + converter + '(input(' + promptStr + '))');
+                } else if (isStringNode) {
+                    this.lines.push(this.ind() + node.id + ' = input(' + promptStr + ')');
+                } else {
+                    // Undeclared type: attempt to cast to int/float if possible, otherwise string
+                    this.lines.push(this.ind() + node.id + ' = _pseudopy_input_cast(' + promptStr + ')');
                 }
                 break;
             }
