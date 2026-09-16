@@ -454,15 +454,17 @@ function countAstNodes(node) {
 
 function validateExpressionTree(ast) {
     const error = (node, message) => ast.errors.push({ line: node.line || 1, message, suggestion: 'Check the syntax guide and the reported line.' });
+    const forbidden = name => name.startsWith('__') || ['eval','exec','compile','open','getattr','setattr','delattr','globals','locals','vars','__import__'].includes(name);
     const expression = (expr, allowEmpty = false) => {
         if (!expr) return;
+        for (const token of expr.tokens) if (token.type === TOKEN_TYPES.IDENTIFIER && forbidden(token.value)) error({line:token.line}, 'Unsupported runtime access: ' + token.value);
         try { expr.ast = !expr.tokens.length && allowEmpty ? null : new ExpressionParser(expr.tokens).parse(); }
         catch (e) { error(expr, e.message); }
     };
     const walk = (nodes, inFunction = false) => {
         for (const node of nodes) {
             for (const key of ['id', 'name', 'iterator', 'target']) {
-                if (key in node && (!/^[A-Za-z_]\w*$/.test(node[key]) || node[key].startsWith('_pseudopy_') ||
+                if (key in node && (!/^[A-Za-z_]\w*$/.test(node[key]) || node[key].startsWith('_pseudopy_') || forbidden(node[key]) ||
                     ['class', 'def', 'lambda', 'try', 'except', 'finally', 'raise', 'yield', 'import', 'del', 'with', 'assert', 'pass', 'break', 'continue', 'global', 'nonlocal', 'async', 'await'].includes(node[key]))) error(node, 'Invalid or reserved identifier: ' + node[key]);
             }
             if (node.type === 'ReturnStatement' && !inFunction) error(node, 'RETURN is only valid inside FUNCTION or PROCEDURE.');
@@ -483,6 +485,7 @@ function validateExpressionTree(ast) {
                     const call = new ExpressionParser([{ type: TOKEN_TYPES.IDENTIFIER, value: node.name }, ...tokens]).parse();
                     if (call.type !== 'CallExpression') throw new Error('CALL requires a function and arguments.');
                     node.arguments = call.arguments;
+                    for (const token of tokens) if (token.type === TOKEN_TYPES.IDENTIFIER && forbidden(token.value)) error({line:token.line}, 'Unsupported runtime access: ' + token.value);
                 } catch (e) { error(node, e.message); }
             }
             if (node.body) walk(node.body, inFunction || node.type === 'FunctionDef');

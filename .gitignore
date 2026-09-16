@@ -20,3 +20,9 @@ icons/generate.html
 
 # Vercel output
 .vercel
+
+# Server credentials and generated web assets
+.env
+.env.*
+*-service-account.json
+public/

@@ -6,12 +6,19 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node --test tests/*.test.js && node test_operator_translation.js"
+    "test": "node --test tests/*.test.js && node test_operator_translation.js",
+    "build": "node scripts/build-public.js",
+    "test:ui": "NODE_ENV=test node tests/support/ui-fixture.js",
+    "format:academic": "prettier --write academic.js academic.css server/*.js tests/academic.test.js tests/runtime.test.js scripts/*.js"
   },
   "dependencies": {
     "animejs": "^4.5.0",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "firebase": "^12.18.0"
+    "firebase": "^12.18.0",
+    "firebase-admin": "^14.4.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6"
   }
 }

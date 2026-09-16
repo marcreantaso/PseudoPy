@@ -1,0 +1,8 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // All access is through authenticated server routes using Firebase Admin.
+    // Browser clients must never read credentials, reference answers, or drafts.
+    match /{document=**} { allow read, write: if false; }
+  }
+}
