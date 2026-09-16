@@ -393,9 +393,9 @@ The translation algorithm used in pseudocode-to-Python systems relies on a set o
 <!-- Start of picture text -->
 Guiversity of Cabuyao<br>(PAMANTASAN NG CABUYAO)<br><!-- End of picture text -->
 
-The algorithm also manages indentation automatically, increasing the indent level when entering a block and decreasing it when the block is closed. This is essential because Python uses indentation to define the scope of code. Operators such as AND, OR, NOT, and MOD are translated into Python equivalents, and 12oolean values like TRUE and FALSE are converted to True and False. If a line does not match any recognized pattern, the algorithm converts it into a comment rather than producing an error, so the remaining translated code stays intact. These guidelines ensure that students who follow the correct pseudocode structure will receive accurate and executable Python output [2]. 
+The algorithm also manages indentation automatically, increasing the indent level when entering a block and decreasing it when the block is closed. This is essential because Python uses indentation to define the scope of code. Operators such as AND, OR, NOT, and MOD are translated into Python equivalents, and 12oolean values like TRUE and FALSE are converted to True and False. If a line does not match any recognized pattern, the algorithm produces a syntax error with a helpful suggestion rather than producing broken code. These guidelines ensure that students who follow the correct pseudocode structure will receive accurate and executable Python output [2]. 
 
-There are several important things that is consider when developing this type of application. The translation algorithm is carefully designed to handle a wide variety of pseudocode constructs, including variable declarations, nested control structures, function definitions, and logical expressions. Proper indentation tracking is critical since Python depends on whitespace to define code blocks. The system also handle unexpected input gracefully converting unrecognized lines into comments rather than crashing or producing broken code. 
+There are several important things that is consider when developing this type of application. The translation algorithm is carefully designed to handle a wide variety of pseudocode constructs, including variable declarations, nested control structures, function definitions, and logical expressions. Proper indentation tracking is critical since Python depends on whitespace to define code blocks. The system also handle unexpected input gracefully by producing a clear syntax error with actionable feedback rather than crashing or producing broken code. 
 
 The choice of database technology matters as well; using a local host database allows real-time data access for storing user accounts, exercises, and student activity records without requiring a dedicated server. Developers also consider data security, particularly regarding how passwords and credentials are stored. Building the platform as a Progressive Web Application ensures it can be accessed across different devices and even installed as a standalone app, which improves accessibility for students who rely on mobile devices. Performance and reliability of the in-browser code execution engine must also 
 
@@ -1003,7 +1003,7 @@ After normalization, the system performs lexical analysis or tokenization. The i
 
 Once the structure is verified, the system performs semantic validation to check the logical correctness of the pseudocode. This includes verifying variable usage, checking data types, and ensuring that operations are valid. Errors such as undeclared variables or incorrect operations are identified at this stage. After validation, the system proceeds to code generation, where the pseudocode is translated into equivalent Python code. Each construct is converted into its proper Python syntax to produce an executable program. 
 
-Finally, the system includes a refinement and feedback loop. The generated code is compared with a reference solution provided by the instructor. The system identifies any logical differences and provides feedback to the user. This allows the user to improve their pseudocode and repeat the process, supporting continuous learning and development. 
+Finally, the system provides real-time feedback. The generated code is compared with a reference solution provided by the instructor. The system identifies any logical differences and provides feedback to the user. This allows the user to improve their pseudocode, supporting continuous learning and development. 
 
 **41** 
 
@@ -1035,7 +1035,7 @@ A kia h<br>Guiversity of Cabuyao<br>(PAMANTASAN NG CABUYAO)<br><!-- End of pictu
 
 
 <!-- Start of picture text -->
-ALGORITHM ValidateBlockStructure(tokens)<br>stack = EMPTY stack // LIFO structure<br>FOR EACH token IN tokens DO<br>IF token IS a starting keyword (BEGIN, IF, WHILE, FOR) THEN<br>PUSH token.type ONTO stack<br>ELSE IF token IS an ending keyword (END, END IF, END WHILE) THEN<br>IF stack IS empty THEN<br>RETURN ERROR “Unexpected END statement”<br>END IF<br>topOfStack = POP from stack<br>IF topOfStack DOES NOT match token.type THEN<br>RETURN ERROR “Block mismatch: Expected END “ + topOfStack<br>END IF<br>END IF<br>END FOR<br>IF stack IS NOT empty THEN<br>RETURN ERROR “Unclosed block: “ + stack.top<br>END IF<br>RETURN SUCCESS<br>END<br><!-- End of picture text -->
+ALGORITHM ValidateBlockStructure(tokens)<br>stack = EMPTY stack // LIFO structure<br>FOR EACH token IN tokens DO<br>IF token IS a starting keyword (IF, WHILE, FOR) THEN<br>PUSH token.type ONTO stack<br>ELSE IF token IS an ending keyword (END, END IF, END WHILE) THEN<br>IF stack IS empty THEN<br>RETURN ERROR “Unexpected END statement”<br>END IF<br>topOfStack = POP from stack<br>IF topOfStack DOES NOT match token.type THEN<br>RETURN ERROR “Block mismatch: Expected END “ + topOfStack<br>END IF<br>END IF<br>END FOR<br>IF stack IS NOT empty THEN<br>RETURN ERROR “Unclosed block: “ + stack.top<br>END IF<br>RETURN SUCCESS<br>END<br><!-- End of picture text -->
 
 ### **Levenshtein Distance Algorithm (Dynamic Programming)** 
 
@@ -1117,7 +1117,7 @@ A ia hh<br>(PAMANTASAN NG CABUYAO)<br><!-- End of picture text -->
 
 
 <!-- Start of picture text -->
-Input: Pseudocode P<br>Step 1: Lexical Analysis<br>tokens + tokenize(P)<br>Step 2: Syntax Parsing<br>AST + parse(tokens using CFG)<br>if error then<br>return “Syntax Error”<br>Step 3: Initial Code Generation<br>codee « generate Python from AST (SDT)<br>Step 4: Execution Validation<br>result + execute(codeo)<br>Step 5: Check Correctness<br>if result is correct then<br>store mapping (P + codec)<br>return codeo<br>Step 6: Refinement (Core Contribution)<br>candidates + generateAlternativeMappings(P)<br>for each code; in candidates do<br>resulti + execute(codei)<br>if results is correct then<br>store mapping (P + code:)<br>return codei<br>Step 7: Failure Handling<br>return best attempt + feedback<br><!-- End of picture text -->
+Input: Pseudocode P<br>Step 1: Lexical Analysis<br>tokens + tokenize(P)<br>Step 2: Syntax Parsing<br>AST + parse(tokens using CFG)<br>if error then<br>return “Syntax Error”<br>Step 3: Initial Code Generation<br>codee « generate Python from AST (SDT)<br>Step 4: Execution Validation<br>result + execute(codeo)<br>Step 5: Check Correctness<br>if result is correct then<br>store mapping (P + codec)<br>return codeo<br>Step 6: Failure Handling<br>return syntax error or best attempt + feedback<br><!-- End of picture text -->
 
 **46** 
 
@@ -1128,7 +1128,7 @@ Guiversity of Cabuyao<br>(PAMANTASAN NG CABUYAO)<br><!-- End of picture text -->
 
 # **COLLEGE OF COMPUTING STUDIES** 
 
-The system incorporates several mechanisms to enhance translation accuracy and user learning. It utilizes the Levenshtein Distance algorithm to perform intelligent keyword correction by identifying minimal differences between user input and valid pseudocode terms, enabling the system to suggest appropriate corrections. Additionally, a validation-driven refinement mechanism is implemented through an automated correction loop that detects structural inconsistencies, such as unclosed blocks, and attempts to resolve them before reprocessing the input. The system also includes a static analysis feature that estimates time complexity by evaluating loop nesting depth, allowing classification of algorithms into standard Big O notations such as 𝑂(1), 𝑂(𝑛), and 𝑂(𝑛<sup>2</sup> ). 
+The system incorporates several mechanisms to enhance translation accuracy and user learning. It utilizes the Levenshtein Distance algorithm to perform intelligent keyword correction by identifying minimal differences between user input and valid pseudocode terms, enabling the system to suggest appropriate corrections. Additionally, a validation-driven error-reporting mechanism detects structural inconsistencies, such as unclosed blocks, and provides immediate feedback to the user. The system also includes a static analysis feature that estimates time complexity by evaluating loop nesting depth, allowing classification of algorithms into standard Big O notations such as 𝑂(1), 𝑂(𝑛), and 𝑂(𝑛<sup>2</sup> ). 
 
 The generated Python code is executed using the Skulpt interpreter, enabling in-browser execution without requiring external dependencies. This allows the system to function offline while maintaining a complete compilation and execution pipeline within the browser environment. 
 
@@ -1155,7 +1155,7 @@ Guiversity of Cabuyao<br>(PAMANTASAN NG CABUYAO)<br><!-- End of picture text -->
 |---|---|
 |IF condition THEN|if condition:|
 |ELSE|else:|
-|FOR I = 1 TO n|for i in range(1, n+1):|
+|FOR I = 1 TO n|for i in _pseudopy_range(1, n, 1):|
 |WHILE condition DO|while condition|
 |PRINT value|print(value)|
 |INPUT variable|input()|
@@ -1306,7 +1306,7 @@ Guiversity of Cabuyao<br>(PAMANTASAN NG CABUYAO)<br><!-- End of picture text -->
 
 [END] 
 
-The system processes student pseudocode through lexical analysis and syntax parsing using CFG. The system ensures the accuracy and correctness of student solutions by using the **instructor-defined pseudocode (P) ᵢ** as the ground truth reference for evaluation. Instead of relying solely on final output, the system performs **multi-level validation** combining structural, semantic, and execution-based checks. If valid, it performs deeper analysis using AST comparison, semantic matching, and Logic Gap Analysis to evaluate correctness and generate a mastery score with feedback. It then translates the pseudocode into Python and executes it. If execution fails, the system enters a **refinement loop** , attempting alternative mappings to auto-repair the code and return the best possible output with feedback. Along with this to provide intelligent and fully offline feedback, the system performs Static Program Analysis by analyzing the program’s Abstract Syntax Tree (AST) and Symbol Table instead of relying on simple keyword matching or regular expressions. Through components implemented in app.js and compiler.js, the system dynamically evaluates code structure, variable usage, logic flow, and algorithmic behavior to generate context-aware suggestions such as detecting deep nesting, undeclared variables, type mismatches, redundant statements, and structural differences from instructor solutions. The system also supports validation-driven refinement, where it automatically generates and tests possible corrections for syntax errors before suggesting fixes to the learner, enabling more adaptive 
+The system processes student pseudocode through lexical analysis and syntax parsing using CFG. The system ensures the accuracy and correctness of student solutions by using the **instructor-defined pseudocode (P) ᵢ** as the ground truth reference for evaluation. Instead of relying solely on final output, the system performs **multi-level validation** combining structural, semantic, and execution-based checks. If valid, it performs deeper analysis using AST comparison, semantic matching, and Logic Gap Analysis to evaluate correctness and generate a mastery score with feedback. It then translates the pseudocode into Python and executes it. If execution fails, the system provides the error message as feedback. Along with this to provide intelligent and fully offline feedback, the system performs Static Program Analysis by analyzing the program’s Abstract Syntax Tree (AST) and Symbol Table instead of relying on simple keyword matching or regular expressions. Through components implemented in app.js and compiler.js, the system dynamically evaluates code structure, variable usage, logic flow, and algorithmic behavior to generate context-aware suggestions such as detecting deep nesting, undeclared variables, type mismatches, redundant statements, and structural differences from instructor solutions. The system also supports validation-driven error handling, where it provides structural and syntactical feedback to the learner, enabling more adaptive 
 
 the offline 
 
@@ -1323,7 +1323,7 @@ f kta}<br>Guiversity of Cabuyao<br>(PAMANTASAN NG CABUYAO)<br><!-- End of pictur
 
 # **COLLEGE OF COMPUTING STUDIES** 
 
-In addition, the system incorporates a root cause analysis mechanism to identify failures in pseudocode processing and code generation. Errors are primarily attributed to syntax issues during parsing, ambiguities in Abstract Syntax Tree (AST) construction, semantic or logical gaps in the student’s solution, limitations in syntax-directed translation (SDT) mappings, and runtime execution faults. To address theFIse, the system employs a refinement loop that utilizes alternative mapping strategies to automatically repair invalid or incomplete pseudocode. This approach ensures that, instead of terminating on failure, the system produces a best-effort code output accompanied by diagnostic feedback and suggested corrections, thereby improving both system robustness and instructional effectiveness. 
+In addition, the system incorporates a root cause analysis mechanism to identify failures in pseudocode processing and code generation. Errors are primarily attributed to syntax issues during parsing, ambiguities in Abstract Syntax Tree (AST) construction, semantic or logical gaps in the student’s solution, limitations in syntax-directed translation (SDT) mappings, and runtime execution faults. To address these, the system provides detailed diagnostic feedback on why execution failed. This approach ensures that users receive actionable suggested corrections, thereby improving instructional effectiveness. 
 
 This section demonstrates how the PseudoPy system processes actual input data through a step-by-step execution of the translation pipeline using a sample pseudocode problem 
 
