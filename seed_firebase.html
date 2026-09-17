@@ -29,12 +29,12 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script>
     const firebaseConfig = {
-        apiKey: "AIzaSyAkm5sWJpcF05QCDDSa8VciUTh3LOc5BU",
+        apiKey: "AIzaSyAkm5sWvJpcF05QCDDSa8VcUIhh3L0c58U",
         authDomain: "pseudopy-e7e74.firebaseapp.com",
         projectId: "pseudopy-e7e74",
         storageBucket: "pseudopy-e7e74.firebasestorage.app",
-        messagingSenderId: "442671972919",
-        appId: "1:442671972919:web:53fc4b941b37c484247ab2"
+        messagingSenderId: "442571972919",
+        appId: "1:442571972919:web:53fc4b941b37c484247ab2"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
@@ -55,7 +55,17 @@
         "Gabriel Santiago","Abigail Ramos","Ryan Ocampo","Megan Custodio","Kyle Dela Rosa"
     ];
 
-    function buildUsers() {
+    async function hashSeedPassword(password) {
+        const saltBytes = new Uint8Array(16);
+        crypto.getRandomValues(saltBytes);
+        const passwordSalt = Array.from(saltBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        const encoded = new TextEncoder().encode(password + passwordSalt);
+        const digest = await crypto.subtle.digest('SHA-256', encoded);
+        const passwordHash = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+        return { passwordHash, passwordSalt };
+    }
+
+    async function buildUsers() {
         const users = [
             { _docId:'u1', id:'u1', fullName:'Mark Bautista', username:'mbautista_admin', email:'bautista@university.edu.ph', password:'admin123', role:'admin', status:'active', createdAt:'2025-07-01T08:00:00.000Z' },
             { _docId:'u2', id:'u2', fullName:'Marc Reantaso', username:'mreantaso_instructor', email:'reantaso@university.edu.ph', password:'pass123', role:'instructor', status:'active', createdBy:'u1', createdAt:'2025-08-10T14:15:00.000Z' },
@@ -67,7 +77,12 @@
             const clean = name.toLowerCase().replace(/\s+/g,'');
             users.push({ _docId:`u_stu_${i+3}`, id:`u_stu_${i+3}`, studentId:`2024-${String(i+1).padStart(3,'0')}`, fullName:name, username:`${clean}_student`, email:`${clean.split(' ')[0]}@student.edu.ph`, password:'pass123', role:'student', status:'active', instructorId:'u2', createdBy:'u2', section:['BSCS-3A','BSCS-3B','BSIT-3A','BSIT-3B'][i%4] });
         });
-        return users;
+        return Promise.all(users.map(async user => {
+            const credentials = await hashSeedPassword(user.password);
+            const safeUser = { ...user, ...credentials };
+            delete safeUser.password;
+            return safeUser;
+        }));
     }
 
     const EXERCISES = [
@@ -439,7 +454,7 @@
         btn.textContent = '⏳ Seeding...';
         try {
             log('🔥 Connecting to Firebase...', 'info');
-            await seedCollection('pseudopy_users', buildUsers());
+            await seedCollection('pseudopy_users', await buildUsers());
             await seedCollection('pseudopy_exercises', EXERCISES);
             await seedCollection('pseudopy_activity', buildActivity());
             log('', 'info');

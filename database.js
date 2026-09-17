@@ -23,7 +23,9 @@ function resolveFirebaseConfig() {
 const firebaseConfig = resolveFirebaseConfig();
 
 let firestore = null;
+let firestoreInitPromise = Promise.resolve();
 const hasFirebaseSDK = typeof firebase !== 'undefined' && firebase && typeof firebase.apps !== 'undefined';
+const demoModeEnabled = typeof window !== 'undefined' && window.__PSEUDOPY_DEMO_MODE__ === true;
 
 try {
     if (hasFirebaseSDK) {
@@ -31,6 +33,13 @@ try {
             firebase.initializeApp(firebaseConfig);
         }
         firestore = firebase.firestore();
+        firestoreInitPromise = firestore.enablePersistence({ synchronizeTabs: true }).catch((error) => {
+            // failed-precondition means another tab initialized persistence first;
+            // unimplemented means the browser does not support IndexedDB persistence.
+            if (!['failed-precondition', 'unimplemented'].includes(error.code)) {
+                console.warn('[Database] Firestore persistence unavailable:', error.message);
+            }
+        });
         console.log('[Database] Firebase Firestore connected ✅ Project:', firebaseConfig.projectId);
     } else if (typeof window !== 'undefined' && window.firebase) {
         window.firebase.initializeApp(firebaseConfig);
@@ -45,7 +54,13 @@ try {
 
 const firestoreReady = () => !!(firestore && typeof firestore.collection === 'function');
 
-function withFirestoreTimeout(promise, ms = 4000) {
+function databaseUnavailableError(operation, ref) {
+    const error = new Error(`Database unavailable while ${operation} ${ref}. Check the network and Firestore configuration.`);
+    error.code = 'database/unavailable';
+    return error;
+}
+
+function withFirestoreTimeout(promise, ms = 12000) {
     let timer;
     const timeout = new Promise((_, reject) => {
         timer = setTimeout(() => reject(new Error(`Firestore operation timed out after ${ms}ms`)), ms);
@@ -525,39 +540,17 @@ function getLocalCollection(ref) {
         const raw = localStorage.getItem(`pseudopy_local_${ref}`);
         if (raw) {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) {
+            if (Array.isArray(parsed)) {
                 list = parsed;
             }
         }
     } catch (e) { }
 
     if (!list) {
-        if (ref === usersRef) list = getInitialSeedUsers();
-        else if (ref === exercisesRef) list = SEED_EXERCISES_LIST;
-        else if (ref === activityRef) list = getInitialSeedActivity();
+        if (demoModeEnabled && ref === usersRef) list = getInitialSeedUsers();
+        else if (demoModeEnabled && ref === exercisesRef) list = SEED_EXERCISES_LIST;
+        else if (demoModeEnabled && ref === activityRef) list = getInitialSeedActivity();
         else list = [];
-    }
-
-    // Guarantee that standard seed instructor exists in user list
-    if (ref === usersRef && Array.isArray(list)) {
-        const hasMarc = list.some(u => u.username === 'mreantaso_instructor' || u.id === 'u2' || u._docId === 'u2');
-        if (!hasMarc) {
-            const marc = getInitialSeedUsers().find(u => u.username === 'mreantaso_instructor');
-            if (marc) list.splice(1, 0, marc);
-        }
-    }
-
-    // Guarantee that activity list always has the full rich demo dataset merged in
-    if (ref === activityRef && Array.isArray(list)) {
-        if (list.length < 15) {
-            list = getInitialSeedActivity();
-        } else {
-            // Merge missing seed records so chart always has all demo bars
-            const seedRecords = getInitialSeedActivity();
-            const existingIds = new Set(list.map(a => a._docId));
-            const missingSeeds = seedRecords.filter(s => !existingIds.has(s._docId));
-            if (missingSeeds.length > 0) list = [...list, ...missingSeeds];
-        }
     }
 
     setLocalCollection(ref, list);
@@ -580,45 +573,27 @@ function setLocalCollection(ref, data) {
 async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
     let results = [];
 
-    // 1. Try Firestore
+    // Firestore is the source of truth. localStorage is only a last-known read
+    // cache; it is never treated as a successful database write.
     if (firestoreReady()) {
         try {
+            await firestoreInitPromise;
             const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
-            if (snapshot && !snapshot.empty) {
-                results = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
-                // For activity, always merge with full seed demo data so charts are rich
-                if (ref === activityRef) {
-                    const seedRecords = getInitialSeedActivity();
-                    const existingIds = new Set(results.map(r => r._docId));
-                    const missingSeeds = seedRecords.filter(s => !existingIds.has(s._docId));
-                    if (missingSeeds.length > 0) results = [...results, ...missingSeeds];
-                }
-                setLocalCollection(ref, results);
-            }
+            results = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
+            setLocalCollection(ref, results);
         } catch (err) {
-            console.warn(`[Database] Firestore fetch error on ${ref}, using local fallback:`, err.message);
-        }
-    }
-
-    // 2. Fallback to Local/Seed data if empty.
-    if (!results || results.length === 0) {
-        results = getLocalCollection(ref);
-        // If Firestore is connected, seed it in the background.
-        if (firestoreReady() && results.length > 0) {
-            seedDatabase().catch(e => console.warn('[Database] Background seed attempt:', e));
-        }
-    }
-
-    // Ensure instructor mreantaso_instructor is present in users
-    if (ref === usersRef && Array.isArray(results)) {
-        const hasMarc = results.some(u => u.username === 'mreantaso_instructor' || u.id === 'u2' || u._docId === 'u2');
-        if (!hasMarc) {
-            const marc = getInitialSeedUsers().find(u => u.username === 'mreantaso_instructor');
-            if (marc) {
-                results.splice(1, 0, marc);
-                setLocalCollection(ref, results);
+            const cached = getLocalCollection(ref);
+            if (cached.length > 0 || demoModeEnabled) {
+                console.warn(`[Database] Firestore read failed on ${ref}; showing last synchronized data:`, err.message);
+                results = cached;
+            } else {
+                throw databaseUnavailableError('reading', ref);
             }
         }
+    } else if (demoModeEnabled) {
+        results = getLocalCollection(ref);
+    } else {
+        throw databaseUnavailableError('reading', ref);
     }
 
     // Client-side sorting
@@ -660,18 +635,27 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
 async function dbGet(ref, docId) {
     if (firestoreReady()) {
         try {
+            await firestoreInitPromise;
             const doc = await withFirestoreTimeout(firestore.collection(ref).doc(docId).get());
             if (doc.exists) {
                 return { _docId: doc.id, ...doc.data() };
             }
+            return null;
         } catch (err) {
-            console.warn(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
+            const cached = getLocalCollection(ref).find(item => item._docId === docId || item.id === docId);
+            if (cached || demoModeEnabled) {
+                console.warn(`[Database] Firestore read failed on ${ref}/${docId}; showing last synchronized data:`, err.message);
+                return cached || null;
+            }
+            throw databaseUnavailableError('reading', `${ref}/${docId}`);
         }
     }
 
-    // Local fallback
-    const local = getLocalCollection(ref);
-    return local.find(item => item._docId === docId || item.id === docId) || null;
+    if (demoModeEnabled) {
+        const local = getLocalCollection(ref);
+        return local.find(item => item._docId === docId || item.id === docId) || null;
+    }
+    throw databaseUnavailableError('reading', `${ref}/${docId}`);
 }
 
 /**
@@ -681,22 +665,18 @@ async function dbAdd(ref, data) {
     const docId = data._docId || ('doc_' + Date.now() + '_' + Math.floor(Math.random() * 1000));
     const docData = { ...data, _docId: docId };
 
-    // Update local cache immediately
+    if (firestoreReady()) {
+        await firestoreInitPromise;
+        await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(docData));
+    } else if (!demoModeEnabled) {
+        throw databaseUnavailableError('creating', ref);
+    }
+
     const local = getLocalCollection(ref);
     const existingIdx = local.findIndex(item => item._docId === docId);
     if (existingIdx >= 0) local[existingIdx] = docData;
     else local.unshift(docData);
     setLocalCollection(ref, local);
-
-    // Save to Firestore if available
-    if (firestoreReady()) {
-        try {
-            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(docData));
-        } catch (err) {
-            console.warn(`[Database] Error saving to Firestore ${ref} (local cache updated):`, err.message);
-        }
-    }
-
     return docId;
 }
 
@@ -706,22 +686,18 @@ async function dbAdd(ref, data) {
 async function dbSet(ref, docId, data) {
     const docData = { ...data, _docId: docId };
 
-    // Update local cache immediately
+    if (firestoreReady()) {
+        await firestoreInitPromise;
+        await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(docData));
+    } else if (!demoModeEnabled) {
+        throw databaseUnavailableError('saving', `${ref}/${docId}`);
+    }
+
     const local = getLocalCollection(ref);
     const existingIdx = local.findIndex(item => item._docId === docId);
     if (existingIdx >= 0) local[existingIdx] = docData;
     else local.push(docData);
     setLocalCollection(ref, local);
-
-    // Save to Firestore if available
-    if (firestoreReady()) {
-        try {
-            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(docData));
-        } catch (err) {
-            console.warn(`[Database] Error setting to Firestore ${ref}/${docId} (local cache updated):`, err.message);
-        }
-    }
-
     return docData;
 }
 
@@ -733,54 +709,52 @@ async function dbUpdate(ref, docId, data) {
     const existing = local.find(item => item._docId === docId || item.id === docId);
     const merged = existing ? { ...existing, ...data, _docId: docId } : { ...data, _docId: docId };
 
-    // Update local cache immediately
+    if (firestoreReady()) {
+        await firestoreInitPromise;
+        const docRef = firestore.collection(ref).doc(docId);
+        await withFirestoreTimeout(docRef.set(data, { merge: true }));
+    } else if (!demoModeEnabled) {
+        throw databaseUnavailableError('updating', `${ref}/${docId}`);
+    }
+
     const existingIdx = local.findIndex(item => item._docId === docId || item.id === docId);
     if (existingIdx >= 0) local[existingIdx] = merged;
     else local.push(merged);
     setLocalCollection(ref, local);
-
-    // Save to Firestore if available
-    if (firestoreReady()) {
-        try {
-            const docRef = firestore.collection(ref).doc(docId);
-            await withFirestoreTimeout(docRef.set(merged, { merge: true }));
-        } catch (err) {
-            console.warn(`[Database] Error updating Firestore ${ref}/${docId} (local cache updated):`, err.message);
-        }
-    }
-
     return merged;
 }
 
 /**
  * Delete a document by ID.
- * Intentionally disabled for Firestore-backed persistence to prevent data loss.
  */
 async function dbDelete(ref, docId) {
     const local = getLocalCollection(ref);
     const exists = local.some(item => item._docId === docId || item.id === docId);
 
     if (firestoreReady()) {
-        try {
-            await firestore.collection(ref).doc(docId).delete();
-        } catch (err) {
-            console.error(`[Database] Error deleting Firestore ${ref}/${docId}:`, err);
-        }
+        await firestoreInitPromise;
+        await withFirestoreTimeout(firestore.collection(ref).doc(docId).delete());
+    } else if (!demoModeEnabled) {
+        throw databaseUnavailableError('deleting', `${ref}/${docId}`);
     }
 
-    if (!exists) {
-        return { success: false, deleted: false, message: 'Nothing to delete.' };
-    }
-
-    return { success: false, deleted: false, message: 'Deletion is disabled to protect persisted Firestore data.' };
+    setLocalCollection(ref, local.filter(item => item._docId !== docId && item.id !== docId));
+    return { success: true, deleted: exists || firestoreReady() };
 }
 
 async function dbClearCollection(ref) {
-    setLocalCollection(ref, []);
-    if (!firestoreReady()) return;
+    if (!firestoreReady()) {
+        if (!demoModeEnabled) throw databaseUnavailableError('clearing', ref);
+        setLocalCollection(ref, []);
+        return;
+    }
 
+    await firestoreInitPromise;
     const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
-    if (snapshot.empty) return;
+    if (snapshot.empty) {
+        setLocalCollection(ref, []);
+        return;
+    }
 
     let batch = firestore.batch();
     let batchSize = 0;
@@ -794,6 +768,7 @@ async function dbClearCollection(ref) {
         }
     }
     if (batchSize > 0) await withFirestoreTimeout(batch.commit());
+    setLocalCollection(ref, []);
 }
 
 /**
@@ -802,11 +777,17 @@ async function dbClearCollection(ref) {
 async function dbCount(ref) {
     if (firestoreReady()) {
         try {
+            await firestoreInitPromise;
             const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
             if (snapshot) return snapshot.size;
-        } catch (err) { }
+        } catch (err) {
+            const cached = getLocalCollection(ref);
+            if (cached.length > 0 || demoModeEnabled) return cached.length;
+            throw databaseUnavailableError('counting', ref);
+        }
     }
-    return getLocalCollection(ref).length;
+    if (demoModeEnabled) return getLocalCollection(ref).length;
+    throw databaseUnavailableError('counting', ref);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -823,6 +804,17 @@ async function batchSeed(collectionName, items) {
     await withFirestoreTimeout(batch.commit());
 }
 
+async function getHashedSeedUsers() {
+    return Promise.all(getInitialSeedUsers().map(async user => {
+        if (!user.password) return user;
+        const passwordSalt = generateSalt();
+        const passwordHash = await hashPassword(user.password, passwordSalt);
+        const safeUser = { ...user, passwordHash, passwordSalt };
+        delete safeUser.password;
+        return safeUser;
+    }));
+}
+
 async function seedDatabase() {
     try {
         if (!firestoreReady()) return true;
@@ -831,7 +823,7 @@ async function seedDatabase() {
         const userSnap = await withFirestoreTimeout(firestore.collection(usersRef).get());
         if (userSnap.empty) {
             console.log('[Database] Seeding initial users into Firestore...');
-            await batchSeed(usersRef, getInitialSeedUsers());
+            await batchSeed(usersRef, await getHashedSeedUsers());
             console.log('[Database] Users seeded ✅');
         }
 
@@ -859,15 +851,38 @@ async function seedDatabase() {
 // ══════════════════════════════════════════════════════════════
 
 async function initDB() {
-    return true;
+    if (!firestoreReady()) {
+        if (demoModeEnabled) return { mode: 'demo', connected: false };
+        throw databaseUnavailableError('initializing', 'Firestore');
+    }
+    await firestoreInitPromise;
+    await withFirestoreTimeout(firestore.collection(usersRef).limit(1).get());
+    return { mode: 'firestore', connected: true, projectId: firebaseConfig.projectId };
 }
 
 async function refreshPasswordHistory() {
     return await dbGetAll(passwordRequestsRef);
 }
 
+function normalizeAuditRecord(record) {
+    const action = record.action || (record.eventType ? record.eventType.toLowerCase() : 'unknown');
+    return {
+        ...record,
+        action,
+        actorId: record.actorId || record.instructorId || record.studentId || null,
+        actorName: record.actorName || record.instructorName || record.studentName || record.actor || null,
+        actorUsername: record.actorUsername || record.username || record.actor || null,
+        actorRole: record.actorRole || (record.instructorId ? 'instructor' : record.studentId ? 'student' : null),
+        targetType: record.targetType || (record.requestId ? 'password_request' : null),
+        targetId: record.targetId || record.requestId || null,
+        targetName: record.targetName || record.target || null,
+        metadata: record.metadata || (record.details ? { details: record.details } : {})
+    };
+}
+
 async function refreshAuditLog() {
-    return await dbGetAll(auditLogRef);
+    const records = await dbGetAll(auditLogRef);
+    return records.map(normalizeAuditRecord);
 }
 
 function normalizeUsername(username) {

@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-v49';
+const CACHE_NAME = 'pseudopy-v50';
 const LOCAL_ASSETS = [
     './',
     './index.html',
@@ -31,16 +31,15 @@ const EXTERNAL_ASSETS = [
 // Install — cache core assets
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
+        caches.open(CACHE_NAME).then(async (cache) => {
             console.log('[SW] Caching core local assets');
-            // Cache local assets atomically
-            cache.addAll(LOCAL_ASSETS).catch(err => console.warn('[SW] Some local assets failed:', err));
-            
-            // Cache external assets individually (to prevent single-failure halting everything)
-            EXTERNAL_ASSETS.forEach(url => {
+            await cache.addAll(LOCAL_ASSETS);
+
+            // External assets are optional; one CDN failure must not abort install.
+            await Promise.allSettled(EXTERNAL_ASSETS.map(url => {
                 const req = new Request(url, { mode: 'no-cors' });
-                fetch(req).then(response => cache.put(req, response)).catch(err => console.warn('[SW] External asset failed:', url, err));
-            });
+                return fetch(req).then(response => cache.put(req, response));
+            }));
         })
     );
     self.skipWaiting();
@@ -59,30 +58,50 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
-// Fetch — cache-first, fallback to network
+const NETWORK_ONLY_HOSTS = new Set([
+    'firestore.googleapis.com',
+    'firebaseinstallations.googleapis.com',
+    'identitytoolkit.googleapis.com',
+    'securetoken.googleapis.com'
+]);
+
+function isBackendRequest(request) {
+    const url = new URL(request.url);
+    return NETWORK_ONLY_HOSTS.has(url.hostname)
+        || url.hostname.endsWith('.firebaseio.com')
+        || url.pathname.startsWith('/api/');
+}
+
+async function handleStaticRequest(request) {
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) return cachedResponse;
+
+    try {
+        const networkResponse = await fetch(request);
+        if (networkResponse && (networkResponse.status === 200 || networkResponse.status === 0)) {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+    } catch (error) {
+        if (request.mode === 'navigate') {
+            const fallback = await caches.match('./index.html') || await caches.match('/index.html');
+            if (fallback) return fallback;
+        }
+
+        return new Response('Offline', {
+            status: 503,
+            statusText: 'Service Unavailable',
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+    }
+}
+
+// Fetch — cache static GET assets only. Firestore and API traffic must bypass
+// the service worker so their transports and error handling remain intact.
 self.addEventListener('fetch', (event) => {
-    event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-            return fetch(event.request).then((networkResponse) => {
-                // Cache successful GET responses (allow opaque status 0 for CDNs)
-                if (event.request.method === 'GET' && (networkResponse.status === 200 || networkResponse.status === 0)) {
-                    const responseClone = networkResponse.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseClone);
-                    });
-                }
-                return networkResponse;
-            }).catch(() => {
-                // Offline fallback for navigation
-                if (event.request.mode === 'navigate') {
-                    return caches.match('/index.html');
-                }
-            });
-        })
-    );
+    if (event.request.method !== 'GET' || isBackendRequest(event.request)) return;
+    event.respondWith(handleStaticRequest(event.request));
 });
 
 // Listen for the skipWaiting message from the UI
@@ -91,4 +110,3 @@ self.addEventListener('message', (event) => {
         self.skipWaiting();
     }
 });
-

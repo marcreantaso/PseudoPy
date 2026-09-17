@@ -138,24 +138,23 @@ async function init() {
     try {
 
 
-        console.log('[App] Calling seedDatabase()...');
-        // Seed the database if collections are empty
-        await seedDatabase();
-        console.log('[App] seedDatabase() finished.');
+        console.log('[App] Connecting to Firestore...');
+        await initDB();
+        console.log('[App] Firestore connection ready.');
 
         // Pre-load data from Offline Database into cache
         cachedUsers = await dbGetAll(usersRef);
         cachedExercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, 0);
         cachedActivity = await dbGetAll(activityRef);
 
-        console.log(`[App] Loaded users, max ${EX_PAGE_LIMIT} exercises, and activity records from IndexedDB.`);
+        console.log(`[App] Loaded users, max ${EX_PAGE_LIMIT} exercises, and activity records from Firestore.`);
 
         // Initialize Theme from Storage
         const savedTheme = localStorage.getItem('pseudopy_theme') || 'dark';
         document.documentElement.setAttribute('data-theme', savedTheme);
     } catch (err) {
         console.error('[App] Init error:', err);
-        showToast('Database initialization failed. Check local storage availability.', 'error');
+        showToast('Database initialization failed. Check your connection and Firestore configuration.', 'error');
     }
 
     updateClock();
@@ -424,6 +423,19 @@ async function handleLogin() {
             return;
         }
 
+        // One-time migration for legacy seed/accounts that still contain a
+        // plaintext password. New and migrated accounts store only a hash.
+        if (userByUsername.password && userByUsername.password === password) {
+            const passwordSalt = generateSalt();
+            const passwordHash = await hashPassword(password, passwordSalt);
+            const migratedUser = { ...userByUsername, passwordHash, passwordSalt };
+            delete migratedUser.password;
+            await dbSet(usersRef, userByUsername._docId || userByUsername.id, migratedUser);
+            delete userByUsername.password;
+            userByUsername.passwordHash = passwordHash;
+            userByUsername.passwordSalt = passwordSalt;
+        }
+
         // Step 3: Check account status
         if (userByUsername.status === 'archived') {
             showToast('This account has been archived. Please contact your administrator.', 'error');
@@ -491,15 +503,17 @@ async function handleLogin() {
                 };
                 await dbSet(devicesRef, newDevDocId, newDev);
 
-                try {
-                    await dbAdd(auditLogRef, {
-                        eventType: 'INSTRUCTOR_NEW_DEVICE_ATTEMPT',
-                        actor: userByUsername.username,
-                        target: currentDevice.deviceName,
-                        details: `Instructor attempted sign-in from unapproved device (${currentDevice.os} - ${currentDevice.browser})`,
-                        timestamp: new Date().toISOString()
-                    });
-                } catch (e) { }
+                await logAuditAction({
+                    action: 'instructor_new_device_attempt',
+                    actorId: userByUsername._docId || userByUsername.id,
+                    actorName: userByUsername.fullName,
+                    actorUsername: userByUsername.username,
+                    actorRole: userByUsername.role,
+                    targetType: 'device',
+                    targetId: newDevDocId,
+                    targetName: currentDevice.deviceName,
+                    metadata: { os: currentDevice.os, browser: currentDevice.browser }
+                });
 
                 showPendingDeviceModal(newDev, userByUsername);
                 return;
@@ -3073,13 +3087,16 @@ async function saveInstructor() {
 
             const newId = 'u_inst_' + Date.now();
             const creatorId = currentUser ? (currentUser.id || currentUser._docId || 'u1') : 'u1';
+            const passwordSalt = generateSalt();
+            const passwordHash = await hashPassword(password, passwordSalt);
             await dbSet(usersRef, newId, {
                 _docId: newId,
                 id: newId,
                 fullName,
                 username,
                 email,
-                password,
+                passwordHash,
+                passwordSalt,
                 role: 'instructor',
                 status,
                 createdAt: new Date().toISOString(),
@@ -3397,12 +3414,15 @@ async function saveUser() {
             showToast('User updated successfully!', 'success');
         } else {
             const newId = 'u' + Date.now();
+            const passwordSalt = generateSalt();
+            const passwordHash = await hashPassword(password, passwordSalt);
             const userData = {
                 id: newId,
                 fullName,
                 username,
                 email,
-                password,
+                passwordHash,
+                passwordSalt,
                 role,
                 status: 'active',
                 createdBy: currentUser.id
@@ -4293,18 +4313,21 @@ async function submitPasswordChangeRequest() {
         currentUser.passwordSalt = salt;
 
         // Log the password change to audit log
-        const logId = 'al_pc_' + Date.now();
-        await dbSet(auditLogRef, logId, {
-            _docId: logId,
+        await logAuditAction({
             action: 'password_changed',
+            actorId: currentUser._docId || currentUser.id,
+            actorName: currentUser.fullName,
+            actorUsername: currentUser.username,
+            actorRole: currentUser.role,
+            targetType: 'user',
+            targetId: currentUser._docId || currentUser.id,
+            targetName: currentUser.fullName,
             studentId: currentUser.id,
             studentName: currentUser.fullName,
             username: currentUser.username,
             instructorId: null,
             instructorName: null,
-            timestamp: new Date().toISOString(),
             requestId: null
-            // NEVER log the password or hash
         });
 
         setValue('new-password', '');
@@ -4370,15 +4393,44 @@ async function updatePendingRequestsBadge() {
 /**
  * Records an audit action. NEVER logs passwords or hashes.
  */
-async function logAuditAction({ action, studentId, studentName, username, instructorId, instructorName, requestId }) {
+async function logAuditAction({
+    action,
+    actorId,
+    actorName,
+    actorUsername,
+    actorRole,
+    targetType,
+    targetId,
+    targetName,
+    metadata,
+    studentId,
+    studentName,
+    username,
+    instructorId,
+    instructorName,
+    requestId
+}) {
     try {
         const logId = 'al_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        const resolvedActorId = actorId || instructorId || studentId || currentUser?._docId || currentUser?.id || null;
+        const resolvedActorName = actorName || instructorName || studentName || currentUser?.fullName || null;
+        const resolvedUsername = actorUsername || username || currentUser?.username || null;
+        const resolvedRole = actorRole || currentUser?.role || (instructorId ? 'instructor' : studentId ? 'student' : null);
         await dbSet(auditLogRef, logId, {
             _docId: logId,
             action,
+            actorId: resolvedActorId,
+            actorName: resolvedActorName,
+            actorUsername: resolvedUsername,
+            actorRole: resolvedRole,
+            targetType: targetType || (requestId ? 'password_request' : studentId ? 'student' : null),
+            targetId: targetId || requestId || studentId || null,
+            targetName: targetName || studentName || null,
+            metadata: metadata || {},
+            // Compatibility fields for existing report rendering.
             studentId: studentId || null,
             studentName: studentName || null,
-            username: username || null,
+            username: resolvedUsername,
             instructorId: instructorId || null,
             instructorName: instructorName || null,
             requestId: requestId || null,
@@ -5226,7 +5278,8 @@ async function loadPasswordRequests() {
                 'password_reset_requested': { icon: 'mail', label: 'Reset Requested', cls: 'badge-recovery-pending' },
                 'password_reset_approved': { icon: 'circle-check', label: 'Reset Approved', cls: 'badge-recovery-approved' },
                 'password_reset_rejected': { icon: 'circle-x', label: 'Reset Rejected', cls: 'badge-recovery-rejected' },
-                'password_reset_completed': { icon: 'party-popper', label: 'Reset Completed', cls: 'badge-recovery-completed' }
+                'password_reset_completed': { icon: 'party-popper', label: 'Reset Completed', cls: 'badge-recovery-completed' },
+                'instructor_new_device_attempt': { icon: 'monitor-smartphone', label: 'New Device Attempt', cls: 'badge-recovery-pending' }
             };
 
             tbody.innerHTML = allLogs.map(r => {
@@ -5234,8 +5287,9 @@ async function loadPasswordRequests() {
                 const dt = r.timestamp
                     ? new Date(r.timestamp).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
                     : '—';
-                const name = r.studentName || r.instructorName || 'Unknown';
-                const username = r.username || '—';
+                const name = r.actorName || r.studentName || r.instructorName || r.targetName || 'Unknown';
+                const username = r.actorUsername || r.username || '—';
+                const authorizedBy = r.instructorName || (r.actorRole === 'admin' ? r.actorName : null) || '—';
                 return `
                 <tr>
                   <td><div class="user-cell"><div class="avatar-sm">${name.charAt(0)}</div>
@@ -5245,7 +5299,7 @@ async function loadPasswordRequests() {
                     </div>
                   </div></td>
                   <td><span class="badge ${a.cls}"><i data-lucide="${a.icon}" aria-hidden="true"></i> ${a.label}</span></td>
-                  <td>${r.instructorName || '—'}</td>
+                  <td>${authorizedBy}</td>
                   <td>${dt}</td>
                 </tr>`;
             }).join('');
@@ -6250,5 +6304,3 @@ function autoFormatPseudocode() {
     updateGutter(); // Refresh line numbers
     showToast('Pseudocode formatted!', 'success');
 }
-
-
