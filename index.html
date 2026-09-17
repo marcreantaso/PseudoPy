@@ -56,7 +56,7 @@
       </div>
       <div class="hero-content">
         <div class="hero-logo">
-          <div class="logo-icon">⚡</div>
+          <div class="logo-icon"><i data-lucide="zap" aria-hidden="true"></i></div>
           <span class="logo-text">PseudoPy</span>
         </div>
         <h1 class="hero-tagline">
@@ -177,7 +177,7 @@
           <!-- Step 2: Request Submitted / Check Status -->
           <div id="fp-step-2" class="hidden">
             <div class="fp-status-card fp-status-pending">
-              <div class="fp-status-icon">⏳</div>
+              <div class="fp-status-icon"><i data-lucide="hourglass" aria-hidden="true"></i></div>
               <h3>Request Submitted</h3>
               <p>Your recovery request for <strong id="fp-submitted-name">your account</strong> has been submitted.</p>
               <p style="margin-top:0.5rem; font-size:0.85rem; color:var(--text-muted);">
@@ -191,14 +191,14 @@
             </div>
             <div style="display:flex; gap:0.75rem; margin-top:1rem;">
               <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">← Back to Login</button>
-              <button class="btn btn-primary" onclick="checkRecoveryStatus()" style="flex:2">🔍 Check Status</button>
+              <button class="btn btn-primary" onclick="checkRecoveryStatus()" style="flex:2"><i data-lucide="search" aria-hidden="true"></i> Check Status</button>
             </div>
           </div>
 
           <!-- Step 3: Reset Password Form (shown after instructor approval) -->
           <div id="fp-step-3" class="hidden">
             <div class="fp-status-card fp-status-approved">
-              <div class="fp-status-icon">✅</div>
+              <div class="fp-status-icon"><i data-lucide="circle-check" aria-hidden="true"></i></div>
               <h3>Reset Authorized!</h3>
               <p id="fp-token-expiry" style="font-size:0.85rem; color:var(--warning);">Authorization expires in 30 minutes</p>
             </div>
@@ -228,14 +228,14 @@
               <div>✓ Passwords must match</div>
             <div style="display:flex; gap:0.75rem; margin-top:1.25rem;">
               <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">← Cancel</button>
-              <button class="btn btn-primary" onclick="submitPasswordReset()" style="flex:2">🔐 Reset Password</button>
+              <button class="btn btn-primary" onclick="submitPasswordReset()" style="flex:2"><i data-lucide="lock-keyhole" aria-hidden="true"></i> Reset Password</button>
             </div>
           </div>
 
           <!-- Step Success -->
           <div id="fp-step-success" class="hidden">
             <div class="fp-status-card fp-status-success">
-              <div class="fp-status-icon">🎉</div>
+              <div class="fp-status-icon"><i data-lucide="party-popper" aria-hidden="true"></i></div>
               <h3>Password Reset Successfully!</h3>
               <p>You can now log in with your new password.</p>
             </div>
@@ -409,7 +409,7 @@
           style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 0.75rem; gap: 0.75rem;">
           <span id="topbar-progress-pill"
             style="font-size: 0.8rem; font-weight: 600; color: var(--success); background: var(--success-glow); border: 1px solid var(--success); border-radius: var(--radius-full); padding: 0.3rem 0.85rem; white-space: nowrap; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.3s ease;">
-            ✅ 0 / 0 Completed
+            <i data-lucide="circle-check" aria-hidden="true"></i> 0 / 0 Completed
           </span>
           <div
             style="width: 160px; height: 6px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; overflow: hidden;">
@@ -426,7 +426,7 @@
             style="justify-content: space-between; background: var(--bg-card); border: 1px solid var(--border); border-bottom: none; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 1rem 1.5rem;">
             <div style="display: flex; align-items: center; gap: 1rem;">
               <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
-                <span style="font-size: 1.2rem;">📝</span>
+                <span style="font-size: 1.2rem;"><i data-lucide="notebook-pen" aria-hidden="true"></i></span>
                 <span id="active-ex-title">Exercise Title</span>
               </h3>
               <span class="badge" id="active-ex-difficulty">Medium</span>
@@ -459,7 +459,7 @@
           <!-- Submission Success Overlay -->
           <div id="submission-success-overlay" class="hidden"
             style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 20; border-radius: var(--radius-lg); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: white;">
-            <div style="font-size: 4rem; margin-bottom: 1rem;">✅</div>
+            <div style="font-size: 4rem; margin-bottom: 1rem;"><i data-lucide="circle-check" aria-hidden="true" style="width:4rem;height:4rem;"></i></div>
             <h2 style="margin: 0 0 0.5rem 0; color: var(--success);">Exercise Submitted Successfully</h2>
             <div style="color: #aaa; font-size: 1.1rem; margin-bottom: 2rem;">
               Submission Time:<br>
@@ -473,7 +473,7 @@
         <div class="editor-layout">
           <div class="editor-panel">
             <div class="panel-header">
-              <h3>📝 Pseudocode Editor <span class="lang-badge pseudo">Pseudocode</span></h3>
+              <h3><i data-lucide="notebook-pen" aria-hidden="true"></i> Pseudocode Editor <span class="lang-badge pseudo">Pseudocode</span></h3>
             </div>
             <div class="panel-body">
               <div class="editor-with-gutter">
@@ -560,7 +560,7 @@
         </details>
         <div class="page-header">
           <div>
-            <h2>🔄 Translate Pseudocode</h2>
+            <h2><i data-lucide="refresh-cw" aria-hidden="true"></i> Translate Pseudocode</h2>
             <p>Convert your pseudocode into executable Python code step-by-step.</p>
           </div>
         </div>
@@ -568,14 +568,14 @@
           <div class="editor-panel">
             <div class="panel-header" style="justify-content: space-between;">
               <div style="display:flex; align-items:center;">
-                <h3>📝 Input <span class="lang-badge pseudo">Pseudocode</span></h3>
+                <h3><i data-lucide="notebook-pen" aria-hidden="true"></i> Input <span class="lang-badge pseudo">Pseudocode</span></h3>
               </div>
               <div>
                 <input type="file" id="upload-translate-file" accept=".txt,.pdf" style="display:none"
                   onchange="handleFileUpload(event, 'translate-input')">
                 <label for="upload-translate-file" class="btn btn-ghost btn-sm"
-                  style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; font-weight: 500;"><span
-                    style="font-size:1.1rem">📄</span> Upload File</label>
+                  style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; font-weight: 500;"><i data-lucide="file-text" aria-hidden="true"
+                    style="width:1.1rem;height:1.1rem"></i> Upload File</label>
               </div>
             </div>
             <div class="panel-body">
@@ -584,13 +584,13 @@
             </div>
             <div class="panel-footer">
               <button class="btn btn-primary" style="width:auto" onclick="translateFromPage()">
-                🔄 Translate Now
+                <i data-lucide="refresh-cw" aria-hidden="true"></i> Translate Now
               </button>
             </div>
           </div>
           <div class="editor-panel">
             <div class="panel-header">
-              <h3>🐍 Result <span class="lang-badge python">Python</span></h3>
+              <h3><i data-lucide="code-2" aria-hidden="true"></i> Result <span class="lang-badge python">Python</span></h3>
             </div>
             <div class="panel-body">
               <textarea id="translate-output" class="code-editor" spellcheck="false"
@@ -598,14 +598,14 @@
             </div>
             <div class="panel-footer">
               <button class="btn btn-success btn-sm" onclick="executeFromTranslate()"><i data-lucide="play" aria-hidden="true"></i> Run</button>
-              <button class="btn btn-secondary btn-sm" onclick="copyTranslateOutput()">📋 Copy</button>
+              <button class="btn btn-secondary btn-sm" onclick="copyTranslateOutput()"><i data-lucide="clipboard-list" aria-hidden="true"></i> Copy</button>
             </div>
           </div>
         </div>
         <div style="margin-top:1rem">
           <div class="output-container">
             <div class="panel-header">
-              <h3>📟 Output</h3>
+              <h3><i data-lucide="panel-top" aria-hidden="true"></i> Output</h3>
             </div>
             <div id="translate-console" class="output-content">Waiting for code execution...</div>
           </div>
@@ -624,7 +624,7 @@
         </div>
         <div class="editor-panel" style="height:calc(100vh - 320px)">
           <div class="panel-header">
-            <h3>🐍 Python Code <span class="lang-badge python">Python</span></h3>
+            <h3><i data-lucide="code-2" aria-hidden="true"></i> Python Code <span class="lang-badge python">Python</span></h3>
           </div>
           <div class="panel-body">
             <textarea id="execute-editor" class="code-editor" spellcheck="false"
@@ -634,7 +634,7 @@
             <button class="btn btn-success" style="width:auto" onclick="executeFromExecPage()">
               <i data-lucide="play" aria-hidden="true"></i> Execute Code
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('execute-editor').value=''">🗑️
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('execute-editor').value=''"><i data-lucide="trash-2" aria-hidden="true"></i>
               Clear</button>
           </div>
         </div>
@@ -654,14 +654,14 @@
       <div id="page-feedback" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>💡 Feedback & Suggestions</h2>
+            <h2><i data-lucide="lightbulb" aria-hidden="true"></i> Feedback &amp; Suggestions</h2>
             <p>Review analysis of your pseudocode quality and get improvement tips.</p>
           </div>
         </div>
 
         <div class="editor-panel" style="max-height:320px">
           <div class="panel-header">
-            <h3>📝 Pseudocode to Analyze <span class="lang-badge pseudo">Pseudocode</span></h3>
+            <h3><i data-lucide="notebook-pen" aria-hidden="true"></i> Pseudocode to Analyze <span class="lang-badge pseudo">Pseudocode</span></h3>
           </div>
           <div class="panel-body">
             <textarea id="feedback-input" class="code-editor" spellcheck="false"
@@ -669,18 +669,18 @@
           </div>
           <div class="panel-footer">
             <button class="btn btn-primary" style="width:auto" onclick="analyzePseudocode()">
-              🔍 Analyze Pseudocode
+              <i data-lucide="search" aria-hidden="true"></i> Analyze Pseudocode
             </button>
           </div>
         </div>
 
         <div class="feedback-container" style="margin-top:1.5rem">
           <div class="panel-header">
-            <h3>📊 Analysis Results</h3>
+            <h3><i data-lucide="chart-column" aria-hidden="true"></i> Analysis Results</h3>
           </div>
           <div id="feedback-results" class="feedback-list">
             <div class="empty-state">
-              <div class="empty-icon">🔍</div>
+              <div class="empty-icon"><i data-lucide="search" aria-hidden="true"></i></div>
               <h3>No Analysis Yet</h3>
               <p>Paste your pseudocode above and click "Analyze" to receive feedback and suggestions.</p>
             </div>
@@ -690,7 +690,7 @@
         <!-- Logic Analysis Card -->
         <div id="logic-analysis-card" class="feedback-container hidden" style="margin-top:1.5rem">
           <div class="panel-header" style="background: var(--primary); color: white;">
-            <h3>🧠 Structural Logic & Root Cause Analysis</h3>
+            <h3><i data-lucide="brain" aria-hidden="true"></i> Structural Logic & Root Cause Analysis</h3>
           </div>
           <div id="logic-analysis-results" class="panel-body" style="padding: 1.5rem;">
             <!-- Results injected by JS -->
@@ -1083,11 +1083,11 @@
       <div id="page-manage-exercises" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>📋 Manage Exercises & Tasks</h2>
+            <h2><i data-lucide="clipboard-list" aria-hidden="true"></i> Manage Exercises & Tasks</h2>
             <p>Create, edit, and manage pseudocode exercises for students. Click <strong>Add Exercise</strong> to get started.</p>
           </div>
           <button class="btn btn-primary" style="width:auto" onclick="openExerciseModal()">
-            ➕ Add Exercise
+            <i data-lucide="plus" aria-hidden="true"></i> Add Exercise
           </button>
         </div>
         <div class="stats-grid" style="margin-bottom:1.5rem">
@@ -1143,11 +1143,11 @@
       <div id="page-manage-students" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>👥 Manage Students</h2>
+            <h2><i data-lucide="users" aria-hidden="true"></i> Manage Students</h2>
             <p>Create, edit, delete, and manage student accounts assigned to your class.</p>
           </div>
           <button class="btn btn-primary" style="width:auto" onclick="openUserModal()">
-            ➕ Add Student
+            <i data-lucide="plus" aria-hidden="true"></i> Add Student
           </button>
         </div>
 
@@ -1199,7 +1199,7 @@
         </details>
         <div class="page-header">
           <div>
-            <h2>🐍 Generate Python Code</h2>
+            <h2><i data-lucide="code-2" aria-hidden="true"></i> Generate Python Code</h2>
             <p>Translate pseudocode into Python to create exercise solution keys.</p>
           </div>
         </div>
@@ -1207,14 +1207,14 @@
           <div class="editor-panel">
             <div class="panel-header" style="justify-content: space-between;">
               <div style="display:flex; align-items:center;">
-                <h3>📝 Pseudocode <span class="lang-badge pseudo">Pseudocode</span></h3>
+                <h3><i data-lucide="notebook-pen" aria-hidden="true"></i> Pseudocode <span class="lang-badge pseudo">Pseudocode</span></h3>
               </div>
               <div>
                 <input type="file" id="upload-instructor-file" accept=".txt,.pdf" style="display:none"
                   onchange="handleFileUpload(event, 'instructor-pseudo-input')">
                 <label for="upload-instructor-file" class="btn btn-ghost btn-sm"
-                  style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; font-weight: 500;"><span
-                    style="font-size:1.1rem">📄</span> Upload File</label>
+                  style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; font-weight: 500;"><i data-lucide="file-text" aria-hidden="true"
+                    style="width:1.1rem;height:1.1rem"></i> Upload File</label>
               </div>
             </div>
             <div class="panel-body">
@@ -1222,13 +1222,13 @@
                 placeholder="Write pseudocode here..."></textarea>
             </div>
             <div class="panel-footer">
-              <button class="btn btn-primary" style="width:auto" onclick="instructorTranslate()">🔄 Generate
+              <button class="btn btn-primary" style="width:auto" onclick="instructorTranslate()"><i data-lucide="refresh-cw" aria-hidden="true"></i> Generate
                 Python</button>
             </div>
           </div>
           <div class="editor-panel">
             <div class="panel-header">
-              <h3>🐍 Generated Python <span class="lang-badge python">Python</span></h3>
+              <h3><i data-lucide="code-2" aria-hidden="true"></i> Generated Python <span class="lang-badge python">Python</span></h3>
             </div>
             <div class="panel-body">
               <textarea id="instructor-python-output" class="code-editor" spellcheck="false"
@@ -1236,7 +1236,7 @@
             </div>
             <div class="panel-footer">
               <button class="btn btn-success btn-sm" onclick="instructorExecute()"><i data-lucide="play" aria-hidden="true"></i> Run</button>
-              <button class="btn btn-secondary btn-sm" onclick="copyInstructorOutput()">📋 Copy</button>
+              <button class="btn btn-secondary btn-sm" onclick="copyInstructorOutput()"><i data-lucide="clipboard-list" aria-hidden="true"></i> Copy</button>
             </div>
           </div>
         </div>
@@ -1336,13 +1336,13 @@
         <!-- ── Improvement Tracking ── -->
         <div class="data-table-container" tabindex="0" role="region" aria-label="Scrollable data table" style="margin-bottom:1.5rem">
           <div class="panel-header">
-            <h3>📈 Improvement Tracking</h3>
+            <h3><i data-lucide="trending-up" aria-hidden="true"></i> Improvement Tracking</h3>
           </div>
           <div style="padding:0.5rem 1rem 0;font-size:0.78rem;color:var(--text-muted);">Compares your first translation
             against your latest to show directional improvement in correctness and speed.</div>
           <div id="metrics-improvement-section" style="padding:1rem;">
             <div class="empty-state" style="padding: 1.5rem;">
-              <div class="empty-icon">📊</div>
+              <div class="empty-icon"><i data-lucide="chart-column" aria-hidden="true"></i></div>
               <h3>No Improvement Data Yet</h3>
               <p>Need at least 2 translations to calculate improvement.</p>
             </div>
