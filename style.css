@@ -5995,4 +5995,47 @@ select.form-input {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-}
+}
+
+/* Analytics: use the actual markup classes and override inline flex/widths. */
+.an-charts-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+}
+.an-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+}
+.an-filter-bar > .an-filter-item {
+  width: 100% !important;
+  min-width: 0;
+}
+.an-search-wrap, .an-input, .an-chart-card, .an-table-card {
+  min-width: 0;
+  max-width: 100%;
+}
+.an-input { box-sizing: border-box; }
+.an-reset-btn { width: 100%; margin-left: 0; justify-content: center; }
+.an-kpi-trend { flex-wrap: wrap; }
+.an-donut-wrap { flex-wrap: wrap; }
+.an-donut-legend { min-width: min(100%, 140px); }
+.an-bar-chart-area { min-width: 0; overflow-x: auto; }
+.an-bar-col { min-width: 36px; }
+.an-bar-tooltip { min-width: 0; width: 220px; max-width: calc(100% - 16px); }
+.an-page-controls, .an-page-numbers { flex-wrap: wrap; }
+@media (max-width: 1023px) {
+  .an-charts-row { grid-template-columns: minmax(0, 1fr); }
+  .an-chart-card { width: 100%; }
+}
+@media (max-width: 639px) {
+  .an-filter-bar { grid-template-columns: minmax(0, 1fr); padding: 1rem; }
+  .an-input { font-size: 16px; min-height: 44px; }
+  .an-kpi-grid { grid-template-columns: minmax(0, 1fr); gap: .75rem; }
+  .an-kpi-card { padding: 1rem; gap: 1rem; }
+  .an-chart-card { padding: 1rem; }
+  .an-pagination-row { flex-direction: column; align-items: flex-start; gap: .75rem; }
+}
+/* Touch browsers synthesize sticky hover; tapping a bar still filters records. */
+@media (hover: none) {
+  .an-bar-tooltip { display: none !important; }
+}

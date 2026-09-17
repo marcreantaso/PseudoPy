@@ -3868,13 +3868,14 @@ function renderSubmissionActivityChart(filteredActivity) {
         col.addEventListener('mousemove', (e) => {
             if (!tooltip) return;
             const cardRect = container.closest('.an-chart-card').getBoundingClientRect();
-            tooltip.style.left = `${Math.min(e.clientX - cardRect.left + 10, cardRect.width - 220)}px`;
+            tooltip.style.left = `${Math.max(8, Math.min(e.clientX - cardRect.left + 10, cardRect.width - tooltip.offsetWidth - 8))}px`;
             tooltip.style.top = `${Math.max(e.clientY - cardRect.top - 130, 10)}px`;
         });
 
         col.addEventListener('mouseleave', () => { if (tooltip) tooltip.classList.add('hidden'); });
 
         col.addEventListener('click', () => {
+            if (tooltip) tooltip.classList.add('hidden');
             if (key) {
                 const dateInput = $id('filter-date');
                 if (dateInput) { dateInput.value = key; applyAnalyticsFilters(); }
