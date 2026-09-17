@@ -138,24 +138,17 @@ async function init() {
     try {
 
 
-        console.log('[App] Calling seedDatabase()...');
-        // Seed the database if collections are empty
-        await seedDatabase();
-        console.log('[App] seedDatabase() finished.');
+        console.log('[App] Connecting to Firestore...');
+        await initDB();
+        console.log('[App] Backend reachable; records load after sign-in.');
 
-        // Pre-load data from Offline Database into cache
-        cachedUsers = await dbGetAll(usersRef);
-        cachedExercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, 0);
-        cachedActivity = await dbGetAll(activityRef);
-
-        console.log(`[App] Loaded users, max ${EX_PAGE_LIMIT} exercises, and activity records from IndexedDB.`);
-
+        // User records load only after a server-authenticated login.
         // Initialize Theme from Storage
         const savedTheme = localStorage.getItem('pseudopy_theme') || 'dark';
         document.documentElement.setAttribute('data-theme', savedTheme);
     } catch (err) {
         console.error('[App] Init error:', err);
-        showToast('Database initialization failed. Check local storage availability.', 'error');
+        showToast('Database initialization failed. Check your connection and Firestore configuration.', 'error');
     }
 
     updateClock();
@@ -223,15 +216,12 @@ async function init() {
         }
     });
 
-    // Restore active exercise if any
-    const activeExId = localStorage.getItem('pseudopy_active_exercise');
-    if (activeExId) {
-        if (typeof dbGet === 'function' && typeof exercisesRef !== 'undefined') {
-            dbGet(exercisesRef, activeExId).then(ex => {
-                if (ex) renderActiveExercise(ex);
-            }).catch(err => console.error('Failed to restore active exercise', err));
-        }
-    }
+    // Restore only a server-verified session, never a local role flag.
+    try {
+        const user = await apiRequest('auth/session');
+        if (user.deviceApproved !== false) { currentUser = user; showApp(); }
+    } catch (error) { if (error.status !== 401) console.info('[Session] Sign in when the server is available.'); }
+
 }
 
 function updateClock() {
@@ -249,17 +239,26 @@ function updateClock() {
    ============================================================ */
 
 async function refreshUsers() {
-    cachedUsers = await dbGetAll(usersRef);
+    const userId = currentUser?._docId || currentUser?.id;
+    const rows = await dbGetAll(usersRef);
+    if (userId !== (currentUser?._docId || currentUser?.id)) return [];
+    cachedUsers = rows;
     return cachedUsers;
 }
 
 async function refreshExercises() {
-    cachedExercises = await dbGetAll(exercisesRef);
+    const userId = currentUser?._docId || currentUser?.id;
+    const rows = await dbGetAll(exercisesRef);
+    if (userId !== (currentUser?._docId || currentUser?.id)) return [];
+    cachedExercises = rows;
     return cachedExercises;
 }
 
 async function refreshActivity() {
-    cachedActivity = await dbGetAll(activityRef);
+    const userId = currentUser?._docId || currentUser?.id;
+    const rows = await dbGetAll(activityRef);
+    if (userId !== (currentUser?._docId || currentUser?.id)) return [];
+    cachedActivity = rows;
     return cachedActivity;
 }
 
@@ -388,7 +387,7 @@ function fillLoginUser(username) {
 async function handleLogin() {
     const rawUsername = getValue('login-username').trim();
     const username = typeof normalizeUsername === 'function' ? normalizeUsername(rawUsername) : rawUsername;
-    const password = getValue('login-password').trim();
+    const password = getValue('login-password');
 
     if (!username || !password) {
         showToast('Please enter your username and password.', 'error');
@@ -396,34 +395,7 @@ async function handleLogin() {
     }
 
     try {
-        // Refresh users from Offline Database
-        await refreshUsers();
-
-        // Step 1: Find user by username or alias
-        const userByUsername = cachedUsers.find(u => u.username === username || u.username === rawUsername);
-
-        if (!userByUsername) {
-            showToast('User not found.', 'error');
-            return;
-        }
-
-        // Step 2: Verify password — support both plaintext and hashed auth
-        let passwordValid = false;
-
-        if (userByUsername.password && userByUsername.password === password) {
-            passwordValid = true;
-        } else if (userByUsername.passwordHash && userByUsername.passwordSalt) {
-            passwordValid = await verifyPassword(password, userByUsername.passwordHash, userByUsername.passwordSalt);
-        } else {
-            showToast('Account configuration error. Please contact your administrator.', 'error');
-            return;
-        }
-
-        if (!passwordValid) {
-            showToast('Incorrect password.', 'error');
-            return;
-        }
-
+        const userByUsername = await apiRequest('auth/login', 'POST', { username, password, device: getDeviceFingerprint() });
         // Step 3: Check account status
         if (userByUsername.status === 'archived') {
             showToast('This account has been archived. Please contact your administrator.', 'error');
@@ -491,15 +463,17 @@ async function handleLogin() {
                 };
                 await dbSet(devicesRef, newDevDocId, newDev);
 
-                try {
-                    await dbAdd(auditLogRef, {
-                        eventType: 'INSTRUCTOR_NEW_DEVICE_ATTEMPT',
-                        actor: userByUsername.username,
-                        target: currentDevice.deviceName,
-                        details: `Instructor attempted sign-in from unapproved device (${currentDevice.os} - ${currentDevice.browser})`,
-                        timestamp: new Date().toISOString()
-                    });
-                } catch (e) { }
+                await logAuditAction({
+                    action: 'instructor_new_device_attempt',
+                    actorId: userByUsername._docId || userByUsername.id,
+                    actorName: userByUsername.fullName,
+                    actorUsername: userByUsername.username,
+                    actorRole: userByUsername.role,
+                    targetType: 'device',
+                    targetId: newDevDocId,
+                    targetName: currentDevice.deviceName,
+                    metadata: { os: currentDevice.os, browser: currentDevice.browser }
+                });
 
                 showPendingDeviceModal(newDev, userByUsername);
                 return;
@@ -530,11 +504,22 @@ async function handleLogin() {
         showApp();
     } catch (err) {
         console.error('[Login] Error:', err);
-        showToast('Login failed. Check your connection.', 'error');
+        showToast(err.message || 'Login failed. Check your connection.', 'error');
     }
 }
 
 function handleLogout(reason) {
+    apiRequest('auth/logout', 'POST').catch(() => {});
+    cachedUsers = []; cachedActivity = []; cachedExercises = [];
+    metricsEngine.setUser(null);
+    activePythonRuns.forEach(run => run.cancel());
+    activePythonRuns.clear();
+    stopLearningSync();
+    lastExerciseRun = null;
+    exerciseState = { isTranslated:false, isExecuted:false, outputMatched:false, expectedOutput:null, activeExercise:null };
+    for (const id of ['python-output','translate-output','instructor-python-output']) setPythonOutput(id,'');
+    for (const id of ['console-output','translate-console','execute-console','instructor-console']) setText(id,'');
+    hide('active-exercise-panel');
     // Stop the session timeout timer before clearing state
     SessionTimeout.stop();
 
@@ -570,8 +555,8 @@ function handleLogout(reason) {
    ============================================================ */
 
 const SessionTimeout = (() => {
-    const TIMEOUT_MS  = 35 * 1000;  // 35 seconds total inactivity window
-    const WARNING_MS  = 10 * 1000;  // Show warning at 10 seconds remaining
+    const TIMEOUT_MS  = 30 * 60 * 1000; // Allow time to read and think between edits
+    const WARNING_MS  = 60 * 1000;  // Show warning at 10 seconds remaining
 
     let _mainTimer    = null;  // Fires at (TIMEOUT_MS - WARNING_MS)
     let _warnTimer    = null;  // Fires WARNING_MS after the warning is shown
@@ -700,7 +685,7 @@ const SessionTimeout = (() => {
 
     /**
      * Start the inactivity session timer.
-     * Calling start() while already active resets to a fresh 35s window
+     * Calling start() while already active resets to a fresh 30 minutes window
      * (ensures no duplicate timers exist after page navigation).
      */
     function start() {
@@ -709,7 +694,7 @@ const SessionTimeout = (() => {
         _active = true;
         _addListeners();
         _scheduleTimeout();
-        console.log('[SessionTimeout] Started — user will be logged out after 35s of inactivity.');
+        console.log('[SessionTimeout] Started — user will be logged out after 30 minutes of inactivity.');
     }
 
     /**
@@ -724,7 +709,7 @@ const SessionTimeout = (() => {
     }
 
     /**
-     * Reset the timer to full 35 seconds (e.g., "Stay Logged In" button).
+     * Reset the timer to full 30 minutes (e.g., "Stay Logged In" button).
      */
     function reset() {
         if (_active) {
@@ -750,6 +735,10 @@ function checkAccess(role, pageId) {
 }
 
 function showApp() {
+    metricsEngine.setUser(currentUser._docId || currentUser.id);
+    startLearningSync();
+    installLearningGuide();
+    restoreLearningDrafts();
     hide('login-page');
     show('app-layout');
 
@@ -1080,6 +1069,11 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
             return;
         }
 
+        if (typeof activePythonRuns !== 'undefined') activePythonRuns.get(consoleId)?.cancel();
+        if (outputId === 'python-output') {
+            exerciseState.isTranslated = exerciseState.isExecuted = exerciseState.outputMatched = false;
+            updateExerciseStatus();
+        }
         const cleanedInput = preprocessPseudocode(input);
         if (cleanedInput !== input) {
             inputEl.value = cleanedInput;
@@ -1087,7 +1081,9 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
         }
 
         const result = pseudocodeToPython(input);
+        if (typeof recordLearningAttempt === 'function') recordLearningAttempt('translation', { errorType: result.valid ? null : 'Syntax Error', errors: result.errors, durationMs: result.metrics?.totalTime || 0 });
         const validation = result;
+        if ($id(outputId)?.dataset) $id(outputId).dataset.translationValid = String(result.valid);
         const consoleEl = consoleId ? $id(consoleId) : null;
         const runBtn = runBtnSelector ? $qs(runBtnSelector) : null;
 
@@ -1277,145 +1273,130 @@ function adminExecute() {
 
 function executeCode(sourceId, outputId, emptyMessage) {
     const sourceEl = $id(sourceId);
+    if (sourceEl?.dataset?.translationValid === 'false') { showToast('Fix translation errors first.', 'error'); return; }
     const code = sourceEl ? (sourceEl.tagName === 'TEXTAREA' || sourceEl.tagName === 'INPUT' ? sourceEl.value : sourceEl.textContent || '') : '';
     if (!code.trim()) { showToast(emptyMessage, 'error'); return; }
     runPythonCode(code, outputId);
 }
 
-function runPythonCode(code, outputElementId) {
+const activePythonRuns = new Map();
+let lastExerciseRun = null;
+
+function requestConsoleInput(outputEl, promptText) {
+    return new Promise(resolve => {
+        const container = document.createElement('div');
+        container.className = 'skulpt-input-container';
+        const label = document.createElement('div');
+        label.className = 'skulpt-input-label';
+        label.textContent = promptText || 'Input required:';
+        const row = document.createElement('div');
+        row.className = 'skulpt-input-row';
+        const field = document.createElement('input');
+        field.className = 'skulpt-input-field';
+        field.type = 'text';
+        field.autocomplete = 'off';
+        field.setAttribute('aria-label', label.textContent);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'skulpt-input-btn';
+        button.textContent = 'Submit ↵';
+        let submitted = false;
+        const submit = () => {
+            if (submitted) return;
+            submitted = true;
+            field.disabled = button.disabled = true;
+            const value = field.value;
+            const echo = document.createElement('div');
+            echo.className = 'skulpt-input-echo';
+            echo.textContent = (promptText || 'Input: ') + value;
+            container.replaceWith(echo);
+            resolve(value);
+        };
+        button.addEventListener('click', submit);
+        field.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); submit(); }
+        });
+        row.append(field, button);
+        container.append(label, row);
+        outputEl.appendChild(container);
+        field.focus();
+        outputEl.scrollTop = outputEl.scrollHeight;
+    });
+}
+
+async function runPythonCode(code, outputElementId) {
     const outputEl = $id(outputElementId);
     if (!outputEl) return;
+    activePythonRuns.get(outputElementId)?.cancel();
     outputEl.innerHTML = '';
     outputEl.className = 'output-content';
-
-    // The compiler now handles str() wrapping correctly in smartPrintExpr(),
-    // so no runtime code fixup is needed. Use code as-is.
-    const cleanCode = code;
-
-    if (typeof Sk === 'undefined') {
-        outputEl.textContent = '⚠️ Skulpt library not loaded. Please check your internet connection.\n\nFalling back to static analysis...\n\n';
-        outputEl.textContent += simulateExecution(code);
-        return;
+    const stop = document.createElement('button');
+    stop.type = 'button';
+    stop.className = 'btn btn-secondary btn-sm';
+    stop.textContent = 'Stop execution';
+    outputEl.appendChild(stop);
+    const exercise = outputElementId === 'console-output' ? exerciseState.activeExercise : null;
+    const source = exercise ? getValue('pseudocode-editor') : null;
+    if (exercise) {
+        lastExerciseRun = null;
+        exerciseState.isExecuted = exerciseState.outputMatched = false;
+        updateExerciseStatus();
     }
-
-    // Helper: append text to the console output (HTML-safe)
-    function appendOutput(text) {
+    const append = text => {
         const span = document.createElement('span');
         span.textContent = text;
         outputEl.appendChild(span);
-    }
-
-    Sk.configure({
-        output: function (text) { appendOutput(text); },
-        read: function (x) {
-            if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) throw "File not found: '" + x + "'";
-            return Sk.builtinFiles["files"][x];
-        },
-        inputfun: function (promptText) {
-            return new Promise(function (resolve) {
-                // Create the inline input container
-                const container = document.createElement('div');
-                container.className = 'skulpt-input-container';
-
-                // Prompt label
-                if (promptText) {
-                    const label = document.createElement('div');
-                    label.className = 'skulpt-input-label';
-                    label.textContent = promptText;
-                    container.appendChild(label);
-                }
-
-                // Input row (input + button)
-                const row = document.createElement('div');
-                row.className = 'skulpt-input-row';
-
-                const inputField = document.createElement('input');
-                inputField.type = 'text';
-                inputField.className = 'skulpt-input-field';
-                inputField.placeholder = 'Type your answer here...';
-                inputField.autocomplete = 'off';
-
-                const submitBtn = document.createElement('button');
-                submitBtn.className = 'skulpt-input-btn';
-                submitBtn.textContent = 'Submit ↵';
-
-                row.appendChild(inputField);
-                row.appendChild(submitBtn);
-                container.appendChild(row);
-                outputEl.appendChild(container);
-
-                // Scroll to make input visible
-                outputEl.scrollTop = outputEl.scrollHeight;
-                inputField.focus();
-
-                function submitInput() {
-                    const value = inputField.value;
-                    // Replace input container with echoed value
-                    const echo = document.createElement('div');
-                    echo.className = 'skulpt-input-echo';
-                    if (promptText) {
-                        echo.innerHTML = '<span class="skulpt-echo-prompt">' + escapeHtml(promptText) + '</span> <span class="skulpt-echo-value">' + escapeHtml(value) + '</span>';
-                    } else {
-                        echo.innerHTML = '<span class="skulpt-echo-prompt">▸ Input:</span> <span class="skulpt-echo-value">' + escapeHtml(value) + '</span>';
-                    }
-                    container.replaceWith(echo);
-
-                    // Skulpt's inputfun must ALWAYS return a string.
-                    // The generated Python handles type conversion (e.g. float(input(...))).
-                    resolve(value);
-
-                }
-
-                submitBtn.addEventListener('click', submitInput);
-                inputField.addEventListener('keydown', function (e) {
-                    if (e.key === 'Enter') { e.preventDefault(); submitInput(); }
-                });
-            });
-        },
-        inputfunTakesPrompt: true,
-        __future__: Sk.python3
-    });
-
-    Sk.misceval.asyncToPromise(function () {
-        return Sk.importMainWithBody("<stdin>", false, cleanCode, true);
-    }).then(function () {
-        if (!outputEl.textContent.trim()) outputEl.textContent = '✅ Code executed successfully (no output).';
-        showToast('Code executed successfully!', 'success');
-
-        // ── Panel 1: Record successful execution ──
-        if (typeof metricsEngine !== 'undefined') {
-            metricsEngine.recordExecution(true);
-        }
-
-        if (outputElementId === 'console-output' && exerciseState.activeExercise) {
+    };
+    const run = PythonRuntime.run(code, { onOutput: append, onInput: prompt => requestConsoleInput(outputEl, prompt) });
+    activePythonRuns.set(outputElementId, run);
+    stop.addEventListener('click', () => run.cancel());
+    try {
+        const result = await run.done;
+        if (activePythonRuns.get(outputElementId) !== run) return;
+        if (!result.stdout) append('Code executed successfully (no output).');
+        if (typeof metricsEngine !== 'undefined') metricsEngine.recordExecution(true);
+        if (exercise && exerciseState.activeExercise === exercise && source === getValue('pseudocode-editor') && code === getPythonCode('python-output')) {
+            // Reference execution has its own worker and receives identical inputs.
+            const reference = exercise.solution || exercise.python_code;
+            let expected = null;
+            if (reference) {
+                let index = 0;
+                const check = PythonRuntime.run(reference, { onInput: () => {
+                    if (index >= result.inputs.length) throw new Error('Reference requires additional input.');
+                    return result.inputs[index++];
+                } });
+                run.cancel = () => check.cancel();
+                try { expected = (await check.done).stdout; }
+                catch (error) { append('\nReference check unavailable: ' + error.message); }
+            } else if (typeof exercise.expectedOutput === 'string') expected = exercise.expectedOutput;
+            if (activePythonRuns.get(outputElementId) !== run || exerciseState.activeExercise !== exercise || source !== getValue('pseudocode-editor') || code !== getPythonCode('python-output')) return;
             exerciseState.isExecuted = true;
-            const actualOut = outputEl.textContent.replace('✅ Code executed successfully (no output).', '').trim();
-            const expectedOut = (exerciseState.expectedOutput || '').trim();
-
-            if (actualOut === expectedOut) {
-                exerciseState.outputMatched = true;
-            } else {
-                exerciseState.outputMatched = false;
-                console.log(`[Completion] Output mismatch. Expected: "${expectedOut}", Actual: "${actualOut}"`);
+            exerciseState.expectedOutput = expected;
+            exerciseState.outputMatched = expected !== null && result.stdout.trim() === expected.trim();
+            lastExerciseRun = { ...result, code, source, exerciseId: exercise._docId || exercise.id };
+            updateExerciseStatus();
+            if (expected !== null && !exerciseState.outputMatched) {
+                append('\nOutput differs from the reference for these inputs.');
+                recordLearningAttempt('correctness', { errorType: 'Task Correctness', output: result.stdout });
             }
-            updateExerciseStatus();
         }
-    }).catch(function (err) {
-        appendOutput('\n❌ Error: ' + err.toString());
+        recordLearningAttempt('execution', { output: result.stdout, durationMs: result.durationMs });
+        showToast('Code executed successfully.', 'success');
+    } catch (error) {
+        if (activePythonRuns.get(outputElementId) !== run) return;
+        append('\n' + error.message + (/ValueError/.test(error.message) ? '\nEnter a whole number for INTEGER, or a decimal number for FLOAT/REAL.' : ''));
         outputEl.className = 'output-content error';
-        showToast('Runtime error occurred.', 'error');
-
-        // ── Panel 1: Record failed execution ──
-        if (typeof metricsEngine !== 'undefined') {
-            metricsEngine.recordExecution(false, err.toString());
+        if (!['cancelled', 'infrastructure'].includes(error.code)) {
+            if (typeof metricsEngine !== 'undefined') metricsEngine.recordExecution(false, error.message);
+            recordLearningAttempt('execution', { errorType: /TypeError|ValueError/.test(error.message) ? 'Type Error' : 'Runtime Error' });
         }
-
-        if (outputElementId === 'console-output') {
-            exerciseState.isExecuted = false;
-            exerciseState.outputMatched = false;
-            updateExerciseStatus();
+    } finally {
+        if (activePythonRuns.get(outputElementId) === run) {
+            activePythonRuns.delete(outputElementId);
+            outputEl.querySelectorAll('.skulpt-input-container').forEach(el => el.remove());
+            stop.remove();
         }
-    });
+    }
 }
 
 function escapeHtml(str) {
@@ -2076,8 +2057,8 @@ async function loadStudentExercises(page = 1) {
     const studentIdVal = currentUser ? (currentUser.id || currentUser._docId) : '';
     const completedIds = new Set(
         allActivity
-            .filter(a => (a.student === studentName || a.studentId === studentIdVal) && a.status === 'Completed')
-            .map(a => a.exercise)
+            .filter(a => a.status === 'Completed')
+            .map(a => a.exerciseId || a.exercise)
     );
 
     const normDiff = d => {
@@ -2090,7 +2071,7 @@ async function loadStudentExercises(page = 1) {
         const exTitle = ex.title || ex.concept || 'Untitled Exercise';
         const exDesc = ex.description || 'No description provided.';
         const exDiff = normDiff(ex.difficulty);
-        const isCompleted = completedIds.has(exTitle);
+        const isCompleted = completedIds.has(ex._docId || ex.id) || completedIds.has(exTitle);
         const iconInfo = getExerciseIconInfo(ex);
         const exDate = ex.createdAt || '2026-08-12';
 
@@ -2102,12 +2083,12 @@ async function loadStudentExercises(page = 1) {
         </div>
         <div class="ex-header-text">
           <div class="ex-header-row">
-            <h4 class="ex-title">${exTitle}</h4>
+            <h4 class="ex-title">${escapeHtml(exTitle)}</h4>
             <span class="ex-difficulty ${exDiff}">${dispDiff(ex.difficulty)}</span>
           </div>
         </div>
       </div>
-      <p class="ex-desc">${exDesc}</p>
+      <p class="ex-desc">${escapeHtml(exDesc)}</p>
       <div class="ex-date-row">
         <i data-lucide="calendar" aria-hidden="true"></i>
         <span>${exDate}</span>
@@ -2155,10 +2136,10 @@ async function loadStudentProgress() {
         const studentIdVal = currentUser.id || currentUser._docId;
         const completedTitles = new Set(
             allActivity
-                .filter(a => (a.student === studentName || a.studentId === studentIdVal) && a.status === 'Completed')
-                .map(a => a.exercise)
+                .filter(a => a.status === 'Completed')
+                .map(a => a.exerciseId || a.exercise)
         );
-        const completedCount = completedTitles.size;
+        const completedCount = studentExercises.filter(ex => completedTitles.has(ex._docId || ex.id) || completedTitles.has(ex.title || ex.concept)).length;
 
         // 3. Calculate progress percentage
         const pct = totalExercises > 0 ? Math.round((completedCount / totalExercises) * 100) : 0;
@@ -2206,7 +2187,7 @@ async function attemptExercise(id) {
         pyOut.dispatchEvent(new Event('input'));
     }
 
-    localStorage.setItem('pseudopy_active_exercise', id);
+    localStorage.setItem('pseudopy_active_exercise_' + (currentUser._docId || currentUser.id), id);
     renderActiveExercise(ex);
 
     navigateTo('write-pseudocode');
@@ -2255,25 +2236,9 @@ function renderActiveExercise(ex) {
     if (solutionCode) computeExpectedOutput(solutionCode);
 }
 
-function computeExpectedOutput(code) {
-    if (typeof Sk === 'undefined') return;
-    let outText = '';
-    Sk.configure({
-        output: function (text) { outText += text; },
-        read: function (x) {
-            if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) throw "File not found: '" + x + "'";
-            return Sk.builtinFiles["files"][x];
-        },
-        __future__: Sk.python3
-    });
-    Sk.misceval.asyncToPromise(function () {
-        return Sk.importMainWithBody("<stdin>", false, code, true);
-    }).then(() => {
-        exerciseState.expectedOutput = outText;
-        console.log('[Completion] Expected output computed dynamically.');
-    }).catch(err => {
-        console.warn('[Completion] Failed to compute expected output:', err);
-    });
+function computeExpectedOutput() {
+    // Evaluate the reference only after the learner runs, using identical inputs.
+    exerciseState.expectedOutput = null;
 }
 
 function updateExerciseStatus() {
@@ -2296,17 +2261,22 @@ function updateExerciseStatus() {
     }
 }
 
-function submitExercise() {
+let submissionPending = false;
+async function submitExercise() {
     const ex = exerciseState.activeExercise;
-    if (!ex) return;
+    if (!ex || submissionPending || !currentUser) return;
+    if (!exerciseState.outputMatched || !lastExerciseRun || lastExerciseRun.source !== getValue('pseudocode-editor') || lastExerciseRun.code !== getPythonCode('python-output') || lastExerciseRun.exerciseId !== (ex._docId || ex.id)) {
+        showToast('Translate and run this exercise successfully before submitting.', 'error');
+        return;
+    }
     if (!confirm('Are you sure you want to submit this exercise?')) return;
 
     const pseudo = getValue('pseudocode-editor');
     const py = getPythonCode('python-output');
     const outTextEl = $id('console-output');
-    const outText = outTextEl ? outTextEl.textContent || '' : '';
+    const outText = lastExerciseRun.stdout;
     const now = new Date();
-    const docId = 'act_' + Date.now();
+    const docId = 'submission_' + (currentUser._docId || currentUser.id) + '_' + (ex._docId || ex.id);
 
     const actRecord = {
         _docId: docId,
@@ -2317,24 +2287,29 @@ function submitExercise() {
         exercise: ex.title || ex.concept || 'Untitled Exercise',
         difficulty: ex.difficulty || 'moderate',
         status: 'Completed',
-        score: '100%',
+        score: 'Reference match',
         time: now.toISOString(),
         timestamp: now.getTime(),
         pseudocode: pseudo,
         python_code: py,
         result: 'Success',
         errorType: null,
-        processingTime: '0.45s',
+        userId: currentUser._docId || currentUser.id,
+        exerciseId: ex._docId || ex.id,
+        kind: 'submission',
+        processingTime: (lastExerciseRun.durationMs / 1000).toFixed(3) + 's',
         output: outText
     };
 
-    dbSet(activityRef, docId, actRecord).then(async () => {
+    submissionPending = true;
+    try {
+        await dbSet(activityRef, docId, actRecord);
         // Immediate local sync for Learning Analytics
         if (typeof cachedActivity !== 'undefined') {
-            cachedActivity.unshift(actRecord);
+            cachedActivity = [actRecord, ...cachedActivity.filter(a => a._docId !== docId)];
         }
         if (typeof currentFilteredActivity !== 'undefined') {
-            currentFilteredActivity.unshift(actRecord);
+            currentFilteredActivity = [actRecord, ...currentFilteredActivity.filter(a => a._docId !== docId)];
         }
         if (typeof updateAnalyticsUI === 'function') {
             try { updateAnalyticsUI(); } catch (e) {}
@@ -2362,11 +2337,13 @@ function submitExercise() {
         if (runBtn) runBtn.disabled = true;
 
         await loadStudentProgress();
-    });
+    } catch (error) {
+        showToast('Submission was not confirmed saved. Please retry. ' + error.message, 'error');
+    } finally { submissionPending = false; }
 }
 
 function changeExercise() {
-    localStorage.removeItem('pseudopy_active_exercise');
+    localStorage.removeItem('pseudopy_active_exercise_' + (currentUser?._docId || currentUser?.id));
     const panel = $id('active-exercise-panel');
     if (panel) panel.classList.add('hidden');
 
@@ -3073,13 +3050,16 @@ async function saveInstructor() {
 
             const newId = 'u_inst_' + Date.now();
             const creatorId = currentUser ? (currentUser.id || currentUser._docId || 'u1') : 'u1';
+            const passwordSalt = generateSalt();
+            const passwordHash = await hashPassword(password, passwordSalt);
             await dbSet(usersRef, newId, {
                 _docId: newId,
                 id: newId,
                 fullName,
                 username,
                 email,
-                password,
+                passwordHash,
+                passwordSalt,
                 role: 'instructor',
                 status,
                 createdAt: new Date().toISOString(),
@@ -3397,12 +3377,15 @@ async function saveUser() {
             showToast('User updated successfully!', 'success');
         } else {
             const newId = 'u' + Date.now();
+            const passwordSalt = generateSalt();
+            const passwordHash = await hashPassword(password, passwordSalt);
             const userData = {
                 id: newId,
                 fullName,
                 username,
                 email,
-                password,
+                passwordHash,
+                passwordSalt,
                 role,
                 status: 'active',
                 createdBy: currentUser.id
@@ -3460,47 +3443,7 @@ async function loadAnalytics() {
     cachedUsers = await refreshUsers();
     cachedExercises = await refreshExercises();
 
-    const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
-    const myStudents = cachedUsers.filter(u => u.role === 'student' && (
-        u.instructorId === currentUser?.id ||
-        u.instructorId === currentUser?._docId ||
-        (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
-    ));
-    const myExercises = cachedExercises.filter(e =>
-        e.createdBy === currentUser?.id ||
-        e.createdBy === currentUser?._docId ||
-        e.instructorId === currentUser?.id ||
-        e.instructorId === currentUser?._docId ||
-        (isDefaultInst && (e._docId || '').startsWith('algo_'))
-    );
-
-    const myStudentIds = new Set(myStudents.map(s => s.id || s._docId));
-    const myStudentEnrolledIds = new Set(myStudents.map(s => s.studentId).filter(Boolean));
-    const myStudentUsernames = new Set(myStudents.map(s => s.username).filter(Boolean));
-    const myStudentNames = new Set(myStudents.map(s => s.fullName).filter(Boolean));
-    const myExerciseTitles = new Set(myExercises.map(e => e.title).filter(Boolean));
-
-    cachedInstructorActivity = cachedActivity.filter(a => {
-        if (a.instructorId && (a.instructorId === currentUser?.id || a.instructorId === currentUser?._docId)) return true;
-        if (a.studentId && (myStudentIds.has(a.studentId) || myStudentEnrolledIds.has(a.studentId))) return true;
-        if (a.username && myStudentUsernames.has(a.username)) return true;
-        if (a.student && myStudentNames.has(a.student)) return true;
-        if (a.exercise && myExerciseTitles.has(a.exercise)) return true;
-        if (isDefaultInst && (a._docId || '').startsWith('act_sp_')) return true;
-        return false;
-    });
-
-    if (!cachedInstructorActivity || cachedInstructorActivity.length === 0) {
-        cachedInstructorActivity = typeof getInitialSeedActivity === 'function' ? getInitialSeedActivity() : [...cachedActivity];
-    } else if (isDefaultInst && typeof getInitialSeedActivity === 'function') {
-        // Always ensure the full rich demo activity is included for the default instructor
-        const seedRecords = getInitialSeedActivity();
-        const existingIds = new Set(cachedInstructorActivity.map(a => a._docId));
-        const missingSeeds = seedRecords.filter(s => !existingIds.has(s._docId));
-        if (missingSeeds.length > 0) {
-            cachedInstructorActivity = [...cachedInstructorActivity, ...missingSeeds];
-        }
-    }
+    cachedInstructorActivity = cachedActivity;
 
     currentFilteredActivity = [...cachedInstructorActivity];
 
@@ -3557,7 +3500,7 @@ function applyAnalyticsFilters() {
 
     updateWeekDropdownLabels();
 
-    const sourceActivity = cachedInstructorActivity && cachedInstructorActivity.length ? cachedInstructorActivity : cachedActivity;
+    const sourceActivity = cachedInstructorActivity;
 
     currentFilteredActivity = sourceActivity.filter(a => {
         const recordDate = new Date(a.timestamp || a.time);
@@ -3625,13 +3568,13 @@ function applyAnalyticsFilters() {
         const mIdx = monthVal !== '' ? parseInt(monthVal) : -1;
         const mName = mIdx >= 0 ? monthNames[mIdx] : '';
         if (weekVal && mName) {
-            subLabel.textContent = `Shows student submissions for ${mName} ${weekLabels[weekVal] || 'Week ' + weekVal}.`;
+            subLabel.textContent = `Shows recorded learning activity for ${mName} ${weekLabels[weekVal] || 'Week ' + weekVal}.`;
         } else if (weekVal) {
-            subLabel.textContent = `Shows student submissions for ${weekLabels[weekVal] || 'Week ' + weekVal}.`;
+            subLabel.textContent = `Shows recorded learning activity for ${weekLabels[weekVal] || 'Week ' + weekVal}.`;
         } else if (mName) {
-            subLabel.textContent = `Shows student submissions for ${mName}.`;
+            subLabel.textContent = `Shows recorded learning activity for ${mName}.`;
         } else if (dateVal) {
-            subLabel.textContent = `Shows student submissions for the selected date.`;
+            subLabel.textContent = `Shows recorded learning activity for the selected date.`;
         } else {
             subLabel.textContent = 'Shows the number of student submissions based on selected filters.';
         }
@@ -3667,11 +3610,11 @@ function updateAnalyticsUI() {
     setText('stat-students', String(activeStudents.length));
     setText('stat-submissions', String(total));
 
-    const completed = currentFilteredActivity.filter(a => a.status === 'Completed').length;
+    const completed = currentFilteredActivity.filter(a => a.result === 'Success' || a.status === 'Completed').length;
     const successRate = total > 0 ? Math.round((completed / total) * 100) : 0;
     setText('stat-success-rate', successRate + '%');
 
-    const errCount = currentFilteredActivity.filter(a => a.errorType && a.errorType.trim() !== '').length;
+    const errCount = currentFilteredActivity.filter(hasRecordedError).length;
     setText('stat-common-errors', String(errCount));
 
     // Dynamic Trend Elements
@@ -3685,12 +3628,12 @@ function updateAnalyticsUI() {
     if (subTrend) {
         subTrend.innerHTML = total > 0
             ? `<span class="positive">${total} total</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">evaluated</span>`
-            : `<span class="neutral">0</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">submissions</span>`;
+            : `<span class="neutral">0</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">activity records</span>`;
     }
     const succTrend = $id('stat-success-trend');
     if (succTrend) {
         succTrend.innerHTML = total > 0
-            ? `<span class="positive">${completed} completed</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">of ${total}</span>`
+            ? `<span class="positive">${completed} successful</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">of ${total}</span>`
             : `<span class="neutral">—</span> <span style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">no submissions</span>`;
     }
     const errTrend = $id('stat-errors-trend');
@@ -3868,13 +3811,14 @@ function renderSubmissionActivityChart(filteredActivity) {
         col.addEventListener('mousemove', (e) => {
             if (!tooltip) return;
             const cardRect = container.closest('.an-chart-card').getBoundingClientRect();
-            tooltip.style.left = `${Math.min(e.clientX - cardRect.left + 10, cardRect.width - 220)}px`;
+            tooltip.style.left = `${Math.max(8, Math.min(e.clientX - cardRect.left + 10, cardRect.width - tooltip.offsetWidth - 8))}px`;
             tooltip.style.top = `${Math.max(e.clientY - cardRect.top - 130, 10)}px`;
         });
 
         col.addEventListener('mouseleave', () => { if (tooltip) tooltip.classList.add('hidden'); });
 
         col.addEventListener('click', () => {
+            if (tooltip) tooltip.classList.add('hidden');
             if (key) {
                 const dateInput = $id('filter-date');
                 if (dateInput) { dateInput.value = key; applyAnalyticsFilters(); }
@@ -3882,6 +3826,10 @@ function renderSubmissionActivityChart(filteredActivity) {
             }
         });
     });
+}
+
+function hasRecordedError(a) {
+    return typeof a.errorType === 'string' && !!a.errorType.trim() && !a.isDemo && a.errorType !== 'Logic Error' && a.result !== 'Success' && a.status !== 'Completed';
 }
 
 function renderErrorDistributionChart(filteredActivity) {
@@ -3893,7 +3841,8 @@ function renderErrorDistributionChart(filteredActivity) {
     // Count actual error types from real filtered data
     const errorColorMap = {
         'Syntax Error': '#ef4444',
-        'Logic Error': '#f59e0b',
+        'Task Correctness': '#f59e0b',
+        'Runtime Error': '#ec4899',
         'Missing END': '#f97316',
         'Indentation Error': '#10b981',
         'Type Error': '#3b82f6',
@@ -3904,7 +3853,7 @@ function renderErrorDistributionChart(filteredActivity) {
     knownTypes.forEach(t => counts[t] = 0);
 
     filteredActivity.forEach(a => {
-        if (!a.errorType || a.errorType.trim() === '') return;
+        if (!hasRecordedError(a)) return;
         const t = a.errorType.trim();
         if (counts[t] !== undefined) counts[t]++;
         else counts['Other']++;
@@ -4033,7 +3982,7 @@ function renderFilteredActivityTable(activityList) {
         if (res.includes('Logic')) return `<span class="badge-result badge-result-logic">Logic Error</span>`;
         if (res.includes('Runtime')) return `<span class="badge-result badge-result-runtime">Runtime Error</span>`;
         if (res === 'Pending') return `<span class="badge-result badge-result-pending">Pending</span>`;
-        return `<span class="badge-result badge-result-syntax">${res}</span>`;
+        return `<span class="badge-result badge-result-syntax">${escapeHtml(res)}</span>`;
     };
 
     const scoreColor = a => {
@@ -4055,17 +4004,17 @@ function renderFilteredActivityTable(activityList) {
         <tr>
           <td>
             <div class="user-cell" style="display:flex;align-items:center;gap:0.6rem">
-              <div class="avatar-sm" style="width:28px;height:28px;border-radius:50%;background:#334155;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:#f8fafc">${(a.student || '?').charAt(0)}</div>
-              <span style="font-weight:600;color:var(--text-primary);font-size:0.85rem">${a.student || '—'}</span>
+              <div class="avatar-sm" style="width:28px;height:28px;border-radius:50%;background:#334155;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:#f8fafc">${escapeHtml(String((a.student || '?').charAt(0)))}</div>
+              <span style="font-weight:600;color:var(--text-primary);font-size:0.85rem">${escapeHtml(String(a.student || '—'))}</span>
             </div>
           </td>
-          <td style="color:var(--text-muted);font-size:0.82rem;font-family:monospace">${a.studentId || '—'}</td>
-          <td style="color:var(--text-secondary);font-size:0.85rem">${a.exercise || '—'}</td>
+          <td style="color:var(--text-muted);font-size:0.82rem;font-family:monospace">${escapeHtml(String(a.studentId || '—'))}</td>
+          <td style="color:var(--text-secondary);font-size:0.85rem">${escapeHtml(String(a.exercise || '—'))}</td>
           <td>${diffBadge(a.difficulty)}</td>
           <td>${anStatusBadge(a.status)}</td>
-          <td style="font-weight:700;font-size:0.85rem;color:${scoreColor(a)}">${a.score || '—'}</td>
-          <td style="color:var(--text-muted);font-size:0.82rem">${dateStr}</td>
-          <td style="color:var(--text-muted);font-size:0.82rem">${a.processingTime || '—'}</td>
+          <td style="font-weight:700;font-size:0.85rem;color:${scoreColor(a)}">${escapeHtml(String(a.score || '—'))}</td>
+          <td style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(String(dateStr))}</td>
+          <td style="color:var(--text-muted);font-size:0.82rem">${escapeHtml(String(a.processingTime || '—'))}</td>
           <td>${resultBadge(a)}</td>
           <td>
                         <button class="an-eye-btn" title="View Details" onclick="viewSubmissionDetail('${docId}')">
@@ -4269,42 +4218,24 @@ async function submitPasswordChangeRequest() {
     }
 
     try {
-        // Hash the new password before storing
-        const salt = generateSalt();
-        const hash = await hashPassword(newPassword, salt);
-
-        // Update the hashed password in Offline Database
-        const users = cachedUsers.length ? cachedUsers : await refreshUsers();
-        const user = users.find(u => u.id === currentUser.id);
-        if (user) {
-            const updatedData = await dbGet(usersRef, user._docId);
-            if (updatedData) {
-                delete updatedData.password; // remove any plaintext residue
-                updatedData.passwordHash = hash;
-                updatedData.passwordSalt = salt;
-                updatedData.lastPasswordChange = new Date().toISOString().split('T')[0];
-                await dbSet(usersRef, user._docId, updatedData);
-            }
-        }
-
-        // Update current session (remove plaintext, store hash info)
-        delete currentUser.password;
-        currentUser.passwordHash = hash;
-        currentUser.passwordSalt = salt;
+        currentUser = await apiRequest('auth/password', 'POST', { password: newPassword });
 
         // Log the password change to audit log
-        const logId = 'al_pc_' + Date.now();
-        await dbSet(auditLogRef, logId, {
-            _docId: logId,
+        await logAuditAction({
             action: 'password_changed',
+            actorId: currentUser._docId || currentUser.id,
+            actorName: currentUser.fullName,
+            actorUsername: currentUser.username,
+            actorRole: currentUser.role,
+            targetType: 'user',
+            targetId: currentUser._docId || currentUser.id,
+            targetName: currentUser.fullName,
             studentId: currentUser.id,
             studentName: currentUser.fullName,
             username: currentUser.username,
             instructorId: null,
             instructorName: null,
-            timestamp: new Date().toISOString(),
             requestId: null
-            // NEVER log the password or hash
         });
 
         setValue('new-password', '');
@@ -4370,15 +4301,44 @@ async function updatePendingRequestsBadge() {
 /**
  * Records an audit action. NEVER logs passwords or hashes.
  */
-async function logAuditAction({ action, studentId, studentName, username, instructorId, instructorName, requestId }) {
+async function logAuditAction({
+    action,
+    actorId,
+    actorName,
+    actorUsername,
+    actorRole,
+    targetType,
+    targetId,
+    targetName,
+    metadata,
+    studentId,
+    studentName,
+    username,
+    instructorId,
+    instructorName,
+    requestId
+}) {
     try {
         const logId = 'al_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        const resolvedActorId = actorId || instructorId || studentId || currentUser?._docId || currentUser?.id || null;
+        const resolvedActorName = actorName || instructorName || studentName || currentUser?.fullName || null;
+        const resolvedUsername = actorUsername || username || currentUser?.username || null;
+        const resolvedRole = actorRole || currentUser?.role || (instructorId ? 'instructor' : studentId ? 'student' : null);
         await dbSet(auditLogRef, logId, {
             _docId: logId,
             action,
+            actorId: resolvedActorId,
+            actorName: resolvedActorName,
+            actorUsername: resolvedUsername,
+            actorRole: resolvedRole,
+            targetType: targetType || (requestId ? 'password_request' : studentId ? 'student' : null),
+            targetId: targetId || requestId || studentId || null,
+            targetName: targetName || studentName || null,
+            metadata: metadata || {},
+            // Compatibility fields for existing report rendering.
             studentId: studentId || null,
             studentName: studentName || null,
-            username: username || null,
+            username: resolvedUsername,
             instructorId: instructorId || null,
             instructorName: instructorName || null,
             requestId: requestId || null,
@@ -4417,244 +4377,36 @@ function cancelForgotPassword() {
  * Submits a password recovery request for student (instructor approval) or instructor (admin approval).
  */
 async function submitRecoveryRequest() {
-    const rawInput = getValue('fp-username-input').trim();
-    const usernameOrId = typeof normalizeUsername === 'function' ? normalizeUsername(rawInput) : rawInput;
-    if (!usernameOrId) {
-        showToast('Please enter your username, email, or Student ID.', 'error');
-        return;
-    }
-
-    await refreshUsers();
-    const targetUser = cachedUsers.find(u =>
-        (u.username === usernameOrId || u.username === rawInput || u.studentId === rawInput || u.email === rawInput) &&
-        (u.role === 'student' || u.role === 'instructor')
-    );
-
-    if (!targetUser) {
-        showToast('Account not found. Check your username, email, or Student ID.', 'error');
-        return;
-    }
-
-    if (targetUser.status === 'inactive' || targetUser.status === 'archived') {
-        const contactRole = targetUser.role === 'instructor' ? 'administrator' : 'instructor';
-        showToast(`Your account is ${targetUser.status}. Please contact your ${contactRole}.`, 'error');
-        return;
-    }
-
-    const isInstructor = targetUser.role === 'instructor';
-    const approver = isInstructor ? 'administrator' : 'instructor';
-
-    // Check for existing pending request to avoid duplicates
-    const existing = await dbGetAll(passwordRequestsRef);
-    const alreadyPending = existing.find(r =>
-        r.type === 'recovery' && (r.studentId === targetUser._docId || r.userId === targetUser._docId) && r.status === 'pending'
-    );
-
-    if (alreadyPending) {
-        setText('fp-submitted-name', targetUser.fullName);
-        hide('fp-step-1');
-        show('fp-step-2');
-        showToast(`You already have a pending recovery request. Ask your ${approver} to approve it.`, 'info');
-        return;
-    }
-
-    // Create a new recovery request
-    const reqId = 'pr_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-    await dbSet(passwordRequestsRef, reqId, {
-        _docId: reqId,
-        type: 'recovery',
-        userRole: targetUser.role,
-        targetRole: targetUser.role,
-        userId: targetUser._docId,
-        studentId: targetUser._docId, // for backward compatibility
-        studentName: targetUser.fullName,
-        studentUsername: targetUser.username,
-        studentEnrolledId: targetUser.studentId || (isInstructor ? 'INSTRUCTOR' : '—'),
-        email: targetUser.email || null,
-        instructorId: targetUser.instructorId || null,
-        status: 'pending',
-        requestedAt: new Date().toISOString(),
-        reviewedAt: null,
-        reviewedBy: null,
-        reviewedByName: null,
-        resetToken: null,
-        tokenExpiresAt: null,
-        tokenUsed: false
-    });
-
-    await logAuditAction({
-        action: 'password_reset_requested',
-        studentId: targetUser._docId,
-        studentName: targetUser.fullName,
-        username: targetUser.username,
-        userRole: targetUser.role,
-        requestId: reqId
-    });
-
-    setText('fp-submitted-name', targetUser.fullName);
-    hide('fp-step-1');
-    show('fp-step-2');
-    showToast(`Recovery request submitted! Ask your ${approver} to approve it.`, 'success');
-
-    // Update badges
-    if (isInstructor) {
-        updateAdminPendingRequestsBadge();
-    } else {
-        updatePendingRequestsBadge();
-    }
-}
-
-/**
- * Checks if recovery request has been approved, then shows the reset password form if a valid token exists.
- */
-async function checkRecoveryStatus() {
-    const usernameOrId = getValue('fp-username-input').trim() ||
-        (getValue('fp-check-username') || '').trim();
-    const checkInput = getValue('fp-check-username').trim();
-    const rawLookup = checkInput || usernameOrId;
-    const lookupVal = typeof normalizeUsername === 'function' ? normalizeUsername(rawLookup) : rawLookup;
-
-    if (!lookupVal) {
-        showToast('Please enter your username, email, or Student ID.', 'error');
-        return;
-    }
-
-    await refreshUsers();
-    const targetUser = cachedUsers.find(u =>
-        (u.username === lookupVal || u.username === rawLookup || u.studentId === rawLookup || u.email === rawLookup) &&
-        (u.role === 'student' || u.role === 'instructor')
-    );
-
-    if (!targetUser) {
-        showToast('Account not found.', 'error');
-        return;
-    }
-
-    const isInstructor = targetUser.role === 'instructor';
-    const approver = isInstructor ? 'administrator' : 'instructor';
-
-    // Find the most recent approved (unused, non-expired) recovery request
-    const requests = await dbGetAll(passwordRequestsRef);
-    const now = Date.now();
-
-    const approvedReq = requests
-        .filter(r =>
-            r.type === 'recovery' &&
-            (r.studentId === targetUser._docId || r.userId === targetUser._docId) &&
-            r.status === 'approved' &&
-            !r.tokenUsed &&
-            r.tokenExpiresAt && r.tokenExpiresAt > now
-        )
-        .sort((a, b) => b.tokenExpiresAt - a.tokenExpiresAt)[0];
-
-    if (!approvedReq) {
-        // Check if there's an expired one
-        const expiredReq = requests.find(r =>
-            r.type === 'recovery' &&
-            (r.studentId === targetUser._docId || r.userId === targetUser._docId) &&
-            r.status === 'approved' &&
-            (!r.tokenExpiresAt || r.tokenExpiresAt <= now)
-        );
-        if (expiredReq) {
-            // Auto-mark as expired
-            await dbUpdate(passwordRequestsRef, expiredReq._docId, { status: 'expired' });
-            showToast('Your recovery authorization has expired. Please submit a new request.', 'error');
-        } else {
-            showToast(`No approved recovery request found. Please ask your ${approver} to approve it.`, 'info');
-        }
-        return;
-    }
-
-    // Show reset password form
-    // Store the request ID in a hidden field on the form
-    setValue('fp-reset-request-id', approvedReq._docId);
-    setValue('fp-reset-student-id', targetUser._docId);
-    setValue('fp-reset-new-password', '');
-    setValue('fp-reset-confirm-password', '');
-
-    // Show expiry countdown
-    const minsLeft = Math.max(0, Math.floor((approvedReq.tokenExpiresAt - now) / 60000));
-    setText('fp-token-expiry', `Authorization expires in ~${minsLeft} minute${minsLeft !== 1 ? 's' : ''}`);
-
-    hide('fp-step-2');
-    show('fp-step-3');
-}
-
-/**
- * Student submits their new password after instructor approval.
- */
-async function submitPasswordReset() {
-    const requestId = getValue('fp-reset-request-id').trim();
-    const studentDocId = getValue('fp-reset-student-id').trim();
-    const newPwd = getValue('fp-reset-new-password').trim();
-    const confirmPwd = getValue('fp-reset-confirm-password').trim();
-
-    if (!newPwd || !confirmPwd) {
-        showToast('Please fill in both password fields.', 'error');
-        return;
-    }
-
-    if (newPwd !== confirmPwd) {
-        showToast('Passwords do not match.', 'error');
-        return;
-    }
-
-    // Re-validate token is still valid
-    const req = await dbGet(passwordRequestsRef, requestId);
-    if (!req || req.status !== 'approved' || req.tokenUsed || req.tokenExpiresAt <= Date.now()) {
-        showToast('Recovery authorization is invalid or expired. Please request a new one.', 'error');
-        return;
-    }
-
     try {
-        // Hash the new password
-        const salt = generateSalt();
-        const hash = await hashPassword(newPwd, salt);
-
-        // Update the student's credentials
-        const storedUser = await dbGet(usersRef, studentDocId);
-        if (storedUser) {
-            delete storedUser.password;
-            storedUser.passwordHash = hash;
-            storedUser.passwordSalt = salt;
-            storedUser.lastPasswordChange = new Date().toISOString().split('T')[0];
-            await dbSet(usersRef, storedUser._docId, storedUser);
-        }
-
-        // Invalidate the token (one-time use)
-        await dbUpdate(passwordRequestsRef, requestId, {
-            status: 'completed',
-            tokenUsed: true,
-            completedAt: new Date().toISOString()
-        });
-
-        // Log to audit trail — NEVER log the password
-        await logAuditAction({
-            action: 'password_reset_completed',
-            studentId: studentDocId,
-            studentName: req.studentName,
-            username: req.studentUsername,
-            instructorId: req.reviewedBy,
-            instructorName: req.reviewedByName,
-            requestId: requestId
-        });
-
-        // Show success state
-        hide('fp-step-3');
-        show('fp-step-success');
-        showToast('Password reset successfully! You can now log in.', 'success');
-
-        // Refresh caches
-        await refreshUsers();
-    } catch (err) {
-        console.error('[PasswordReset] Error:', err);
-        showToast('Failed to reset password. Please try again.', 'error');
-    }
+        const recovery = await apiRequest('auth/recover','POST',{lookup:getValue('fp-username-input').trim()});
+        sessionStorage.setItem('pseudopy_recovery',JSON.stringify(recovery));
+        setText('fp-submitted-name',recovery.name);
+        hide('fp-step-1'); show('fp-step-2');
+    } catch(error) { showToast(error.message,'error'); }
+}
+async function checkRecoveryStatus() {
+    try {
+        const proof = JSON.parse(sessionStorage.getItem('pseudopy_recovery') || 'null');
+        if (!proof) throw new Error('Use the same browser where you submitted the recovery request.');
+        const status = await apiRequest('auth/recovery-status','POST',proof);
+        if (status.status !== 'approved' || status.expiresAt <= Date.now()) throw new Error('Recovery is ' + status.status + '. Ask your instructor or administrator to review it.');
+        setText('fp-token-expiry','Authorization expires in approximately ' + Math.ceil((status.expiresAt-Date.now())/60000) + ' minutes.');
+        hide('fp-step-2'); show('fp-step-3');
+    } catch(error) { showToast(error.message,'error'); }
+}
+async function submitPasswordReset() {
+    try {
+        const password = getValue('fp-reset-new-password');
+        if (password !== getValue('fp-reset-confirm-password')) throw new Error('Passwords do not match.');
+        const proof = JSON.parse(sessionStorage.getItem('pseudopy_recovery') || 'null');
+        if (!proof) throw new Error('Recovery request required.');
+        await apiRequest('auth/reset','POST',{...proof,password});
+        sessionStorage.removeItem('pseudopy_recovery');
+        hide('fp-step-3'); show('fp-step-success');
+        showToast('Password reset. You can now sign in.','success');
+    } catch(error) { showToast(error.message,'error'); }
 }
 
-/**
- * Returns to login after successful reset.
- */
 function backToLoginAfterReset() {
     hide('forgot-password-panel');
     show('login-form-section-inner');
@@ -5226,7 +4978,8 @@ async function loadPasswordRequests() {
                 'password_reset_requested': { icon: 'mail', label: 'Reset Requested', cls: 'badge-recovery-pending' },
                 'password_reset_approved': { icon: 'circle-check', label: 'Reset Approved', cls: 'badge-recovery-approved' },
                 'password_reset_rejected': { icon: 'circle-x', label: 'Reset Rejected', cls: 'badge-recovery-rejected' },
-                'password_reset_completed': { icon: 'party-popper', label: 'Reset Completed', cls: 'badge-recovery-completed' }
+                'password_reset_completed': { icon: 'party-popper', label: 'Reset Completed', cls: 'badge-recovery-completed' },
+                'instructor_new_device_attempt': { icon: 'monitor-smartphone', label: 'New Device Attempt', cls: 'badge-recovery-pending' }
             };
 
             tbody.innerHTML = allLogs.map(r => {
@@ -5234,8 +4987,9 @@ async function loadPasswordRequests() {
                 const dt = r.timestamp
                     ? new Date(r.timestamp).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
                     : '—';
-                const name = r.studentName || r.instructorName || 'Unknown';
-                const username = r.username || '—';
+                const name = r.actorName || r.studentName || r.instructorName || r.targetName || 'Unknown';
+                const username = r.actorUsername || r.username || '—';
+                const authorizedBy = r.instructorName || (r.actorRole === 'admin' ? r.actorName : null) || '—';
                 return `
                 <tr>
                   <td><div class="user-cell"><div class="avatar-sm">${name.charAt(0)}</div>
@@ -5245,7 +4999,7 @@ async function loadPasswordRequests() {
                     </div>
                   </div></td>
                   <td><span class="badge ${a.cls}"><i data-lucide="${a.icon}" aria-hidden="true"></i> ${a.label}</span></td>
-                  <td>${r.instructorName || '—'}</td>
+                  <td>${authorizedBy}</td>
                   <td>${dt}</td>
                 </tr>`;
             }).join('');
@@ -5790,21 +5544,9 @@ function setupRealtimeValidation() {
  * Falls back to fetching dataset.json if the store is empty.
  */
 async function loadExercisesFromDB() {
-    try {
-        const exercises = await dbGetAll(exercisesRef);
-        if (exercises && exercises.length > 0) {
-            console.log(`[Benchmark] Loaded ${exercises.length} exercises from IndexedDB.`);
-            return exercises;
-        }
-    } catch (e) {
-        console.warn('[Benchmark] IndexedDB read failed, falling back to dataset.json:', e);
-    }
-    // Fallback
-    console.log('[Benchmark] Fetching dataset.json as fallback...');
-    const res = await fetch('dataset.json');
-    if (!res.ok) throw new Error('Failed to fetch dataset.json: ' + res.status);
-    const raw = await res.json();
-    return Array.isArray(raw) ? raw : (raw.dataset || []);
+    // Benchmark only the reference cases actually available to this instructor.
+    return (await dbGetAll(exercisesRef)).filter(e => e.pseudocode && (e.python_code || e.solution))
+        .map(e => ({...e, python_code:e.python_code || e.solution}));
 }
 
 /**
@@ -6074,50 +5816,13 @@ async function handleChangePassword() {
         return;
     }
 
-    // Verify current password using hash-based check
-    let currentValid = false;
-    if (currentUser.passwordHash && currentUser.passwordSalt) {
-        currentValid = await verifyPassword(currentParam, currentUser.passwordHash, currentUser.passwordSalt);
-    } else if (currentUser.password) {
-        // Legacy plaintext fallback
-        currentValid = (currentParam === currentUser.password);
-    }
-
-    if (!currentValid) {
-        showToast('Incorrect current password.', 'error');
-        return;
-    }
-
-
-
     if (newParam !== confirmParam) {
         showToast('New passwords do not match.', 'error');
         return;
     }
 
     try {
-        const salt = generateSalt();
-        const hash = await hashPassword(newParam, salt);
-
-        const stored = await dbGet(usersRef, currentUser._docId);
-        if (stored) {
-            delete stored.password;
-            stored.passwordHash = hash;
-            stored.passwordSalt = salt;
-            await dbSet(usersRef, stored._docId, stored);
-        }
-
-        // Update local state
-        delete currentUser.password;
-        currentUser.passwordHash = hash;
-        currentUser.passwordSalt = salt;
-
-        const uIndex = cachedUsers.findIndex(u => u.id === currentUser.id);
-        if (uIndex !== -1) {
-            delete cachedUsers[uIndex].password;
-            cachedUsers[uIndex].passwordHash = hash;
-            cachedUsers[uIndex].passwordSalt = salt;
-        }
+        currentUser = await apiRequest('auth/password', 'POST', { currentPassword: currentParam, password: newParam });
 
         await logAuditAction({
             action: 'password_changed',
@@ -6250,5 +5955,3 @@ function autoFormatPseudocode() {
     updateGutter(); // Refresh line numbers
     showToast('Pseudocode formatted!', 'success');
 }
-
-

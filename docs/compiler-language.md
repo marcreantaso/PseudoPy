@@ -48,8 +48,10 @@ The complexity display is a loop-nesting heuristic, not an asymptotic-complexity
 
 Run `npm test` with Node.js 20+ and Python 3 (`python3` on PATH, or set `PYTHON`). No third-party test dependencies are required.
 
-The suite checks operator results against CPython, malformed input rejection, nested AST shape, function scope, typed input, and student/instructor consistency. It executes all 30 built-in exercises from `database.js` against their reference Python and covers factorial, Fibonacci, Euclidean GCD, linear/binary search, bubble/insertion/selection sort, and recursion. The 10,000-record `dataset.json` corpus was not retrieved or independently verified in this change.
+The suite checks operator results against CPython, malformed input rejection, nested AST shape, function scope, typed input, and student/instructor consistency. It executes all 30 built-in exercises from `tests/exercise-fixtures.js` against their reference Python and covers factorial, Fibonacci, Euclidean GCD, linear/binary search, bubble/insertion/selection sort, and recursion. The 10,000-record `dataset.json` corpus was not retrieved or independently verified in this change.
 
 Navigation behavior is tested using a DOM test harness for each role at 320, 768, 1023, 1024 and 1440 pixels, including Escape, focus trapping and resize cleanup. These are behavioral tests, not rendered browser screenshots. Browser layout, actual Skulpt execution, live authentication/database operations and PWA cache migration still require an integrated browser check before merging.
 
 The existing `node verify_app_refactor.js` suite passes 32 instructor-isolation and data checks. The existing `test_instructor_password_admin_approval.js` fails during setup with `ReferenceError: Node is not defined`, reproduced against the unchanged base `app.js`; its DOM harness needs a separate repair.
+
+See [current runtime and deployment notes](local-development.md) for the isolated worker runtime and authenticated Firestore API. Historical verification counts above describe the original compiler change; `npm test` provides the current combined results.

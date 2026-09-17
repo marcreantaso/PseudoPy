@@ -20,3 +20,8 @@ icons/generate.html
 
 # Vercel output
 .vercel
+
+public/
+.env
+.env.*
+!.env.example

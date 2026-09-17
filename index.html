@@ -861,7 +861,7 @@
             </div>
             <div class="an-kpi-body">
               <div class="an-kpi-value" id="stat-submissions">0</div>
-              <div class="an-kpi-label">Total Submissions</div>
+              <div class="an-kpi-label">Recorded Activity</div>
               <div class="an-kpi-trend" id="stat-submissions-trend">
                 <span class="positive">—</span> <span
                   style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">vs last week</span>
@@ -874,7 +874,7 @@
             </div>
             <div class="an-kpi-body">
               <div class="an-kpi-value" id="stat-success-rate">0%</div>
-              <div class="an-kpi-label">Success Rate</div>
+              <div class="an-kpi-label">Successful Activity</div>
               <div class="an-kpi-trend" id="stat-success-trend">
                 <span class="positive">—</span> <span
                   style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">vs last week</span>
@@ -905,10 +905,10 @@
                 <div style="display:flex;align-items:center;gap:0.5rem">
                   <span style="font-weight:700;font-size:0.95rem;color:var(--text-primary)">Student Submission
                     Activity</span>
-                  <span class="an-info-badge" title="Shows the number of student submissions per day"><i data-lucide="info" aria-hidden="true"></i></span>
+                  <span class="an-info-badge" title="Shows the number of learning activity records per day"><i data-lucide="info" aria-hidden="true"></i></span>
                 </div>
                 <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem" id="an-chart-sub-label">Shows
-                  the number of student submissions based on the selected week.</div>
+                  the number of learning activity records based on the selected week.</div>
               </div>
               <div class="an-view-toggle">
                 <span style="font-size:0.8rem;color:var(--text-muted)">View by:</span>
@@ -924,7 +924,7 @@
               <div class="an-bar-y-axis" id="an-bar-y-axis"></div>
               <div class="an-bar-chart-area" id="chart-submissions"></div>
             </div>
-            <div class="an-chart-footer"><i data-lucide="info" aria-hidden="true"></i> Click on any bar to view detailed submissions for that day.</div>
+            <div class="an-chart-footer"><i data-lucide="info" aria-hidden="true"></i> Click on any bar to view learning activity for that day.</div>
             <div id="an-bar-tooltip" class="an-bar-tooltip hidden"></div>
           </div>
 
@@ -1277,7 +1277,7 @@
             <strong style="color:var(--text-primary);">How to use this page:</strong><br>
             <strong>Session Metrics</strong> track live activity from your current session (translations &amp;
             executions done via the <em>Generate Python Code</em> page).<br>
-            <strong>Benchmark</strong> runs all test cases from <code>dataset.json</code> against the compiler and
+            <strong>Benchmark</strong> runs your available pseudocode/reference exercise pairs against the compiler and
             computes Accuracy, Precision, Recall, F1 Score, and Compilation Rate.<br>
             <strong>Concept Mastery</strong> groups benchmark results by programming concept so you can see where the
             compiler performs best and worst.
@@ -1370,7 +1370,7 @@
             style="font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;">
             🎯 Benchmark Results</h3>
           <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">Computed by running the full
-            <code>dataset.json</code> test suite through the compiler. Click <em>Run Benchmark</em> above to populate
+            available reference exercise test suite through the compiler. Click <em>Run Benchmark</em> above to populate
             these.
           </p>
         </div>
@@ -2636,8 +2636,6 @@
   </div>
 
   <!-- Firebase SDK (Compat mode for easy usage) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
   <script>
     window.__FIREBASE_CONFIG__ = {
@@ -2655,8 +2653,6 @@
   <script src="database.js"></script>
 
   <!-- Skulpt for Python execution -->
-  <script src="https://skulpt.org/js/skulpt.min.js" type="text/javascript"></script>
-  <script src="https://skulpt.org/js/skulpt-stdlib.js" type="text/javascript"></script>
 
   <!-- PDF.js for PDF text extraction -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -2667,7 +2663,9 @@
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=20260907"></script>
+  <script src="runtime.js"></script>
+  <script src="learning.js"></script>
+  <script src="app.js?v=20260917"></script>
   <script src="devtools.js?v=20260909"></script>
   <script>
     if (window.lucide) lucide.createIcons({ icons: lucide.icons });

@@ -12,6 +12,10 @@
     "animejs": "^4.5.0",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "firebase": "^12.18.0"
+    "firebase": "^12.18.0",
+    "firebase-admin": "^13.10.0"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
   }
 }

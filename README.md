@@ -17,23 +17,14 @@ A web-based system that translates pseudocode into executable Python code, built
 
 ## 🚀 Quick Start
 
-```bash
-# Using Node.js http-server
-npx http-server . -p 8080
+Configure the server credentials described in [local development and deployment](docs/local-development.md), then run:
 
-# Or Python
-python -m http.server 8080
+```bash
+npm ci
+npm start
 ```
 
-Then open [http://localhost:8080](http://localhost:8080)
-
-## 🔐 Test Accounts
-
-| Role | Username | Password |
-|------|----------|----------|
-| Student | `mdaet` | `pass123` |
-| Instructor | `mreantaso` | `pass123` |
-| Admin | `mbautista` | `admin123` |
+Open [http://localhost:3000](http://localhost:3000). A static file server alone cannot provide authenticated database operations. Existing Firestore accounts are retained; there are no automatically seeded production accounts.
 
 ## 📱 Mobile / PWA
 
@@ -45,7 +36,8 @@ Then open [http://localhost:8080](http://localhost:8080)
 - Vanilla HTML, CSS, JavaScript (no frameworks)
 - [Skulpt](https://skulpt.org/) for Python execution
 - Service Worker for offline caching
-- localStorage for data persistence
+- Firestore through authenticated Express/Vercel APIs for durable records
+- Per-user localStorage for editor drafts and recent personal metrics
 
 ## 📄 License
 
@@ -54,4 +46,4 @@ MIT
 
 ## Compiler rules and regression checks
 
-See [the supported language and verification notes](docs/compiler-language.md) for exact operator semantics, loop bounds, syntax rules and test limitations. Run `npm test` with Node.js 20+ and Python 3 to check the compiler and role navigation behavior.
+See [the supported language and verification notes](docs/compiler-language.md) for exact operator semantics, loop bounds, syntax rules and test limitations. Run `npm test` with Node.js 22+ and Python 3 to check the compiler and role navigation behavior.

@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
-  ]
+  "buildCommand": "node scripts/build-public.js",
+  "outputDirectory": "public",
+  "headers": [{"source":"/sw.js","headers":[{"key":"Cache-Control","value":"no-cache"}]}],
+  "rewrites": [{"source":"/","destination":"/index.html"}]
 }

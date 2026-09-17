@@ -50,6 +50,9 @@ function devToolsSwitchTab(tabId) {
 // ══════════════════════════════════════════════════════════════
 
 function devToolsRunPipeline() {
+    if (!currentUser || currentUser.role !== 'admin') { showToast('Administrator access required.', 'error'); return; }
+    activePythonRuns.get('developer')?.cancel();
+    activePythonRuns.delete('developer');
     const pseudocode = document.getElementById('devtools-pseudocode').value;
     if (!pseudocode.trim()) {
         if (typeof showToast === 'function') showToast('Please enter pseudocode first.', 'error');
@@ -147,39 +150,22 @@ function _devToolsExecutePython(pythonCode, attempt) {
     compilerTrace.enable();
     compilerTrace.emit({ type: 'EXECUTION_START', stage: 'EXECUTION', status: 'RUNNING', data: { pythonLength: pythonCode.length } });
 
-    if (typeof Sk === 'undefined') {
-        if (statusEl) statusEl.textContent = '⚠️ Skulpt not loaded';
-        if (stderrEl) stderrEl.textContent = 'Skulpt library not available.';
-        if (pipeRuntime) pipeRuntime.className = 'pipeline-stage status-ERROR';
-        compilerTrace.emit({ type: 'EXECUTION_COMPLETE', stage: 'EXECUTION', status: 'ERROR', data: { error: 'Skulpt not loaded' } });
-        compilerTrace.disable();
-        _updateEventLog(compilerTrace.getEvents());
-        return;
-    }
-
     const stdoutBuffer = [];
     const execStart = performance.now();
-
-    Sk.configure({
-        output: function (text) { stdoutBuffer.push(text); },
-        read: function (x) {
-            if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined)
-                throw "File not found: '" + x + "'";
-            return Sk.builtinFiles["files"][x];
-        },
-        inputfun: function (promptText) {
-            return new Promise(function (resolve) {
-                const value = prompt(promptText || 'Input required:');
-                resolve(value || '');
-            });
-        },
-        inputfunTakesPrompt: true,
-        __future__: Sk.python3
+    const run = PythonRuntime.run(pythonCode, {
+        onOutput: text => { stdoutBuffer.push(text); if (stdoutEl) stdoutEl.appendChild(document.createTextNode(text)); },
+        onInput: prompt => requestConsoleInput(stdoutEl, prompt)
     });
+    activePythonRuns.set('developer', run);
+    const stop = document.createElement('button');
+    stop.className = 'btn btn-secondary btn-sm';
+    stop.textContent = 'Stop execution';
+    stop.type = 'button';
+    stop.addEventListener('click', () => run.cancel());
+    stdoutEl?.before(stop);
+    run.done.then(function () {
+        if (activePythonRuns.get('developer') !== run) return;
 
-    Sk.misceval.asyncToPromise(function () {
-        return Sk.importMainWithBody("<stdin>", false, pythonCode, true);
-    }).then(function () {
         const execTime = performance.now() - execStart;
         const stdout = stdoutBuffer.join('');
 
@@ -208,6 +194,7 @@ function _devToolsExecutePython(pythonCode, attempt) {
         _buildExecutionTrace(devToolsState.currentResult, stdout);
 
     }).catch(function (err) {
+        if (activePythonRuns.get('developer') !== run) return;
         const execTime = performance.now() - execStart;
         const errStr = err.toString();
 
@@ -232,6 +219,12 @@ function _devToolsExecutePython(pythonCode, attempt) {
         devToolsState.stepEvents = compilerTrace.getEvents();
         _updateEventLog(devToolsState.stepEvents);
         _updateRawJSON(devToolsState.currentResult, { stdout: stdoutBuffer.join(''), stderr: errStr, executionTime: execTime });
+    }).finally(() => {
+        stop.remove();
+        if (activePythonRuns.get('developer') === run) {
+            activePythonRuns.delete('developer');
+            stdoutEl?.querySelectorAll('.skulpt-input-container').forEach(el => el.remove());
+        }
     });
 }
 

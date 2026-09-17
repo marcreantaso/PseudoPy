@@ -42,16 +42,25 @@ class MetricsEngine {
         this.benchmarkResults  = null;   // latest benchmark run
 
         // Load persisted history
-        this.history = this._loadHistory();
+        this.userId = null;
+        this.history = { sessions: [], benchmarks: [] };
     }
 
     // ══════════════════════════════════════════════════════════════
     // PERSISTENCE
     // ══════════════════════════════════════════════════════════════
 
+    setUser(userId) {
+        this.userId = userId;
+        this.history = userId ? this._loadHistory() : { sessions: [], benchmarks: [] };
+        this.translations = this.history.translations || [];
+        this.executions = this.history.executions || [];
+        this.benchmarkResults = null;
+    }
+
     _loadHistory() {
         try {
-            const raw = localStorage.getItem('pseudopy_metrics_history');
+            const raw = localStorage.getItem('pseudopy_metrics_history_' + this.userId);
             return raw ? JSON.parse(raw) : { sessions: [], benchmarks: [] };
         } catch {
             return { sessions: [], benchmarks: [] };
@@ -59,8 +68,11 @@ class MetricsEngine {
     }
 
     _saveHistory() {
+        if (!this.userId) return;
+        this.history.translations = this.translations.slice(-500);
+        this.history.executions = this.executions.slice(-500);
         try {
-            localStorage.setItem('pseudopy_metrics_history', JSON.stringify(this.history));
+            localStorage.setItem('pseudopy_metrics_history_' + this.userId, JSON.stringify(this.history));
         } catch (e) {
             console.warn('[Metrics] Failed to save history:', e);
         }
@@ -510,6 +522,8 @@ class MetricsEngine {
     }
 
     clearHistory() {
+        this.translations = [];
+        this.executions = [];
         this.history = { sessions: [], benchmarks: [] };
         this._saveHistory();
     }
