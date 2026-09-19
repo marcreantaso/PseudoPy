@@ -4090,7 +4090,10 @@ function renderFilteredActivityTable(activityList) {
     refreshIcons(tbody);
 }
 
+let activeSubmissionDetailId = null;
+
 function viewSubmissionDetail(docId) {
+    activeSubmissionDetailId = docId;
     const a = cachedActivity.find(x => x._docId === docId);
     if (!a) { showToast('Record not found.', 'error'); return; }
 
@@ -4148,6 +4151,14 @@ function viewSubmissionDetail(docId) {
         outputEl.textContent = a.output || a.compilerOutput || (a.status === 'Completed' ? 'Execution successful.' : a.errorType ? `Error: ${a.errorType} during compilation.` : '(No output recorded)');
     }
 
+    const requestButton = $id('sdm-request-resubmit');
+    if (requestButton) {
+        const ownsSubmission = currentUser?.role === 'instructor' &&
+            (!a.instructorId || a.instructorId === currentUser.id || a.instructorId === currentUser._docId);
+        requestButton.classList.toggle('hidden', !ownsSubmission || a.status === 'Revision Requested');
+        requestButton.disabled = false;
+    }
+
     // Modal title
     const title = $id('sdm-title');
     if (title) title.innerHTML = `${icon('file-text')} ${a.student} — ${a.exercise}`;
@@ -4156,6 +4167,57 @@ function viewSubmissionDetail(docId) {
     if (modal) {
         modal.classList.remove('hidden');
         refreshIcons(modal);
+    }
+}
+
+async function requestResubmission(docId = activeSubmissionDetailId) {
+    if (!docId || currentUser?.role !== 'instructor') return;
+    const a = cachedActivity.find(x => x._docId === docId) || await dbGet(activityRef, docId);
+    if (!a) { showToast('Submission not found.', 'error'); return; }
+    const feedback = window.prompt('Tell the student what to revise (optional):', '');
+    if (feedback === null) return;
+
+    const button = $id('sdm-request-resubmit');
+    if (button) button.disabled = true;
+    SessionTimeout.pause();
+    try {
+        const now = new Date().toISOString();
+        const instructorId = currentUser._docId || currentUser.id;
+        await dbUpdate(activityRef, docId, {
+            status: 'Revision Requested',
+            reviewStatus: 'revision_requested',
+            revisionRequestedAt: now,
+            requestedBy: instructorId,
+            requestedByName: currentUser.fullName,
+            feedback: feedback.trim()
+        });
+
+        const notificationId = 'notif_revision_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+        await dbSet(notificationsRef, notificationId, {
+            _docId: notificationId,
+            studentId: a.studentId || a.studentAccountId,
+            accountId: a.studentAccountId || a.studentId,
+            exerciseId: a.exerciseId || null,
+            submissionId: a._docId,
+            exerciseTitle: a.exercise || 'Exercise',
+            title: 'Resubmission Requested',
+            message: feedback.trim() || 'Your instructor requested that you revise and resubmit this activity.',
+            type: 'resubmission_requested',
+            isRead: false,
+            createdAt: now
+        });
+
+        const cached = cachedActivity.find(x => x._docId === docId);
+        if (cached) Object.assign(cached, { status: 'Revision Requested', reviewStatus: 'revision_requested', feedback: feedback.trim(), revisionRequestedAt: now });
+        closeSubmissionDetail();
+        showToast('Resubmission requested. The student has been notified.', 'success');
+        if (typeof loadAnalytics === 'function') await loadAnalytics();
+    } catch (error) {
+        console.error('[Review] Resubmission request failed:', error);
+        showToast('Unable to request resubmission.', 'error');
+    } finally {
+        if (button) button.disabled = false;
+        SessionTimeout.resume();
     }
 }
 
