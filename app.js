@@ -977,7 +977,7 @@ const uiEmojiIconMap = {
     '📍': 'map-pin', '📱': 'smartphone', '💻': 'laptop', '🛡️': 'shield-check', '🛡': 'shield-check',
     '✉️': 'mail', '✉': 'mail', '📩': 'mail', '🎓': 'graduation-cap', '💬': 'message-circle', '🔥': 'flame',
     '➕': 'plus', '✕': 'x', '👉': 'arrow-right', '☰': 'menu', '🌓': 'sun-moon', '☀️': 'sun', '☀': 'sun',
-    '🎭': 'masks', '🕒': 'clock-3', '🪪': 'badge', '🔢': 'hash', '🧩': 'puzzle', '🔬': 'search',
+    '🎭': 'theater', '🕒': 'clock-3', '🪪': 'badge', '🔢': 'hash', '🧩': 'puzzle', '🔬': 'search',
     '📡': 'radio', '🏫': 'school', '🧠': 'brain', '📟': 'panel-top', '🔴': 'circle', '🟢': 'circle',
     '🟡': 'circle', '🔵': 'circle'
 };

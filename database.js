@@ -596,7 +596,7 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
                 setLocalCollection(ref, results);
             }
         } catch (err) {
-            console.warn(`[Database] Firestore fetch error on ${ref}, using local fallback:`, err.message);
+            console.info(`[Database] Firestore fetch error on ${ref}, using local fallback:`, err.message);
         }
     }
 
@@ -605,7 +605,7 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
         results = getLocalCollection(ref);
         // If Firestore is connected, seed it in the background.
         if (firestoreReady() && results.length > 0) {
-            seedDatabase().catch(e => console.warn('[Database] Background seed attempt:', e));
+            seedDatabase().catch(e => console.info('[Database] Background seed attempt:', e));
         }
     }
 
@@ -665,7 +665,7 @@ async function dbGet(ref, docId) {
                 return { _docId: doc.id, ...doc.data() };
             }
         } catch (err) {
-            console.warn(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
+            console.info(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
         }
     }
 
@@ -693,7 +693,7 @@ async function dbAdd(ref, data) {
         try {
             await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(docData));
         } catch (err) {
-            console.warn(`[Database] Error saving to Firestore ${ref} (local cache updated):`, err.message);
+            console.info(`[Database] Error saving to Firestore ${ref} (local cache updated):`, err.message);
         }
     }
 
@@ -718,7 +718,7 @@ async function dbSet(ref, docId, data) {
         try {
             await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(docData));
         } catch (err) {
-            console.warn(`[Database] Error setting to Firestore ${ref}/${docId} (local cache updated):`, err.message);
+            console.info(`[Database] Error setting to Firestore ${ref}/${docId} (local cache updated):`, err.message);
         }
     }
 
@@ -745,7 +745,7 @@ async function dbUpdate(ref, docId, data) {
             const docRef = firestore.collection(ref).doc(docId);
             await withFirestoreTimeout(docRef.set(merged, { merge: true }));
         } catch (err) {
-            console.warn(`[Database] Error updating Firestore ${ref}/${docId} (local cache updated):`, err.message);
+            console.info(`[Database] Error updating Firestore ${ref}/${docId} (local cache updated):`, err.message);
         }
     }
 
