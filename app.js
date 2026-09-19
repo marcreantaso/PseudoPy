@@ -4098,6 +4098,7 @@ function renderFilteredActivityTable(activityList) {
 }
 
 let activeSubmissionDetailId = null;
+let pendingResubmissionId = null;
 
 function viewSubmissionDetail(docId) {
     activeSubmissionDetailId = docId;
@@ -4178,15 +4179,54 @@ function viewSubmissionDetail(docId) {
     }
 }
 
-async function requestResubmission(docId = activeSubmissionDetailId) {
+function requestResubmission(docId = activeSubmissionDetailId) {
+    if (!docId || currentUser?.role !== 'instructor') return;
+    const a = cachedActivity.find(x => x._docId === docId);
+    if (!a) { showToast('Submission not found.', 'error'); return; }
+    pendingResubmissionId = docId;
+    const feedback = $id('resubmission-feedback');
+    const error = $id('resubmission-feedback-error');
+    if (feedback) feedback.value = '';
+    if (error) error.classList.add('hidden');
+    const modal = $id('resubmission-request-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => feedback?.focus(), 0);
+}
+
+function closeResubmissionRequest() {
+    const modal = $id('resubmission-request-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    pendingResubmissionId = null;
+}
+
+async function confirmResubmissionRequest() {
+    const docId = pendingResubmissionId;
     if (!docId || currentUser?.role !== 'instructor') return;
     const a = cachedActivity.find(x => x._docId === docId) || await dbGet(activityRef, docId);
-    if (!a) { showToast('Submission not found.', 'error'); return; }
-    const feedback = window.prompt('Tell the student what to revise (optional):', '');
-    if (feedback === null) return;
+    if (!a) { closeResubmissionRequest(); showToast('Submission not found.', 'error'); return; }
 
-    const button = $id('sdm-request-resubmit');
-    if (button) button.disabled = true;
+    const feedbackEl = $id('resubmission-feedback');
+    const errorEl = $id('resubmission-feedback-error');
+    const feedback = (feedbackEl?.value || '').trim();
+    if (feedback.length > 1000) {
+        if (errorEl) {
+            errorEl.textContent = 'Feedback must be 1,000 characters or fewer.';
+            errorEl.classList.remove('hidden');
+        }
+        feedbackEl?.focus();
+        return;
+    }
+
+    const confirmButton = $id('confirm-resubmission-btn');
+    if (confirmButton) {
+        confirmButton.disabled = true;
+        confirmButton.textContent = 'Sending…';
+    }
     SessionTimeout.pause();
     try {
         const now = new Date().toISOString();
@@ -4197,7 +4237,7 @@ async function requestResubmission(docId = activeSubmissionDetailId) {
             revisionRequestedAt: now,
             requestedBy: instructorId,
             requestedByName: currentUser.fullName,
-            feedback: feedback.trim()
+            feedback
         });
 
         const notificationId = 'notif_revision_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
@@ -4209,14 +4249,20 @@ async function requestResubmission(docId = activeSubmissionDetailId) {
             submissionId: a._docId,
             exerciseTitle: a.exercise || 'Exercise',
             title: 'Resubmission Requested',
-            message: feedback.trim() || 'Your instructor requested that you revise and resubmit this activity.',
+            message: feedback || 'Your instructor requested that you revise and resubmit this activity.',
             type: 'resubmission_requested',
             isRead: false,
             createdAt: now
         });
 
         const cached = cachedActivity.find(x => x._docId === docId);
-        if (cached) Object.assign(cached, { status: 'Revision Requested', reviewStatus: 'revision_requested', feedback: feedback.trim(), revisionRequestedAt: now });
+        if (cached) Object.assign(cached, {
+            status: 'Revision Requested',
+            reviewStatus: 'revision_requested',
+            feedback,
+            revisionRequestedAt: now
+        });
+        closeResubmissionRequest();
         closeSubmissionDetail();
         showToast('Resubmission requested. The student has been notified.', 'success');
         if (typeof loadAnalytics === 'function') await loadAnalytics();
@@ -4224,7 +4270,10 @@ async function requestResubmission(docId = activeSubmissionDetailId) {
         console.error('[Review] Resubmission request failed:', error);
         showToast('Unable to request resubmission.', 'error');
     } finally {
-        if (button) button.disabled = false;
+        if (confirmButton) {
+            confirmButton.disabled = false;
+            confirmButton.textContent = 'Request Resubmission';
+        }
         SessionTimeout.resume();
     }
 }
@@ -4232,6 +4281,13 @@ async function requestResubmission(docId = activeSubmissionDetailId) {
 function closeSubmissionDetail() {
     hide('submission-detail-modal');
 }
+
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !$id('resubmission-request-modal')?.classList.contains('hidden')) {
+        event.preventDefault();
+        closeResubmissionRequest();
+    }
+});
 
 
 /* ============================================================
