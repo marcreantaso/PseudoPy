@@ -17,6 +17,7 @@ let exerciseState = {
     isExecuted: false,
     outputMatched: false,
     expectedOutput: null,
+    expectedOutputResolved: false,
     activeExercise: null,
     resubmissionOf: null
 };
@@ -535,10 +536,7 @@ async function handleLogin() {
     }
 }
 
-function handleLogout(reason) {
-    // Stop the session timeout timer before clearing state
-    SessionTimeout.stop();
-
+function handleLogout() {
     // Invalidate session state
     currentUser = null;
     currentPage = '';
@@ -552,200 +550,8 @@ function handleLogout(reason) {
     hide('app-layout');
     show('login-page');
 
-    if (reason === 'inactivity') {
-        showToast('You have been logged out due to inactivity.', 'info');
-    } else {
-        showToast('Signed out successfully.', 'info');
-    }
+    showToast('Signed out successfully.', 'info');
 }
-
-/* ============================================================
-   SESSION TIMEOUT — Automatic Inactivity Logout
-   ============================================================
-
-   - Logs out the user after TIMEOUT_MS of inactivity.
-   - Shows a warning modal WARNING_MS before the final logout.
-   - Resets on any user activity: mouse, keyboard, scroll, touch.
-   - Safe to call start() multiple times; never creates duplicate timers.
-   - Properly tears down all event listeners to prevent memory leaks.
-   ============================================================ */
-
-const SessionTimeout = (() => {
-    const TIMEOUT_MS  = 15 * 60 * 1000;  // 15 minutes total inactivity window
-    const WARNING_MS  = 60 * 1000;  // Show warning at 60 seconds remaining
-
-    let _mainTimer    = null;  // Fires at (TIMEOUT_MS - WARNING_MS)
-    let _warnTimer    = null;  // Fires WARNING_MS after the warning is shown
-    let _countdownInt = null;  // Updates the countdown display every second
-    let _active       = false; // Whether the timeout is currently running
-    let _paused       = false; // Temporarily paused during long database writes
-
-    // ── Activity Events ──────────────────────────────────────────
-    // All standard desktop + mobile (iOS / Android) interactions
-    const ACTIVITY_EVENTS = [
-        'mousemove', 'mousedown', 'click', 'dblclick',
-        'keydown', 'keypress', 'keyup',
-        'scroll', 'wheel',
-        'touchstart', 'touchmove', 'touchend',
-        'pointerdown', 'pointermove', 'pointerup',
-        'input', 'beforeinput', 'change', 'focusin', 'submit',
-        'visibilitychange'
-    ];
-
-    // ── Internal Helpers ─────────────────────────────────────────
-
-    function _clearAllTimers() {
-        if (_mainTimer)    { clearTimeout(_mainTimer);    _mainTimer    = null; }
-        if (_warnTimer)    { clearTimeout(_warnTimer);    _warnTimer    = null; }
-        if (_countdownInt) { clearInterval(_countdownInt); _countdownInt = null; }
-    }
-
-    function _hideWarning() {
-        const overlay = document.getElementById('session-timeout-overlay');
-        if (overlay) overlay.classList.add('hidden');
-    }
-
-    function _showWarning() {
-        const overlay = document.getElementById('session-timeout-overlay');
-        if (!overlay) return;
-        overlay.classList.remove('hidden');
-
-        // Animate the countdown ring
-        const ring = document.getElementById('sto-ring-progress');
-        const label = document.getElementById('sto-countdown-label');
-        const warningSeconds = Math.floor(WARNING_MS / 1000); // 10
-        let remaining = warningSeconds;
-
-        // Set initial ring state
-        if (ring) {
-            const circumference = 2 * Math.PI * 45; // r=45
-            ring.style.strokeDasharray  = circumference;
-            ring.style.strokeDashoffset = '0';
-        }
-        if (label) label.textContent = remaining + 's';
-
-        _countdownInt = setInterval(() => {
-            remaining--;
-            if (remaining <= 0) {
-                clearInterval(_countdownInt);
-                _countdownInt = null;
-                if (label) label.textContent = '0s';
-                if (ring) ring.style.strokeDashoffset = String(2 * Math.PI * 45);
-                return;
-            }
-            if (label) label.textContent = remaining + 's';
-            if (ring) {
-                const circumference = 2 * Math.PI * 45;
-                const offset = circumference * (1 - remaining / warningSeconds);
-                ring.style.strokeDashoffset = String(offset);
-            }
-        }, 1000);
-    }
-
-    function _scheduleTimeout() {
-        _clearAllTimers();
-        if (_paused) return;
-        _hideWarning();
-
-        // Phase 1: Wait until the warning threshold
-        _mainTimer = setTimeout(() => {
-            // Only trigger if a user is logged in
-            if (!currentUser) { _active = false; return; }
-
-            _showWarning();
-
-            // Phase 2: Final logout countdown
-            _warnTimer = setTimeout(() => {
-                _active = false;
-                _removeListeners();
-                _hideWarning();
-                _clearAllTimers();
-
-                // Perform the actual logout
-                if (typeof handleLogout === 'function') {
-                    handleLogout('inactivity');
-                }
-            }, WARNING_MS);
-
-        }, TIMEOUT_MS - WARNING_MS);
-    }
-
-    // ── Activity Handler ─────────────────────────────────────────
-    // Bound version stored so we can removeEventListener by reference
-    const _onActivity = (e) => {
-        if (_paused) return;
-        // Ignore visibility change — tab hidden should NOT reset the timer
-        if (e.type === 'visibilitychange' && document.hidden) return;
-
-        // Dismiss warning if shown and reset the full timer
-        if (!document.getElementById('session-timeout-overlay')?.classList.contains('hidden')) {
-            _hideWarning();
-        }
-        _scheduleTimeout();
-    };
-
-    function _addListeners() {
-        ACTIVITY_EVENTS.forEach(evt => {
-            // Use passive:true for scroll/touch to avoid blocking the main thread on mobile
-            const opts = (evt.startsWith('touch') || evt === 'scroll' || evt === 'wheel' || evt.startsWith('pointer'))
-                ? { passive: true }
-                : false;
-            document.addEventListener(evt, _onActivity, opts);
-        });
-    }
-
-    function _removeListeners() {
-        ACTIVITY_EVENTS.forEach(evt => {
-            document.removeEventListener(evt, _onActivity, true);
-            document.removeEventListener(evt, _onActivity, false);
-        });
-    }
-
-    // ── Public API ───────────────────────────────────────────────
-
-    /**
-     * Start the inactivity session timer.
-     * Calling start() while already active resets to a fresh 35s window
-     * (ensures no duplicate timers exist after page navigation).
-     */
-    function start() {
-        // Full teardown first to guarantee no lingering timers or listeners
-        stop();
-        _active = true;
-        _addListeners();
-        _scheduleTimeout();
-        console.log('[SessionTimeout] Started — user will be logged out after 15 minutes of inactivity.');
-    }
-
-    /**
-     * Stop the timer and remove all event listeners.
-     * Call this explicitly on manual logout.
-     */
-    function stop() {
-        _active = false;
-        _paused = false;
-        _removeListeners();
-        _clearAllTimers();
-        _hideWarning();
-    }
-
-    /** Temporarily suspend expiry while a user-authorized save is in flight. */
-    function pause() { if (!_active) return; _paused = true; _clearAllTimers(); _hideWarning(); }
-
-    /** Resume expiry after a protected operation completes. */
-    function resume() { if (!_active) return; _paused = false; _scheduleTimeout(); }
-
-    /**
-     * Reset the timer to full 15 minutes (e.g., "Stay Logged In" button).
-     */
-    function reset() {
-        if (_active) {
-            _scheduleTimeout();
-        }
-    }
-
-    return { start, stop, reset, pause, resume };
-})();
 
 const ROLE_LABELS = { student: 'Student', instructor: 'Instructor', admin: 'Administrator' };
 const ROLE_BADGES = { student: 'badge-student', instructor: 'badge-instructor', admin: 'badge-admin' };
@@ -764,9 +570,6 @@ function checkAccess(role, pageId) {
 function showApp() {
     hide('login-page');
     show('app-layout');
-
-    // Start (or restart) the inactivity session timeout for the newly logged-in user
-    SessionTimeout.start();
 
     // Update sidebar user info
     setText('sidebar-avatar', currentUser.fullName.charAt(0).toUpperCase());
@@ -1406,14 +1209,16 @@ function runPythonCode(code, outputElementId) {
 
         if (outputElementId === 'console-output' && exerciseState.activeExercise) {
             exerciseState.isExecuted = true;
-            const actualOut = outputEl.textContent.replace('✅ Code executed successfully (no output).', '').trim();
-            const expectedOut = (exerciseState.expectedOutput || '').trim();
+            exerciseState.outputMatched = false;
+            if (exerciseState.expectedOutputResolved && exerciseState.expectedOutput) {
+                const actualOut = outputEl.textContent.replace('✅ Code executed successfully (no output).', '').trim();
+                const expectedOut = (exerciseState.expectedOutput || '').trim();
 
-            if (actualOut === expectedOut) {
-                exerciseState.outputMatched = true;
-            } else {
-                exerciseState.outputMatched = false;
-                console.log(`[Completion] Output mismatch. Expected: "${expectedOut}", Actual: "${actualOut}"`);
+                if (actualOut === expectedOut) {
+                    exerciseState.outputMatched = true;
+                } else {
+                    console.log(`[Completion] Output mismatch. Expected: "${expectedOut}", Actual: "${actualOut}"`);
+                }
             }
             updateExerciseStatus();
         }
@@ -1427,7 +1232,7 @@ function runPythonCode(code, outputElementId) {
             metricsEngine.recordExecution(false, err.toString());
         }
 
-        if (outputElementId === 'console-output') {
+        if (outputElementId === 'console-output' && exerciseState.activeExercise) {
             exerciseState.isExecuted = false;
             exerciseState.outputMatched = false;
             updateExerciseStatus();
@@ -2267,16 +2072,29 @@ function renderActiveExercise(ex) {
     exerciseState.isExecuted = false;
     exerciseState.outputMatched = false;
     exerciseState.expectedOutput = '';
+    exerciseState.expectedOutputResolved = false;
     updateExerciseStatus();
 
-    // Background execution to compute expected output
-    // solution key: user-created use 'solution', seeded may have 'python_code'
-    const solutionCode = ex.solution || ex.python_code || '';
-    if (solutionCode) computeExpectedOutput(solutionCode);
+    // Determine expected output:
+    // 1. Prefer the instructor's stored expected output on the exercise record.
+    // 2. Otherwise compute it dynamically by running the solution code (legacy seeds).
+    const storedOutput = ex.expectedOutput || ex.expected_output || '';
+    if (storedOutput) {
+        exerciseState.expectedOutput = storedOutput;
+        exerciseState.expectedOutputResolved = true;
+    } else {
+        // solution key: user-created use 'solution', seeded may have 'python_code'
+        const solutionCode = ex.solution || ex.python_code || '';
+        if (solutionCode) computeExpectedOutput(solutionCode);
+        else exerciseState.expectedOutputResolved = true;
+    }
 }
 
 function computeExpectedOutput(code) {
-    if (typeof Sk === 'undefined') return;
+    if (typeof Sk === 'undefined') {
+        exerciseState.expectedOutputResolved = true;
+        return;
+    }
     let outText = '';
     Sk.configure({
         output: function (text) { outText += text; },
@@ -2284,14 +2102,18 @@ function computeExpectedOutput(code) {
             if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) throw "File not found: '" + x + "'";
             return Sk.builtinFiles["files"][x];
         },
+        inputfun: function () { return ''; },
+        inputfunTakesPrompt: true,
         __future__: Sk.python3
     });
     Sk.misceval.asyncToPromise(function () {
         return Sk.importMainWithBody("<stdin>", false, code, true);
     }).then(() => {
         exerciseState.expectedOutput = outText;
+        exerciseState.expectedOutputResolved = true;
         console.log('[Completion] Expected output computed dynamically.');
     }).catch(err => {
+        exerciseState.expectedOutputResolved = true;
         console.warn('[Completion] Failed to compute expected output:', err);
     });
 }
@@ -2301,7 +2123,12 @@ function updateExerciseStatus() {
     const submitBtn = $id('btn-submit-exercise');
     if (!statusEl || !submitBtn || !exerciseState.activeExercise) return;
 
-    const isCompleted = exerciseState.isTranslated && exerciseState.isExecuted && exerciseState.outputMatched;
+    // Exact output matching is only required when a reliable expected output
+    // could be established. If not (e.g. interactive INPUT-based programs such
+    // as the Calculator activity), successful translate + run counts as complete.
+    const hasExpectedOutput = exerciseState.expectedOutputResolved && !!exerciseState.expectedOutput;
+    const isCompleted = exerciseState.isTranslated && exerciseState.isExecuted &&
+        (!hasExpectedOutput || exerciseState.outputMatched);
 
     if (isCompleted) {
         statusEl.textContent = '🟢 Status: Completed';
@@ -2343,7 +2170,6 @@ async function submitExercise() {
     };
     const saveBtn = $id('btn-submit-exercise');
     if (saveBtn) saveBtn.disabled = true;
-    SessionTimeout.pause();
     try {
         await dbSet(activityRef, docId, actRecord);
         if (typeof cachedActivity !== 'undefined') cachedActivity.unshift(actRecord);
@@ -2373,7 +2199,6 @@ async function submitExercise() {
         showToast('Unable to save submission. Please try again.', 'error');
     } finally {
         if (saveBtn) saveBtn.disabled = false;
-        SessionTimeout.resume();
     }
 }
 
@@ -2389,6 +2214,7 @@ function changeExercise() {
     exerciseState.isTranslated = false;
     exerciseState.isExecuted = false;
     exerciseState.outputMatched = false;
+    exerciseState.expectedOutputResolved = false;
     exerciseState.expectedOutput = '';
 
     const pseudoEditor = $id('pseudocode-editor');
@@ -2505,7 +2331,6 @@ async function saveExercise() {
 
     const saveBtn = $id('exercise-save-btn');
     if (saveBtn) saveBtn.disabled = true;
-    SessionTimeout.pause();
     try {
         const instId = currentUser?.id || currentUser?._docId || 'u2';
         if (editingExerciseId) {
@@ -2543,7 +2368,6 @@ async function saveExercise() {
         showToast('Failed to save exercise. Please check your connection and try again.', 'error');
     } finally {
         if (saveBtn) saveBtn.disabled = false;
-        SessionTimeout.resume();
     }
 }
 
@@ -4228,7 +4052,6 @@ async function confirmResubmissionRequest() {
         confirmButton.disabled = true;
         confirmButton.textContent = 'Sending…';
     }
-    SessionTimeout.pause();
     try {
         const now = new Date().toISOString();
         const instructorId = currentUser._docId || currentUser.id;
@@ -4275,7 +4098,6 @@ async function confirmResubmissionRequest() {
             confirmButton.disabled = false;
             confirmButton.textContent = 'Request Resubmission';
         }
-        SessionTimeout.resume();
     }
 }
 
