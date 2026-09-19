@@ -3,11 +3,12 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-mobile-20260919';
+const CACHE_NAME = 'pseudopy-logo-20260919-v2';
 const LOCAL_ASSETS = [
     './',
     './index.html',
     './style.css',
+    './style.css?v=pseudopy-logo-1',
     './mapper.js',
     './app.js',
     './compiler.js',
@@ -15,7 +16,12 @@ const LOCAL_ASSETS = [
     './metrics.js',
     './manifest.json',
     './database.js',
-    './icons/icon.svg'
+    './icons/icon.svg',
+    './icons/pseudopy-logo.png?v=2',
+    './icons/pseudopy-192.png?v=2',
+    './icons/pseudopy-apple.png?v=2',
+    './icons/pseudopy-favicon.png?v=2',
+    './icons/pseudopy-maskable.png?v=2'
 ];
 
 const EXTERNAL_ASSETS = [
@@ -91,4 +97,3 @@ self.addEventListener('message', (event) => {
         self.skipWaiting();
     }
 });
-
