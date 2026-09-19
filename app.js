@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    PSEUDOPY — APP.JS
    Automated Code Generation System
    Powered by Offline LocalStorage Database
@@ -272,11 +272,12 @@ async function refreshActivity() {
 
 function showToast(message, type = 'info') {
     const container = $id('toast-container');
-    const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+    const icons = { success: 'circle-check', error: 'circle-x', info: 'info' };
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${message}</span>`;
+    toast.innerHTML = `<span class="toast-icon">${icon(icons[type] || 'info')}</span><span>${message}</span>`;
     container.appendChild(toast);
+    refreshIcons(toast);
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.style.transform = 'translateX(30px)';
@@ -767,85 +768,6 @@ function refreshIcons(root) {
     lucide.createIcons({ root: root || document, icons: lucide.icons });
 }
 
-const uiEmojiIconMap = {
-    '📊': 'chart-column', '📈': 'trending-up', '📉': 'trending-down', '📄': 'file-text', '📋': 'clipboard-list',
-    '📑': 'files', '📥': 'download', '📦': 'package', '📅': 'calendar', '📧': 'mail', '🗓️': 'calendar-days', '🗓': 'calendar-days',
-    '📆': 'calendar-range', '🔍': 'search', '🔄': 'refresh-cw', '🔁': 'repeat-2', '🔃': 'refresh-cw',
-    '👥': 'users', '👤': 'user', '💡': 'lightbulb', '🔧': 'wrench', '⚡': 'zap', '🪄': 'wand-sparkles',
-    '📝': 'notebook-pen', '✏️': 'pencil', '✏': 'pencil', '🐍': 'code-2', '🧪': 'flask-conical', '⚙️': 'settings', '⚙': 'settings',
-    '🔑': 'key-round', '🔐': 'lock-keyhole', '🔒': 'lock', '🔓': 'unlock', '🔔': 'bell', '🔕': 'bell-off',
-    '👁️': 'eye', '👁': 'eye', '🙈': 'eye-off', '✅': 'circle-check', '☑️': 'square-check', '✔️': 'check',
-    '✔': 'check', '✓': 'check', '❌': 'circle-x', '⚠️': 'triangle-alert', '⚠': 'triangle-alert',
-    '⏳': 'hourglass', '⏱️': 'timer', '⏱': 'timer', '🎯': 'target', '🎉': 'party-popper', '🏆': 'trophy',
-    '📍': 'map-pin', '📱': 'smartphone', '💻': 'laptop', '🛡️': 'shield-check', '🛡': 'shield-check',
-    '✉️': 'mail', '✉': 'mail', '📩': 'mail', '🎓': 'graduation-cap', '💬': 'message-circle', '🔥': 'flame',
-    '➕': 'plus', '✕': 'x', '👉': 'arrow-right', '☰': 'menu', '🌓': 'sun-moon', '☀️': 'sun', '☀': 'sun',
-    '🎭': 'theater', '🕒': 'clock-3', '🪪': 'badge', '🔢': 'hash', '🧩': 'puzzle', '🔬': 'search',
-    '📡': 'radio', '🏫': 'school', '🧠': 'brain', '📟': 'panel-top', '🔴': 'circle', '🟢': 'circle',
-    '🟡': 'circle', '🔵': 'circle'
-};
-
-function replaceUiEmojiIcons(root) {
-    const container = root || document.body;
-    if (!container || container.nodeType !== Node.ELEMENT_NODE) return false;
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-    const textNodes = [];
-    let replaced = false;
-    let current;
-    while ((current = walker.nextNode())) {
-        const parent = current.parentElement;
-        if (!parent || ['SCRIPT', 'STYLE', 'TEXTAREA', 'PRE', 'CODE', 'SVG'].includes(parent.tagName)) continue;
-        if (Object.keys(uiEmojiIconMap).some(glyph => current.nodeValue.includes(glyph))) textNodes.push(current);
-    }
-    textNodes.forEach(textNode => {
-        const fragment = document.createDocumentFragment();
-        let text = textNode.nodeValue;
-        while (text) {
-            const matches = Object.keys(uiEmojiIconMap)
-                .map(glyph => ({ glyph, index: text.indexOf(glyph) }))
-                .filter(match => match.index >= 0)
-                .sort((a, b) => a.index - b.index || b.glyph.length - a.glyph.length);
-            if (!matches.length) {
-                fragment.appendChild(document.createTextNode(text));
-                break;
-            }
-            const match = matches[0];
-            if (match.index > 0) fragment.appendChild(document.createTextNode(text.slice(0, match.index)));
-            const iconElement = document.createElement('i');
-            iconElement.setAttribute('data-lucide', uiEmojiIconMap[match.glyph]);
-            iconElement.setAttribute('aria-hidden', 'true');
-            fragment.appendChild(iconElement);
-            text = text.slice(match.index + match.glyph.length);
-        }
-        textNode.replaceWith(fragment);
-        replaced = true;
-    });
-    if (replaced) refreshIcons(container);
-    return replaced;
-}
-
-function observeUiEmojiIcons() {
-    replaceUiEmojiIcons(document.body);
-    let pendingRoots = new Set();
-    let scheduled = false;
-    const flush = () => {
-        scheduled = false;
-        const roots = pendingRoots;
-        pendingRoots = new Set();
-        roots.forEach(root => replaceUiEmojiIcons(root));
-    };
-    const observer = new MutationObserver(records => {
-        records.forEach(record => record.addedNodes.forEach(node => {
-            if (node.nodeType === Node.ELEMENT_NODE && node.nodeName !== 'SVG') pendingRoots.add(node);
-        }));
-        if (pendingRoots.size && !scheduled) {
-            scheduled = true;
-            requestAnimationFrame(flush);
-        }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-}
-
 function animateAnalyticsCards() {
     if (typeof anime === 'undefined' || typeof anime.animate !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const analyticsPage = $id('page-analytics');
@@ -880,7 +802,7 @@ function animateAnalyticsCharts() {
 }
 
 function initializeLucideIcons() {
-    observeUiEmojiIcons();
+    refreshIcons();
 }
 
 if (document.readyState === 'loading') {
@@ -1113,7 +1035,7 @@ function runPythonCode(code, outputElementId) {
     const cleanCode = code;
 
     if (typeof Sk === 'undefined') {
-        outputEl.textContent = '⚠️ Skulpt library not loaded. Please check your internet connection.\n\nFalling back to static analysis...\n\n';
+        outputEl.textContent = 'Skulpt library not loaded. Please check your internet connection.\n\nFalling back to static analysis...\n\n';
         outputEl.textContent += simulateExecution(code);
         return;
     }
@@ -1199,7 +1121,7 @@ function runPythonCode(code, outputElementId) {
     Sk.misceval.asyncToPromise(function () {
         return Sk.importMainWithBody("<stdin>", false, cleanCode, true);
     }).then(function () {
-        if (!outputEl.textContent.trim()) outputEl.textContent = '✅ Code executed successfully (no output).';
+        if (!outputEl.textContent.trim()) outputEl.textContent = 'Code executed successfully (no output).';
         showToast('Code executed successfully!', 'success');
 
         // ── Panel 1: Record successful execution ──
@@ -1211,7 +1133,7 @@ function runPythonCode(code, outputElementId) {
             exerciseState.isExecuted = true;
             exerciseState.outputMatched = false;
             if (exerciseState.expectedOutputResolved && exerciseState.expectedOutput) {
-                const actualOut = outputEl.textContent.replace('✅ Code executed successfully (no output).', '').trim();
+                const actualOut = outputEl.textContent.replace('Code executed successfully (no output).', '').trim();
                 const expectedOut = (exerciseState.expectedOutput || '').trim();
 
                 if (actualOut === expectedOut) {
@@ -1223,7 +1145,7 @@ function runPythonCode(code, outputElementId) {
             updateExerciseStatus();
         }
     }).catch(function (err) {
-        appendOutput('\n❌ Error: ' + err.toString());
+        appendOutput('\nError: ' + err.toString());
         outputEl.className = 'output-content error';
         showToast('Runtime error occurred.', 'error');
 
@@ -1310,7 +1232,7 @@ function generateFeedback(pseudocode) {
         sa.analyze(ast);
         symbolTable = sa.symbolTable;
     } catch (e) {
-        feedback.push({ type: 'error', icon: '❌', text: '<strong>Analysis Error:</strong> Could not parse pseudocode. ' + e.message });
+        feedback.push({ type: 'error', icon: 'circle-x', text: '<strong>Analysis Error:</strong> Could not parse pseudocode. ' + e.message });
     }
 
     // ──────────────────────────────────────────────
@@ -1320,11 +1242,11 @@ function generateFeedback(pseudocode) {
     const hasEnd = trimmedLines.some(l => /^END$/i.test(l));
 
     if (hasBegin && hasEnd) {
-        feedback.push({ type: 'success', icon: '✅', text: '<strong>Good structure:</strong> Proper BEGIN/END blocks detected.' });
+        feedback.push({ type: 'success', icon: 'circle-check', text: '<strong>Good structure:</strong> Proper BEGIN/END blocks detected.' });
         qualityScore += 15;
     } else {
-        if (!hasBegin) feedback.push({ type: 'warning', icon: '⚠️', text: '<strong>Missing BEGIN:</strong> Start with a BEGIN statement.' });
-        if (!hasEnd) feedback.push({ type: 'warning', icon: '⚠️', text: '<strong>Missing END:</strong> End with an END statement.' });
+        if (!hasBegin) feedback.push({ type: 'warning', icon: 'triangle-alert', text: '<strong>Missing BEGIN:</strong> Start with a BEGIN statement.' });
+        if (!hasEnd) feedback.push({ type: 'warning', icon: 'triangle-alert', text: '<strong>Missing END:</strong> End with an END statement.' });
     }
 
     // ──────────────────────────────────────────────
@@ -1332,15 +1254,15 @@ function generateFeedback(pseudocode) {
     // ──────────────────────────────────────────────
     if (compileResult) {
         if (compileResult.valid) {
-            feedback.push({ type: 'success', icon: '✅', text: '<strong>Compilation:</strong> Pseudocode compiles successfully to Python with no syntax errors.' });
+            feedback.push({ type: 'success', icon: 'circle-check', text: '<strong>Compilation:</strong> Pseudocode compiles successfully to Python with no syntax errors.' });
             qualityScore += 25;
         } else {
             const syntaxErrors = compileResult.errors;
-            feedback.push({ type: 'error', icon: '❌', text: `<strong>Syntax Errors:</strong> ${syntaxErrors.length} error(s) detected. Fix these before translation.` });
+            feedback.push({ type: 'error', icon: 'circle-x', text: `<strong>Syntax Errors:</strong> ${syntaxErrors.length} error(s) detected. Fix these before translation.` });
             syntaxErrors.slice(0, 3).forEach(err => {
                 feedback.push({
-                    type: 'error', icon: '📍',
-                    text: `<strong>Line ${err.line}:</strong> ${err.message}${err.suggestion ? ' <em>💡 ' + err.suggestion + '</em>' : ''}`
+                    type: 'error', icon: 'map-pin',
+                    text: `<strong>Line ${err.line}:</strong> ${err.message}${err.suggestion ? ' <em>Tip: ' + err.suggestion + '</em>' : ''}`
                 });
             });
         }
@@ -1349,12 +1271,12 @@ function generateFeedback(pseudocode) {
         if (compileResult.warnings && compileResult.warnings.length > 0) {
             compileResult.warnings.slice(0, 3).forEach(w => {
                 feedback.push({
-                    type: 'warning', icon: '⚠️',
-                    text: `<strong>Line ${w.line}:</strong> ${w.message}${w.suggestion ? ' <em>💡 ' + w.suggestion + '</em>' : ''}`
+                    type: 'warning', icon: 'triangle-alert',
+                    text: `<strong>Line ${w.line}:</strong> ${w.message}${w.suggestion ? ' <em>Tip: ' + w.suggestion + '</em>' : ''}`
                 });
             });
         } else if (compileResult.valid) {
-            feedback.push({ type: 'success', icon: '✅', text: '<strong>Semantic Check:</strong> No undeclared variables or type warnings.' });
+            feedback.push({ type: 'success', icon: 'circle-check', text: '<strong>Semantic Check:</strong> No undeclared variables or type warnings.' });
             qualityScore += 10;
         }
     }
@@ -1365,7 +1287,7 @@ function generateFeedback(pseudocode) {
     if (symbolTable && symbolTable.size > 0) {
         const declaredVars = [...symbolTable.keys()];
         feedback.push({
-            type: 'success', icon: '📊',
+            type: 'success', icon: 'chart-column',
             text: `<strong>Variables:</strong> ${declaredVars.length} variable(s) tracked in symbol table: <code>${declaredVars.join(', ')}</code>`
         });
         qualityScore += 5;
@@ -1376,14 +1298,14 @@ function generateFeedback(pseudocode) {
         });
         if (numericVars.length > 0) {
             feedback.push({
-                type: 'success', icon: '🔢',
+                type: 'success', icon: 'hash',
                 text: `<strong>Type Safety:</strong> ${numericVars.length} variable(s) confirmed as numeric: <code>${numericVars.join(', ')}</code>`
             });
             qualityScore += 5;
         }
     } else if (ast && ast.body && ast.body.length > 0) {
         feedback.push({
-            type: 'warning', icon: '💡',
+            type: 'warning', icon: 'lightbulb',
             text: '<strong>Suggestion:</strong> Use DECLARE statements to explicitly type your variables for better code generation.'
         });
     }
@@ -1447,7 +1369,7 @@ function generateFeedback(pseudocode) {
         const complexityType = 'info';
 
         feedback.push({
-            type: complexityType, icon: '⚡',
+            type: complexityType, icon: 'zap',
             text: `<strong>Loop nesting estimate:</strong> ${complexity} — ${desc}`
         });
         qualityScore += 10; // Nesting alone does not establish algorithm quality.
@@ -1458,7 +1380,7 @@ function generateFeedback(pseudocode) {
     // ──────────────────────────────────────────────
     const patterns = detectAlgorithmicPatterns(pseudocode, ast);
     patterns.forEach(p => {
-        feedback.push({ type: 'success', icon: '🧩', text: p });
+        feedback.push({ type: 'success', icon: 'puzzle', text: p });
         qualityScore += 5;
     });
 
@@ -1467,23 +1389,23 @@ function generateFeedback(pseudocode) {
     // ──────────────────────────────────────────────
     const indentedLines = lines.filter(l => l.match(/^\s+/));
     if (indentedLines.length > 0) {
-        feedback.push({ type: 'success', icon: '✅', text: '<strong>Indentation:</strong> Uses indentation for readability. Good practice!' });
+        feedback.push({ type: 'success', icon: 'circle-check', text: '<strong>Indentation:</strong> Uses indentation for readability. Good practice!' });
         qualityScore += 5;
     } else if (lines.length > 3) {
-        feedback.push({ type: 'warning', icon: '💡', text: '<strong>Suggestion:</strong> Add indentation inside blocks (IF, FOR, WHILE) for improved readability.' });
+        feedback.push({ type: 'warning', icon: 'lightbulb', text: '<strong>Suggestion:</strong> Add indentation inside blocks (IF, FOR, WHILE) for improved readability.' });
     }
 
     const displayCount = trimmedLines.filter(l => /^(DISPLAY|PRINT|OUTPUT)\s/i.test(l)).length;
     if (displayCount > 0) {
-        feedback.push({ type: 'success', icon: '✅', text: `<strong>Output:</strong> ${displayCount} DISPLAY/PRINT statement(s) found.` });
+        feedback.push({ type: 'success', icon: 'circle-check', text: `<strong>Output:</strong> ${displayCount} DISPLAY/PRINT statement(s) found.` });
         qualityScore += 5;
     } else {
-        feedback.push({ type: 'warning', icon: '💡', text: '<strong>Suggestion:</strong> Add DISPLAY statements to show results to the user.' });
+        feedback.push({ type: 'warning', icon: 'lightbulb', text: '<strong>Suggestion:</strong> Add DISPLAY statements to show results to the user.' });
     }
 
     const declareCount = trimmedLines.filter(l => /^DECLARE\s/i.test(l)).length;
     if (declareCount > 0) {
-        feedback.push({ type: 'success', icon: '✅', text: `<strong>Declarations:</strong> ${declareCount} DECLARE statement(s) — explicit typing improves code reliability.` });
+        feedback.push({ type: 'success', icon: 'circle-check', text: `<strong>Declarations:</strong> ${declareCount} DECLARE statement(s) — explicit typing improves code reliability.` });
         qualityScore += 5;
     }
 
@@ -1493,7 +1415,7 @@ function generateFeedback(pseudocode) {
     if (compileResult && compileResult.metrics) {
         const m = compileResult.metrics;
         feedback.push({
-            type: 'success', icon: '⏱️',
+            type: 'success', icon: 'timer',
             text: `<strong>Generation Time:</strong> ${m.totalTime}ms total — Lexer: ${m.lexTime}ms, Parser: ${m.parseTime}ms, Semantic: ${m.semanticTime}ms, CodeGen: ${m.codeGenTime}ms`
         });
         qualityScore += 5;
@@ -1507,18 +1429,18 @@ function generateFeedback(pseudocode) {
         if (improvement.hasData) {
             if (improvement.correctnessImprovement > 0) {
                 feedback.push({
-                    type: 'success', icon: '📈',
+                    type: 'success', icon: 'trending-up',
                     text: `<strong>Session Improvement:</strong> ${improvement.correctnessImprovement}% improvement in code correctness since your first translation this session.`
                 });
             } else if (improvement.correctnessImprovement < 0) {
                 feedback.push({
-                    type: 'warning', icon: '📉',
+                    type: 'warning', icon: 'trending-down',
                     text: `<strong>Session Trend:</strong> Error count has increased since your first translation. Review the error messages carefully.`
                 });
             }
 
             feedback.push({
-                type: 'success', icon: '📊',
+                type: 'success', icon: 'chart-column',
                 text: `<strong>Session Stats:</strong> ${improvement.translationCount} translations, ${improvement.overallSuccessRate}% overall compilation success rate.`
             });
         }
@@ -1543,7 +1465,7 @@ function generateFeedback(pseudocode) {
 
     feedback.unshift({
         type: qualityType,
-        icon: qualityType === 'success' ? '🏆' : qualityType === 'warning' ? '📊' : '🔧',
+        icon: qualityType === 'success' ? 'trophy' : qualityType === 'warning' ? 'chart-column' : 'wrench',
         text: `<strong>Code Quality Score: ${qualityScore}/100 — ${quality}</strong> — ${successes} passed, ${warnings} suggestion(s), ${errors} error(s). Total: ${trimmedLines.length} lines.`
     });
 
@@ -1595,9 +1517,10 @@ function detectAlgorithmicPatterns(pseudocode, ast) {
 function renderFeedback(feedback) {
     setHtml('feedback-results', feedback.map(f => `
     <div class="feedback-item ${f.type}">
-      <span class="fb-icon">${f.icon}</span>
+      <span class="fb-icon">${icon(f.icon)}</span>
       <span class="fb-text">${f.text}</span>
     </div>`).join(''));
+    refreshIcons($id('feedback-results'));
 }
 
 
