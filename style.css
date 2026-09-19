@@ -6082,3 +6082,62 @@ select.form-input {
     min-width: 0;
   }
 }
+
+
+/* Native resubmission dialog */
+.resubmission-dialog {
+  width: min(34rem, calc(100vw - 2rem));
+}
+
+.resubmission-dialog-intro {
+  margin: 0 0 1rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.resubmission-field-label {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.resubmission-field-label span {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.resubmission-feedback {
+  display: block;
+  width: 100%;
+  min-height: 8rem;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.resubmission-feedback:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.resubmission-field-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 1.4rem;
+  margin-top: 0.4rem;
+}
+
+.resubmission-character-count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}

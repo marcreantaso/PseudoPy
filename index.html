@@ -1078,6 +1078,29 @@
         </div>
       </div>
 
+      <!-- Native resubmission request dialog -->
+      <div id="resubmission-request-modal" class="modal-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="resubmission-request-title">
+        <div class="modal resubmission-dialog">
+          <div class="modal-header">
+            <h3 id="resubmission-request-title" class="modal-title"><i data-lucide="rotate-ccw" aria-hidden="true"></i> Request Resubmission</h3>
+            <button class="modal-close" type="button" onclick="closeResubmissionRequest()" aria-label="Close resubmission dialog"><i data-lucide="x" aria-hidden="true"></i></button>
+          </div>
+          <div class="modal-body">
+            <p class="resubmission-dialog-intro">Send the student clear guidance before they submit a new attempt.</p>
+            <label class="resubmission-field-label" for="resubmission-feedback">Revision feedback <span>(optional)</span></label>
+            <textarea id="resubmission-feedback" class="resubmission-feedback" maxlength="1000" rows="5" oninput="document.getElementById('resubmission-feedback-count').textContent=this.value.length" placeholder="Example: Check your IF condition and test the boundary value."></textarea>
+            <div class="resubmission-field-footer">
+              <span id="resubmission-feedback-error" class="form-error hidden" role="alert"></span>
+              <span class="resubmission-character-count"><span id="resubmission-feedback-count">0</span>/1000</span>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" type="button" onclick="closeResubmissionRequest()">Cancel</button>
+            <button id="confirm-resubmission-btn" class="btn btn-primary" type="button" onclick="confirmResubmissionRequest()">Request Resubmission</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ═══════════════════════════════════
            PAGE: Manage Exercises (Instructor)
            ═══════════════════════════════════ -->
