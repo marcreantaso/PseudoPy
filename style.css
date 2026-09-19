@@ -340,6 +340,19 @@ h4 {
   box-shadow: 0 0 30px rgba(59, 130, 246, 0.3);
 }
 
+.pseudopy-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+
+.hero-logo .logo-icon,
+.sidebar-header .brand-icon:has(.pseudopy-logo) {
+  background: transparent;
+}
+
 .hero-logo .logo-text {
   font-size: 1.35rem;
   font-weight: 800;
