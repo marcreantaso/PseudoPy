@@ -2503,6 +2503,9 @@ async function saveExercise() {
     }
     if (hasError) return;
 
+    const saveBtn = $id('exercise-save-btn');
+    if (saveBtn) saveBtn.disabled = true;
+    SessionTimeout.pause();
     try {
         const instId = currentUser?.id || currentUser?._docId || 'u2';
         if (editingExerciseId) {
@@ -2536,8 +2539,11 @@ async function saveExercise() {
         closeExerciseModal();
         await loadExercises();
     } catch (err) {
-        console.error('[Offline Database] Save exercise error:', err);
-        showToast('Failed to save exercise.', 'error');
+        console.error('[Exercise] Save error:', err);
+        showToast('Failed to save exercise. Please check your connection and try again.', 'error');
+    } finally {
+        if (saveBtn) saveBtn.disabled = false;
+        SessionTimeout.resume();
     }
 }
 
