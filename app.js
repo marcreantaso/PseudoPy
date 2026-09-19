@@ -4187,6 +4187,7 @@ function requestResubmission(docId = activeSubmissionDetailId) {
     const feedback = $id('resubmission-feedback');
     const error = $id('resubmission-feedback-error');
     if (feedback) feedback.value = '';
+    setText('resubmission-feedback-count', '0');
     if (error) error.classList.add('hidden');
     const modal = $id('resubmission-request-modal');
     if (!modal) return;
