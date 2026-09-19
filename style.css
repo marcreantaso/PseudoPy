@@ -6039,3 +6039,46 @@ select.form-input {
 @media (hover: none) {
   .an-bar-tooltip { display: none !important; }
 }
+
+
+/* Exercise instructions stay in the page flow instead of covering the editor. */
+#active-exercise-panel {
+  position: relative !important;
+  z-index: 1 !important;
+  isolation: isolate;
+}
+
+#active-exercise-panel > .panel-header {
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+#active-exercise-panel > .panel-header > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+@media (max-width: 700px) {
+  #active-exercise-panel > .panel-header {
+    align-items: flex-start;
+    padding: 0.85rem 1rem !important;
+  }
+
+  #active-exercise-panel > .panel-header > div:first-child {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem !important;
+  }
+
+  #active-exercise-panel > .panel-header > div:last-child {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  #active-exercise-panel > .panel-header button {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
