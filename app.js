@@ -17,7 +17,8 @@ let exerciseState = {
     isExecuted: false,
     outputMatched: false,
     expectedOutput: null,
-    activeExercise: null
+    activeExercise: null,
+    resubmissionOf: null
 };
 
 // ── Cached data (loaded from Offline Database) ──
@@ -570,13 +571,14 @@ function handleLogout(reason) {
    ============================================================ */
 
 const SessionTimeout = (() => {
-    const TIMEOUT_MS  = 35 * 1000;  // 35 seconds total inactivity window
-    const WARNING_MS  = 10 * 1000;  // Show warning at 10 seconds remaining
+    const TIMEOUT_MS  = 15 * 60 * 1000;  // 15 minutes total inactivity window
+    const WARNING_MS  = 60 * 1000;  // Show warning at 60 seconds remaining
 
     let _mainTimer    = null;  // Fires at (TIMEOUT_MS - WARNING_MS)
     let _warnTimer    = null;  // Fires WARNING_MS after the warning is shown
     let _countdownInt = null;  // Updates the countdown display every second
     let _active       = false; // Whether the timeout is currently running
+    let _paused       = false; // Temporarily paused during long database writes
 
     // ── Activity Events ──────────────────────────────────────────
     // All standard desktop + mobile (iOS / Android) interactions
@@ -586,6 +588,7 @@ const SessionTimeout = (() => {
         'scroll', 'wheel',
         'touchstart', 'touchmove', 'touchend',
         'pointerdown', 'pointermove', 'pointerup',
+        'input', 'beforeinput', 'change', 'focusin', 'submit',
         'visibilitychange'
     ];
 
@@ -641,6 +644,7 @@ const SessionTimeout = (() => {
 
     function _scheduleTimeout() {
         _clearAllTimers();
+        if (_paused) return;
         _hideWarning();
 
         // Phase 1: Wait until the warning threshold
@@ -669,6 +673,7 @@ const SessionTimeout = (() => {
     // ── Activity Handler ─────────────────────────────────────────
     // Bound version stored so we can removeEventListener by reference
     const _onActivity = (e) => {
+        if (_paused) return;
         // Ignore visibility change — tab hidden should NOT reset the timer
         if (e.type === 'visibilitychange' && document.hidden) return;
 
@@ -709,7 +714,7 @@ const SessionTimeout = (() => {
         _active = true;
         _addListeners();
         _scheduleTimeout();
-        console.log('[SessionTimeout] Started — user will be logged out after 35s of inactivity.');
+        console.log('[SessionTimeout] Started — user will be logged out after 15 minutes of inactivity.');
     }
 
     /**
@@ -718,13 +723,20 @@ const SessionTimeout = (() => {
      */
     function stop() {
         _active = false;
+        _paused = false;
         _removeListeners();
         _clearAllTimers();
         _hideWarning();
     }
 
+    /** Temporarily suspend expiry while a user-authorized save is in flight. */
+    function pause() { if (!_active) return; _paused = true; _clearAllTimers(); _hideWarning(); }
+
+    /** Resume expiry after a protected operation completes. */
+    function resume() { if (!_active) return; _paused = false; _scheduleTimeout(); }
+
     /**
-     * Reset the timer to full 35 seconds (e.g., "Stay Logged In" button).
+     * Reset the timer to full 15 minutes (e.g., "Stay Logged In" button).
      */
     function reset() {
         if (_active) {
@@ -732,7 +744,7 @@ const SessionTimeout = (() => {
         }
     }
 
-    return { start, stop, reset };
+    return { start, stop, reset, pause, resume };
 })();
 
 const ROLE_LABELS = { student: 'Student', instructor: 'Instructor', admin: 'Administrator' };
@@ -2195,7 +2207,7 @@ async function loadStudentProgress() {
     }
 }
 
-async function attemptExercise(id) {
+async function attemptExercise(id, resubmissionOf = null) {
     const ex = await dbGet(exercisesRef, id);
     if (!ex) return;
 
@@ -2212,6 +2224,9 @@ async function attemptExercise(id) {
     }
 
     localStorage.setItem('pseudopy_active_exercise', id);
+    exerciseState.resubmissionOf = resubmissionOf || null;
+    if (pseudoEditor) pseudoEditor.readOnly = false;
+    if (pyOut) pyOut.readOnly = false;
     renderActiveExercise(ex);
 
     navigateTo('write-pseudocode');
@@ -2301,73 +2316,65 @@ function updateExerciseStatus() {
     }
 }
 
-function submitExercise() {
+async function submitExercise() {
     const ex = exerciseState.activeExercise;
-    if (!ex) return;
+    if (!ex || !currentUser) return;
     if (!confirm('Are you sure you want to submit this exercise?')) return;
-
     const pseudo = getValue('pseudocode-editor');
     const py = getPythonCode('python-output');
     const outTextEl = $id('console-output');
     const outText = outTextEl ? outTextEl.textContent || '' : '';
     const now = new Date();
-    const docId = 'act_' + Date.now();
-
+    const docId = 'act_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    const studentAccountId = currentUser._docId || currentUser.id;
     const actRecord = {
-        _docId: docId,
-        student: currentUser ? currentUser.fullName : 'Guest Student',
-        studentId: currentUser ? (currentUser.studentId || currentUser.username) : '2024-001',
-        section: currentUser ? (currentUser.section || 'BSCS-3A') : 'BSCS-3A',
-        instructorId: currentUser ? (currentUser.instructorId || 'u2') : 'u2',
+        _docId: docId, id: docId, exerciseId: ex._docId || ex.id,
+        revisionOf: exerciseState.resubmissionOf || null,
+        attemptNumber: exerciseState.resubmissionOf ? 2 : 1,
+        student: currentUser.fullName,
+        studentId: currentUser.studentId || currentUser.username || studentAccountId,
+        studentAccountId, section: currentUser.section || 'BSCS-3A',
+        instructorId: ex.instructorId || ex.createdBy || currentUser.instructorId || 'u2',
         exercise: ex.title || ex.concept || 'Untitled Exercise',
-        difficulty: ex.difficulty || 'moderate',
-        status: 'Completed',
-        score: '100%',
-        time: now.toISOString(),
-        timestamp: now.getTime(),
-        pseudocode: pseudo,
-        python_code: py,
-        result: 'Success',
-        errorType: null,
-        processingTime: '0.45s',
-        output: outText
+        difficulty: ex.difficulty || 'moderate', status: 'Completed',
+        reviewStatus: 'submitted', score: '100%', time: now.toISOString(),
+        timestamp: now.getTime(), pseudocode: pseudo, python_code: py,
+        result: 'Success', errorType: null, processingTime: '0.45s', output: outText
     };
-
-    dbSet(activityRef, docId, actRecord).then(async () => {
-        // Immediate local sync for Learning Analytics
-        if (typeof cachedActivity !== 'undefined') {
-            cachedActivity.unshift(actRecord);
-        }
-        if (typeof currentFilteredActivity !== 'undefined') {
-            currentFilteredActivity.unshift(actRecord);
-        }
-        if (typeof updateAnalyticsUI === 'function') {
-            try { updateAnalyticsUI(); } catch (e) {}
-        }
-
+    const saveBtn = $id('btn-submit-exercise');
+    if (saveBtn) saveBtn.disabled = true;
+    SessionTimeout.pause();
+    try {
+        await dbSet(activityRef, docId, actRecord);
+        if (typeof cachedActivity !== 'undefined') cachedActivity.unshift(actRecord);
+        if (typeof currentFilteredActivity !== 'undefined') currentFilteredActivity.unshift(actRecord);
+        if (typeof updateAnalyticsUI === 'function') { try { updateAnalyticsUI(); } catch (e) {} }
         const overlay = $id('submission-success-overlay');
         const timeDisplay = $id('submission-time-display');
         if (overlay && timeDisplay) {
-            timeDisplay.innerHTML = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '<br>' +
-                now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            timeDisplay.innerHTML = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '<br>' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
             overlay.classList.remove('hidden');
-
             const returnBtn = $id('btn-return-to-exercises');
             if (returnBtn) returnBtn.disabled = false;
         }
-
         const pseudoEditor = $id('pseudocode-editor');
         if (pseudoEditor) pseudoEditor.readOnly = true;
         const pyOutput = $id('python-output');
         if (pyOutput) pyOutput.readOnly = true;
-
         const translateBtn = $id('btn-translate-pseudocode');
         if (translateBtn) translateBtn.disabled = true;
         const runBtn = $id('btn-run-code');
         if (runBtn) runBtn.disabled = true;
-
         await loadStudentProgress();
-    });
+        showToast(exerciseState.resubmissionOf ? 'Resubmission submitted successfully.' : 'Exercise submitted successfully.', 'success');
+        exerciseState.resubmissionOf = null;
+    } catch (error) {
+        console.error('[Exercise] Submission failed:', error);
+        showToast('Unable to save submission. Please try again.', 'error');
+    } finally {
+        if (saveBtn) saveBtn.disabled = false;
+        SessionTimeout.resume();
+    }
 }
 
 function changeExercise() {
@@ -4970,7 +4977,7 @@ async function loadStudentNotifications() {
         const allNotifs = await dbGetAll(notificationsRef);
         const studentId = currentUser._docId || currentUser.id;
         const myNotifs = allNotifs
-            .filter(n => n.studentId === studentId || n.studentId === currentUser.id || n.studentId === currentUser._docId)
+            .filter(n => n.studentId === studentId || n.studentId === currentUser.id || n.studentId === currentUser._docId || n.accountId === studentId || n.accountId === currentUser.id || n.accountId === currentUser._docId)
             .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
         const unreadCount = myNotifs.filter(n => !n.isRead).length;
@@ -5012,7 +5019,7 @@ async function loadStudentNotifications() {
                 : 'Recent';
             const isUnread = !n.isRead;
             return `
-                <div class="notif-item ${isUnread ? 'unread' : 'read'}" onclick="handleNotificationClick('${n._docId}', '${n.exerciseId || ''}')">
+                <div class="notif-item ${isUnread ? 'unread' : 'read'}" onclick="handleNotificationClick('${n._docId}', '${n.exerciseId || ''}', '${n.submissionId || ''}')">
                     <div class="notif-item-header">
                         <div class="notif-item-title-row">
                             ${isUnread ? '<span class="notif-unread-dot"></span>' : ''}
@@ -5050,7 +5057,7 @@ function toggleNotificationDropdown(event) {
 /**
  * Handles clicking a notification item: marks as read and navigates to exercise.
  */
-async function handleNotificationClick(notifId, exerciseId) {
+async function handleNotificationClick(notifId, exerciseId, submissionId = '') {
     try {
         if (notifId) {
             await dbUpdate(notificationsRef, notifId, { isRead: true });
@@ -5071,7 +5078,7 @@ async function handleNotificationClick(notifId, exerciseId) {
             setTimeout(async () => {
                 const ex = await dbGet(exercisesRef, exerciseId);
                 if (ex) {
-                    attemptExercise(exerciseId);
+                    attemptExercise(exerciseId, submissionId || null);
                 }
             }, 200);
         }
