@@ -1088,7 +1088,7 @@
           <div class="modal-body">
             <p class="resubmission-dialog-intro">Send the student clear guidance before they submit a new attempt.</p>
             <label class="resubmission-field-label" for="resubmission-feedback">Revision feedback <span>(optional)</span></label>
-            <textarea id="resubmission-feedback" class="resubmission-feedback" maxlength="1000" rows="5" placeholder="Example: Check your IF condition and test the boundary value."></textarea>
+            <textarea id="resubmission-feedback" class="resubmission-feedback" maxlength="1000" rows="5" oninput="document.getElementById('resubmission-feedback-count').textContent=this.value.length" placeholder="Example: Check your IF condition and test the boundary value."></textarea>
             <div class="resubmission-field-footer">
               <span id="resubmission-feedback-error" class="form-error hidden" role="alert"></span>
               <span class="resubmission-character-count"><span id="resubmission-feedback-count">0</span>/1000</span>
