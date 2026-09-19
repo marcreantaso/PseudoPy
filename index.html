@@ -31,6 +31,7 @@
   <meta name="application-name" content="PseudoPy">
 
   <link rel="stylesheet" href="style.css?v=pseudopy-logo-1">
+  <link rel="stylesheet" href="motion.css?v=1">
   <link rel="icon" href="icons/pseudopy-favicon.png?v=2" type="image/png" sizes="32x32">
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.js"></script>
 </head>
@@ -780,6 +781,7 @@
           <div>
             <h2 class="an-page-title">Learning Analytics</h2>
             <p class="an-page-sub">Track student progress, common errors, and usage metrics.</p>
+            <span id="analytics-sync-status" class="analytics-sync-status" role="status" aria-live="polite">Connecting to updates…</span>
           </div>
         </div>
 
@@ -2642,7 +2644,8 @@
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=20260907"></script>
+  <script src="analytics-live.js?v=1"></script>
+  <script src="app.js?v=motion-1"></script>
   <script src="devtools.js?v=20260909"></script>
   <script>
     if (window.lucide) lucide.createIcons({ icons: lucide.icons });

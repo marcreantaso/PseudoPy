@@ -534,7 +534,7 @@ function getLocalCollection(ref) {
     if (!list) {
         if (ref === usersRef) list = getInitialSeedUsers();
         else if (ref === exercisesRef) list = SEED_EXERCISES_LIST;
-        else if (ref === activityRef) list = getInitialSeedActivity();
+        else if (ref === activityRef) list = [];
         else list = [];
     }
 
@@ -547,19 +547,6 @@ function getLocalCollection(ref) {
         }
     }
 
-    // Guarantee that activity list always has the full rich demo dataset merged in
-    if (ref === activityRef && Array.isArray(list)) {
-        if (list.length < 15) {
-            list = getInitialSeedActivity();
-        } else {
-            // Merge missing seed records so chart always has all demo bars
-            const seedRecords = getInitialSeedActivity();
-            const existingIds = new Set(list.map(a => a._docId));
-            const missingSeeds = seedRecords.filter(s => !existingIds.has(s._docId));
-            if (missingSeeds.length > 0) list = [...list, ...missingSeeds];
-        }
-    }
-
     setLocalCollection(ref, list);
     return list;
 }
@@ -567,6 +554,7 @@ function getLocalCollection(ref) {
 function setLocalCollection(ref, data) {
     try {
         localStorage.setItem(`pseudopy_local_${ref}`, JSON.stringify(data));
+        window.dispatchEvent(new CustomEvent('pseudopy:collection-change', { detail: { ref } }));
     } catch (e) { }
 }
 
@@ -579,20 +567,15 @@ function setLocalCollection(ref, data) {
  */
 async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
     let results = [];
+    let receivedSnapshot = false;
 
     // 1. Try Firestore
     if (firestoreReady()) {
         try {
             const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
-            if (snapshot && !snapshot.empty) {
+            if (snapshot) {
+                receivedSnapshot = true;
                 results = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
-                // For activity, always merge with full seed demo data so charts are rich
-                if (ref === activityRef) {
-                    const seedRecords = getInitialSeedActivity();
-                    const existingIds = new Set(results.map(r => r._docId));
-                    const missingSeeds = seedRecords.filter(s => !existingIds.has(s._docId));
-                    if (missingSeeds.length > 0) results = [...results, ...missingSeeds];
-                }
                 setLocalCollection(ref, results);
             }
         } catch (err) {
@@ -600,8 +583,8 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
         }
     }
 
-    // 2. Fallback to Local/Seed data if empty.
-    if (!results || results.length === 0) {
+    // 2. Use stored data only when no server snapshot was received.
+    if (!receivedSnapshot) {
         results = getLocalCollection(ref);
         // If Firestore is connected, seed it in the background.
         if (firestoreReady() && results.length > 0) {
@@ -842,12 +825,6 @@ async function seedDatabase() {
             console.log('[Database] Exercises seeded ✅');
         }
 
-        const actSnap = await withFirestoreTimeout(firestore.collection(activityRef).get());
-        if (actSnap.empty) {
-            console.log('[Database] Seeding sample activity into Firestore...');
-            await batchSeed(activityRef, SEED_ACTIVITY_LIST);
-            console.log('[Database] Activity seeded ✅');
-        }
     } catch (err) {
         console.warn('[Database] Seeding notice (local fallback active):', err.message);
     }

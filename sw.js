@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-logo-20260919-v2';
+const CACHE_NAME = 'pseudopy-motion-20260919-v1';
 const LOCAL_ASSETS = [
     './',
     './index.html',
@@ -11,6 +11,9 @@ const LOCAL_ASSETS = [
     './style.css?v=pseudopy-logo-1',
     './mapper.js',
     './app.js',
+    './app.js?v=motion-1',
+    './analytics-live.js?v=1',
+    './motion.css?v=1',
     './compiler.js',
     './dataset.json',
     './metrics.js',
