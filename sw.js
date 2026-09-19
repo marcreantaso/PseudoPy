@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-logo-20260919-v1';
+const CACHE_NAME = 'pseudopy-logo-20260919-v2';
 const LOCAL_ASSETS = [
     './',
     './index.html',
@@ -17,11 +17,11 @@ const LOCAL_ASSETS = [
     './manifest.json',
     './database.js',
     './icons/icon.svg',
-    './icons/pseudopy-logo.png',
-    './icons/pseudopy-192.png',
-    './icons/pseudopy-apple.png',
-    './icons/pseudopy-favicon.png',
-    './icons/pseudopy-maskable.png'
+    './icons/pseudopy-logo.png?v=2',
+    './icons/pseudopy-192.png?v=2',
+    './icons/pseudopy-apple.png?v=2',
+    './icons/pseudopy-favicon.png?v=2',
+    './icons/pseudopy-maskable.png?v=2'
 ];
 
 const EXTERNAL_ASSETS = [
