@@ -2517,7 +2517,7 @@ async function saveExercise() {
                 expectedOutput: expectedOutputVal,
                 instructorId: instId
             });
-            await createExerciseNotifications(editingExerciseId, titleVal, 'updated');
+            createExerciseNotifications(editingExerciseId, titleVal, 'updated').catch(error => console.error('[Notifications] Background update failed:', error));
             showToast('Exercise updated successfully!', 'success');
         } else {
             const newId = 'ex' + Date.now();
@@ -2533,7 +2533,7 @@ async function saveExercise() {
                 instructorId: instId,
                 createdAt: new Date().toISOString().split('T')[0]
             });
-            await createExerciseNotifications(newId, titleVal, 'added');
+            createExerciseNotifications(newId, titleVal, 'added').catch(error => console.error('[Notifications] Background create failed:', error));
             showToast('Exercise added successfully!', 'success');
         }
         closeExerciseModal();
