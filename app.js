@@ -891,7 +891,12 @@ function navigateTo(pageId) {
     if (pageId === 'manage-students') loadStudents();
     if (pageId === 'exercises-student') loadStudentExercises();
     if (pageId === 'student-settings') loadStudentSettings();
-    if (pageId === 'password-requests') loadPasswordRequests();
+    if (pageId === 'password-requests') {
+        startAuditLogRealtime();
+        loadPasswordRequests();
+    } else if (auditLogUnsubscribe) {
+        stopAuditLogRealtime();
+    }
     if (pageId === 'password-recovery') loadPasswordRecovery();
     if (pageId === 'compiler-metrics') loadCompilerMetrics();
     if (pageId === 'developer-options' && typeof initDevTools === 'function') initDevTools();
@@ -5157,6 +5162,24 @@ async function markAllNotificationsAsRead(event) {
    ============================================================ */
 
 let currentAdminReviewRequestId = null;
+let auditLogUnsubscribe = null;
+let auditRealtimeTimer = null;
+
+function startAuditLogRealtime() {
+    if (auditLogUnsubscribe) return;
+    auditLogUnsubscribe = subscribeCollection(auditLogRef, () => {
+        if (currentPage !== 'password-requests') return;
+        clearTimeout(auditRealtimeTimer);
+        auditRealtimeTimer = setTimeout(() => loadPasswordRequests(), 80);
+    }, error => console.warn('[Audit] Realtime subscription failed:', error.message));
+}
+
+function stopAuditLogRealtime() {
+    if (auditLogUnsubscribe) auditLogUnsubscribe();
+    auditLogUnsubscribe = null;
+    clearTimeout(auditRealtimeTimer);
+    auditRealtimeTimer = null;
+}
 
 async function clearSecurityAuditHistory() {
     if (!window.confirm('Clear all security audit history? Password recovery requests will remain unchanged.')) return;
@@ -5264,6 +5287,10 @@ async function loadPasswordRequests() {
         }));
 
     const allLogs = [...auditLogs, ...legacyHistory]
+        // Never render incomplete legacy audit rows as Unknown/UNKNOWN events.
+        .filter(record => record.action && record.action !== 'unknown' &&
+            (record.actorId || record.studentId || record.instructorId) &&
+            (record.actorName || record.studentName || record.instructorName))
         .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
 
     setText('stat-total-changes', allLogs.length);
