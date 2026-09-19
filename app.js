@@ -538,6 +538,7 @@ async function handleLogin() {
 }
 
 function handleLogout() {
+    stopAnalyticsRealtime();
     // Invalidate session state
     currentUser = null;
     currentPage = '';
@@ -687,7 +688,8 @@ function navigateTo(pageId) {
     setText('topbar-title', titles[pageId] || 'Dashboard');
 
     // Load page-specific data (async)
-    if (pageId === 'analytics') loadAnalytics();
+    if (pageId === 'analytics') startAnalyticsRealtime();
+    else stopAnalyticsRealtime();
     if (pageId === 'manage-exercises') loadExercises();
     if (pageId === 'manage-users') loadUsers();
     if (pageId === 'manage-students') loadStudents();
@@ -3220,10 +3222,12 @@ let currentFilteredActivity = [];
 let analyticsCurrentPage = 1;
 const analyticsPageSize = 5;
 
-async function loadAnalytics() {
-    cachedActivity = await refreshActivity();
-    cachedUsers = await refreshUsers();
-    cachedExercises = await refreshExercises();
+async function loadAnalytics(data) {
+    if (!data) { startAnalyticsRealtime(); return; }
+    const demoIds = new Set(getInitialSeedActivity().map(a => a._docId));
+    cachedActivity = (data[activityRef] || []).filter(a => !demoIds.has(a._docId));
+    cachedUsers = data[usersRef] || [];
+    cachedExercises = data[exercisesRef] || [];
 
     const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
     const myStudents = cachedUsers.filter(u => u.role === 'student' && (
@@ -3255,36 +3259,10 @@ async function loadAnalytics() {
         return false;
     });
 
-    if (!cachedInstructorActivity || cachedInstructorActivity.length === 0) {
-        cachedInstructorActivity = typeof getInitialSeedActivity === 'function' ? getInitialSeedActivity() : [...cachedActivity];
-    } else if (isDefaultInst && typeof getInitialSeedActivity === 'function') {
-        // Always ensure the full rich demo activity is included for the default instructor
-        const seedRecords = getInitialSeedActivity();
-        const existingIds = new Set(cachedInstructorActivity.map(a => a._docId));
-        const missingSeeds = seedRecords.filter(s => !existingIds.has(s._docId));
-        if (missingSeeds.length > 0) {
-            cachedInstructorActivity = [...cachedInstructorActivity, ...missingSeeds];
-        }
-    }
-
-    currentFilteredActivity = [...cachedInstructorActivity];
-
-    // Set default filter values
-    const searchEl = $id('filter-search');
-    const dateEl = $id('filter-date');
-    const monthEl = $id('filter-month');
-    const weekEl = $id('filter-week');
-    const statusEl = $id('filter-submission');
-
-    if (searchEl) searchEl.value = '';
-    if (dateEl) dateEl.value = '';
-    if (monthEl) monthEl.value = '';
-    if (weekEl) weekEl.value = '';
-    if (statusEl) statusEl.value = '';
-
-    analyticsCurrentPage = 1;
-    updateWeekDropdownLabels();
+    const previousPage = analyticsCurrentPage;
     applyAnalyticsFilters();
+    analyticsCurrentPage = previousPage;
+    renderFilteredActivityTable(currentFilteredActivity);
 }
 
 function analyticsGoToPage(pageNum) {
@@ -3322,7 +3300,7 @@ function applyAnalyticsFilters() {
 
     updateWeekDropdownLabels();
 
-    const sourceActivity = cachedInstructorActivity && cachedInstructorActivity.length ? cachedInstructorActivity : cachedActivity;
+    const sourceActivity = cachedInstructorActivity || [];
 
     currentFilteredActivity = sourceActivity.filter(a => {
         const recordDate = new Date(a.timestamp || a.time);
@@ -3475,7 +3453,6 @@ function updateAnalyticsUI() {
 
     // Render Paginated Table
     renderFilteredActivityTable(currentFilteredActivity);
-    animateAnalyticsCards();
 }
 
 function renderSubmissionActivityChart(filteredActivity) {
@@ -3527,11 +3504,11 @@ function renderSubmissionActivityChart(filteredActivity) {
                 const key = `${year}-${String(mIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 count += (dateMap[key] || []).length;
             }
-            return { label: r.label, sub: `${mName} ${r.start}–${r.end}`, dateKey: null, weekRange: r, count, active: weekVal === String(r.w) };
+            return { label: r.label, sub: `${mName} ${r.start}–${r.end}`, dateKey: null, weekRange: r, month: mIdx, year, count, active: weekVal === String(r.w) };
         });
     } else {
         // Default: daily view for selected week (or show last 7 unique days if no week)
-        let startDay = 4, year = chartYear, mIdx = 7; // default Aug Week 2
+        let startDay = 1, year = chartYear, mIdx = new Date().getMonth();
         if (monthVal !== '') mIdx = parseInt(monthVal);
         if (weekVal === '1') startDay = 1;
         else if (weekVal === '2') startDay = 4;
@@ -3543,7 +3520,7 @@ function renderSubmissionActivityChart(filteredActivity) {
             const allDates = Object.keys(dateMap).sort();
             if (allDates.length > 0) {
                 // Find the most recent date, then show 7 days ending there
-                const latestDate = new Date(allDates[allDates.length - 1]);
+                const latestDate = new Date(allDates[allDates.length - 1] + 'T00:00:00');
                 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                 const monNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                 for (let i = 6; i >= 0; i--) {
@@ -3593,10 +3570,10 @@ function renderSubmissionActivityChart(filteredActivity) {
 
     container.innerHTML = weekDays.map((w, idx) => {
         const count = w.count !== undefined ? w.count : (dateMap[w.dateKey] || []).length;
-        const heightPct = Math.max((count / yMax) * 100, 3);
+        const heightPct = (count / yMax) * 100;
         const isHighlighted = w.active;
         return `
-            <div class="an-bar-col ${isHighlighted ? 'highlighted' : ''}" data-key="${w.dateKey || ''}" data-idx="${idx}">
+            <div class="an-bar-col ${isHighlighted ? 'highlighted' : ''}" data-key="${w.dateKey || ''}" data-idx="${idx}" tabindex="0" role="button" aria-label="${w.sub}: ${count} submissions">
                 <span class="an-bar-val">${count}</span>
                 <div class="an-bar-inner" style="height:${heightPct}%"></div>
                 <span class="an-bar-lbl">${w.label}<br><span style="font-size:0.62rem;opacity:0.75">${w.sub}</span></span>
@@ -3604,13 +3581,16 @@ function renderSubmissionActivityChart(filteredActivity) {
         `;
     }).join('');
 
-    animateAnalyticsCharts();
 
     // Attach Hover and Click Handlers
     container.querySelectorAll('.an-bar-col').forEach((col, idx) => {
         const key = col.getAttribute('data-key');
         const w = weekDays[idx];
-        const items = key ? (dateMap[key] || []) : [];
+        const items = key ? (dateMap[key] || []) : Object.entries(dateMap)
+            .filter(([date]) => {
+                const [year, month, day] = date.split('-').map(Number);
+                return w.weekRange && year === w.year && month === w.month + 1 && day >= w.weekRange.start && day <= w.weekRange.end;
+            }).flatMap(([, rows]) => rows);
 
         col.addEventListener('mouseenter', () => {
             if (!tooltip) return;
@@ -3618,7 +3598,7 @@ function renderSubmissionActivityChart(filteredActivity) {
             const pendingCount = items.filter(i => i.status === 'Pending').length;
             const failedCount = items.filter(i => i.status === 'Failed').length;
             const totalCount = w.count !== undefined ? w.count : items.length;
-            const studentNames = Array.from(new Set(items.map(i => i.student))).slice(0, 3);
+            const studentNames = Array.from(new Set(items.map(i => i.student))).slice(0, 3).map(name => escapeHtml(String(name || '')));
 
             const headerText = key
                 ? new Date(key + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
@@ -3645,12 +3625,19 @@ function renderSubmissionActivityChart(filteredActivity) {
 
         col.addEventListener('mouseleave', () => { if (tooltip) tooltip.classList.add('hidden'); });
 
+        col.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); col.click(); }
+        });
         col.addEventListener('click', () => {
             if (tooltip) tooltip.classList.add('hidden');
             if (key) {
                 const dateInput = $id('filter-date');
                 if (dateInput) { dateInput.value = key; applyAnalyticsFilters(); }
                 $qs('.an-table-card')?.scrollIntoView({ behavior: 'smooth' });
+            } else if (w.weekRange) {
+                $id('filter-month').value = String(w.month);
+                $id('filter-week').value = String(w.weekRange.w);
+                applyAnalyticsFilters();
             }
         });
     });
@@ -3714,7 +3701,7 @@ function renderErrorDistributionChart(filteredActivity) {
     const legendItemsHtml = [];
 
     categories.forEach(cat => {
-        const deg = (cat.pct / 100) * 360;
+        const deg = (cat.count / totalErrors) * 360;
         const nextDeg = currentDeg + deg;
         gradientStops.push(`${cat.color} ${currentDeg.toFixed(1)}deg ${nextDeg.toFixed(1)}deg`);
         currentDeg = nextDeg;
@@ -6163,5 +6150,3 @@ function autoFormatPseudocode() {
     updateGutter(); // Refresh line numbers
     showToast('Pseudocode formatted!', 'success');
 }
-
-

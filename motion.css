@@ -1,0 +1,37 @@
+/* Native motion keeps navigation smooth without a network animation dependency. */
+:root { --motion-ease: cubic-bezier(.22, 1, .36, 1); }
+.page-view { animation: soft-arrival 360ms var(--motion-ease); }
+.modal-overlay:not(.hidden) .modal { animation: soft-arrival 280ms var(--motion-ease); }
+.btn, .nav-item { transition: background-color 180ms ease, box-shadow 180ms ease, transform 180ms var(--motion-ease); }
+.btn:active { transform: scale(.97); }
+.btn:focus-visible, .an-bar-col:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+@keyframes soft-arrival { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.an-chart-card, .an-kpi-card {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--bg-card) 94%, #22d3ee), var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--border) 78%, #38bdf8);
+  box-shadow: inset 0 1px 0 #ffffff08, 0 12px 32px #00000012;
+}
+.an-chart-title { letter-spacing: -.025em; }
+.an-bar-inner {
+  background: linear-gradient(0deg, #6366f1, #22d3ee);
+  border-radius: 7px 7px 2px 2px;
+  box-shadow: 0 0 16px #22d3ee20, inset 0 1px 0 #ffffff88;
+  min-height: 0;
+  flex-shrink: 0;
+  animation: bar-arrival 420ms var(--motion-ease);
+}
+.an-bar-col.highlighted .an-bar-inner { background: linear-gradient(0deg, #7c3aed, #c084fc); }
+.an-bar-val { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.an-donut-chart { box-shadow: 0 0 28px #6366f126; border: 1px solid #ffffff18; }
+.an-donut-val, .an-kpi-value { font-variant-numeric: tabular-nums; }
+.analytics-sync-status { display: inline-flex; align-items: center; gap: .5rem; margin-top: .65rem; font-size: .75rem; color: var(--text-secondary); }
+.analytics-sync-status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; }
+.analytics-sync-status[data-live="true"]::before { background: #34d399; box-shadow: 0 0 10px #34d39966; }
+@keyframes bar-arrival { from { transform: scaleY(.94); opacity: .6; } to { transform: scaleY(1); opacity: 1; } }
+@media (hover: hover) {
+  .btn:hover { transform: translateY(-1px); }
+  .an-bar-col:hover .an-bar-inner { filter: brightness(1.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
