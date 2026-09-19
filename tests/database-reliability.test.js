@@ -39,3 +39,15 @@ test('audit records use a canonical actor and target schema', () => {
     assert.match(source, /metadata: metadata \|\| \{\}/);
 });
 
+
+
+test('audit log rejects unidentified legacy rows and subscribes to live changes', () => {
+    const database = read('database.js');
+    const app = read('app.js');
+    assert.match(database, /filter\(record => record\.action && record\.action !== 'unknown'/);
+    assert.match(database, /collection\(ref\)\.onSnapshot/);
+    assert.match(database, /function subscribeCollection\(ref, onChange, onError\)/);
+    assert.match(app, /function startAuditLogRealtime\(\)/);
+    assert.match(app, /subscribeCollection\(auditLogRef/);
+    assert.match(app, /Never render incomplete legacy audit rows/);
+});
