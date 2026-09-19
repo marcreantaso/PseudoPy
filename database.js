@@ -882,7 +882,34 @@ function normalizeAuditRecord(record) {
 
 async function refreshAuditLog() {
     const records = await dbGetAll(auditLogRef);
-    return records.map(normalizeAuditRecord);
+    return records
+        .map(normalizeAuditRecord)
+        // Legacy partial writes must never appear as a fake Unknown event.
+        .filter(record => record.action && record.action !== 'unknown' && record.actorId && record.actorName);
+}
+
+/**
+ * Subscribe to a Firestore collection and keep the local read cache current.
+ * The initial snapshot is delivered immediately, then every server change is
+ * delivered without a page refresh. The returned function detaches the listener.
+ */
+function subscribeCollection(ref, onChange, onError) {
+    if (!firestoreReady() || typeof firestore.collection(ref).onSnapshot !== 'function') {
+        return () => {};
+    }
+    let active = true;
+    const unsubscribe = firestore.collection(ref).onSnapshot(snapshot => {
+        if (!active) return;
+        const records = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
+        setLocalCollection(ref, records);
+        onChange(records);
+    }, error => {
+        if (active && typeof onError === 'function') onError(error);
+    });
+    return () => {
+        active = false;
+        if (typeof unsubscribe === 'function') unsubscribe();
+    };
 }
 
 function normalizeUsername(username) {
