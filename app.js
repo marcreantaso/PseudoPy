@@ -3577,13 +3577,19 @@ function renderSubmissionActivityChart(filteredActivity) {
         dateMap[key].push(a);
     });
 
+    // Derive the chart year from the actual data so bar date keys always
+    // line up with the stamped submission dates (not a hardcoded year).
+    let chartYear = new Date().getFullYear();
+    const chartYears = Object.keys(dateMap).map(k => parseInt(k.split('-')[0], 10)).filter(y => !isNaN(y));
+    if (chartYears.length > 0) chartYear = Math.max(...chartYears);
+
     // Build chart columns based on selected filter context
     let weekDays = [];
 
     if (viewMode === 'month' || (monthVal !== '' && !weekVal)) {
         // Monthly view: show each week as a bar
         const mIdx = monthVal !== '' ? parseInt(monthVal) : new Date().getMonth();
-        const year = 2025;
+        const year = chartYear;
         const mName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mIdx];
         const weekRanges = [
             { label: 'Wk 1', start: 1, end: 3, w: 1 },
@@ -3602,7 +3608,7 @@ function renderSubmissionActivityChart(filteredActivity) {
         });
     } else {
         // Default: daily view for selected week (or show last 7 unique days if no week)
-        let startDay = 4, year = 2025, mIdx = 7; // default Aug Week 2
+        let startDay = 4, year = chartYear, mIdx = 7; // default Aug Week 2
         if (monthVal !== '') mIdx = parseInt(monthVal);
         if (weekVal === '1') startDay = 1;
         else if (weekVal === '2') startDay = 4;
@@ -3898,18 +3904,18 @@ function renderFilteredActivityTable(activityList) {
         return `
         <tr>
           <td>
-            <div class="user-cell" style="display:flex;align-items:center;gap:0.6rem">
-              <div class="avatar-sm" style="width:28px;height:28px;border-radius:50%;background:#334155;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:#f8fafc">${(a.student || '?').charAt(0)}</div>
-              <span style="font-weight:600;color:var(--text-primary);font-size:0.85rem">${a.student || '—'}</span>
+            <div class="an-user-cell">
+              <div class="an-avatar-sm">${(a.student || '?').charAt(0)}</div>
+              <span class="an-user-name">${a.student || '—'}</span>
             </div>
           </td>
-          <td style="color:var(--text-muted);font-size:0.82rem;font-family:monospace">${a.studentId || '—'}</td>
-          <td style="color:var(--text-secondary);font-size:0.85rem">${a.exercise || '—'}</td>
+          <td class="an-cell-muted an-cell-mono">${a.studentId || '—'}</td>
+          <td class="an-cell-secondary">${a.exercise || '—'}</td>
           <td>${diffBadge(a.difficulty)}</td>
           <td>${anStatusBadge(a.status)}</td>
-          <td style="font-weight:700;font-size:0.85rem;color:${scoreColor(a)}">${a.score || '—'}</td>
-          <td style="color:var(--text-muted);font-size:0.82rem">${dateStr}</td>
-          <td style="color:var(--text-muted);font-size:0.82rem">${a.processingTime || '—'}</td>
+          <td class="an-cell-score" style="color:${scoreColor(a)}">${a.score || '—'}</td>
+          <td class="an-cell-muted">${dateStr}</td>
+          <td class="an-cell-muted">${a.processingTime || '—'}</td>
           <td>${resultBadge(a)}</td>
           <td>
                         <button class="an-eye-btn" title="View Details" onclick="viewSubmissionDetail('${docId}')">

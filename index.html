@@ -899,15 +899,14 @@
         <!-- Charts Row -->
         <div class="an-charts-row">
           <!-- Bar Chart -->
-          <div class="an-chart-card" style="flex:1.4">
+          <div class="an-chart-card an-grow-wide">
             <div class="an-chart-header">
               <div>
-                <div style="display:flex;align-items:center;gap:0.5rem">
-                  <span style="font-weight:700;font-size:0.95rem;color:var(--text-primary)">Student Submission
-                    Activity</span>
+<div class="an-chart-title">Student Submission
+                  Activity
                   <span class="an-info-badge" title="Shows the number of student submissions per day"><i data-lucide="info" aria-hidden="true"></i></span>
                 </div>
-                <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem" id="an-chart-sub-label">Shows
+                <div class="an-chart-subtitle" id="an-chart-sub-label">Shows
                   the number of student submissions based on the selected week.</div>
               </div>
               <div class="an-view-toggle">
@@ -929,14 +928,13 @@
           </div>
 
           <!-- Doughnut Chart -->
-          <div class="an-chart-card" style="flex:1">
+          <div class="an-chart-card an-grow">
             <div class="an-chart-header">
               <div>
-                <div style="display:flex;align-items:center;gap:0.5rem">
-                  <span style="font-weight:700;font-size:0.95rem;color:var(--text-primary)">Error Distribution</span>
+                <div class="an-chart-title">Error Distribution
                   <span class="an-info-badge" title="Shows the percentage distribution of error types"><i data-lucide="info" aria-hidden="true"></i></span>
                 </div>
-                <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem">Shows the percentage
+                <div class="an-chart-subtitle">Shows the percentage
                   distribution of error types.</div>
               </div>
             </div>
@@ -958,11 +956,11 @@
         <div class="an-table-card">
           <div class="an-table-header">
             <div>
-              <span style="font-weight:700;font-size:0.95rem;color:var(--text-primary)">Recent Student
+              <span class="an-table-title">Recent Student
                 Submissions</span>
-              <span style="font-weight:400;color:var(--text-muted);font-size:0.9rem"> (Filtered Results)</span>
+              <span class="an-table-count"> (Filtered Results)</span>
             </div>
-            <span id="activity-count-label" style="font-size:0.8rem;color:var(--text-muted)"></span>
+            <span id="activity-count-label" class="an-table-count"></span>
           </div>
           <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable data table">
             <table class="data-table" style="min-width:1000px">
