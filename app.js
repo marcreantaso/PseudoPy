@@ -5236,6 +5236,10 @@ async function loadPasswordRequests() {
         }));
 
     const allLogs = [...auditLogs, ...legacyHistory]
+        // Never render incomplete legacy audit rows as Unknown/UNKNOWN events.
+        .filter(record => record.action && record.action !== 'unknown' &&
+            (record.actorId || record.studentId || record.instructorId) &&
+            (record.actorName || record.studentName || record.instructorName))
         .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
 
     setText('stat-total-changes', allLogs.length);
