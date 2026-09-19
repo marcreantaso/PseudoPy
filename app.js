@@ -4034,6 +4034,7 @@ function renderFilteredActivityTable(activityList) {
         const norm = (s || '').toLowerCase();
         if (norm === 'completed') return `<span class="badge-status badge-completed">Completed</span>`;
         if (norm === 'failed') return `<span class="badge-status badge-failed">Failed</span>`;
+        if (norm === 'revision requested') return `<span class="badge-status badge-pending">Revision Requested</span>`;
         return `<span class="badge-status badge-pending">Pending</span>`;
     };
 
@@ -4127,6 +4128,7 @@ function viewSubmissionDetail(docId) {
         'Completed': '<span class="badge badge-active">Completed</span>',
         'In Progress': '<span class="badge badge-student">In Progress</span>',
         'Failed': '<span class="badge badge-inactive">Failed</span>',
+        'Revision Requested': '<span class="badge badge-warning">Revision Requested</span>',
     };
     setHtml('sdm-status', statusBadges[a.status] || `<span class="badge">${a.status}</span>`);
 
