@@ -31,6 +31,8 @@
   <meta name="application-name" content="PseudoPy">
 
   <link rel="stylesheet" href="style.css?v=pseudopy-logo-1">
+  <link rel="stylesheet" href="ui-icons.css?v=1">
+  <script src="ui-icons.js?v=2" defer></script>
   <link rel="icon" href="icons/pseudopy-favicon.png?v=2" type="image/png" sizes="32x32">
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.js"></script>
 </head>
@@ -225,7 +227,7 @@
                   style="position:absolute; right:0.25rem; background:transparent; border:none; font-size:1.1rem; opacity:0.7; cursor:pointer;">•••</button>
               </div>
             </div>
-              <div>✓ Passwords must match</div>
+              <div>{{ui:Check}} Passwords must match</div>
             <div style="display:flex; gap:0.75rem; margin-top:1.25rem;">
               <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">← Cancel</button>
               <button class="btn btn-primary" onclick="submitPasswordReset()" style="flex:2"><i data-lucide="lock-keyhole" aria-hidden="true"></i> Reset Password</button>
@@ -430,7 +432,7 @@
                 <span id="active-ex-title">Exercise Title</span>
               </h3>
               <span class="badge" id="active-ex-difficulty">Medium</span>
-              <span class="badge badge-warning" id="active-ex-status" style="margin-left: 0.5rem;">🟡 Status: In
+              <span class="badge badge-warning" id="active-ex-status" style="margin-left: 0.5rem;">{{ui:Circle}} Status: In
                 Progress</span>
             </div>
             <div style="display: flex; gap: 0.5rem; align-items: center;">
@@ -641,7 +643,7 @@
         <div style="margin-top:1.5rem">
           <div class="output-container">
             <div class="panel-header">
-              <h3>📟 Console Output</h3>
+              <h3>{{ui:Terminal}} Console Output</h3>
             </div>
             <div id="execute-console" class="output-content">Waiting for code execution...</div>
           </div>
@@ -707,7 +709,7 @@
       <div id="page-exercises-student" class="page-view hidden">
         <div class="page-header student-ex-header" style="justify-content: space-between; align-items: flex-end; margin-bottom: 1.25rem;">
           <div>
-            <h2 style="display: flex; align-items: center; gap: 0.5rem;"><span>📑</span> Available Exercises</h2>
+            <h2 style="display: flex; align-items: center; gap: 0.5rem;"><span>{{ui:Files}}</span> Available Exercises</h2>
             <p style="color: var(--text-secondary); margin-top: 0.25rem; font-size: 0.9rem;">Practice writing pseudocode with these exercises from your instructor.</p>
           </div>
           <div id="student-progress-container" class="student-progress-box">
@@ -1265,7 +1267,7 @@
         <div style="margin-top:1rem">
           <div class="output-container">
             <div class="panel-header">
-              <h3>📟 Output</h3>
+              <h3>{{ui:Terminal}} Output</h3>
             </div>
             <div id="instructor-console" class="output-content">Waiting for code execution...</div>
           </div>
@@ -1278,7 +1280,7 @@
       <div id="page-compiler-metrics" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>🧪 Compiler Metrics &amp; Evaluation</h2>
+            <h2>{{ui:FlaskConical}} Compiler Metrics &amp; Evaluation</h2>
             <p>Automated evaluation of the pseudocode-to-Python compiler using the built-in dataset of ground-truth test
               cases. Measures <strong>accuracy</strong> (exact-match), <strong>precision &amp; recall</strong>
               (line-level overlap), <strong>compilation success rate</strong>, <strong>runtime error rate</strong>, and
@@ -1287,14 +1289,14 @@
             </p>
           </div>
           <button id="run-benchmark-btn" class="btn btn-primary" style="width:auto" onclick="runBenchmarkTest()">
-            🧪 Run Benchmark
+            {{ui:FlaskConical}} Run Benchmark
           </button>
         </div>
 
         <!-- Purpose Banner -->
         <div
           style="background:var(--accent-subtle);border:1px solid var(--border-accent);border-radius:var(--radius-md);padding:0.85rem 1.1rem;margin-bottom:1.5rem;display:flex;gap:0.75rem;align-items:flex-start;">
-          <span style="font-size:1.3rem;line-height:1;">ℹ️</span>
+          <span style="font-size:1.3rem;line-height:1;">{{ui:Info}}</span>
           <div style="font-size:0.82rem;color:var(--text-secondary);line-height:1.65;">
             <strong style="color:var(--text-primary);">How to use this page:</strong><br>
             <strong>Session Metrics</strong> track live activity from your current session (translations &amp;
@@ -1310,7 +1312,7 @@
         <div style="margin-bottom:0.6rem;">
           <h3
             style="font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;">
-            📡 Live Session Metrics</h3>
+            {{ui:Radio}} Live Session Metrics</h3>
           <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">Updated automatically each time you
             translate pseudocode or execute Python code in this session.</p>
         </div>
@@ -1375,7 +1377,7 @@
         <div class="charts-grid" style="margin-bottom:1.5rem">
           <div class="chart-container">
             <div class="panel-header">
-              <h3>⏱️ Pipeline Stage Timing (Avg)</h3>
+              <h3>{{ui:Timer}} Pipeline Stage Timing (Avg)</h3>
             </div>
             <div style="padding:0.4rem 1rem 0;font-size:0.78rem;color:var(--text-muted);">Average milliseconds spent in
               each compiler stage: Lexer → Parser → Semantic Analysis → Code Generation.</div>
@@ -1390,7 +1392,7 @@
         <div style="margin-bottom:0.6rem;">
           <h3
             style="font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;">
-            🎯 Benchmark Results</h3>
+            {{ui:Target}} Benchmark Results</h3>
           <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">Computed by running the full
             <code>dataset.json</code> test suite through the compiler. Click <em>Run Benchmark</em> above to populate
             these.
@@ -1398,38 +1400,38 @@
         </div>
         <div class="stats-grid" style="margin-bottom:1rem">
           <div class="stat-card">
-            <div class="stat-icon">🎯</div>
+            <div class="stat-icon">{{ui:Target}}</div>
             <div class="stat-value" id="benchmark-accuracy">—</div>
             <div class="stat-label">Accuracy</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Exact-match vs. ground truth</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">🔍</div>
+            <div class="stat-icon">{{ui:Search}}</div>
             <div class="stat-value" id="benchmark-precision">—</div>
             <div class="stat-label">Avg Precision</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Correct lines / generated lines
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">📡</div>
+            <div class="stat-icon">{{ui:Radio}}</div>
             <div class="stat-value" id="benchmark-recall">—</div>
             <div class="stat-label">Avg Recall</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Expected lines covered</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">📊</div>
+            <div class="stat-icon">{{ui:ChartColumn}}</div>
             <div class="stat-value" id="benchmark-f1">—</div>
             <div class="stat-label">F1 Score</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Harmonic mean of P &amp; R</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">🔧</div>
+            <div class="stat-icon">{{ui:Wrench}}</div>
             <div class="stat-value" id="benchmark-compile-rate">—</div>
             <div class="stat-label">Compile Rate</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">% of test cases compiled OK</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">⚡</div>
+            <div class="stat-icon">{{ui:Zap}}</div>
             <div class="stat-value" id="benchmark-avg-time">—</div>
             <div class="stat-label">Avg Time / Test</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Mean ms per test case</div>
@@ -1439,7 +1441,7 @@
         <!-- Per-test-case detailed results table -->
         <div class="data-table-container" tabindex="0" role="region" aria-label="Scrollable data table" id="benchmark-detail-wrapper" style="margin-bottom:1.5rem;display:none;">
           <div class="panel-header" style="display:flex;align-items:center;justify-content:space-between;">
-            <h3>📋 Per-Test-Case Results</h3>
+            <h3>{{ui:ClipboardList}} Per-Test-Case Results</h3>
             <span id="benchmark-total-label" style="font-size:0.78rem;color:var(--text-muted);"></span>
           </div>
           <div style="overflow-x:auto;">
@@ -1463,7 +1465,7 @@
         <!-- ── Concept Mastery Analysis ── -->
         <div class="data-table-container" tabindex="0" role="region" aria-label="Scrollable data table" style="margin-top: 1.5rem;">
           <div class="panel-header">
-            <h3>🎓 Concept Mastery Analytics (Constructivism Model)</h3>
+            <h3>{{ui:GraduationCap}} Concept Mastery Analytics (Constructivism Model)</h3>
           </div>
           <div style="padding:0.4rem 1rem 0;font-size:0.78rem;color:var(--text-muted);">Groups benchmark test results by
             programming concept. <strong>Mastery Level</strong> is determined by the exact-match accuracy: ≥80% =
@@ -1495,19 +1497,19 @@
       <div id="page-password-recovery" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>🔑 Password Recovery Requests</h2>
+            <h2>{{ui:KeyRound}} Password Recovery Requests</h2>
             <p>Review and authorize student password recovery requests. No passwords will be viewed or revealed.</p>
           </div>
         </div>
 
         <div class="stats-grid" style="margin-bottom:1.5rem">
           <div class="stat-card">
-            <div class="stat-icon">⏳</div>
+            <div class="stat-icon">{{ui:Hourglass}}</div>
             <div class="stat-value" id="stat-recovery-pending" style="color:var(--warning)">0</div>
             <div class="stat-label">Pending Requests</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">📋</div>
+            <div class="stat-icon">{{ui:ClipboardList}}</div>
             <div class="stat-value" id="stat-recovery-total">0</div>
             <div class="stat-label">Total Requests</div>
           </div>
@@ -1541,15 +1543,15 @@
       <div id="page-manage-users" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>👥 Manage Instructors</h2>
+            <h2>{{ui:Users}} Manage Instructors</h2>
             <p>Create, edit, and manage instructor accounts.</p>
           </div>
           <div style="display: flex; gap: 0.75rem;">
             <button class="btn btn-secondary" style="width:auto" onclick="exportData('users')">
-              📥 Export Instructors
+              {{ui:Download}} Export Instructors
             </button>
             <button class="btn btn-primary" style="width:auto" onclick="openInstructorAddModal()">
-              ➕ Add Instructor
+              {{ui:Plus}} Add Instructor
             </button>
           </div>
         </div>
@@ -1615,7 +1617,7 @@
         <!-- Filter & Search Bar -->
         <div class="an-filter-bar" style="margin-bottom:1.5rem">
           <div class="an-filter-item an-filter-search" style="flex:1">
-            <span class="an-filter-label">🔍 SEARCH</span>
+            <span class="an-filter-label">{{ui:Search}} SEARCH</span>
             <div class="an-search-wrap">
               <svg class="an-search-icon" viewBox="0 0 20 20" fill="none">
                 <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.6" />
@@ -1627,7 +1629,7 @@
           </div>
 
           <div class="an-filter-item" style="width:160px">
-            <span class="an-filter-label">✔ STATUS</span>
+            <span class="an-filter-label">{{ui:Check}} STATUS</span>
             <select id="instructor-filter-status" class="an-input" onchange="applyInstructorFilters()">
               <option value="" selected>All Statuses</option>
               <option value="active">Active</option>
@@ -1637,7 +1639,7 @@
           </div>
 
           <div class="an-filter-item" style="width:200px">
-            <span class="an-filter-label">↕ SORT BY</span>
+            <span class="an-filter-label">{{ui:ArrowUpDown}} SORT BY</span>
             <select id="instructor-sort" class="an-input" onchange="applyInstructorFilters()">
               <option value="newest" selected>Date Added (Newest)</option>
               <option value="oldest">Date Added (Oldest)</option>
@@ -1648,7 +1650,7 @@
           </div>
 
           <button class="btn btn-secondary an-reset-btn" onclick="loadUsers()" style="margin-top:auto;height:38px">
-            🔄 Refresh
+            {{ui:RefreshCw}} Refresh
           </button>
         </div>
 
@@ -1656,7 +1658,7 @@
         <div class="data-table-container" tabindex="0" role="region" aria-label="Scrollable data table">
           <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">
             <div style="display:flex;align-items:center;gap:0.5rem">
-              <span style="font-size:1.1rem">👥</span>
+              <span style="font-size:1.1rem">{{ui:Users}}</span>
               <h3 style="margin:0">All Instructors</h3>
             </div>
             <span id="instructor-count-label" style="font-size:0.8rem;color:var(--text-muted)"></span>
@@ -1716,7 +1718,7 @@
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('cp-current-password', this)"
                   style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
-                  👁️
+                  {{ui:Eye}}
                 </button>
               </div>
             </div>
@@ -1728,7 +1730,7 @@
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('cp-new-password', this)"
                   style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
-                  👁️
+                  {{ui:Eye}}
                 </button>
               </div>
             </div>
@@ -1740,7 +1742,7 @@
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('cp-confirm-password', this)"
                   style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
-                  👁️
+                  {{ui:Eye}}
                 </button>
               </div>
             </div>
@@ -1752,7 +1754,7 @@
               </ul>
             </div>
             <button class="btn btn-primary" style="width:auto;" onclick="handleChangePassword()">
-              🔑 Update Password
+              {{ui:KeyRound}} Update Password
             </button>
           </div>
         </div>
@@ -1800,19 +1802,19 @@
         <!-- Three-Column Layout -->
         <div class="devtools-columns">
           <div class="devtools-col devtools-col-left">
-            <div class="devtools-panel"><div class="devtools-panel-header"><h3>📝 Source Pseudocode</h3></div>
+            <div class="devtools-panel"><div class="devtools-panel-header"><h3>{{ui:NotebookPen}} Source Pseudocode</h3></div>
               <div class="devtools-panel-body"><textarea id="devtools-pseudocode" class="code-editor devtools-editor" spellcheck="false" placeholder="Enter pseudocode here...&#10;&#10;Example:&#10;BEGIN&#10;  DECLARE x AS INTEGER&#10;  SET x TO 5&#10;  IF x > 0 THEN&#10;    DISPLAY &quot;Positive&quot;&#10;  END IF&#10;END"></textarea></div>
             </div>
           </div>
           <div class="devtools-col devtools-col-center">
-            <div class="devtools-panel"><div class="devtools-panel-header"><h3>⚙️ Active Stage</h3><span class="devtools-stage-badge" id="devtools-active-stage-badge">IDLE</span></div>
+            <div class="devtools-panel"><div class="devtools-panel-header"><h3>{{ui:Settings}} Active Stage</h3><span class="devtools-stage-badge" id="devtools-active-stage-badge">IDLE</span></div>
               <div class="devtools-panel-body devtools-stage-detail" id="devtools-stage-detail">
-                <div class="devtools-idle-message"><div style="font-size:2rem;margin-bottom:0.5rem">🔬</div><p>Enter pseudocode and click <strong>Run Pipeline</strong> to begin compiler analysis.</p></div>
+                <div class="devtools-idle-message"><div style="font-size:2rem;margin-bottom:0.5rem">{{ui:Microscope}}</div><p>Enter pseudocode and click <strong>Run Pipeline</strong> to begin compiler analysis.</p></div>
               </div>
             </div>
           </div>
           <div class="devtools-col devtools-col-right">
-            <div class="devtools-panel"><div class="devtools-panel-header"><h3>🐍 Generated Python</h3><button class="btn btn-ghost btn-sm" onclick="devToolsCopyPython()" title="Copy">📋</button></div>
+            <div class="devtools-panel"><div class="devtools-panel-header"><h3>{{ui:FileCode}} Generated Python</h3><button class="btn btn-ghost btn-sm" onclick="devToolsCopyPython()" title="Copy">{{ui:ClipboardList}}</button></div>
               <div class="devtools-panel-body"><pre id="devtools-python-output" class="devtools-python-pre">Waiting for compilation...</pre></div>
             </div>
           </div>
@@ -1905,7 +1907,7 @@
 
         <!-- Auto-Fix Detail -->
         <div class="devtools-autofix-panel hidden" id="devtools-autofix-panel">
-          <div class="devtools-panel-header"><h3>🔧 Validation-Driven Refinement</h3></div>
+          <div class="devtools-panel-header"><h3>{{ui:Wrench}} Validation-Driven Refinement</h3></div>
           <div id="devtools-autofix-content"></div>
         </div>
       </div>
@@ -1922,7 +1924,7 @@
         </div>
         <div class="editor-panel" style="height:calc(100vh - 320px)">
           <div class="panel-header">
-            <h3>🐍 Python Code <span class="lang-badge python">Python</span></h3>
+            <h3>{{ui:FileCode}} Python Code <span class="lang-badge python">Python</span></h3>
           </div>
           <div class="panel-body">
             <textarea id="admin-execute-editor" class="code-editor" spellcheck="false"
@@ -1931,13 +1933,13 @@
           <div class="panel-footer">
             <button class="btn btn-success" style="width:auto" onclick="adminExecute()"><i data-lucide="play" aria-hidden="true"></i> Execute Code</button>
             <button class="btn btn-secondary btn-sm"
-              onclick="document.getElementById('admin-execute-editor').value=''">🗑️ Clear</button>
+              onclick="document.getElementById('admin-execute-editor').value=''">{{ui:Trash2}} Clear</button>
           </div>
         </div>
         <div style="margin-top:1.5rem">
           <div class="output-container">
             <div class="panel-header">
-              <h3>📟 Output</h3>
+              <h3>{{ui:Terminal}} Output</h3>
             </div>
             <div id="admin-console" class="output-content">Waiting for code execution...</div>
           </div>
@@ -1950,7 +1952,7 @@
       <div id="page-student-settings" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>⚙️ Settings</h2>
+            <h2>{{ui:Settings}} Settings</h2>
             <p>View your profile information and manage your password.</p>
           </div>
         </div>
@@ -1966,15 +1968,15 @@
           </div>
           <div class="profile-details">
             <div class="profile-detail-row">
-              <span class="detail-label">👤 Username</span>
+              <span class="detail-label">{{ui:UserRound}} Username</span>
               <span class="detail-value" id="settings-username">—</span>
             </div>
             <div class="profile-detail-row">
-              <span class="detail-label">📧 Email</span>
+              <span class="detail-label">{{ui:Mail}} Email</span>
               <span class="detail-value" id="settings-email">—</span>
             </div>
             <div class="profile-detail-row">
-              <span class="detail-label">🎓 Role</span>
+              <span class="detail-label">{{ui:GraduationCap}} Role</span>
               <span class="detail-value" id="settings-role">Student</span>
             </div>
             <div class="profile-detail-row">
@@ -2031,11 +2033,11 @@
         <!-- Request History -->
         <div class="settings-section">
           <div class="section-header">
-            <h3>📋 Password Change History</h3>
+            <h3>{{ui:ClipboardList}} Password Change History</h3>
           </div>
           <div id="password-request-history">
             <div class="empty-state">
-              <div class="empty-icon">📄</div>
+              <div class="empty-icon">{{ui:FileText}}</div>
               <h3>No Requests Yet</h3>
               <p>You haven't submitted any password change requests.</p>
             </div>
@@ -2049,24 +2051,24 @@
       <div id="page-password-requests" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2>🔑 Password Requests &amp; Security Audit</h2>
+            <h2>{{ui:KeyRound}} Password Requests &amp; Security Audit</h2>
             <p>Review and authorize instructor password recovery requests and view security audit logs.</p>
           </div>
         </div>
 
         <div class="stats-grid" style="margin-bottom:1.5rem">
           <div class="stat-card">
-            <div class="stat-icon">⏳</div>
+            <div class="stat-icon">{{ui:Hourglass}}</div>
             <div class="stat-value" id="stat-admin-recovery-pending" style="color:var(--warning)">0</div>
             <div class="stat-label">Pending Instructor Requests</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">👥</div>
+            <div class="stat-icon">{{ui:Users}}</div>
             <div class="stat-value" id="stat-admin-recovery-total">0</div>
             <div class="stat-label">Total Instructor Requests</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">📋</div>
+            <div class="stat-icon">{{ui:ClipboardList}}</div>
             <div class="stat-value" id="stat-total-changes">0</div>
             <div class="stat-label">Total Security Events</div>
           </div>
@@ -2075,7 +2077,7 @@
         <!-- Instructor Password Recovery Requests Panel -->
         <div class="data-table-container" tabindex="0" role="region" aria-label="Scrollable data table" style="margin-bottom:2rem">
           <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
-            <h3>🔑 Instructor Password Recovery Requests</h3>
+            <h3>{{ui:KeyRound}} Instructor Password Recovery Requests</h3>
             <span style="font-size:0.8rem; color:var(--text-muted);">Admin Authorization Panel</span>
           </div>
           <table class="data-table">
@@ -2125,7 +2127,7 @@
     <div class="modal">
       <div class="modal-header">
         <h3 id="exercise-modal-title">Add Exercise</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeExerciseModal()">✕</button>
+        <button class="btn btn-ghost btn-icon" onclick="closeExerciseModal()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
@@ -2171,7 +2173,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeExerciseModal()">Cancel</button>
-        <button id="exercise-save-btn" class="btn btn-primary" style="width:auto" onclick="saveExercise()">➕ Add Exercise</button>
+        <button id="exercise-save-btn" class="btn btn-primary" style="width:auto" onclick="saveExercise()">{{ui:Plus}} Add Exercise</button>
       </div>
     </div>
   </div>
@@ -2181,7 +2183,7 @@
     <div class="modal">
       <div class="modal-header">
         <h3 id="user-modal-title">Add New User</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeUserModal()">✕</button>
+        <button class="btn btn-ghost btn-icon" onclick="closeUserModal()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
@@ -2204,7 +2206,7 @@
             <button type="button" class="btn btn-ghost btn-icon"
               onclick="togglePasswordVisibility('user-password', this)"
               style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
-              👁️
+              {{ui:Eye}}
             </button>
           </div>
         </div>
@@ -2219,7 +2221,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
-        <button class="btn btn-primary" style="width:auto" onclick="saveUser()">💾 Save User</button>
+        <button class="btn btn-primary" style="width:auto" onclick="saveUser()">{{ui:Save}} Save User</button>
       </div>
     </div>
   </div>
@@ -2228,8 +2230,8 @@
   <div id="instructor-modal" class="modal-overlay hidden">
     <div class="modal" style="max-width:540px;width:95%">
       <div class="modal-header">
-        <h3 id="instructor-modal-title" class="modal-title">➕ Add Instructor</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeInstructorModal()">✕</button>
+        <h3 id="instructor-modal-title" class="modal-title">{{ui:Plus}} Add Instructor</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeInstructorModal()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <div class="responsive-form-grid">
@@ -2275,7 +2277,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeInstructorModal()">Cancel</button>
-        <button id="inst-save-btn" class="btn btn-primary" style="width:auto" onclick="saveInstructor()">➕ Add Instructor</button>
+        <button id="inst-save-btn" class="btn btn-primary" style="width:auto" onclick="saveInstructor()">{{ui:Plus}} Add Instructor</button>
       </div>
     </div>
   </div>
@@ -2285,7 +2287,7 @@
     <div class="drawer-panel">
       <div class="drawer-header">
         <h3 id="idm-title" style="margin:0;font-size:1.1rem;font-weight:700">Instructor Details</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeInstructorDetailModal()" style="font-size:1.1rem">✕</button>
+        <button class="btn btn-ghost btn-icon" onclick="closeInstructorDetailModal()" style="font-size:1.1rem">{{ui:X}}</button>
       </div>
 
       <div class="drawer-body">
@@ -2300,14 +2302,14 @@
         <div style="display:flex;flex-direction:column;gap:0.75rem">
           <div>
             <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
-              <span>✉️</span> Email
+              <span>{{ui:Mail}}</span> Email
             </div>
             <div id="idm-email" style="font-size:0.88rem;color:var(--text-primary);word-break:break-all;padding-left:1.5rem">reantaso@university.edu.ph</div>
           </div>
 
           <div>
             <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
-              <span>🎭</span> Role
+              <span>{{ui:UserRound}}</span> Role
             </div>
             <div id="idm-role" style="padding-left:1.5rem">
               <span class="badge badge-instructor" style="font-size:0.75rem;padding:0.2rem 0.6rem">INSTRUCTOR</span>
@@ -2316,7 +2318,7 @@
 
           <div>
             <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
-              <span>⚡</span> Status
+              <span>{{ui:Zap}}</span> Status
             </div>
             <div id="idm-status" style="padding-left:1.5rem">
               <span class="badge badge-active" style="font-size:0.75rem;padding:0.2rem 0.6rem">ACTIVE</span>
@@ -2325,35 +2327,35 @@
 
           <div>
             <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
-              <span>📅</span> Date Added
+              <span>{{ui:Calendar}}</span> Date Added
             </div>
             <div id="idm-date-added" style="font-size:0.88rem;color:var(--text-secondary);padding-left:1.5rem">Aug 10, 2025 02:15 PM</div>
           </div>
 
           <div>
             <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
-              <span>🕒</span> Last Login
+              <span>{{ui:Clock}}</span> Last Login
             </div>
             <div id="idm-last-login" style="font-size:0.88rem;color:var(--text-secondary);padding-left:1.5rem">Aug 12, 2025 08:20 PM</div>
           </div>
 
           <div>
             <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
-              <span>👥</span> Total Students
+              <span>{{ui:Users}}</span> Total Students
             </div>
             <div id="idm-students" style="font-size:1.1rem;font-weight:700;color:var(--text-primary);padding-left:1.5rem">12</div>
           </div>
 
           <div>
             <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
-              <span>📋</span> Total Exercises
+              <span>{{ui:ClipboardList}}</span> Total Exercises
             </div>
             <div id="idm-exercises" style="font-size:1.1rem;font-weight:700;color:var(--text-primary);padding-left:1.5rem">8</div>
           </div>
 
           <div>
             <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--text-muted);margin-bottom:0.25rem">
-              <span>📝</span> Total Submissions
+              <span>{{ui:NotebookPen}}</span> Total Submissions
             </div>
             <div id="idm-submissions" style="font-size:1.1rem;font-weight:700;color:var(--text-primary);padding-left:1.5rem">85</div>
           </div>
@@ -2370,8 +2372,8 @@
   <div id="recovery-review-modal" class="modal-overlay hidden">
     <div class="modal" style="max-width: 540px;">
       <div class="modal-header">
-        <h3>🔍 Student Verification &amp; Recovery Review</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeRecoveryReview()">✕</button>
+        <h3>{{ui:Search}} Student Verification &amp; Recovery Review</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeRecoveryReview()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <div id="recovery-review-content"></div>
@@ -2379,8 +2381,8 @@
       <div class="modal-footer" style="display:flex; justify-content:space-between; gap:0.75rem;">
         <button class="btn btn-secondary" onclick="closeRecoveryReview()">Close</button>
         <div style="display:flex; gap:0.5rem;">
-          <button class="btn btn-danger" id="recovery-reject-btn" onclick="rejectRecoveryRequest()">❌ Reject Request</button>
-          <button class="btn btn-primary" id="recovery-approve-btn" onclick="confirmApproveRecovery()">✅ Approve Password Reset</button>
+          <button class="btn btn-danger" id="recovery-reject-btn" onclick="rejectRecoveryRequest()">{{ui:CircleX}} Reject Request</button>
+          <button class="btn btn-primary" id="recovery-approve-btn" onclick="confirmApproveRecovery()">{{ui:CircleCheck}} Approve Password Reset</button>
         </div>
       </div>
     </div>
@@ -2390,8 +2392,8 @@
   <div id="recovery-confirm-dialog" class="modal-overlay hidden" style="z-index: 10001;">
     <div class="modal" style="max-width: 460px;">
       <div class="modal-header">
-        <h3>⚠️ Confirm Password Reset</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeRecoveryConfirm()">✕</button>
+        <h3>{{ui:TriangleAlert}} Confirm Password Reset</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeRecoveryConfirm()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <p style="font-size:1rem; margin-bottom:0.75rem;">
@@ -2412,8 +2414,8 @@
   <div id="admin-recovery-review-modal" class="modal-overlay hidden">
     <div class="modal" style="max-width: 540px;">
       <div class="modal-header">
-        <h3>🔍 Instructor Verification &amp; Recovery Review</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeAdminRecoveryReview()">✕</button>
+        <h3>{{ui:Search}} Instructor Verification &amp; Recovery Review</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeAdminRecoveryReview()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <div id="admin-recovery-review-content"></div>
@@ -2421,8 +2423,8 @@
       <div class="modal-footer" style="display:flex; justify-content:space-between; gap:0.75rem;">
         <button class="btn btn-secondary" onclick="closeAdminRecoveryReview()">Close</button>
         <div style="display:flex; gap:0.5rem;">
-          <button class="btn btn-danger" id="admin-recovery-reject-btn" onclick="rejectAdminRecoveryRequest()">❌ Reject Request</button>
-          <button class="btn btn-primary" id="admin-recovery-approve-btn" onclick="confirmApproveAdminRecovery()">✅ Approve Password Reset</button>
+          <button class="btn btn-danger" id="admin-recovery-reject-btn" onclick="rejectAdminRecoveryRequest()">{{ui:CircleX}} Reject Request</button>
+          <button class="btn btn-primary" id="admin-recovery-approve-btn" onclick="confirmApproveAdminRecovery()">{{ui:CircleCheck}} Approve Password Reset</button>
         </div>
       </div>
     </div>
@@ -2432,8 +2434,8 @@
   <div id="admin-recovery-confirm-dialog" class="modal-overlay hidden" style="z-index: 10001;">
     <div class="modal" style="max-width: 460px;">
       <div class="modal-header">
-        <h3>⚠️ Confirm Instructor Password Reset</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeAdminRecoveryConfirm()">✕</button>
+        <h3>{{ui:TriangleAlert}} Confirm Instructor Password Reset</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeAdminRecoveryConfirm()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <p style="font-size:1rem; margin-bottom:0.75rem;">
@@ -2455,13 +2457,13 @@
     <div class="modal" style="max-width: 680px; width: 95%;">
       <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center;">
         <div style="display:flex; align-items:center; gap:0.6rem;">
-          <span style="font-size:1.4rem;">💻</span>
+          <span style="font-size:1.4rem;">{{ui:Monitor}}</span>
           <div>
             <h3 style="margin:0; font-size:1.15rem;">Authorized Devices &amp; Security</h3>
             <p style="margin:0; font-size:0.8rem; color:var(--text-muted);" id="device-modal-instructor-subtitle">Manage device access for instructor</p>
           </div>
         </div>
-        <button class="btn btn-ghost btn-icon" onclick="closeInstructorDevicesModal()">✕</button>
+        <button class="btn btn-ghost btn-icon" onclick="closeInstructorDevicesModal()">{{ui:X}}</button>
       </div>
       <div class="modal-body" style="padding: 1.25rem;">
         <div style="background:var(--bg-card-hover); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem 1rem; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
@@ -2513,7 +2515,7 @@
       <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
         <button class="btn btn-secondary" onclick="closeInstructorDevicesModal()">Close</button>
         <button class="btn btn-primary btn-sm" onclick="approveAllPendingDevices()" id="btn-approve-all-devices">
-          ✅ Approve All Pending
+          {{ui:CircleCheck}} Approve All Pending
         </button>
       </div>
     </div>
@@ -2523,7 +2525,7 @@
   <div id="new-device-pending-modal" class="modal-overlay hidden" style="z-index: 10005;">
     <div class="modal" style="max-width: 480px; text-align: center; padding: 2rem 1.5rem;">
       <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(245, 158, 11, 0.15); color: #f59e0b; display: flex; align-items: center; justify-content: center; font-size: 2rem; margin: 0 auto 1.25rem;">
-        🛡️
+        {{ui:ShieldCheck}}
       </div>
       <h3 style="margin: 0 0 0.5rem; font-size: 1.35rem; color: var(--text-primary);">New Device Detected</h3>
       <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.5rem;">
@@ -2551,7 +2553,7 @@
 
       <div style="display: flex; flex-direction: column; gap: 0.75rem;">
         <button class="btn btn-primary" onclick="checkCurrentDeviceApprovalStatus()" style="width: 100%; justify-content: center;">
-          🔄 Check Approval Status &amp; Sign In
+          {{ui:RefreshCw}} Check Approval Status &amp; Sign In
         </button>
         <button class="btn btn-secondary" onclick="closePendingDeviceModal()" style="width: 100%; justify-content: center;">
           Back to Sign In
@@ -2564,8 +2566,8 @@
   <div id="archive-instructor-modal" class="modal-overlay hidden" style="z-index: 10004;">
     <div class="modal" style="max-width: 460px;">
       <div class="modal-header">
-        <h3>📦 Archive Instructor?</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeArchiveInstructorModal()">✕</button>
+        <h3>{{ui:Archive}} Archive Instructor?</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeArchiveInstructorModal()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <p style="font-size:0.95rem; color:var(--text-primary); margin-bottom:0.75rem;">
@@ -2578,7 +2580,7 @@
       <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.75rem;">
         <button class="btn btn-secondary" onclick="closeArchiveInstructorModal()">Cancel</button>
         <button class="btn btn-warning" id="btn-confirm-archive" onclick="executeArchiveInstructor()">
-          📦 Archive Instructor
+          {{ui:Archive}} Archive Instructor
         </button>
       </div>
     </div>
@@ -2588,8 +2590,8 @@
   <div id="restore-instructor-modal" class="modal-overlay hidden" style="z-index: 10004;">
     <div class="modal" style="max-width: 460px;">
       <div class="modal-header">
-        <h3>🔄 Restore Instructor?</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeRestoreInstructorModal()">✕</button>
+        <h3>{{ui:RefreshCw}} Restore Instructor?</h3>
+        <button class="btn btn-ghost btn-icon" onclick="closeRestoreInstructorModal()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <p style="font-size:0.95rem; color:var(--text-primary); margin-bottom:0.75rem;">
@@ -2602,7 +2604,7 @@
       <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.75rem;">
         <button class="btn btn-secondary" onclick="closeRestoreInstructorModal()">Cancel</button>
         <button class="btn btn-primary" id="btn-confirm-restore" onclick="executeRestoreInstructor()">
-          🔄 Restore Instructor
+          {{ui:RefreshCw}} Restore Instructor
         </button>
       </div>
     </div>
@@ -2642,7 +2644,7 @@
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=20260907"></script>
+  <script src="app.js?v=icons-2"></script>
   <script src="devtools.js?v=20260909"></script>
   <script>
     if (window.lucide) lucide.createIcons({ icons: lucide.icons });

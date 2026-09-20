@@ -1347,7 +1347,7 @@ function generateFeedback(pseudocode) {
             logicHtml += `</div>`;
         } else {
             logicHtml += `<div style="padding: 1rem; background: #ecfdf5; color: #065f46; border-radius: 4px; border-left: 4px solid #10b981;">
-                ✅ Your logic matches the structural patterns required for this problem. You have correctly applied the necessary control structures.
+                {{ui:CircleCheck}} Your logic matches the structural patterns required for this problem. You have correctly applied the necessary control structures.
             </div>`;
         }
         logicResults.innerHTML = logicHtml;
@@ -1559,7 +1559,7 @@ async function loadExercises(append = false) {
         : instructorExercises.slice(0, EX_PAGE_LIMIT);
 
     if (exercises.length === 0 && !append) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-muted)"><div style="font-size:2rem">📋</div><div style="margin-top:0.5rem;font-weight:600">No Exercises Yet</div><div style="font-size:0.85rem">Click <strong>Add Exercise</strong> to get started.</div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-muted)"><div style="font-size:2rem">{{ui:ClipboardList}}</div><div style="margin-top:0.5rem;font-weight:600">No Exercises Yet</div><div style="font-size:0.85rem">Click <strong>Add Exercise</strong> to get started.</div></td></tr>`;
         return;
     }
 
@@ -1588,8 +1588,8 @@ async function loadExercises(append = false) {
           <td style="color:var(--text-muted);font-size:0.83rem">${date}</td>
           <td>
             <div style="display:flex;gap:0.5rem">
-              <button class="btn btn-ghost btn-sm" onclick="editExercise('${ex._docId}')" title="Edit">✏️ Edit</button>
-              <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteExercise('${ex._docId}')" title="Delete">🗑️ Delete</button>
+              <button class="btn btn-ghost btn-sm" onclick="editExercise('${ex._docId}')" title="Edit">{{ui:Pencil}} Edit</button>
+              <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteExercise('${ex._docId}')" title="Delete">{{ui:Trash2}} Delete</button>
             </div>
           </td>
         </tr>`;
@@ -1810,7 +1810,7 @@ async function loadStudentExercises(page = 1) {
     await loadStudentProgress();
 
     if (exercises.length === 0) {
-        container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📝</div><h3>No Exercises Available</h3><p>Your instructor hasn't created any exercises yet.</p></div>`;
+        container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">{{ui:NotebookPen}}</div><h3>No Exercises Available</h3><p>Your instructor hasn't created any exercises yet.</p></div>`;
         renderStudentPaginationControls(totalExercises, studentExCurrentPage);
         return;
     }
@@ -2054,12 +2054,12 @@ function updateExerciseStatus() {
         (!hasExpectedOutput || exerciseState.outputMatched);
 
     if (isCompleted) {
-        statusEl.textContent = '🟢 Status: Completed';
+        statusEl.textContent = '{{ui:Circle}} Status: Completed';
         statusEl.className = 'badge badge-success';
         statusEl.style.marginLeft = '0.5rem';
         submitBtn.classList.remove('hidden');
     } else {
-        statusEl.textContent = '🟡 Status: In Progress';
+        statusEl.textContent = '{{ui:Circle}} Status: In Progress';
         statusEl.className = 'badge badge-warning';
         statusEl.style.marginLeft = '0.5rem';
         submitBtn.classList.add('hidden');
@@ -2193,7 +2193,7 @@ async function openExerciseModal(id = null) {
             setValue('ex-solution', ex.solution || ex.pseudocode || '');
             setValue('ex-expected-output', ex.expectedOutput || ex.expected_output || '');
             const saveBtn = $id('exercise-save-btn');
-            if (saveBtn) saveBtn.textContent = '💾 Save Changes';
+            if (saveBtn) saveBtn.textContent = '{{ui:Save}} Save Changes';
         }
     } else {
         title.textContent = 'Add Exercise';
@@ -2203,7 +2203,7 @@ async function openExerciseModal(id = null) {
         setValue('ex-solution', '');
         setValue('ex-expected-output', '');
         const saveBtn = $id('exercise-save-btn');
-        if (saveBtn) saveBtn.textContent = '➕ Add Exercise';
+        if (saveBtn) saveBtn.textContent = '{{ui:Plus}} Add Exercise';
     }
     modal.classList.remove('hidden');
 }
@@ -2369,10 +2369,10 @@ async function loadUsers() {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="7" style="text-align:center;padding:3rem;color:var(--danger)">
-                        <div style="font-size:2rem;margin-bottom:0.5rem">⚠️</div>
+                        <div style="font-size:2rem;margin-bottom:0.5rem">{{ui:TriangleAlert}}</div>
                         <div style="font-weight:600;font-size:1rem;margin-bottom:0.4rem">Unable to load instructors. Please try again.</div>
                         <div style="font-size:0.83rem;color:var(--text-muted);margin-bottom:1rem">${err.message || 'Check database connection.'}</div>
-                        <button class="btn btn-secondary btn-sm" onclick="loadUsers()" style="margin:0 auto">🔄 Try Again</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadUsers()" style="margin:0 auto">{{ui:RefreshCw}} Try Again</button>
                     </td>
                 </tr>`;
         }
@@ -2453,7 +2453,7 @@ function renderInstructorTable() {
         tbody.innerHTML = `
             <tr>
               <td colspan="7" style="text-align:center;padding:3rem;color:var(--text-muted)">
-                <div style="font-size:2.5rem;margin-bottom:0.75rem">👥</div>
+                <div style="font-size:2.5rem;margin-bottom:0.75rem">{{ui:Users}}</div>
                 <div style="font-weight:600;font-size:1rem;margin-bottom:0.4rem">No instructors found</div>
                 <div style="font-size:0.83rem">Try adjusting your search or filter, or click <strong>Add Instructor</strong> to create one.</div>
               </td>
@@ -2595,7 +2595,7 @@ async function renderDeviceModalTable() {
         tbody.innerHTML = `
             <tr>
               <td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">
-                <div style="font-size:1.8rem; margin-bottom:0.4rem;">💻</div>
+                <div style="font-size:1.8rem; margin-bottom:0.4rem;">{{ui:Monitor}}</div>
                 <div style="font-weight:600; font-size:0.9rem;">No Registered Devices Yet</div>
                 <div style="font-size:0.75rem;">When this instructor signs in from a device, it will automatically appear here for verification.</div>
               </td>
@@ -2605,7 +2605,7 @@ async function renderDeviceModalTable() {
 
     tbody.innerHTML = devices.map(d => {
         const isMobile = d.deviceType === 'Mobile';
-        const icon = isMobile ? '📱' : '💻';
+        const icon = isMobile ? '{{ui:Smartphone}}' : '{{ui:Monitor}}';
         const reqTime = _fmtDate(d.requestedAt);
         const lastSeen = _fmtDate(d.lastSeenAt);
 
@@ -2642,15 +2642,15 @@ async function renderDeviceModalTable() {
             <div style="display:flex; gap:0.35rem; justify-content:flex-end;">
               ${d.status !== 'approved' ? `
                 <button class="btn btn-sm" onclick="approveDevice('${d._docId}')" style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3); font-size:0.75rem; padding:0.25rem 0.5rem;" title="Approve this device">
-                  ✅ Approve
+                  {{ui:CircleCheck}} Approve
                 </button>
               ` : `
                 <button class="btn btn-sm" onclick="revokeDevice('${d._docId}')" style="background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); font-size:0.75rem; padding:0.25rem 0.5rem;" title="Revoke authorization">
-                  🔒 Revoke
+                  {{ui:LockKeyhole}} Revoke
                 </button>
               `}
               <button class="btn btn-ghost btn-sm" onclick="deleteDeviceRecord('${d._docId}')" style="color:var(--danger); padding:0.25rem 0.4rem; font-size:0.75rem;" title="Remove record">
-                🗑️
+                {{ui:Trash2}}
               </button>
             </div>
           </td>
@@ -2731,9 +2731,9 @@ async function approveAllPendingDevices() {
 
 function openInstructorAddModal() {
     editingInstructorId = null;
-    setText('instructor-modal-title', '➕ Add Instructor');
+    setText('instructor-modal-title', '{{ui:Plus}} Add Instructor');
     const saveBtn = $id('inst-save-btn');
-    if (saveBtn) saveBtn.textContent = '➕ Add Instructor';
+    if (saveBtn) saveBtn.textContent = '{{ui:Plus}} Add Instructor';
 
     setValue('inst-fullname', '');
     setValue('inst-username', '');
@@ -2760,9 +2760,9 @@ async function openInstructorEditModal(id) {
     if (!user) return;
 
     editingInstructorId = id;
-    setText('instructor-modal-title', '✏️ Edit Instructor');
+    setText('instructor-modal-title', '{{ui:Pencil}} Edit Instructor');
     const saveBtn = $id('inst-save-btn');
-    if (saveBtn) saveBtn.textContent = '💾 Save Changes';
+    if (saveBtn) saveBtn.textContent = '{{ui:Save}} Save Changes';
 
     setValue('inst-fullname', user.fullName || '');
     setValue('inst-username', user.username || '');
@@ -3048,9 +3048,9 @@ async function loadStudents() {
       <td>${u.studentId || '—'}</td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">
-        <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit">✏️</button>
-        <button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}">${u.status === 'active' ? '🔒' : '🔓'}</button>
-        <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" title="Delete">🗑️</button>
+        <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit">{{ui:Pencil}}</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}">${u.status === 'active' ? '{{ui:LockKeyhole}}' : '{{ui:LockKeyholeOpen}}'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" title="Delete">{{ui:Trash2}}</button>
       </div></td>
     </tr>`).join('');
 }
@@ -4594,11 +4594,11 @@ async function loadPasswordRecovery() {
 
     tbody.innerHTML = recoveryRequests.map(r => {
         const statusMap = {
-            pending: { cls: 'badge-recovery-pending', label: '⏳ Pending' },
-            approved: { cls: 'badge-recovery-approved', label: '✅ Approved' },
-            rejected: { cls: 'badge-recovery-rejected', label: '❌ Rejected' },
-            completed: { cls: 'badge-recovery-completed', label: '✔️ Completed' },
-            expired: { cls: 'badge-recovery-expired', label: '⏱️ Expired' }
+            pending: { cls: 'badge-recovery-pending', label: '{{ui:Hourglass}} Pending' },
+            approved: { cls: 'badge-recovery-approved', label: '{{ui:CircleCheck}} Approved' },
+            rejected: { cls: 'badge-recovery-rejected', label: '{{ui:CircleX}} Rejected' },
+            completed: { cls: 'badge-recovery-completed', label: '{{ui:Check}} Completed' },
+            expired: { cls: 'badge-recovery-expired', label: '{{ui:Timer}} Expired' }
         };
         const s = statusMap[r.status] || { cls: '', label: r.status };
         const dt = r.requestedAt ? new Date(r.requestedAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
@@ -4614,8 +4614,8 @@ async function loadPasswordRecovery() {
           <td><span class="badge ${s.cls}">${s.label}</span></td>
           <td>
             ${canReview
-                ? `<button class="btn btn-primary btn-sm" onclick="openRecoveryReview('${r._docId}')">🔍 Review</button>`
-                : `<button class="btn btn-ghost btn-sm" onclick="openRecoveryReview('${r._docId}')">👁️ View</button>`
+                ? `<button class="btn btn-primary btn-sm" onclick="openRecoveryReview('${r._docId}')">{{ui:Search}} Review</button>`
+                : `<button class="btn btn-ghost btn-sm" onclick="openRecoveryReview('${r._docId}')">{{ui:Eye}} View</button>`
             }
           </td>
         </tr>`;
@@ -4644,43 +4644,43 @@ async function openRecoveryReview(requestId) {
         : '—';
 
     const statusMap = {
-        pending: { cls: 'badge-recovery-pending', label: '⏳ Pending' },
-        approved: { cls: 'badge-recovery-approved', label: '✅ Approved' },
-        rejected: { cls: 'badge-recovery-rejected', label: '❌ Rejected' },
-        completed: { cls: 'badge-recovery-completed', label: '✔️ Completed' },
-        expired: { cls: 'badge-recovery-expired', label: '⏱️ Expired' }
+        pending: { cls: 'badge-recovery-pending', label: '{{ui:Hourglass}} Pending' },
+        approved: { cls: 'badge-recovery-approved', label: '{{ui:CircleCheck}} Approved' },
+        rejected: { cls: 'badge-recovery-rejected', label: '{{ui:CircleX}} Rejected' },
+        completed: { cls: 'badge-recovery-completed', label: '{{ui:Check}} Completed' },
+        expired: { cls: 'badge-recovery-expired', label: '{{ui:Timer}} Expired' }
     };
     const s = statusMap[req.status] || { cls: '', label: req.status };
 
     setHtml('recovery-review-content', `
         <div class="recovery-info-grid">
           <div class="recovery-info-row">
-            <span class="recovery-info-label">👤 Full Name</span>
+            <span class="recovery-info-label">{{ui:UserRound}} Full Name</span>
             <span class="recovery-info-value">${req.studentName || 'Unknown'}</span>
           </div>
           <div class="recovery-info-row">
-            <span class="recovery-info-label">🪪 Student ID</span>
+            <span class="recovery-info-label">{{ui:IdCard}} Student ID</span>
             <span class="recovery-info-value">${req.studentEnrolledId || '—'}</span>
           </div>
           <div class="recovery-info-row">
-            <span class="recovery-info-label">👤 Username</span>
+            <span class="recovery-info-label">{{ui:UserRound}} Username</span>
             <span class="recovery-info-value">@${req.studentUsername || '—'}</span>
           </div>
           <div class="recovery-info-row">
-            <span class="recovery-info-label">🟢 Account Status</span>
+            <span class="recovery-info-label">{{ui:Circle}} Account Status</span>
             <span class="recovery-info-value">${student ? student.status : '—'}</span>
           </div>
           <div class="recovery-info-row">
-            <span class="recovery-info-label">📅 Request Date</span>
+            <span class="recovery-info-label">{{ui:Calendar}} Request Date</span>
             <span class="recovery-info-value">${dt}</span>
           </div>
           <div class="recovery-info-row">
-            <span class="recovery-info-label">📋 Request Status</span>
+            <span class="recovery-info-label">{{ui:ClipboardList}} Request Status</span>
             <span class="recovery-info-value"><span class="badge ${s.cls}">${s.label}</span></span>
           </div>
         </div>
         <div class="recovery-security-notice">
-          🔒 <strong>Security Notice:</strong> No password information is displayed. 
+          {{ui:LockKeyhole}} <strong>Security Notice:</strong> No password information is displayed.
           The instructor only authorizes the student to create a new password.
         </div>
     `);
@@ -4839,7 +4839,7 @@ async function createExerciseNotifications(exerciseId, exerciseTitle, actionType
             });
         }
 
-        console.log(`[Notifications] Sent "${title}" notifications to ${students.length} students ✅`);
+        console.log(`[Notifications] Sent "${title}" notifications to ${students.length} students `);
     } catch (err) {
         console.error('[Notifications] Failed to create notifications:', err);
     }
@@ -4884,7 +4884,7 @@ async function loadStudentNotifications() {
         if (myNotifs.length === 0) {
             listEl.innerHTML = `
                 <div class="notif-empty">
-                    <div style="font-size:1.75rem; margin-bottom:0.35rem; opacity:0.6;">🔕</div>
+                    <div style="font-size:1.75rem; margin-bottom:0.35rem; opacity:0.6;">{{ui:BellOff}}</div>
                     <div style="font-weight:600; color:var(--text-secondary); margin-bottom:0.25rem;">No notifications yet</div>
                     <div style="font-size:0.75rem; color:var(--text-muted);">You will be notified when your instructor adds or updates exercises.</div>
                 </div>`;
@@ -4907,7 +4907,7 @@ async function loadStudentNotifications() {
                     </div>
                     <div class="notif-item-ex-title">"${n.exerciseTitle || 'Exercise'}"</div>
                     <div class="notif-item-msg">${n.message || ''}</div>
-                    <div class="notif-item-time">📅 ${dt} &bull; <span style="font-weight:500;">${isUnread ? 'Unread' : 'Read'}</span></div>
+                    <div class="notif-item-time">{{ui:Calendar}} ${dt} &bull; <span style="font-weight:500;">${isUnread ? 'Unread' : 'Read'}</span></div>
                 </div>`;
         }).join('');
     } catch (err) {
@@ -5186,11 +5186,11 @@ async function openAdminRecoveryReview(requestId) {
         : '—';
 
     const statusMap = {
-        pending: { cls: 'badge-recovery-pending', label: '⏳ Pending' },
-        approved: { cls: 'badge-recovery-approved', label: '✅ Approved' },
-        rejected: { cls: 'badge-recovery-rejected', label: '❌ Rejected' },
-        completed: { cls: 'badge-recovery-completed', label: '✔️ Completed' },
-        expired: { cls: 'badge-recovery-expired', label: '⏱️ Expired' }
+        pending: { cls: 'badge-recovery-pending', label: '{{ui:Hourglass}} Pending' },
+        approved: { cls: 'badge-recovery-approved', label: '{{ui:CircleCheck}} Approved' },
+        rejected: { cls: 'badge-recovery-rejected', label: '{{ui:CircleX}} Rejected' },
+        completed: { cls: 'badge-recovery-completed', label: '{{ui:Check}} Completed' },
+        expired: { cls: 'badge-recovery-expired', label: '{{ui:Timer}} Expired' }
     };
     const s = statusMap[req.status] || { cls: '', label: req.status };
     const instName = req.studentName || req.instructorName || 'Unknown';
@@ -5199,32 +5199,32 @@ async function openAdminRecoveryReview(requestId) {
     setHtml('admin-recovery-review-content', `
         <div class="recovery-info-grid">
           <div class="recovery-info-row">
-            <span class="recovery-info-label">👤 Instructor Name</span>
+            <span class="recovery-info-label">{{ui:UserRound}} Instructor Name</span>
             <span class="recovery-info-value">${instName}</span>
           </div>
           <div class="recovery-info-row">
-            <span class="recovery-info-label">📧 Email</span>
+            <span class="recovery-info-label">{{ui:Mail}} Email</span>
             <span class="recovery-info-value">${req.email || (instructor ? instructor.email : '—')}</span>
           </div>
           <div class="recovery-info-row">
-            <span class="recovery-info-label">👤 Username</span>
+            <span class="recovery-info-label">{{ui:UserRound}} Username</span>
             <span class="recovery-info-value">@${instUsername}</span>
           </div>
           <div class="recovery-info-row">
-            <span class="recovery-info-label">🟢 Account Status</span>
+            <span class="recovery-info-label">{{ui:Circle}} Account Status</span>
             <span class="recovery-info-value">${instructor ? instructor.status : 'Active'}</span>
           </div>
           <div class="recovery-info-row">
-            <span class="recovery-info-label">📅 Request Date</span>
+            <span class="recovery-info-label">{{ui:Calendar}} Request Date</span>
             <span class="recovery-info-value">${dt}</span>
           </div>
           <div class="recovery-info-row">
-            <span class="recovery-info-label">📋 Request Status</span>
+            <span class="recovery-info-label">{{ui:ClipboardList}} Request Status</span>
             <span class="recovery-info-value"><span class="badge ${s.cls}">${s.label}</span></span>
           </div>
         </div>
         <div class="recovery-security-notice">
-          🔒 <strong>Security Notice:</strong> No password information is displayed. 
+          {{ui:LockKeyhole}} <strong>Security Notice:</strong> No password information is displayed.
           The administrator only authorizes the instructor to create a new password.
         </div>
     `);
@@ -5520,11 +5520,11 @@ function validatePseudocode(code) {
 }
 
 function renderHtmlErrors(errors) {
-    let output = '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># ❌ Syntax Errors Found:</span></div><div><span style="color: var(--text-muted);">#</span></div>';
+    let output = '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># {{ui:CircleX}} Syntax Errors Found:</span></div><div><span style="color: var(--text-muted);">#</span></div>';
     for (const err of errors) {
         let suggestionHtml = '';
         if (err.suggestion) {
-            suggestionHtml = `<div><span class="suggestion-text">#   💡 Suggestion: ${err.suggestion}</span></div>`;
+            suggestionHtml = `<div><span class="suggestion-text">#   {{ui:Lightbulb}} Suggestion: ${err.suggestion}</span></div>`;
         }
         output += `<div style="margin-bottom: 0.5rem; font-family: 'JetBrains Mono', monospace;"><div><span class="error-text"># Line ${err.line}: ${err.message}</span></div>${suggestionHtml}<div><span style="color: var(--text-muted);">#</span></div></div>`;
     }
@@ -5753,24 +5753,24 @@ function loadCompilerMetrics() {
         improvementEl.innerHTML = `
         <div class="stats-grid" style="margin-bottom: 1rem;">
           <div class="stat-card">
-            <div class="stat-icon">📈</div>
+            <div class="stat-icon">{{ui:ChartNoAxesCombined}}</div>
             <div class="stat-value">${improvement.correctnessImprovement}%</div>
             <div class="stat-label">Correctness Improvement</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">⚡</div>
+            <div class="stat-icon">{{ui:Zap}}</div>
             <div class="stat-value">${improvement.speedImprovement}%</div>
             <div class="stat-label">Speed Improvement</div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon">✅</div>
+            <div class="stat-icon">{{ui:CircleCheck}}</div>
             <div class="stat-value">${improvement.overallSuccessRate}%</div>
             <div class="stat-label">Overall Success Rate</div>
           </div>
         </div>`;
     } else {
         improvementEl.innerHTML = `<div class="empty-state" style="padding: 1.5rem;">
-            <div class="empty-icon">📊</div>
+            <div class="empty-icon">{{ui:ChartColumn}}</div>
             <h3>No Improvement Data Yet</h3>
             <p>${improvement.message}</p>
         </div>`;
@@ -5794,7 +5794,7 @@ function loadCompilerMetrics() {
  */
 async function runBenchmarkTest() {
     const btn = $id('run-benchmark-btn');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Running...'; }
+    if (btn) { btn.disabled = true; btn.textContent = '{{ui:Hourglass}} Running...'; }
     showToast('Running benchmark... loading exercises from database.', 'info');
 
     try {
@@ -5818,14 +5818,14 @@ async function runBenchmarkTest() {
         renderBenchmarkResults(results);
 
         showToast(
-            `✅ Benchmark complete! Accuracy: ${results.accuracy}% · F1: ${results.f1Score}% · ${results.totalTestCases} test cases.`,
+            `{{ui:CircleCheck}} Benchmark complete! Accuracy: ${results.accuracy}% · F1: ${results.f1Score}% · ${results.totalTestCases} test cases.`,
             'success'
         );
     } catch (err) {
         console.error('[Benchmark] Error:', err);
         showToast('Benchmark failed: ' + err.message, 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = '🧪 Run Benchmark'; }
+        if (btn) { btn.disabled = false; btn.textContent = '{{ui:FlaskConical}} Run Benchmark'; }
     }
 }
 
@@ -5855,8 +5855,8 @@ function renderBenchmarkResults(results) {
         <tr>
           <td style="font-weight:600;color:var(--text-primary)">${r.id}</td>
           <td>${r.concept}</td>
-          <td><span class="badge ${r.compiled ? 'badge-active' : 'badge-inactive'}">${r.compiled ? '✅ Pass' : '❌ Fail'}</span></td>
-          <td><span class="badge ${r.exactMatch ? 'badge-active' : 'badge-student'}">${r.exactMatch ? '✅ Match' : '⚠️ Diff'}</span></td>
+          <td><span class="badge ${r.compiled ? 'badge-active' : 'badge-inactive'}">${r.compiled ? '{{ui:CircleCheck}} Pass' : '{{ui:CircleX}} Fail'}</span></td>
+          <td><span class="badge ${r.exactMatch ? 'badge-active' : 'badge-student'}">${r.exactMatch ? '{{ui:CircleCheck}} Match' : '{{ui:TriangleAlert}} Diff'}</span></td>
           <td style="font-weight:500">${(r.precision * 100).toFixed(0)}%</td>
           <td style="font-weight:500">${(r.recall * 100).toFixed(0)}%</td>
           <td style="color:var(--text-muted)">${r.timeMs}ms</td>
@@ -5872,10 +5872,10 @@ function renderBenchmarkResults(results) {
         } else {
             masteryBody.innerHTML = conceptData.map(c => {
                 let masteryLabel, masteryColor;
-                if (c.accuracy >= 80) { masteryLabel = '🟢 Expert'; masteryColor = '#22c55e'; }
-                else if (c.accuracy >= 60) { masteryLabel = '🔵 Proficient'; masteryColor = '#3b82f6'; }
-                else if (c.accuracy >= 40) { masteryLabel = '🟡 Developing'; masteryColor = '#f59e0b'; }
-                else { masteryLabel = '🔴 Beginner'; masteryColor = '#ef4444'; }
+                if (c.accuracy >= 80) { masteryLabel = '{{ui:Circle}} Expert'; masteryColor = '#22c55e'; }
+                else if (c.accuracy >= 60) { masteryLabel = '{{ui:Circle}} Proficient'; masteryColor = '#3b82f6'; }
+                else if (c.accuracy >= 40) { masteryLabel = '{{ui:Circle}} Developing'; masteryColor = '#f59e0b'; }
+                else { masteryLabel = '{{ui:Circle}} Beginner'; masteryColor = '#ef4444'; }
 
                 return `<tr>
                   <td style="font-weight:600;color:var(--text-primary)">${c.concept}</td>
@@ -6163,5 +6163,3 @@ function autoFormatPseudocode() {
     updateGutter(); // Refresh line numbers
     showToast('Pseudocode formatted!', 'success');
 }
-
-

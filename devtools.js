@@ -148,7 +148,7 @@ function _devToolsExecutePython(pythonCode, attempt) {
     compilerTrace.emit({ type: 'EXECUTION_START', stage: 'EXECUTION', status: 'RUNNING', data: { pythonLength: pythonCode.length } });
 
     if (typeof Sk === 'undefined') {
-        if (statusEl) statusEl.textContent = '⚠️ Skulpt not loaded';
+        if (statusEl) statusEl.textContent = '{{ui:TriangleAlert}} Skulpt not loaded';
         if (stderrEl) stderrEl.textContent = 'Skulpt library not available.';
         if (pipeRuntime) pipeRuntime.className = 'pipeline-stage status-ERROR';
         compilerTrace.emit({ type: 'EXECUTION_COMPLETE', stage: 'EXECUTION', status: 'ERROR', data: { error: 'Skulpt not loaded' } });
@@ -183,7 +183,7 @@ function _devToolsExecutePython(pythonCode, attempt) {
         const execTime = performance.now() - execStart;
         const stdout = stdoutBuffer.join('');
 
-        if (statusEl) statusEl.textContent = '✅ Success';
+        if (statusEl) statusEl.textContent = '{{ui:CircleCheck}} Success';
         if (stdoutEl) stdoutEl.textContent = stdout || '(no output)';
         if (timeEl) timeEl.textContent = execTime.toFixed(3) + ' ms';
         if (pipeRuntime) {
@@ -211,7 +211,7 @@ function _devToolsExecutePython(pythonCode, attempt) {
         const execTime = performance.now() - execStart;
         const errStr = err.toString();
 
-        if (statusEl) statusEl.textContent = '❌ Error';
+        if (statusEl) statusEl.textContent = '{{ui:CircleX}} Error';
         if (stderrEl) stderrEl.textContent = errStr;
         if (stdoutEl) stdoutEl.textContent = stdoutBuffer.join('') || '(no output before error)';
         if (timeEl) timeEl.textContent = execTime.toFixed(3) + ' ms';
@@ -308,7 +308,7 @@ function devToolsReset() {
     document.getElementById('devtools-runtime-stderr').textContent = '—';
     document.getElementById('devtools-exec-trace').innerHTML = '<div class="devtools-idle-message"><p>Run the pipeline and execute to see a step-by-step trace.</p></div>';
     document.getElementById('devtools-event-log').innerHTML = '<div class="devtools-idle-message"><p>No events recorded.</p></div>';
-    document.getElementById('devtools-stage-detail').innerHTML = '<div class="devtools-idle-message"><div style="font-size:2rem;margin-bottom:0.5rem">🔬</div><p>Enter pseudocode and click <strong>Run Pipeline</strong> to begin compiler analysis.</p></div>';
+    document.getElementById('devtools-stage-detail').innerHTML = '<div class="devtools-idle-message"><div style="font-size:2rem;margin-bottom:0.5rem">{{ui:Microscope}}</div><p>Enter pseudocode and click <strong>Run Pipeline</strong> to begin compiler analysis.</p></div>';
     document.getElementById('devtools-active-stage-badge').textContent = 'IDLE';
     document.getElementById('devtools-active-stage-badge').className = 'devtools-stage-badge';
     ['dm-lex-time','dm-parse-time','dm-semantic-time','dm-codegen-time','dm-total-time','dm-exec-time','dm-token-count','dm-ast-nodes','dm-complexity','dm-attempt-num','dm-autofix-count'].forEach(id => {
@@ -554,14 +554,14 @@ function _updateParserState(result) {
 
     let html = '<div class="devtools-parser-info">';
     html += `<div class="devtools-kv"><span class="devtools-kv-key">Parser Errors:</span> ${parserErrors.length}</div>`;
-    html += `<div class="devtools-kv"><span class="devtools-kv-key">Block Stack (at end):</span> ${blockStack.length === 0 ? 'EMPTY ✅' : blockStack.map(b => b.type + ' (line ' + b.line + ')').join(' → ')}</div>`;
+    html += `<div class="devtools-kv"><span class="devtools-kv-key">Block Stack (at end):</span> ${blockStack.length === 0 ? 'EMPTY {{ui:CircleCheck}}' : blockStack.map(b => b.type + ' (line ' + b.line + ')').join(' → ')}</div>`;
 
     if (parserErrors.length > 0) {
         html += '<h4 style="margin-top:1rem">Parser Errors:</h4>';
         html += '<div class="devtools-error-list">';
         for (const err of parserErrors) {
             html += `<div class="devtools-error-item"><strong>Line ${err.line}:</strong> ${_esc(err.message)}`;
-            if (err.suggestion) html += `<div class="devtools-suggestion">💡 ${_esc(err.suggestion)}</div>`;
+            if (err.suggestion) html += `<div class="devtools-suggestion">{{ui:Lightbulb}} ${_esc(err.suggestion)}</div>`;
             html += '</div>';
         }
         html += '</div>';
@@ -590,7 +590,7 @@ function _updateSemanticView(result) {
         html += '<div class="devtools-warning-list">';
         for (const w of warnings) {
             html += `<div class="devtools-warning-item"><strong>Line ${w.line}:</strong> ${_esc(w.message)}`;
-            if (w.suggestion) html += `<div class="devtools-suggestion">💡 ${_esc(w.suggestion)}</div>`;
+            if (w.suggestion) html += `<div class="devtools-suggestion">{{ui:Lightbulb}} ${_esc(w.suggestion)}</div>`;
             html += '</div>';
         }
         html += '</div>';
@@ -754,10 +754,10 @@ function _updateAttemptHistory() {
     }
 
     const html = devToolsState.attempts.map((a, i) => {
-        let icon = '❌';
+        let icon = '{{ui:CircleX}}';
         let statusClass = 'attempt-error';
-        if (a.status === 'RUNTIME_SUCCESS') { icon = '✅'; statusClass = 'attempt-success'; }
-        else if (a.status === 'COMPILE_SUCCESS') { icon = '⚠️'; statusClass = 'attempt-warning'; }
+        if (a.status === 'RUNTIME_SUCCESS') { icon = '{{ui:CircleCheck}}'; statusClass = 'attempt-success'; }
+        else if (a.status === 'COMPILE_SUCCESS') { icon = '{{ui:TriangleAlert}}'; statusClass = 'attempt-warning'; }
 
         return `<div class="devtools-attempt-card ${statusClass}" onclick="devToolsLoadAttempt(${i})">
             <div class="attempt-num">${icon} Attempt #${a.attemptNumber}</div>
@@ -961,4 +961,3 @@ function _setText(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
 }
-
