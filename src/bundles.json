@@ -1,0 +1,62 @@
+{
+  "app.js": [
+    "src/app/state.js",
+    "src/app/dom.js",
+    "src/app/initialization.js",
+    "src/app/data-refresh.js",
+    "src/app/toasts.js",
+    "src/app/device-authorization.js",
+    "src/app/authentication.js",
+    "src/app/navigation.js",
+    "src/app/mobile-navigation.js",
+    "src/app/translation.js",
+    "src/app/file-import.js",
+    "src/app/execution.js",
+    "src/app/feedback.js",
+    "src/app/exercises.js",
+    "src/app/users.js",
+    "src/app/analytics.js",
+    "src/app/student-settings.js",
+    "src/app/password-history.js",
+    "src/app/audit.js",
+    "src/app/student-recovery.js",
+    "src/app/instructor-recovery.js",
+    "src/app/notifications.js",
+    "src/app/admin-security.js",
+    "src/app/editor-actions.js",
+    "src/app/validation.js",
+    "src/app/editor-files.js",
+    "src/app/realtime-validation.js",
+    "src/app/compiler-dashboard.js",
+    "src/app/pwa.js",
+    "src/app/password-management.js",
+    "src/app/appearance.js"
+  ],
+  "compiler.js": [
+    "src/compiler/tokens-and-trace.js",
+    "src/compiler/lexer.js",
+    "src/compiler/expressions.js",
+    "src/compiler/parser.js",
+    "src/compiler/semantic-analyzer.js",
+    "src/compiler/code-generator.js",
+    "src/compiler/compiler.js"
+  ],
+  "database.js": [
+    "src/database/firebase.js",
+    "src/database/passwords.js",
+    "src/database/seed-data.js",
+    "src/database/local-storage.js",
+    "src/database/collections.js",
+    "src/database/seeding.js",
+    "src/database/subscriptions-and-helpers.js",
+    "src/database/facade.js"
+  ],
+  "devtools.js": [
+    "src/devtools/pipeline-controls.js",
+    "src/devtools/pipeline-view.js",
+    "src/devtools/inspectors.js",
+    "src/devtools/diagnostics.js",
+    "src/devtools/execution-trace.js",
+    "src/devtools/dom.js"
+  ]
+}
