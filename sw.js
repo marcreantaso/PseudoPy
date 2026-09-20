@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-icons-20260920-v1';
+const CACHE_NAME = 'pseudopy-icons-20260920-v2';
 const LOCAL_ASSETS = [
     './',
     './index.html',
@@ -11,9 +11,9 @@ const LOCAL_ASSETS = [
     './style.css?v=pseudopy-logo-1',
     './mapper.js',
     './app.js',
-    './app.js?v=icons-1',
+    './app.js?v=icons-2',
     './devtools.js?v=icons-1',
-    './ui-icons.js?v=1',
+    './ui-icons.js?v=2',
     './ui-icons.css?v=1',
     './compiler.js',
     './dataset.json',

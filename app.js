@@ -4594,11 +4594,11 @@ async function loadPasswordRecovery() {
 
     tbody.innerHTML = recoveryRequests.map(r => {
         const statusMap = {
-            pending: { cls: 'badge-recovery-pending', label: '⏳ Pending' },
+            pending: { cls: 'badge-recovery-pending', label: '{{ui:Hourglass}} Pending' },
             approved: { cls: 'badge-recovery-approved', label: '{{ui:CircleCheck}} Approved' },
             rejected: { cls: 'badge-recovery-rejected', label: '{{ui:CircleX}} Rejected' },
             completed: { cls: 'badge-recovery-completed', label: '{{ui:Check}} Completed' },
-            expired: { cls: 'badge-recovery-expired', label: '⏱️ Expired' }
+            expired: { cls: 'badge-recovery-expired', label: '{{ui:Timer}} Expired' }
         };
         const s = statusMap[r.status] || { cls: '', label: r.status };
         const dt = r.requestedAt ? new Date(r.requestedAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
@@ -4644,11 +4644,11 @@ async function openRecoveryReview(requestId) {
         : '—';
 
     const statusMap = {
-        pending: { cls: 'badge-recovery-pending', label: '⏳ Pending' },
+        pending: { cls: 'badge-recovery-pending', label: '{{ui:Hourglass}} Pending' },
         approved: { cls: 'badge-recovery-approved', label: '{{ui:CircleCheck}} Approved' },
         rejected: { cls: 'badge-recovery-rejected', label: '{{ui:CircleX}} Rejected' },
         completed: { cls: 'badge-recovery-completed', label: '{{ui:Check}} Completed' },
-        expired: { cls: 'badge-recovery-expired', label: '⏱️ Expired' }
+        expired: { cls: 'badge-recovery-expired', label: '{{ui:Timer}} Expired' }
     };
     const s = statusMap[req.status] || { cls: '', label: req.status };
 
@@ -5186,11 +5186,11 @@ async function openAdminRecoveryReview(requestId) {
         : '—';
 
     const statusMap = {
-        pending: { cls: 'badge-recovery-pending', label: '⏳ Pending' },
+        pending: { cls: 'badge-recovery-pending', label: '{{ui:Hourglass}} Pending' },
         approved: { cls: 'badge-recovery-approved', label: '{{ui:CircleCheck}} Approved' },
         rejected: { cls: 'badge-recovery-rejected', label: '{{ui:CircleX}} Rejected' },
         completed: { cls: 'badge-recovery-completed', label: '{{ui:Check}} Completed' },
-        expired: { cls: 'badge-recovery-expired', label: '⏱️ Expired' }
+        expired: { cls: 'badge-recovery-expired', label: '{{ui:Timer}} Expired' }
     };
     const s = statusMap[req.status] || { cls: '', label: req.status };
     const instName = req.studentName || req.instructorName || 'Unknown';
@@ -5794,7 +5794,7 @@ function loadCompilerMetrics() {
  */
 async function runBenchmarkTest() {
     const btn = $id('run-benchmark-btn');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Running...'; }
+    if (btn) { btn.disabled = true; btn.textContent = '{{ui:Hourglass}} Running...'; }
     showToast('Running benchmark... loading exercises from database.', 'info');
 
     try {

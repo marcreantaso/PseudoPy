@@ -32,7 +32,7 @@
 
   <link rel="stylesheet" href="style.css?v=pseudopy-logo-1">
   <link rel="stylesheet" href="ui-icons.css?v=1">
-  <script src="ui-icons.js?v=1" defer></script>
+  <script src="ui-icons.js?v=2" defer></script>
   <link rel="icon" href="icons/pseudopy-favicon.png?v=2" type="image/png" sizes="32x32">
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.js"></script>
 </head>
@@ -1296,7 +1296,7 @@
         <!-- Purpose Banner -->
         <div
           style="background:var(--accent-subtle);border:1px solid var(--border-accent);border-radius:var(--radius-md);padding:0.85rem 1.1rem;margin-bottom:1.5rem;display:flex;gap:0.75rem;align-items:flex-start;">
-          <span style="font-size:1.3rem;line-height:1;">ℹ️</span>
+          <span style="font-size:1.3rem;line-height:1;">{{ui:Info}}</span>
           <div style="font-size:0.82rem;color:var(--text-secondary);line-height:1.65;">
             <strong style="color:var(--text-primary);">How to use this page:</strong><br>
             <strong>Session Metrics</strong> track live activity from your current session (translations &amp;
@@ -1377,7 +1377,7 @@
         <div class="charts-grid" style="margin-bottom:1.5rem">
           <div class="chart-container">
             <div class="panel-header">
-              <h3>⏱️ Pipeline Stage Timing (Avg)</h3>
+              <h3>{{ui:Timer}} Pipeline Stage Timing (Avg)</h3>
             </div>
             <div style="padding:0.4rem 1rem 0;font-size:0.78rem;color:var(--text-muted);">Average milliseconds spent in
               each compiler stage: Lexer → Parser → Semantic Analysis → Code Generation.</div>
@@ -1504,7 +1504,7 @@
 
         <div class="stats-grid" style="margin-bottom:1.5rem">
           <div class="stat-card">
-            <div class="stat-icon">⏳</div>
+            <div class="stat-icon">{{ui:Hourglass}}</div>
             <div class="stat-value" id="stat-recovery-pending" style="color:var(--warning)">0</div>
             <div class="stat-label">Pending Requests</div>
           </div>
@@ -1639,7 +1639,7 @@
           </div>
 
           <div class="an-filter-item" style="width:200px">
-            <span class="an-filter-label">↕ SORT BY</span>
+            <span class="an-filter-label">{{ui:ArrowUpDown}} SORT BY</span>
             <select id="instructor-sort" class="an-input" onchange="applyInstructorFilters()">
               <option value="newest" selected>Date Added (Newest)</option>
               <option value="oldest">Date Added (Oldest)</option>
@@ -2058,7 +2058,7 @@
 
         <div class="stats-grid" style="margin-bottom:1.5rem">
           <div class="stat-card">
-            <div class="stat-icon">⏳</div>
+            <div class="stat-icon">{{ui:Hourglass}}</div>
             <div class="stat-value" id="stat-admin-recovery-pending" style="color:var(--warning)">0</div>
             <div class="stat-label">Pending Instructor Requests</div>
           </div>
@@ -2644,7 +2644,7 @@
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=icons-1"></script>
+  <script src="app.js?v=icons-2"></script>
   <script src="devtools.js?v=20260909"></script>
   <script>
     if (window.lucide) lucide.createIcons({ icons: lucide.icons });
