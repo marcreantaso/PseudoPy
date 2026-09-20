@@ -55,3 +55,14 @@ MIT
 ## Compiler rules and regression checks
 
 See [the supported language and verification notes](docs/compiler-language.md) for exact operator semantics, loop bounds, syntax rules and test limitations. Run `npm test` with Node.js 20+ and Python 3 to check the compiler and role navigation behavior.
+
+## Maintaining the code
+
+Feature sources live in `src/`; backend responsibilities live in `server/`. See [the architecture and compatibility guide](docs/architecture.md) before editing generated browser files.
+
+```bash
+npm ci
+npm run build
+npm test
+npm start
+```
