@@ -60,7 +60,7 @@ async function loadStudentSettings() {
             setText('cooldown-message', `Your last password change was ${diffDays} day(s) ago. You can change your password again in ${remainingDays} day(s).`);
             if (submitBtn) {
                 submitBtn.disabled = true;
-                submitBtn.textContent = '\u23f3 Cooldown Active (' + remainingDays + ' days remaining)';
+                submitBtn.textContent = '{{ui:Hourglass}} Cooldown Active (' + remainingDays + ' days remaining)';
             }
         }
     }
@@ -69,7 +69,7 @@ async function loadStudentSettings() {
         if (cooldownWarning) cooldownWarning.classList.add('hidden');
         if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.textContent = '\ud83d\udd11 Change Password';
+            submitBtn.textContent = '{{ui:KeyRound}} Change Password';
         }
     }
 
@@ -82,15 +82,15 @@ function renderPasswordChangeHistory(history) {
     if (!container) return;
 
     if (history.length === 0) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">\ud83d\udcc4</div><h3>No Changes Yet</h3><p>You haven\'t changed your password yet.</p></div>';
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">{{ui:FileText}}</div><h3>No Changes Yet</h3><p>You haven\'t changed your password yet.</p></div>';
         return;
     }
 
     container.innerHTML = history.map(r => `
     <div class="request-card approved">
       <div class="request-card-header">
-        <span class="badge badge-approved">\u2705 Changed</span>
-        <span class="request-date">\ud83d\udcc5 ${r.changedAt || 'Unknown'}</span>
+        <span class="badge badge-approved">{{ui:CircleCheck}} Changed</span>
+        <span class="request-date">{{ui:Calendar}} ${r.changedAt || 'Unknown'}</span>
       </div>
       <div class="request-card-body">
         <span class="request-info">Password was changed successfully</span>

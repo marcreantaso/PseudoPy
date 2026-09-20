@@ -22,7 +22,7 @@ async function loadPasswordRequests() {
     <tr>
       <td><div class="user-cell"><div class="avatar-sm">${r.fullName ? r.fullName.charAt(0) : '?'}</div><div><div style="font-weight:600;color:var(--text-primary)">${r.fullName || 'Unknown'}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${r.username || 'unknown'}</div></div></div></td>
       <td>${r.changedAt || '\u2014'}</td>
-      <td><span class="badge badge-approved">\u2705 Changed</span></td>
+      <td><span class="badge badge-approved">{{ui:CircleCheck}} Changed</span></td>
     </tr>`).join('');
 }
 
