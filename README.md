@@ -1,5 +1,4 @@
-# PseudoPy — Automated Code Generation System
-
+# PseudoPy 
 > **Translating Pseudocode and Python: An Algorithmic Approach to Automated Code Generation**
 
 A web-based system that translates pseudocode into executable Python code, built as a Progressive Web App (PWA) with full mobile responsiveness.
