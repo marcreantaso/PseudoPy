@@ -7760,7 +7760,8 @@ async function captureEvidence(pipelineResult) {
 function evSeedDocIdFromStudent(student, studentId) {
     if (student === 'Eduard John Mirandilla') return 'u_stu_emirandilla';
     if (student === 'Mikaella Daet') return 'u_stu_mdaet';
-    const n = parseInt(String(studentId || '').replace(/\D/g, ''), 10);
+    const match = String(studentId || '').match(/-(\d+)$/) || String(studentId || '').match(/(\d+)$/);
+    const n = match ? parseInt(match[1], 10) : NaN;
     if (n >= 1 && n <= 30) return 'u_stu_' + (n + 2);
     return 'u_stu_' + (n || 99);
 }

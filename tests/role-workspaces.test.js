@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const source = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
+const source = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8').replace(/\r/g, '');
 const app = source('app.js');
 function classList() {
     const values = new Set();
@@ -18,9 +18,10 @@ function translationContext() {
     };
     const context = vm.createContext({ performance, console, $id: get, $qs: get,
         setPythonOutput: (id, code) => { get(id).value = code; }, showToast() {}, updateGutter() {}, updateExerciseStatus() {},
-        exerciseState: {}, currentErrorLineNumbers: [], renderHtmlErrors: errors => JSON.stringify(errors), elements });
+        exerciseState: {}, currentErrorLineNumbers: [], renderHtmlErrors: errors => JSON.stringify(errors), elements,
+        PseudoPyLearning: null, document: { readyState: 'complete', addEventListener() {} } });
     vm.runInContext(source('mapper.js') + '\n' + source('compiler.js'), context);
-    vm.runInContext(app.slice(app.indexOf('function translatePseudocodeGeneric('), app.indexOf('/* ============================================================\n   FILE UPLOAD')), context);
+    vm.runInContext(app.slice(app.indexOf('function icon(name, label) {'), app.indexOf('/* ============================================================\n   FILE UPLOAD')), context);
     vm.runInContext(app.slice(app.indexOf('function pseudocodeToPython('), app.indexOf('/* ============================================================\n   CODE EXECUTION')), context);
     vm.runInContext(app.slice(app.indexOf('function validatePseudocode('), app.indexOf('function renderHtmlErrors(', app.indexOf('function validatePseudocode('))), context);
     return { context, get };
