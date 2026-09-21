@@ -59,6 +59,12 @@ async function init() {
                 highlights.scrollLeft = editor.scrollLeft;
             }
         });
+
+        // Safety net: any page unload (refresh, tab close, PWA update) persists
+        // unsaved pseudocode to the draft slot so student work survives.
+        window.addEventListener('beforeunload', function () {
+            try { if (typeof maybeSaveEditorDraft === 'function') maybeSaveEditorDraft(); } catch (e) { }
+        });
     }
 
     // Sync scrolling and update gutter for Python Editor

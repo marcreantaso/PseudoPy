@@ -111,6 +111,17 @@ test('PWA update banner is driven by the real service worker lifecycle', () => {
     assert.match(html, /id="pwa-update-msg"/, 'update message element missing');
 });
 
+test('transient restore failures keep the session; gone accounts purge it', () => {
+    const session = read('src/app/session.js');
+    assert.match(session, /gone\.name = 'SessionAccountGone';/, 'gone-account sentinel missing');
+    assert.match(session, /err\.name === 'SessionAccountGone'/, 'gone-account path not branched by the sentinel');
+    const catchBlock = session.match(/catch \(err\) \{[\s\S]*?\n    \}/)[0];
+    assert.ok(catchBlock.includes('clearSession()'), 'gone-account branch does not clear the session');
+    assert.match(catchBlock, /SessionAccountGone/, 'gone branch must be the only clear-path');
+    const keptNote = session.match(/\[Session\] Restore temporarily unavailable[\s\S]*?kept session for retry/);
+    assert.ok(keptNote, 'transient-failure branch does not retain the session for a later retry');
+});
+
 test('unsaved editor drafts are saved and restored around reloads', () => {
     const editor = read('src/app/editor-actions.js');
     assert.match(editor, /function maybeSaveEditorDraft/, 'draft saver missing');
@@ -118,6 +129,8 @@ test('unsaved editor drafts are saved and restored around reloads', () => {
     assert.match(editor, /localStorage\.setItem\(EDITOR_DRAFT_KEY,/, 'draft not persisted to browser-local storage');
     const nav = read('src/app/navigation.js');
     assert.match(nav, /maybeRestoreEditorDraft\(\)/, 'draft not restored on the editor page');
+    const init = read('src/app/initialization.js');
+    assert.match(init, /beforeunload[\s\S]{0,200}maybeSaveEditorDraft/, 'drafts are not saved on unload');
 });
 
 test('build registers new source modules in the app bundle', () => {

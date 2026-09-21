@@ -242,6 +242,12 @@ async function init() {
                 highlights.scrollLeft = editor.scrollLeft;
             }
         });
+
+        // Safety net: any page unload (refresh, tab close, PWA update) persists
+        // unsaved pseudocode to the draft slot so student work survives.
+        window.addEventListener('beforeunload', function () {
+            try { if (typeof maybeSaveEditorDraft === 'function') maybeSaveEditorDraft(); } catch (e) { }
+        });
     }
 
     // Sync scrolling and update gutter for Python Editor
@@ -799,7 +805,9 @@ async function restoreSession() {
         const fresh = await dbGet(usersRef, docId);
 
         if (!fresh) {
-            throw new Error('Session account no longer exists.');
+            const gone = new Error('Session account no longer exists.');
+            gone.name = 'SessionAccountGone';
+            throw gone;
         }
 
         const status = (fresh.status || 'active').toLowerCase();
@@ -822,8 +830,17 @@ async function restoreSession() {
         console.log('[Session] Restored:', fresh.username, 'role:', fresh.role, 'page:', targetPage || '(default)');
         return true;
     } catch (err) {
-        console.warn('[Session] Restore failed; starting at login:', err);
-        clearSession();
+        if (err && err.name === 'SessionAccountGone') {
+            // The account was explicitly deleted: purge stored credentials-free
+            // profile so stale sessions never resurrect.
+            console.warn('[Session] Account no longer exists; clearing stored session.');
+            clearSession();
+        } else {
+            // Transient Firestore/network failure: the persisted session is
+            // kept so a later boot can retry. A temporary outage must never
+            // behave like a (silent) logout.
+            console.warn('[Session] Restore temporarily unavailable; kept session for retry:', err && err.message);
+        }
         bootState = BOOT_UNAUTHENTICATED;
         hideBootSplash();
         return false;
