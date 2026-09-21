@@ -2829,6 +2829,11 @@
       window.applyPWAUpdate = applyPWAUpdate;
       window.dismissPWAUpdate = dismissPWAUpdate;
 
+      // Platform caveat: on iOS 16.4+ Home-Screen PWAs, update detection is
+      // only live while the app is running; after a release users may need to
+      // close and relaunch the app (or open it from Safari once) to receive it.
+      // The Update Now flow below requires an active service worker controller;
+      // if none exists yet the banner stays hidden (first install auto-activates).
       function registerPWAUpdate() {
         navigator.serviceWorker.register('sw.js').then(function (reg) {
           console.log('[PWA] Service Worker registered:', reg.scope);

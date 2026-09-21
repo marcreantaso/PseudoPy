@@ -619,9 +619,12 @@ function handleLogout() {
     editingExerciseId = null;
     editingUserId = null;
 
-    // Explicit sign-out: clear the persisted session and last route.
+    // Explicit sign-out: clear the persisted session, last route and any
+    // per-user editor state so the next account on this device starts fresh.
     clearSession();
     clearPersistedRoute();
+    if (typeof clearEditorDraft === 'function') clearEditorDraft();
+    try { localStorage.removeItem('pseudopy_active_exercise'); } catch (e) { }
     bootState = BOOT_UNAUTHENTICATED;
 
     hide('app-layout');

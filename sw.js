@@ -59,6 +59,15 @@ self.addEventListener('install', (event) => {
     // the UI explicitly posts the SKIP_WAITING message (the "Update Now"
     // banner action), so an update never hijacks an in-progress session or
     // reloads the page without consent.
+    //
+    // Platform caveats:
+    // - iOS Safari before 16.4 cannot keep a Home-Screen web app updated or
+    //   reliably show the banner; such users should launch the app from
+    //   Safari once after a new release.
+    // - Firefox may not advertise updates to inactive tabs; the Update Now
+    //   banner is re-surfaced on pageshow/focus in the UI registration.
+    // - Native authentication never relies on the cache: Firestore/Auth
+    //   responses are excluded from this cache by the fetch handler.
 });
 
 // Activate — clean old caches

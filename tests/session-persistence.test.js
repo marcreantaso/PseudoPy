@@ -36,6 +36,8 @@ test('login persists the session and explicit logout clears it', () => {
     assert.match(auth, /clearSession\(\);\s+clearPersistedRoute\(\);/, 'logout does not clear the persisted session');
     assert.match(auth, /bootState = BOOT_UNAUTHENTICATED;/, 'logout does not mark state unauthenticated');
     assert.ok(!auth.includes("currentUser.fullName.charAt(0)"), 'sidebar avatar initials logic remained');
+    assert.match(auth, /clearEditorDraft\(\);/, 'logout does not clear the previous user editor draft');
+    assert.match(auth, /pseudopy_active_exercise/, 'logout does not clear the active exercise key');
 });
 
 test('current route is persisted and the boot restore re-fetches from Firestore', () => {
