@@ -6,12 +6,20 @@ const bundles = require('../src/bundles.json');
 
 /** Ordered classic-script modules preserve the existing HTML handler contract. */
 function build({ check = false } = {}) {
+    const packageVersion = JSON.parse(
+        fs.readFileSync(path.join(root, 'package.json'), 'utf8')
+    ).version;
     const outputs = Object.entries(bundles).map(([target, sources]) => {
-        const content = sources.map(source => {
+        let content = sources.map(source => {
             const text = fs.readFileSync(path.join(root, source), 'utf8');
             new vm.Script(text, { filename: source });
             return text;
         }).join('');
+        // Inject the single source-of-truth app version (package.json) into the
+        // main bundle so it is never hardcoded across the app.
+        if (target === 'app.js') {
+            content = content.split('__PSEUDOPY_VERSION__').join(packageVersion);
+        }
         new vm.Script(content, { filename: target });
         return { target, content };
     });

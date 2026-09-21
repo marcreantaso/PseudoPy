@@ -26,6 +26,9 @@ function navigateTo(pageId) {
 
     currentPage = pageId;
 
+    // Remember the route so a refresh/boot can restore the same page.
+    if (currentUser) persistRoute(pageId);
+
     // Hide all pages
     $qsa('.page-view').forEach(el => el.classList.add('hidden'));
 
@@ -85,6 +88,9 @@ function navigateTo(pageId) {
         loadStudentProgress();
         if (typeof maybeAutoStartTutorial === 'function') {
             try { maybeAutoStartTutorial(); } catch (e) { /* tour must never block navigation */ }
+        }
+        if (typeof maybeRestoreEditorDraft === 'function') {
+            try { maybeRestoreEditorDraft(); } catch (e) { /* draft restore must never block navigation */ }
         }
     }
 }

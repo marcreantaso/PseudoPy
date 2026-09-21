@@ -48,6 +48,61 @@ function copyText(text) {
     });
 }
 
+/* ============================================================
+   UNSAVED EDITOR DRAFT — preserved across refresh / PWA update
+   ============================================================ */
+
+const EDITOR_DRAFT_KEY = 'pseudopy_editor_draft';
+
+/**
+ * Persist unsaved pseudocode editor content to browser-local draft storage.
+ * Called before any planned reload (e.g. PWA Update Now) so student work is
+ * never silently destroyed. Returns true when a draft was saved.
+ */
+function maybeSaveEditorDraft() {
+    try {
+        const editor = $id('pseudocode-editor');
+        if (!editor || !editor.value || !editor.value.trim()) return false;
+        const active = exerciseState && exerciseState.activeExercise;
+        const activeId = active ? (active._docId || active.id || '') : '';
+        localStorage.setItem(EDITOR_DRAFT_KEY, JSON.stringify({
+            exerciseId: activeId,
+            text: editor.value,
+            savedAt: new Date().toISOString()
+        }));
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function clearEditorDraft() {
+    try { localStorage.removeItem(EDITOR_DRAFT_KEY); } catch (e) { }
+}
+
+/**
+ * Restore a saved draft if it belongs to the currently active exercise (or to
+ * free typing with no active exercise). Restored drafts survive both refreshes
+ * and PWA updates.
+ */
+function maybeRestoreEditorDraft() {
+    try {
+        const raw = localStorage.getItem(EDITOR_DRAFT_KEY);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        const editor = $id('pseudocode-editor');
+        if (!editor) return;
+        const active = exerciseState && exerciseState.activeExercise;
+        const activeId = active ? (active._docId || active.id || '') : '';
+        if (draft.exerciseId && activeId && draft.exerciseId !== activeId) return;
+        if (editor.value.trim()) return;
+        editor.value = draft.text;
+        updateGutter();
+        setText('line-count', editor.value.split('\n').length + ' lines');
+        showToast('Unsaved draft restored.', 'info');
+    } catch (e) { /* non-critical */ }
+}
+
 function downloadPython() {
     const code = getPythonCode('python-output');
     if (!code) { showToast('No code to download.', 'error'); return; }

@@ -68,6 +68,7 @@ async function checkCurrentDeviceApprovalStatus() {
         closePendingDeviceModal();
         showToast('Device authorized by Administrator! Signing in...', 'success');
         currentUser = user;
+        saveSession(currentUser);
         try {
             await dbUpdate(usersRef, currentUser._docId || currentUser.id, { lastLogin: new Date().toISOString() });
             currentUser.lastLogin = new Date().toISOString();

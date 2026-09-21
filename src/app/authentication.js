@@ -151,6 +151,9 @@ async function handleLogin() {
         // Step 4: Role is auto-detected from the database record
         currentUser = userByUsername;
 
+        // Persist the session (browser-local) so refreshes never log the user out.
+        saveSession(currentUser);
+
         // Record last login timestamp
         try {
             await dbUpdate(usersRef, currentUser._docId || currentUser.id, { lastLogin: new Date().toISOString() });
@@ -179,9 +182,10 @@ function handleLogout() {
     editingExerciseId = null;
     editingUserId = null;
 
-    // Clear session token from storage (security: prevent stale session reuse)
-    localStorage.removeItem('pseudopy_session_user');
-    sessionStorage.removeItem('pseudopy_session_user');
+    // Explicit sign-out: clear the persisted session and last route.
+    clearSession();
+    clearPersistedRoute();
+    bootState = BOOT_UNAUTHENTICATED;
 
     hide('app-layout');
     show('login-page');
@@ -203,7 +207,7 @@ function checkAccess(role, pageId) {
     return true; // fallback for unclassified pages
 }
 
-function showApp() {
+function showApp(restorePage) {
     hide('login-page');
     show('app-layout');
 
@@ -238,13 +242,16 @@ function showApp() {
         }
     }
 
-    // Navigate to default page
+    // Navigate to the restored page (if valid for this role) or the role default
     const defaults = {
         student: 'write-pseudocode',
         instructor: 'analytics',
         admin: 'manage-users'
     };
-    navigateTo(defaults[currentUser.role]);
+    const targetPage = (restorePage && checkAccess(currentUser.role, restorePage)) ? restorePage : defaults[currentUser.role];
+    navigateTo(targetPage);
+
+    renderAppVersion();
 
     if (currentUser.role === 'admin') {
         updateAdminPendingRequestsBadge();

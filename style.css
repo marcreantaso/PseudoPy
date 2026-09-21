@@ -6797,6 +6797,86 @@ select.form-input {
   gap: 0.75rem;
 }
 
+.pwa-update-actions .btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.pwa-spinner {
+  display: none;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.4rem;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: pwa-spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+.pwa-update-btn.updating .pwa-spinner {
+  display: inline-block;
+}
+
+@keyframes pwa-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Boot Splash (session restore in progress) ── */
+.boot-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary, #0b1220);
+}
+
+.boot-splash-box {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-accent);
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.95rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.boot-splash-box .pwa-spinner {
+  display: inline-block;
+  border-color: var(--border-accent);
+  border-top-color: var(--accent);
+}
+
+@media (max-width: 576px) {
+  .pwa-update-banner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-width: 100%;
+    transform: none;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pwa-update-banner.show {
+    bottom: 0;
+  }
+
+  .pwa-update-actions {
+    justify-content: flex-end;
+  }
+}
+
 /* Analytics: use the actual markup classes and override inline flex/widths. */
 .an-charts-row {
   display: grid;

@@ -1,6 +1,7 @@
 {
   "app.js": [
     "src/app/state.js",
+    "src/app/app-version.js",
     "src/app/dom.js",
     "src/app/on-demand.js",
     "src/app/initialization.js",
@@ -8,6 +9,7 @@
     "src/app/toasts.js",
     "src/app/device-authorization.js",
     "src/app/authentication.js",
+    "src/app/session.js",
     "src/app/navigation.js",
     "src/app/mobile-navigation.js",
     "src/app/translation.js",

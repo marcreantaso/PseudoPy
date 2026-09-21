@@ -6,6 +6,9 @@ async function init() {
     console.log('[App] init() called');
     try {
 
+        // Restore the persisted session FIRST so a refresh never flashes
+        // login and never behaves like a logout.
+        await restoreSession();
 
         console.log('[App] Calling seedDatabase()...');
         // Seed the database if collections are empty
@@ -22,6 +25,9 @@ async function init() {
         // Initialize Theme from Storage
         const savedTheme = localStorage.getItem('pseudopy_theme') || 'dark';
         document.documentElement.setAttribute('data-theme', savedTheme);
+
+        // Show the app version (login footer / settings About).
+        renderAppVersion();
     } catch (err) {
         console.error('[App] Init error:', err);
         showToast('Database initialization failed. Check local storage availability.', 'error');
@@ -98,6 +104,8 @@ async function init() {
         if (typeof dbGet === 'function' && typeof exercisesRef !== 'undefined') {
             dbGet(exercisesRef, activeExId).then(ex => {
                 if (ex) renderActiveExercise(ex);
+                // Restore any matching unsaved draft once the exercise has loaded.
+                try { if (typeof maybeRestoreEditorDraft === 'function') maybeRestoreEditorDraft(); } catch (e) { }
             }).catch(err => console.error('Failed to restore active exercise', err));
         }
     }

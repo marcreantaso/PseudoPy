@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-icons-20260921-v3';
+const CACHE_NAME = 'pseudopy-shell-20260921-v4';
 const LOCAL_ASSETS = [
     './',
     './index.html',
@@ -55,7 +55,10 @@ self.addEventListener('install', (event) => {
             });
         })
     );
-    self.skipWaiting();
+    // Controlled updates: a freshly deployed worker waits in "waiting" until
+    // the UI explicitly posts the SKIP_WAITING message (the "Update Now"
+    // banner action), so an update never hijacks an in-progress session or
+    // reloads the page without consent.
 });
 
 // Activate — clean old caches
@@ -73,14 +76,19 @@ self.addEventListener('activate', (event) => {
 
 // Fetch — cache-first, fallback to network
 self.addEventListener('fetch', (event) => {
+    const requestUrl = new URL(event.request.url);
+    const isSameOrigin = requestUrl.origin === self.location.origin;
+
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
             if (cachedResponse) {
                 return cachedResponse;
             }
             return fetch(event.request).then((networkResponse) => {
-                // Cache successful GET responses (allow opaque status 0 for CDNs)
-                if (event.request.method === 'GET' && (networkResponse.status === 200 || networkResponse.status === 0)) {
+                // Only same-origin GET successes are promoted to the runtime
+                // cache. Firestore/Auth and other third-party responses are
+                // never cached as static public app assets.
+                if (isSameOrigin && event.request.method === 'GET' && networkResponse.status === 200) {
                     const responseClone = networkResponse.clone();
                     caches.open(CACHE_NAME).then((cache) => {
                         cache.put(event.request, responseClone);
@@ -88,8 +96,8 @@ self.addEventListener('fetch', (event) => {
                 }
                 return networkResponse;
             }).catch(() => {
-                // Offline fallback for navigation
-                if (event.request.mode === 'navigate') {
+                // Offline fallback for same-origin navigations only
+                if (event.request.mode === 'navigate' && isSameOrigin) {
                     return caches.match('/index.html');
                 }
             });

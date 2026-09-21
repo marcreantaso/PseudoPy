@@ -44,6 +44,24 @@ let editingInstructorId = null;
 
 
 /* ============================================================
+   APP VERSION — injected at build time from package.json
+   The build substitutes 1.0.0 with the package
+   version so the version is never hardcoded in this repo.
+   ============================================================ */
+
+const APP_VERSION = '1.0.0';
+window.APP_VERSION = APP_VERSION;
+
+/**
+ * Renders the app version into the login footer and Settings About row.
+ */
+function renderAppVersion() {
+    if (!window.APP_VERSION) return;
+    const loginEl = $id('login-version');
+    if (loginEl) loginEl.textContent = 'PseudoPy v' + window.APP_VERSION;
+    const settingsEl = $id('settings-version');
+    if (settingsEl) settingsEl.textContent = 'Version ' + window.APP_VERSION;
+}/* ============================================================
    PYTHON OUTPUT — LINE NUMBER RENDERER
    Renders Python code with a styled line-number gutter.
    Used by all translation output panels.
@@ -171,6 +189,9 @@ async function init() {
     console.log('[App] init() called');
     try {
 
+        // Restore the persisted session FIRST so a refresh never flashes
+        // login and never behaves like a logout.
+        await restoreSession();
 
         console.log('[App] Calling seedDatabase()...');
         // Seed the database if collections are empty
@@ -187,6 +208,9 @@ async function init() {
         // Initialize Theme from Storage
         const savedTheme = localStorage.getItem('pseudopy_theme') || 'dark';
         document.documentElement.setAttribute('data-theme', savedTheme);
+
+        // Show the app version (login footer / settings About).
+        renderAppVersion();
     } catch (err) {
         console.error('[App] Init error:', err);
         showToast('Database initialization failed. Check local storage availability.', 'error');
@@ -263,6 +287,8 @@ async function init() {
         if (typeof dbGet === 'function' && typeof exercisesRef !== 'undefined') {
             dbGet(exercisesRef, activeExId).then(ex => {
                 if (ex) renderActiveExercise(ex);
+                // Restore any matching unsaved draft once the exercise has loaded.
+                try { if (typeof maybeRestoreEditorDraft === 'function') maybeRestoreEditorDraft(); } catch (e) { }
             }).catch(err => console.error('Failed to restore active exercise', err));
         }
     }
@@ -389,6 +415,7 @@ async function checkCurrentDeviceApprovalStatus() {
         closePendingDeviceModal();
         showToast('Device authorized by Administrator! Signing in...', 'success');
         currentUser = user;
+        saveSession(currentUser);
         try {
             await dbUpdate(usersRef, currentUser._docId || currentUser.id, { lastLogin: new Date().toISOString() });
             currentUser.lastLogin = new Date().toISOString();
@@ -555,6 +582,9 @@ async function handleLogin() {
         // Step 4: Role is auto-detected from the database record
         currentUser = userByUsername;
 
+        // Persist the session (browser-local) so refreshes never log the user out.
+        saveSession(currentUser);
+
         // Record last login timestamp
         try {
             await dbUpdate(usersRef, currentUser._docId || currentUser.id, { lastLogin: new Date().toISOString() });
@@ -583,9 +613,10 @@ function handleLogout() {
     editingExerciseId = null;
     editingUserId = null;
 
-    // Clear session token from storage (security: prevent stale session reuse)
-    localStorage.removeItem('pseudopy_session_user');
-    sessionStorage.removeItem('pseudopy_session_user');
+    // Explicit sign-out: clear the persisted session and last route.
+    clearSession();
+    clearPersistedRoute();
+    bootState = BOOT_UNAUTHENTICATED;
 
     hide('app-layout');
     show('login-page');
@@ -607,7 +638,7 @@ function checkAccess(role, pageId) {
     return true; // fallback for unclassified pages
 }
 
-function showApp() {
+function showApp(restorePage) {
     hide('login-page');
     show('app-layout');
 
@@ -642,13 +673,16 @@ function showApp() {
         }
     }
 
-    // Navigate to default page
+    // Navigate to the restored page (if valid for this role) or the role default
     const defaults = {
         student: 'write-pseudocode',
         instructor: 'analytics',
         admin: 'manage-users'
     };
-    navigateTo(defaults[currentUser.role]);
+    const targetPage = (restorePage && checkAccess(currentUser.role, restorePage)) ? restorePage : defaults[currentUser.role];
+    navigateTo(targetPage);
+
+    renderAppVersion();
 
     if (currentUser.role === 'admin') {
         updateAdminPendingRequestsBadge();
@@ -659,6 +693,142 @@ function showApp() {
 
 
 /* ============================================================
+   PERSISTED SESSION RESTORE
+   Browser-local Firebase-session persistence for the PseudoPy
+   Firestore-backed identity model. A page refresh, CRUD write or
+   PWA update must never behave like an implicit logout.
+   ============================================================ */
+
+const SESSION_KEY = 'pseudopy_session_user';
+const ROUTE_KEY = 'pseudopy_route';
+
+const BOOT_LOADING = 'AUTH_LOADING';
+const BOOT_AUTHENTICATED = 'AUTHENTICATED';
+const BOOT_UNAUTHENTICATED = 'UNAUTHENTICATED';
+
+let bootState = BOOT_LOADING;
+
+/**
+ * Returns a persistable copy of a user record with credential fields
+ * stripped. Password material must never be written to frontend storage.
+ */
+function sanitizeUser(user) {
+    if (!user) return null;
+    const copy = {};
+    for (const key of Object.keys(user)) {
+        if (key === 'password' || key === 'passwordHash' || key === 'passwordSalt') continue;
+        copy[key] = user[key];
+    }
+    return copy;
+}
+
+/**
+ * Persist the authenticated user's sanitized profile using browser-local
+ * persistence so the session survives refresh, reopened tabs and PWA updates.
+ */
+function saveSession(user) {
+    try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(sanitizeUser(user)));
+    } catch (e) {
+        console.warn('[Session] Failed to persist session:', e);
+    }
+}
+
+/**
+ * Clear the persisted session and related transient markers.
+ */
+function clearSession() {
+    try { localStorage.removeItem(SESSION_KEY); } catch (e) { }
+    try { sessionStorage.removeItem('pseudopy_session_user'); } catch (e) { }
+    try { sessionStorage.removeItem('pseudopy_update_dismissed'); } catch (e) { }
+}
+
+/**
+ * Persist the current protected page so a refresh restores the same route.
+ */
+function persistRoute(pageId) {
+    try { localStorage.setItem(ROUTE_KEY, pageId); } catch (e) { }
+}
+
+function getPersistedRoute() {
+    try { return localStorage.getItem(ROUTE_KEY) || ''; } catch (e) { return ''; }
+}
+
+function clearPersistedRoute() {
+    try { localStorage.removeItem(ROUTE_KEY); } catch (e) { }
+}
+
+function showBootSplash() {
+    const splash = $id('boot-splash');
+    if (splash) splash.classList.remove('hidden');
+}
+
+function hideBootSplash() {
+    const splash = $id('boot-splash');
+    if (splash) splash.classList.add('hidden');
+}
+
+/**
+ * Boot-time auth restore. Runs once on startup:
+ *   1. If no persisted session -> UNAUTHENTICATED (login screen).
+ *   2. Otherwise show the boot splash, re-fetch the user record from
+ *      Firestore as the authoritative source of profile/role/status, and
+ *      restore the previously persisted route (access-checked).
+ * A missing/invalid record clears the session; a temporary Firestore delay
+ * must never sign anyone out.
+ */
+async function restoreSession() {
+    bootState = BOOT_LOADING;
+
+    let snapshot = null;
+    try {
+        snapshot = JSON.parse(localStorage.getItem(SESSION_KEY));
+    } catch (e) {
+        snapshot = null;
+    }
+
+    if (!snapshot || !((snapshot._docId || snapshot.id))) {
+        bootState = BOOT_UNAUTHENTICATED;
+        return false;
+    }
+
+    showBootSplash();
+
+    try {
+        const docId = snapshot._docId || snapshot.id;
+        const fresh = await dbGet(usersRef, docId);
+
+        if (!fresh) {
+            throw new Error('Session account no longer exists.');
+        }
+
+        const status = (fresh.status || 'active').toLowerCase();
+        if (status === 'archived' || status === 'inactive') {
+            clearSession();
+            bootState = BOOT_UNAUTHENTICATED;
+            hideBootSplash();
+            showToast('Your session ended. This account is no longer active.', 'info');
+            return false;
+        }
+
+        currentUser = fresh;
+
+        const route = getPersistedRoute();
+        const targetPage = (route && checkAccess(fresh.role, route)) ? route : '';
+        showApp(targetPage);
+
+        bootState = BOOT_AUTHENTICATED;
+        hideBootSplash();
+        console.log('[Session] Restored:', fresh.username, 'role:', fresh.role, 'page:', targetPage || '(default)');
+        return true;
+    } catch (err) {
+        console.warn('[Session] Restore failed; starting at login:', err);
+        clearSession();
+        bootState = BOOT_UNAUTHENTICATED;
+        hideBootSplash();
+        return false;
+    }
+}/* ============================================================
    NAVIGATION
    ============================================================ */
 
@@ -685,6 +855,9 @@ function navigateTo(pageId) {
     }
 
     currentPage = pageId;
+
+    // Remember the route so a refresh/boot can restore the same page.
+    if (currentUser) persistRoute(pageId);
 
     // Hide all pages
     $qsa('.page-view').forEach(el => el.classList.add('hidden'));
@@ -745,6 +918,9 @@ function navigateTo(pageId) {
         loadStudentProgress();
         if (typeof maybeAutoStartTutorial === 'function') {
             try { maybeAutoStartTutorial(); } catch (e) { /* tour must never block navigation */ }
+        }
+        if (typeof maybeRestoreEditorDraft === 'function') {
+            try { maybeRestoreEditorDraft(); } catch (e) { /* draft restore must never block navigation */ }
         }
     }
 }
@@ -5748,6 +5924,61 @@ function copyText(text) {
         document.body.removeChild(textarea);
         showToast('Copied to clipboard!', 'success');
     });
+}
+
+/* ============================================================
+   UNSAVED EDITOR DRAFT — preserved across refresh / PWA update
+   ============================================================ */
+
+const EDITOR_DRAFT_KEY = 'pseudopy_editor_draft';
+
+/**
+ * Persist unsaved pseudocode editor content to browser-local draft storage.
+ * Called before any planned reload (e.g. PWA Update Now) so student work is
+ * never silently destroyed. Returns true when a draft was saved.
+ */
+function maybeSaveEditorDraft() {
+    try {
+        const editor = $id('pseudocode-editor');
+        if (!editor || !editor.value || !editor.value.trim()) return false;
+        const active = exerciseState && exerciseState.activeExercise;
+        const activeId = active ? (active._docId || active.id || '') : '';
+        localStorage.setItem(EDITOR_DRAFT_KEY, JSON.stringify({
+            exerciseId: activeId,
+            text: editor.value,
+            savedAt: new Date().toISOString()
+        }));
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function clearEditorDraft() {
+    try { localStorage.removeItem(EDITOR_DRAFT_KEY); } catch (e) { }
+}
+
+/**
+ * Restore a saved draft if it belongs to the currently active exercise (or to
+ * free typing with no active exercise). Restored drafts survive both refreshes
+ * and PWA updates.
+ */
+function maybeRestoreEditorDraft() {
+    try {
+        const raw = localStorage.getItem(EDITOR_DRAFT_KEY);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        const editor = $id('pseudocode-editor');
+        if (!editor) return;
+        const active = exerciseState && exerciseState.activeExercise;
+        const activeId = active ? (active._docId || active.id || '') : '';
+        if (draft.exerciseId && activeId && draft.exerciseId !== activeId) return;
+        if (editor.value.trim()) return;
+        editor.value = draft.text;
+        updateGutter();
+        setText('line-count', editor.value.split('\n').length + ' lines');
+        showToast('Unsaved draft restored.', 'info');
+    } catch (e) { /* non-critical */ }
 }
 
 function downloadPython() {

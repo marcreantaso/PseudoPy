@@ -68,7 +68,8 @@ test('icon-only buttons carry accessible names', () => {
     for (const btn of iconOnly) {
         assert.match(btn, /aria-label=/, `missing aria-label on: ${btn}`);
     }
-    assert.match(html, /id="pwa-dismiss-btn"[^>]*aria-label="Dismiss update notification"/);
+    assert.match(html, /id="pwa-later-btn"[^>]*>\s*Later\s*<\/button>/, 'update banner Later button has no accessible label');
+    assert.match(html, /id="pwa-update-btn"[^>]*>[\s\S]*?data-update-label>Update Now<\/span>/, 'update banner Update Now button has no accessible label');
     assert.match(html, /onclick="togglePasswordVisibility\('inst-password'[^\n]*aria-label="Show password"/);
 });
 
