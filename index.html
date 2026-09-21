@@ -136,6 +136,7 @@
                 style="padding-right: 2.5rem; width: 100%;" onkeypress="if(event.key === 'Enter') handleLogin()">
               <button type="button" class="btn btn-ghost btn-icon"
                 onclick="togglePasswordVisibility('login-password', this)"
+                aria-label="Show password"
                 style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
                 <i data-lucide="eye" aria-hidden="true"></i>
               </button>
@@ -147,7 +148,7 @@
           </button>
 
           <div style="text-align:center; margin-top: 1rem;">
-            <button class="btn btn-ghost btn-sm" onclick="showForgotPassword()" style="font-size:0.85rem; color:var(--text-muted);">
+            <button class="btn btn-ghost btn-sm" onclick="showForgotPassword()" style="font-size:0.85rem; color:var(--text-secondary);">
               <i data-lucide="lock-keyhole" aria-hidden="true"></i> Forgot your password?
             </button>
           </div>
@@ -1717,6 +1718,7 @@
                   placeholder="Enter your current password" style="padding-right: 2.5rem; width: 100%;">
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('cp-current-password', this)"
+                  aria-label="Show password"
                   style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
                   {{ui:Eye}}
                 </button>
@@ -1729,6 +1731,7 @@
                   style="padding-right: 2.5rem; width: 100%;">
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('cp-new-password', this)"
+                  aria-label="Show password"
                   style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
                   {{ui:Eye}}
                 </button>
@@ -1741,6 +1744,7 @@
                   style="padding-right: 2.5rem; width: 100%;">
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('cp-confirm-password', this)"
+                  aria-label="Show password"
                   style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
                   {{ui:Eye}}
                 </button>
@@ -2010,6 +2014,7 @@
                   placeholder="Enter new password (min 6 characters)" style="padding-right: 2.5rem; width: 100%;">
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('new-password', this)"
+                  aria-label="Show password"
                   style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;"><i data-lucide="eye" aria-hidden="true"></i></button>
               </div>
             </div>
@@ -2020,6 +2025,7 @@
                   style="padding-right: 2.5rem; width: 100%;">
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('confirm-new-password', this)"
+                  aria-label="Show password"
                   style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;"><i data-lucide="eye" aria-hidden="true"></i></button>
               </div>
             </div>

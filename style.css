@@ -356,7 +356,7 @@ h4 {
 .hero-logo .logo-text {
   font-size: 1.35rem;
   font-weight: 800;
-  color: var(--text-primary);
+  color: #ffffff;
   letter-spacing: -0.02em;
 }
 
@@ -365,7 +365,7 @@ h4 {
   font-weight: 900;
   line-height: 1.1;
   letter-spacing: -0.04em;
-  color: var(--text-primary);
+  color: #f8fafc;
   margin-bottom: 1.25rem;
 }
 
@@ -376,9 +376,11 @@ h4 {
   background-clip: text;
 }
 
+/* The hero is a permanently-dark navy surface in both themes, so its
+   foreground colors are theme-independent (never inherit the light theme). */
 .hero-subtitle {
   font-size: 0.95rem;
-  color: var(--text-secondary);
+  color: #cbd5e1;
   line-height: 1.65;
   max-width: 380px;
   margin-bottom: 2.5rem;
@@ -439,7 +441,7 @@ h4 {
 .code-card-title {
   margin-left: auto;
   font-size: 0.7rem;
-  color: var(--text-muted);
+  color: #94a3b8;
   font-family: 'JetBrains Mono', monospace;
 }
 
