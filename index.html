@@ -394,7 +394,7 @@
     </div>
 
     <!-- ── Main Content Area ── -->
-    <div class="main-content" id="main-content">
+      <main class="main-content" id="main-content">
 
       <!-- ═══════════════════════════════════
            PAGE: Write Pseudocode (Student)
@@ -1024,7 +1024,7 @@
         <div class="modal" style="max-width:780px;width:95%">
           <div class="modal-header">
             <h3 id="sdm-title" class="modal-title"><i data-lucide="file-text" aria-hidden="true"></i> Submission Details</h3>
-            <button class="modal-close" onclick="closeSubmissionDetail()"><i data-lucide="x" aria-hidden="true"></i></button>
+            <button class="modal-close" aria-label="Close submission details" onclick="closeSubmissionDetail()"><i data-lucide="x" aria-hidden="true"></i></button>
           </div>
           <div class="modal-body" style="max-height:75vh;overflow-y:auto">
             <!-- Student Info -->
@@ -2158,7 +2158,7 @@
         </div>
       </div>
 
-    </div><!-- /main-content -->
+      </main><!-- /main-content -->
   </div><!-- /app-layout -->
 
   <!-- ════════════════════════════════════════
@@ -2169,7 +2169,7 @@
     <div class="modal">
       <div class="modal-header">
         <h3 id="exercise-modal-title">Add Exercise</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeExerciseModal()">{{ui:X}}</button>
+        <button class="btn btn-ghost btn-icon" aria-label="Close exercise modal" onclick="closeExerciseModal()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
@@ -2225,7 +2225,7 @@
     <div class="modal">
       <div class="modal-header">
         <h3 id="user-modal-title">Add New User</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeUserModal()">{{ui:X}}</button>
+        <button class="btn btn-ghost btn-icon" aria-label="Close user modal" onclick="closeUserModal()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
@@ -2247,6 +2247,7 @@
               style="padding-right: 2.5rem; width: 100%;">
             <button type="button" class="btn btn-ghost btn-icon"
               onclick="togglePasswordVisibility('user-password', this)"
+              aria-label="Show password"
               style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
               {{ui:Eye}}
             </button>
@@ -2273,7 +2274,7 @@
     <div class="modal" style="max-width:540px;width:95%">
       <div class="modal-header">
         <h3 id="instructor-modal-title" class="modal-title">{{ui:Plus}} Add Instructor</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeInstructorModal()">{{ui:X}}</button>
+        <button class="btn btn-ghost btn-icon" aria-label="Close instructor modal" onclick="closeInstructorModal()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <div class="responsive-form-grid">
@@ -2296,7 +2297,7 @@
             <label>Password <span style="color:var(--danger)">*</span></label>
             <div style="position: relative; display: flex; align-items: center;">
               <input type="password" id="inst-password" class="form-input" placeholder="Enter password" style="padding-right: 2.5rem; width: 100%;">
-              <button type="button" class="btn btn-ghost btn-icon" onclick="togglePasswordVisibility('inst-password', this)" style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;"><i data-lucide="eye" aria-hidden="true"></i></button>
+              <button type="button" class="btn btn-ghost btn-icon" onclick="togglePasswordVisibility('inst-password', this)" aria-label="Show password" style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;"><i data-lucide="eye" aria-hidden="true"></i></button>
             </div>
           </div>
 
@@ -2329,7 +2330,7 @@
     <div class="drawer-panel">
       <div class="drawer-header">
         <h3 id="idm-title" style="margin:0;font-size:1.1rem;font-weight:700">Instructor Details</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeInstructorDetailModal()" style="font-size:1.1rem">{{ui:X}}</button>
+        <button class="btn btn-ghost btn-icon" aria-label="Close instructor details" onclick="closeInstructorDetailModal()" style="font-size:1.1rem">{{ui:X}}</button>
       </div>
 
       <div class="drawer-body">
@@ -2415,7 +2416,7 @@
     <div class="modal" style="max-width: 540px;">
       <div class="modal-header">
         <h3>{{ui:Search}} Student Verification &amp; Recovery Review</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeRecoveryReview()">{{ui:X}}</button>
+        <button class="btn btn-ghost btn-icon" aria-label="Close recovery review" onclick="closeRecoveryReview()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <div id="recovery-review-content"></div>
@@ -2435,7 +2436,7 @@
     <div class="modal" style="max-width: 460px;">
       <div class="modal-header">
         <h3>{{ui:TriangleAlert}} Confirm Password Reset</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeRecoveryConfirm()">{{ui:X}}</button>
+        <button class="btn btn-ghost btn-icon" aria-label="Close recovery confirmation" onclick="closeRecoveryConfirm()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <p style="font-size:1rem; margin-bottom:0.75rem;">
@@ -2457,7 +2458,7 @@
     <div class="modal" style="max-width: 540px;">
       <div class="modal-header">
         <h3>{{ui:Search}} Instructor Verification &amp; Recovery Review</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeAdminRecoveryReview()">{{ui:X}}</button>
+        <button class="btn btn-ghost btn-icon" aria-label="Close admin recovery review" onclick="closeAdminRecoveryReview()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <div id="admin-recovery-review-content"></div>
@@ -2477,7 +2478,7 @@
     <div class="modal" style="max-width: 460px;">
       <div class="modal-header">
         <h3>{{ui:TriangleAlert}} Confirm Instructor Password Reset</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeAdminRecoveryConfirm()">{{ui:X}}</button>
+        <button class="btn btn-ghost btn-icon" aria-label="Close admin recovery confirmation" onclick="closeAdminRecoveryConfirm()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <p style="font-size:1rem; margin-bottom:0.75rem;">
@@ -2505,7 +2506,7 @@
             <p style="margin:0; font-size:0.8rem; color:var(--text-muted);" id="device-modal-instructor-subtitle">Manage device access for instructor</p>
           </div>
         </div>
-        <button class="btn btn-ghost btn-icon" onclick="closeInstructorDevicesModal()">{{ui:X}}</button>
+        <button class="btn btn-ghost btn-icon" aria-label="Close authorized devices" onclick="closeInstructorDevicesModal()">{{ui:X}}</button>
       </div>
       <div class="modal-body" style="padding: 1.25rem;">
         <div style="background:var(--bg-card-hover); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem 1rem; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
@@ -2609,7 +2610,7 @@
     <div class="modal" style="max-width: 460px;">
       <div class="modal-header">
         <h3>{{ui:Archive}} Archive Instructor?</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeArchiveInstructorModal()">{{ui:X}}</button>
+        <button class="btn btn-ghost btn-icon" aria-label="Close archive instructor modal" onclick="closeArchiveInstructorModal()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <p style="font-size:0.95rem; color:var(--text-primary); margin-bottom:0.75rem;">
@@ -2633,7 +2634,7 @@
     <div class="modal" style="max-width: 460px;">
       <div class="modal-header">
         <h3>{{ui:RefreshCw}} Restore Instructor?</h3>
-        <button class="btn btn-ghost btn-icon" onclick="closeRestoreInstructorModal()">{{ui:X}}</button>
+        <button class="btn btn-ghost btn-icon" aria-label="Close restore instructor modal" onclick="closeRestoreInstructorModal()">{{ui:X}}</button>
       </div>
       <div class="modal-body">
         <p style="font-size:0.95rem; color:var(--text-primary); margin-bottom:0.75rem;">
@@ -2761,7 +2762,7 @@
     </div>
     <div class="pwa-update-actions">
       <button id="pwa-update-btn" class="btn btn-primary btn-sm">Update Now</button>
-      <button id="pwa-dismiss-btn" class="btn btn-ghost btn-sm" style="color: rgba(255,255,255,0.7); padding: 0.5rem;"><i data-lucide="x" aria-hidden="true"></i></button>
+      <button id="pwa-dismiss-btn" class="btn btn-ghost btn-sm" aria-label="Dismiss update notification" style="color: rgba(255,255,255,0.7); padding: 0.5rem;"><i data-lucide="x" aria-hidden="true"></i></button>
     </div>
   </div>
 

@@ -40,3 +40,44 @@ test('student list uses the monochrome UserRound avatar token', () => {
     const src = read('src/app/users.js');
     assert.ok(src.includes('avatar-sm">{{ui:UserRound}}'), 'expected UserRound tokens in list rows');
 });
+
+test('body no longer masks horizontal overflow with overflow-x:hidden', () => {
+    const css = read('style.css');
+    const bodyRule = css.match(/^body\s*\{[^{}]*\}/m);
+    assert.ok(bodyRule, 'body rule missing');
+    assert.ok(!/overflow-x/.test(bodyRule[0]), 'body still hides overflow-x');
+    assert.match(css, /min-height:\s*100dvh/);
+});
+
+test('app shell uses dvh and resolves 100vw width traps', () => {
+    const css = read('style.css');
+    assert.match(css, /\.app-layout\s*\{[\s\S]*?height:\s*100vh;[\s\S]*?height:\s*100dvh;/);
+    assert.match(css, /\.login-page\s*\{[\s\S]*?min-height:\s*100dvh;/);
+    assert.ok(!/[^-]width:\s*100vw;/m.test(css), '100vw width causes horizontal overflow with a scrollbar');
+});
+
+test('main landmark replaces the main-content div', () => {
+    const html = read('index.html');
+    assert.match(html, /<main class="main-content" id="main-content">/);
+    assert.match(html, /<\/main><!-- \/main-content -->/);
+});
+
+test('icon-only buttons carry accessible names', () => {
+    const html = read('index.html');
+    const iconOnly = html.match(/<button\b[^>]*>\s*(?:<i data-lucide="[^"]+" aria-hidden="true"><\/i>)?\{\{ui:X\}\}/g) || [];
+    for (const btn of iconOnly) {
+        assert.match(btn, /aria-label=/, `missing aria-label on: ${btn}`);
+    }
+    assert.match(html, /id="pwa-dismiss-btn"[^>]*aria-label="Dismiss update notification"/);
+    assert.match(html, /onclick="togglePasswordVisibility\('inst-password'[^\n]*aria-label="Show password"/);
+});
+
+test('login footer text uses a contrast-safe secondary color', () => {
+    const css = read('style.css');
+    assert.match(css, /\.login-footer-text\s*\{[\s\S]*?color:\s*var\(--text-secondary\);/);
+});
+
+test('mobile touch targets meet the 44px guideline', () => {
+    const css = read('style.css');
+    assert.match(css, /min-height:\s*44px;/);
+});
