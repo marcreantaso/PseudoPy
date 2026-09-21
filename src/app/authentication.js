@@ -196,18 +196,9 @@ function handleLogout() {
     showToast('Signed out successfully.', 'info');
 }
 
-const ROLE_LABELS = { student: 'Student', instructor: 'Instructor', admin: 'Administrator' };
-const ROLE_BADGES = { student: 'badge-student', instructor: 'badge-instructor', admin: 'badge-admin' };
-
 function checkAccess(role, pageId) {
-    const adminPages = ['manage-users', 'password-requests', 'admin-execute', 'developer-options'];
-    const instructorPages = ['analytics', 'manage-exercises', 'generate-code', 'compiler-metrics', 'manage-students', 'password-recovery'];
-    const studentPages = ['write-pseudocode', 'translate', 'execute', 'feedback', 'exercises-student', 'student-settings', 'change-password'];
-
-    if (adminPages.includes(pageId)) return role === 'admin';
-    if (instructorPages.includes(pageId)) return role === 'instructor';
-    if (studentPages.includes(pageId)) return role === 'student';
-    return true; // fallback for unclassified pages
+    const allowed = PAGES_BY_ROLE[role] || [];
+    return allowed.includes(pageId) || !PAGES.includes(pageId);
 }
 
 function showApp(restorePage) {
@@ -220,8 +211,7 @@ function showApp(restorePage) {
 
     // Update topbar welcome and role display
     setText('topbar-welcome', 'Welcome, ' + currentUser.fullName);
-    const roleLabelsForDisplay = { student: 'Student', instructor: 'Instructor', admin: 'Administrator' };
-    setText('topbar-role', 'Role: ' + roleLabelsForDisplay[currentUser.role]);
+    setText('topbar-role', 'Role: ' + ROLE_LABELS[currentUser.role]);
 
     // Show correct nav
     $qsa('.sidebar-nav > div').forEach(el => el.classList.add('hidden'));
@@ -246,12 +236,7 @@ function showApp(restorePage) {
     }
 
     // Navigate to the restored page (if valid for this role) or the role default
-    const defaults = {
-        student: 'write-pseudocode',
-        instructor: 'analytics',
-        admin: 'manage-users'
-    };
-    const targetPage = (restorePage && checkAccess(currentUser.role, restorePage)) ? restorePage : defaults[currentUser.role];
+    const targetPage = (restorePage && checkAccess(currentUser.role, restorePage)) ? restorePage : DEFAULT_PAGE_BY_ROLE[currentUser.role];
     navigateTo(targetPage);
 
     renderAppVersion();

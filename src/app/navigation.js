@@ -12,12 +12,7 @@ function navigateTo(pageId) {
 
     if (!checkAccess(currentUser.role, pageId)) {
         showToast('403 Unauthorized: Access Denied', 'error');
-        const defaults = {
-            student: 'write-pseudocode',
-            instructor: 'analytics',
-            admin: 'manage-users'
-        };
-        const defaultPage = defaults[currentUser.role];
+        const defaultPage = DEFAULT_PAGE_BY_ROLE[currentUser.role];
         if (pageId !== defaultPage) {
             navigateTo(defaultPage);
         }
@@ -46,26 +41,7 @@ function navigateTo(pageId) {
     });
 
     // Update topbar title
-    const titles = {
-        'write-pseudocode': 'Write Pseudocode',
-        'translate': 'Translate Pseudocode',
-        'execute': 'Execute Code',
-        'feedback': 'Feedback & Suggestions',
-        'exercises-student': 'Exercises & Tasks',
-        'analytics': 'Learning Analytics',
-        'manage-students': 'Manage Students',
-        'manage-exercises': 'Manage Exercises',
-        'generate-code': 'Generate Python Code',
-        'manage-users': 'Manage Instructors',
-        'admin-execute': 'Execute Code',
-        'change-password': 'Change Password',
-        'student-settings': 'Settings',
-        'password-requests': 'Security Audit Log',
-        'password-recovery': 'Password Recovery',
-        'compiler-metrics': 'Compiler Metrics & Evaluation',
-        'developer-options': 'Developer Options'
-    };
-    setText('topbar-title', titles[pageId] || 'Dashboard');
+    setText('topbar-title', PAGE_TITLES[pageId] || 'Dashboard');
 
     // Load page-specific data (async)
     if (pageId === 'analytics') loadAnalytics();

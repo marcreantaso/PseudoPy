@@ -1,5 +1,6 @@
 {
   "app.js": [
+    "src/app/constants.js",
     "src/app/state.js",
     "src/app/app-version.js",
     "src/app/dom.js",
