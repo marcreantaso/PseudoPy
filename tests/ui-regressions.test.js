@@ -116,3 +116,37 @@ test('service worker no longer pre-caches lazy libraries', () => {
     assert.ok(!sw.includes('pdf.min.js'), 'sw still pre-caches pdf.js');
     assert.ok(sw.includes('./robots.txt'), 'sw does not cache robots.txt');
 });
+
+test('sidebar profile avatar is a monochrome icon, not an initial letter', () => {
+    const html = read('index.html');
+    const footer = html.match(/<div class="sidebar-footer">[\s\S]*?<\/\s*div>\s*<\/aside>/)[0];
+    assert.ok(!footer.includes('id="sidebar-avatar"'), 'initial-letter avatar id still present');
+    assert.match(footer, /<div class="user-avatar" aria-hidden="true">\{\{ui:UserRound\}\}<\/div>/);
+    assert.ok(!/user-avatar[^>]*>[A-Z]<\//.test(footer), 'literal initial letter in avatar');
+    assert.match(footer, /data-lucide="log-out"/, 'sign out no longer uses a vector logout icon');
+    assert.match(footer, /aria-label="Sign out"/);
+
+    const auth = read('src/app/authentication.js');
+    assert.ok(!auth.includes("setText('sidebar-avatar'"), 'initial-letter setter still in auth.js');
+});
+
+test('sidebar avatar tokenizes light and dark with no gradient or accent color', () => {
+    const css = read('style.css');
+    const avatarRule = css.match(/\.user-avatar\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/)[0];
+    assert.ok(!avatarRule.includes('linear-gradient'), 'avatar still uses a gradient');
+    assert.ok(!avatarRule.includes('8b5cf6'), 'avatar still uses accent purple');
+    assert.match(avatarRule, /width:\s*36px/);
+    assert.match(avatarRule, /height:\s*36px/);
+    assert.match(avatarRule, /background:\s*var\(--avatar-bg\)/);
+    assert.match(avatarRule, /color:\s*var\(--avatar-fg\)/);
+    assert.match(avatarRule, /border:\s*1px solid var\(--avatar-border\)/);
+});
+
+test('sidebar profile icons use consistent 18px sizing', () => {
+    const css = read('style.css');
+    assert.match(css, /\.user-avatar \.ui-symbol\s*\{[^}]*width:\s*18px;/);
+    assert.match(css, /\.user-avatar \.ui-symbol\s*\{[^}]*height:\s*18px;/);
+    assert.match(css, /\.sidebar-footer \.btn svg\.lucide\s*\{[^}]*width:\s*18px;/);
+    assert.match(css, /\.sidebar-footer \.btn svg\.lucide\s*\{[^}]*height:\s*18px;/);
+    assert.match(css, /\.user-details \.user-name\s*\{[^}]*text-overflow:\s*ellipsis;/);
+});

@@ -612,7 +612,6 @@ function showApp() {
     show('app-layout');
 
     // Update sidebar user info
-    setText('sidebar-avatar', currentUser.fullName.charAt(0).toUpperCase());
     setText('sidebar-username', currentUser.fullName);
     setText('sidebar-role', ROLE_LABELS[currentUser.role]);
 

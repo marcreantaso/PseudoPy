@@ -1132,27 +1132,49 @@ svg.lucide {
 }
 
 .user-avatar {
-  width: 30px;
-  height: 30px;
-  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  width: 36px;
+  height: 36px;
+  background: var(--avatar-bg);
+  color: var(--avatar-fg);
+  border: 1px solid var(--avatar-border);
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 0.75rem;
   flex-shrink: 0;
+}
+
+.user-avatar .ui-symbol {
+  width: 18px;
+  height: 18px;
+}
+
+.sidebar .user-details {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .user-details .user-name {
   font-size: 0.8rem;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .user-details .user-role {
   font-size: 0.65rem;
   color: var(--text-muted);
   text-transform: capitalize;
+}
+
+.sidebar-footer .btn.btn-sm {
+  font-size: 0.85rem;
+}
+
+.sidebar-footer .btn svg.lucide {
+  width: 18px;
+  height: 18px;
 }
 
 /* â”€â”€ Top Bar â”€â”€ */

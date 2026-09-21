@@ -341,13 +341,13 @@
 
       <div class="sidebar-footer">
         <div class="user-info">
-          <div class="user-avatar" id="sidebar-avatar">A</div>
+          <div class="user-avatar" aria-hidden="true">{{ui:UserRound}}</div>
           <div class="user-details">
             <div class="user-name" id="sidebar-username">Admin</div>
             <div class="user-role" id="sidebar-role">Administrator</div>
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" style="width:100%" onclick="handleLogout()">
+        <button class="btn btn-ghost btn-sm" type="button" style="width:100%" onclick="handleLogout()" aria-label="Sign out">
           <i data-lucide="log-out" aria-hidden="true"></i> Sign Out
         </button>
       </div>
