@@ -163,79 +163,120 @@ function closeRecoveryConfirm() {
  * Instructor approves the password reset — generates one-time token.
  * Does NOT set or reveal any password.
  */
+let _recoveryApproveBusy = false;
+let _recoveryRejectBusy = false;
+
 async function approveRecoveryRequest() {
+    if (_recoveryApproveBusy) return;
     hide('recovery-confirm-dialog');
     if (!currentReviewRequestId) return;
 
-    const req = await dbGet(passwordRequestsRef, currentReviewRequestId);
-    if (!req || req.status !== 'pending') {
-        showToast('This request is no longer pending.', 'error');
-        closeRecoveryReview();
-        return;
+    const approveBtn = $id('recovery-confirm-approve-btn');
+    _recoveryApproveBusy = true;
+    if (approveBtn) {
+        approveBtn.classList.add('is-loading');
+        approveBtn.disabled = true;
     }
 
-    // Generate a cryptographically random one-time token
-    const tokenBytes = new Uint8Array(32);
-    crypto.getRandomValues(tokenBytes);
-    const resetToken = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    try {
+        const req = await dbGet(passwordRequestsRef, currentReviewRequestId);
+        if (!req || req.status !== 'pending') {
+            showToast('This request is no longer pending.', 'error');
+            closeRecoveryReview();
+            return;
+        }
 
-    // 30-minute expiry
-    const tokenExpiresAt = Date.now() + (30 * 60 * 1000);
+        // Generate a cryptographically random one-time token
+        const tokenBytes = new Uint8Array(32);
+        crypto.getRandomValues(tokenBytes);
+        const resetToken = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
-    await dbUpdate(passwordRequestsRef, req._docId, {
-        status: 'approved',
-        resetToken: resetToken,
-        tokenExpiresAt: tokenExpiresAt,
-        tokenUsed: false,
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: currentUser._docId || currentUser.id,
-        reviewedByName: currentUser.fullName
-    });
+        // 30-minute expiry
+        const tokenExpiresAt = Date.now() + (30 * 60 * 1000);
 
-    await logAuditAction({
-        action: 'password_reset_approved',
-        studentId: req.studentId,
-        studentName: req.studentName,
-        username: req.studentUsername,
-        instructorId: currentUser._docId || currentUser.id,
-        instructorName: currentUser.fullName,
-        requestId: req._docId
-    });
+        await dbUpdate(passwordRequestsRef, req._docId, {
+            status: 'approved',
+            resetToken: resetToken,
+            tokenExpiresAt: tokenExpiresAt,
+            tokenUsed: false,
+            reviewedAt: new Date().toISOString(),
+            reviewedBy: currentUser._docId || currentUser.id,
+            reviewedByName: currentUser.fullName
+        });
 
-    closeRecoveryReview();
-    showToast(`Password reset approved for ${req.studentName}. Token valid for 30 minutes.`, 'success');
-    await loadPasswordRecovery();
+        await logAuditAction({
+            action: 'password_reset_approved',
+            studentId: req.studentId,
+            studentName: req.studentName,
+            username: req.studentUsername,
+            instructorId: currentUser._docId || currentUser.id,
+            instructorName: currentUser.fullName,
+            requestId: req._docId
+        });
+
+        closeRecoveryReview();
+        showToast(`Password reset approved for ${req.studentName}. Token valid for 30 minutes.`, 'success');
+        await loadPasswordRecovery();
+    } catch (err) {
+        console.error('[Recovery] approve error:', err);
+        showToast('Failed to approve recovery request. Please try again.', 'error');
+    } finally {
+        _recoveryApproveBusy = false;
+        if (approveBtn) {
+            approveBtn.classList.remove('is-loading');
+            approveBtn.disabled = false;
+        }
+    }
 }
 
 /**
  * Instructor rejects a password recovery request.
  */
 async function rejectRecoveryRequest() {
+    if (_recoveryRejectBusy) return;
     if (!currentReviewRequestId) return;
 
-    const req = await dbGet(passwordRequestsRef, currentReviewRequestId);
-    if (!req) return;
+    const rejectBtn = $id('recovery-reject-btn');
+    _recoveryRejectBusy = true;
+    if (rejectBtn) {
+        rejectBtn.classList.add('is-loading');
+        rejectBtn.disabled = true;
+    }
 
-    await dbUpdate(passwordRequestsRef, req._docId, {
-        status: 'rejected',
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: currentUser._docId || currentUser.id,
-        reviewedByName: currentUser.fullName
-    });
+    try {
+        const req = await dbGet(passwordRequestsRef, currentReviewRequestId);
+        if (!req) return;
 
-    await logAuditAction({
-        action: 'password_reset_rejected',
-        studentId: req.studentId,
-        studentName: req.studentName,
-        username: req.studentUsername,
-        instructorId: currentUser._docId || currentUser.id,
-        instructorName: currentUser.fullName,
-        requestId: req._docId
-    });
+        await dbUpdate(passwordRequestsRef, req._docId, {
+            status: 'rejected',
+            reviewedAt: new Date().toISOString(),
+            reviewedBy: currentUser._docId || currentUser.id,
+            reviewedByName: currentUser.fullName
+        });
 
-    closeRecoveryReview();
-    showToast(`Recovery request for ${req.studentName} has been rejected.`, 'info');
-    await loadPasswordRecovery();
+        await logAuditAction({
+            action: 'password_reset_rejected',
+            studentId: req.studentId,
+            studentName: req.studentName,
+            username: req.studentUsername,
+            instructorId: currentUser._docId || currentUser.id,
+            instructorName: currentUser.fullName,
+            requestId: req._docId
+        });
+
+        closeRecoveryReview();
+        showToast(`Recovery request for ${req.studentName} has been rejected.`, 'info');
+        await loadPasswordRecovery();
+    } catch (err) {
+        console.error('[Recovery] reject error:', err);
+        showToast('Failed to reject recovery request. Please try again.', 'error');
+    } finally {
+        _recoveryRejectBusy = false;
+        if (rejectBtn) {
+            rejectBtn.classList.remove('is-loading');
+            rejectBtn.disabled = false;
+        }
+    }
 }
 
 

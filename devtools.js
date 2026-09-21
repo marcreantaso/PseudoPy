@@ -364,6 +364,20 @@ function devToolsCopyPython() {
 // PIPELINE VISUALIZER — Updates from REAL trace events
 // ══════════════════════════════════════════════════════════════
 
+const _statusLabels = {
+    'IDLE': 'Idle',
+    'RUNNING': 'Active',
+    'SUCCESS': 'Completed',
+    'WARNING': 'Warning',
+    'ERROR': 'Error',
+    'SKIPPED': 'Skipped',
+    'RETRYING': 'Retrying',
+};
+
+function _pipelineStatusLabel(status) {
+    return _statusLabels[status] || status;
+}
+
 function _resetPipelineVis() {
     document.querySelectorAll('.pipeline-stage').forEach(s => {
         s.className = 'pipeline-stage';
@@ -371,6 +385,8 @@ function _resetPipelineVis() {
         if (dot) dot.title = 'IDLE';
         const time = s.querySelector('.pipe-time');
         if (time) time.textContent = '—';
+        s.dataset.status = 'IDLE';
+        s.dataset.statusLabel = _pipelineStatusLabel('IDLE');
     });
 }
 
@@ -405,6 +421,8 @@ function _updatePipelineFromEvents(events, result) {
 
         const status = stageStatus[stage] || 'IDLE';
         el.className = 'pipeline-stage status-' + status;
+        el.dataset.status = status;
+        el.dataset.statusLabel = _pipelineStatusLabel(status);
         const dot = el.querySelector('.pipe-status-dot');
         if (dot) dot.title = status;
         const timeEl = el.querySelector('.pipe-time');
@@ -837,7 +855,7 @@ function _updateActiveStage(result) {
             <div class="devtools-kv"><span class="devtools-kv-key">Errors:</span> ${(result.errors || []).length}</div>
             <div class="devtools-kv"><span class="devtools-kv-key">Warnings:</span> ${(result.warnings || []).length}</div>
             <div class="devtools-kv"><span class="devtools-kv-key">Auto-Fixes:</span> ${(result.autoFixes || []).length}</div>
-            <p style="margin-top:0.75rem;opacity:0.7;font-size:0.85rem">Use <strong>Step Through</strong> to advance through individual trace events.</p>
+            <p class="devtools-hint">Use <strong>Step Through</strong> to advance through individual trace events.</p>
         </div>`;
 }
 

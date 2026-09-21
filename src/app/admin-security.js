@@ -263,81 +263,126 @@ function closeAdminRecoveryConfirm() {
     hide('admin-recovery-confirm-dialog');
 }
 
+let _adminRecoveryBusy = false;
+let _adminRecoveryRejectBusy = false;
+
 async function approveAdminRecoveryRequest() {
+    if (_adminRecoveryBusy) return;
     hide('admin-recovery-confirm-dialog');
     if (!currentAdminReviewRequestId) return;
 
-    const req = await dbGet(passwordRequestsRef, currentAdminReviewRequestId);
-    if (!req || req.status !== 'pending') {
-        showToast('This request is no longer pending.', 'error');
-        closeAdminRecoveryReview();
-        return;
+    const approveBtn = $id('admin-recovery-confirm-approve-btn');
+    _adminRecoveryBusy = true;
+    if (approveBtn) {
+        approveBtn.classList.add('is-loading');
+        approveBtn.disabled = true;
     }
 
-    const tokenBytes = new Uint8Array(32);
-    crypto.getRandomValues(tokenBytes);
-    const resetToken = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-    const tokenExpiresAt = Date.now() + (30 * 60 * 1000); // 30 minutes
+    try {
+        const req = await dbGet(passwordRequestsRef, currentAdminReviewRequestId);
+        if (!req || req.status !== 'pending') {
+            showToast('This request is no longer pending.', 'error');
+            closeAdminRecoveryReview();
+            return;
+        }
 
-    const adminId = currentUser ? (currentUser._docId || currentUser.id) : 'admin';
-    const adminName = currentUser ? currentUser.fullName : 'Administrator';
+        const tokenBytes = new Uint8Array(32);
+        crypto.getRandomValues(tokenBytes);
+        const resetToken = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        const tokenExpiresAt = Date.now() + (30 * 60 * 1000); // 30 minutes
 
-    await dbUpdate(passwordRequestsRef, req._docId, {
-        status: 'approved',
-        resetToken: resetToken,
-        tokenExpiresAt: tokenExpiresAt,
-        tokenUsed: false,
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: adminId,
-        reviewedByName: adminName
-    });
+        const adminId = currentUser ? (currentUser._docId || currentUser.id) : 'admin';
+        const adminName = currentUser ? currentUser.fullName : 'Administrator';
 
-    await logAuditAction({
-        action: 'password_reset_approved',
-        studentId: req.studentId || req.userId,
-        studentName: req.studentName || req.instructorName,
-        username: req.studentUsername || req.instructorUsername,
-        instructorId: adminId,
-        instructorName: adminName,
-        requestId: req._docId
-    });
+        await dbUpdate(passwordRequestsRef, req._docId, {
+            status: 'approved',
+            resetToken: resetToken,
+            tokenExpiresAt: tokenExpiresAt,
+            tokenUsed: false,
+            reviewedAt: new Date().toISOString(),
+            reviewedBy: adminId,
+            reviewedByName: adminName
+        });
 
-    const instName = req.studentName || req.instructorName || 'Instructor';
-    closeAdminRecoveryReview();
-    showToast(`Password reset approved for ${instName}. Token valid for 30 minutes.`, 'success');
-    await loadPasswordRequests();
+        await logAuditAction({
+            action: 'password_reset_approved',
+            studentId: req.studentId || req.userId,
+            studentName: req.studentName || req.instructorName,
+            username: req.studentUsername || req.instructorUsername,
+            instructorId: adminId,
+            instructorName: adminName,
+            requestId: req._docId
+        });
+
+        const instName = req.studentName || req.instructorName || 'Instructor';
+        closeAdminRecoveryReview();
+        showToast(`Password reset approved for ${instName}. Token valid for 30 minutes.`, 'success');
+        await loadPasswordRequests();
+    } catch (err) {
+        console.error('[Recovery] approve error:', err);
+        showToast('Failed to approve recovery request. Please try again.', 'error');
+    } finally {
+        _adminRecoveryBusy = false;
+        if (approveBtn) {
+            approveBtn.classList.remove('is-loading');
+            approveBtn.disabled = false;
+        }
+    }
 }
 
 async function rejectAdminRecoveryRequest() {
+    if (_adminRecoveryRejectBusy) return;
     if (!currentAdminReviewRequestId) return;
 
-    const req = await dbGet(passwordRequestsRef, currentAdminReviewRequestId);
-    if (!req) return;
+    const rejectBtn = $id('admin-recovery-reject-btn');
+    _adminRecoveryRejectBusy = true;
+    if (rejectBtn) {
+        rejectBtn.classList.add('is-loading');
+        rejectBtn.disabled = true;
+    }
 
-    const adminId = currentUser ? (currentUser._docId || currentUser.id) : 'admin';
-    const adminName = currentUser ? currentUser.fullName : 'Administrator';
+    try {
+        const req = await dbGet(passwordRequestsRef, currentAdminReviewRequestId);
+        if (!req || req.status !== 'pending') {
+            showToast('This request is no longer pending.', 'error');
+            closeAdminRecoveryReview();
+            return;
+        }
 
-    await dbUpdate(passwordRequestsRef, req._docId, {
-        status: 'rejected',
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: adminId,
-        reviewedByName: adminName
-    });
+        const adminId = currentUser ? (currentUser._docId || currentUser.id) : 'admin';
+        const adminName = currentUser ? currentUser.fullName : 'Administrator';
 
-    await logAuditAction({
-        action: 'password_reset_rejected',
-        studentId: req.studentId || req.userId,
-        studentName: req.studentName || req.instructorName,
-        username: req.studentUsername || req.instructorUsername,
-        instructorId: adminId,
-        instructorName: adminName,
-        requestId: req._docId
-    });
+        await dbUpdate(passwordRequestsRef, req._docId, {
+            status: 'rejected',
+            reviewedAt: new Date().toISOString(),
+            reviewedBy: adminId,
+            reviewedByName: adminName
+        });
 
-    const instName = req.studentName || req.instructorName || 'Instructor';
-    closeAdminRecoveryReview();
-    showToast(`Recovery request for ${instName} has been rejected.`, 'info');
-    await loadPasswordRequests();
+        await logAuditAction({
+            action: 'password_reset_rejected',
+            studentId: req.studentId || req.userId,
+            studentName: req.studentName || req.instructorName,
+            username: req.studentUsername || req.instructorUsername,
+            instructorId: adminId,
+            instructorName: adminName,
+            requestId: req._docId
+        });
+
+        const instName = req.studentName || req.instructorName || 'Instructor';
+        closeAdminRecoveryReview();
+        showToast(`Recovery request for ${instName} has been rejected.`, 'info');
+        await loadPasswordRequests();
+    } catch (err) {
+        console.error('[Recovery] reject error:', err);
+        showToast('Failed to reject recovery request. Please try again.', 'error');
+    } finally {
+        _adminRecoveryRejectBusy = false;
+        if (rejectBtn) {
+            rejectBtn.classList.remove('is-loading');
+            rejectBtn.disabled = false;
+        }
+    }
 }
 
 

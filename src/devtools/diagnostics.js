@@ -187,7 +187,7 @@ function _updateActiveStage(result) {
             <div class="devtools-kv"><span class="devtools-kv-key">Errors:</span> ${(result.errors || []).length}</div>
             <div class="devtools-kv"><span class="devtools-kv-key">Warnings:</span> ${(result.warnings || []).length}</div>
             <div class="devtools-kv"><span class="devtools-kv-key">Auto-Fixes:</span> ${(result.autoFixes || []).length}</div>
-            <p style="margin-top:0.75rem;opacity:0.7;font-size:0.85rem">Use <strong>Step Through</strong> to advance through individual trace events.</p>
+            <p class="devtools-hint">Use <strong>Step Through</strong> to advance through individual trace events.</p>
         </div>`;
 }
 

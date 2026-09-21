@@ -2745,45 +2745,45 @@ async function renderDeviceModalTable() {
 
         let statusBadge = '';
         if (d.status === 'approved') {
-            statusBadge = `<span class="badge-device-approved">APPROVED</span>`;
+            statusBadge = `<span class="badge-device-approved">{{ui:CircleCheck}} Approved</span>`;
         } else if (d.status === 'pending') {
-            statusBadge = `<span class="badge-device-pending">PENDING APPROVAL</span>`;
+            statusBadge = `<span class="badge-device-pending">{{ui:Clock}} Pending Approval</span>`;
         } else {
-            statusBadge = `<span class="badge-device-revoked">REVOKED</span>`;
+            statusBadge = `<span class="badge-device-revoked">{{ui:CircleX}} Revoked</span>`;
         }
 
         return `
         <tr>
-          <td>
+          <td data-label="Device">
             <div style="display:flex; align-items:center; gap:0.5rem;">
-              <span style="font-size:1.1rem;">${icon}</span>
+              <span style="font-size:1.1rem; flex-shrink:0;">${icon}</span>
               <div>
                 <strong style="color:var(--text-primary); font-size:0.85rem;">${d.deviceName || 'Device'}</strong>
                 <div style="font-size:0.72rem; color:var(--text-muted); font-family:monospace;">${d.deviceId ? d.deviceId.substring(0, 16) + '...' : '-'}</div>
               </div>
             </div>
           </td>
-          <td>
+          <td data-label="OS & Browser">
             <div style="font-size:0.82rem; color:var(--text-primary);">${d.os || 'Unknown OS'}</div>
             <div style="font-size:0.72rem; color:var(--text-muted);">${d.browser || 'Unknown Browser'}</div>
           </td>
-          <td>
+          <td data-label="Requested">
             <div style="font-size:0.78rem; color:var(--text-primary);">${reqTime}</div>
             <div style="font-size:0.7rem; color:var(--text-muted);">Active: ${lastSeen}</div>
           </td>
-          <td>${statusBadge}</td>
-          <td style="text-align:right;">
+          <td data-label="Status">${statusBadge}</td>
+          <td data-label="Action" style="text-align:right;">
             <div style="display:flex; gap:0.35rem; justify-content:flex-end;">
               ${d.status !== 'approved' ? `
-                <button class="btn btn-sm" onclick="approveDevice('${d._docId}')" style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3); font-size:0.75rem; padding:0.25rem 0.5rem;" title="Approve this device">
+                <button class="btn btn-sm device-action-approve" data-device-action="${d._docId}" onclick="approveDevice('${d._docId}')" title="Approve this device">
                   {{ui:CircleCheck}} Approve
                 </button>
               ` : `
-                <button class="btn btn-sm" onclick="revokeDevice('${d._docId}')" style="background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); font-size:0.75rem; padding:0.25rem 0.5rem;" title="Revoke authorization">
+                <button class="btn btn-sm device-action-revoke" data-device-action="${d._docId}" onclick="revokeDevice('${d._docId}')" title="Revoke authorization">
                   {{ui:LockKeyhole}} Revoke
                 </button>
               `}
-              <button class="btn btn-ghost btn-sm" onclick="deleteDeviceRecord('${d._docId}')" style="color:var(--danger); padding:0.25rem 0.4rem; font-size:0.75rem;" title="Remove record">
+              <button class="btn btn-ghost btn-sm" data-device-action="${d._docId}" onclick="deleteDeviceRecord('${d._docId}')" style="color:var(--danger); padding:0.25rem 0.4rem; font-size:0.75rem;" title="Remove record" aria-label="Remove device record from instructor">
                 {{ui:Trash2}}
               </button>
             </div>
@@ -2792,8 +2792,43 @@ async function renderDeviceModalTable() {
     }).join('');
 }
 
-async function approveDevice(deviceDocId) {
+const _busyDevices = new Set();
+
+function _deviceActionButtons(docId) {
+    return document.querySelectorAll(`[data-device-action="${docId}"]`);
+}
+
+function _setDeviceButtonsBusy(docId, busy) {
+    _deviceActionButtons(docId).forEach(b => {
+        if (busy) {
+            b.classList.add('is-loading');
+            b.disabled = true;
+        } else {
+            b.classList.remove('is-loading');
+            b.disabled = false;
+        }
+    });
+}
+
+async function _runDeviceAction(deviceDocId, action) {
+    if (_busyDevices.has(deviceDocId)) return false;
+    _busyDevices.add(deviceDocId);
+    _setDeviceButtonsBusy(deviceDocId, true);
     try {
+        await action();
+        return true;
+    } catch (err) {
+        console.error('[Device] action error:', err);
+        showToast('Device action failed. Please try again.', 'error');
+        return false;
+    } finally {
+        _busyDevices.delete(deviceDocId);
+        _setDeviceButtonsBusy(deviceDocId, false);
+    }
+}
+
+async function approveDevice(deviceDocId) {
+    await _runDeviceAction(deviceDocId, async () => {
         await dbUpdate(devicesRef, deviceDocId, {
             status: 'approved',
             approvedAt: new Date().toISOString(),
@@ -2802,14 +2837,11 @@ async function approveDevice(deviceDocId) {
         showToast('Device approved successfully!', 'success');
         await renderDeviceModalTable();
         await loadUsers();
-    } catch (err) {
-        console.error('[Device] Approve error:', err);
-        showToast('Failed to approve device.', 'error');
-    }
+    });
 }
 
 async function revokeDevice(deviceDocId) {
-    try {
+    await _runDeviceAction(deviceDocId, async () => {
         await dbUpdate(devicesRef, deviceDocId, {
             status: 'revoked',
             revokedAt: new Date().toISOString(),
@@ -2818,47 +2850,62 @@ async function revokeDevice(deviceDocId) {
         showToast('Device access revoked.', 'info');
         await renderDeviceModalTable();
         await loadUsers();
-    } catch (err) {
-        console.error('[Device] Revoke error:', err);
-        showToast('Failed to revoke device.', 'error');
-    }
+    });
 }
 
 async function deleteDeviceRecord(deviceDocId) {
     if (!confirm('Are you sure you want to remove this device record?')) return;
-    try {
+    await _runDeviceAction(deviceDocId, async () => {
         await dbDelete(devicesRef, deviceDocId);
         showToast('Device record removed.', 'info');
         await renderDeviceModalTable();
         await loadUsers();
-    } catch (err) {
-        console.error('[Device] Delete error:', err);
-        showToast('Failed to remove device.', 'error');
-    }
+    });
 }
 
+let _approveAllDevicesBusy = false;
+
 async function approveAllPendingDevices() {
+    if (_approveAllDevicesBusy) return;
     if (!activeDeviceInstructorId) return;
     const instructor = allCachedInstructors.find(u => u.id === activeDeviceInstructorId || u._docId === activeDeviceInstructorId);
     if (!instructor) return;
 
-    const allDevices = await dbGetAll(devicesRef);
-    const pendingDevices = allDevices.filter(d =>
-        (d.userId === instructor.id || d.userId === instructor._docId || d.username === instructor.username) &&
-        d.status === 'pending'
-    );
-
-    for (const dev of pendingDevices) {
-        await dbUpdate(devicesRef, dev._docId, {
-            status: 'approved',
-            approvedAt: new Date().toISOString(),
-            approvedBy: currentUser?.username || 'admin'
-        });
+    const approveAllBtn = $id('btn-approve-all-devices');
+    _approveAllDevicesBusy = true;
+    if (approveAllBtn) {
+        approveAllBtn.classList.add('is-loading');
+        approveAllBtn.disabled = true;
     }
 
-    showToast(`Approved ${pendingDevices.length} pending device(s) for ${instructor.fullName}!`, 'success');
-    await renderDeviceModalTable();
-    await loadUsers();
+    try {
+        const allDevices = await dbGetAll(devicesRef);
+        const pendingDevices = allDevices.filter(d =>
+            (d.userId === instructor.id || d.userId === instructor._docId || d.username === instructor.username) &&
+            d.status === 'pending'
+        );
+
+        for (const dev of pendingDevices) {
+            await dbUpdate(devicesRef, dev._docId, {
+                status: 'approved',
+                approvedAt: new Date().toISOString(),
+                approvedBy: currentUser?.username || 'admin'
+            });
+        }
+
+        showToast(`Approved ${pendingDevices.length} pending device(s) for ${instructor.fullName}!`, 'success');
+        await renderDeviceModalTable();
+        await loadUsers();
+    } catch (err) {
+        console.error('[Device] Approve all error:', err);
+        showToast('Failed to approve devices. Please try again.', 'error');
+    } finally {
+        _approveAllDevicesBusy = false;
+        if (approveAllBtn) {
+            approveAllBtn.classList.remove('is-loading');
+            approveAllBtn.disabled = false;
+        }
+    }
 }
 
 // ── Add / Edit Instructor Modal ──────────────────────────────
@@ -4855,79 +4902,120 @@ function closeRecoveryConfirm() {
  * Instructor approves the password reset — generates one-time token.
  * Does NOT set or reveal any password.
  */
+let _recoveryApproveBusy = false;
+let _recoveryRejectBusy = false;
+
 async function approveRecoveryRequest() {
+    if (_recoveryApproveBusy) return;
     hide('recovery-confirm-dialog');
     if (!currentReviewRequestId) return;
 
-    const req = await dbGet(passwordRequestsRef, currentReviewRequestId);
-    if (!req || req.status !== 'pending') {
-        showToast('This request is no longer pending.', 'error');
-        closeRecoveryReview();
-        return;
+    const approveBtn = $id('recovery-confirm-approve-btn');
+    _recoveryApproveBusy = true;
+    if (approveBtn) {
+        approveBtn.classList.add('is-loading');
+        approveBtn.disabled = true;
     }
 
-    // Generate a cryptographically random one-time token
-    const tokenBytes = new Uint8Array(32);
-    crypto.getRandomValues(tokenBytes);
-    const resetToken = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    try {
+        const req = await dbGet(passwordRequestsRef, currentReviewRequestId);
+        if (!req || req.status !== 'pending') {
+            showToast('This request is no longer pending.', 'error');
+            closeRecoveryReview();
+            return;
+        }
 
-    // 30-minute expiry
-    const tokenExpiresAt = Date.now() + (30 * 60 * 1000);
+        // Generate a cryptographically random one-time token
+        const tokenBytes = new Uint8Array(32);
+        crypto.getRandomValues(tokenBytes);
+        const resetToken = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
-    await dbUpdate(passwordRequestsRef, req._docId, {
-        status: 'approved',
-        resetToken: resetToken,
-        tokenExpiresAt: tokenExpiresAt,
-        tokenUsed: false,
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: currentUser._docId || currentUser.id,
-        reviewedByName: currentUser.fullName
-    });
+        // 30-minute expiry
+        const tokenExpiresAt = Date.now() + (30 * 60 * 1000);
 
-    await logAuditAction({
-        action: 'password_reset_approved',
-        studentId: req.studentId,
-        studentName: req.studentName,
-        username: req.studentUsername,
-        instructorId: currentUser._docId || currentUser.id,
-        instructorName: currentUser.fullName,
-        requestId: req._docId
-    });
+        await dbUpdate(passwordRequestsRef, req._docId, {
+            status: 'approved',
+            resetToken: resetToken,
+            tokenExpiresAt: tokenExpiresAt,
+            tokenUsed: false,
+            reviewedAt: new Date().toISOString(),
+            reviewedBy: currentUser._docId || currentUser.id,
+            reviewedByName: currentUser.fullName
+        });
 
-    closeRecoveryReview();
-    showToast(`Password reset approved for ${req.studentName}. Token valid for 30 minutes.`, 'success');
-    await loadPasswordRecovery();
+        await logAuditAction({
+            action: 'password_reset_approved',
+            studentId: req.studentId,
+            studentName: req.studentName,
+            username: req.studentUsername,
+            instructorId: currentUser._docId || currentUser.id,
+            instructorName: currentUser.fullName,
+            requestId: req._docId
+        });
+
+        closeRecoveryReview();
+        showToast(`Password reset approved for ${req.studentName}. Token valid for 30 minutes.`, 'success');
+        await loadPasswordRecovery();
+    } catch (err) {
+        console.error('[Recovery] approve error:', err);
+        showToast('Failed to approve recovery request. Please try again.', 'error');
+    } finally {
+        _recoveryApproveBusy = false;
+        if (approveBtn) {
+            approveBtn.classList.remove('is-loading');
+            approveBtn.disabled = false;
+        }
+    }
 }
 
 /**
  * Instructor rejects a password recovery request.
  */
 async function rejectRecoveryRequest() {
+    if (_recoveryRejectBusy) return;
     if (!currentReviewRequestId) return;
 
-    const req = await dbGet(passwordRequestsRef, currentReviewRequestId);
-    if (!req) return;
+    const rejectBtn = $id('recovery-reject-btn');
+    _recoveryRejectBusy = true;
+    if (rejectBtn) {
+        rejectBtn.classList.add('is-loading');
+        rejectBtn.disabled = true;
+    }
 
-    await dbUpdate(passwordRequestsRef, req._docId, {
-        status: 'rejected',
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: currentUser._docId || currentUser.id,
-        reviewedByName: currentUser.fullName
-    });
+    try {
+        const req = await dbGet(passwordRequestsRef, currentReviewRequestId);
+        if (!req) return;
 
-    await logAuditAction({
-        action: 'password_reset_rejected',
-        studentId: req.studentId,
-        studentName: req.studentName,
-        username: req.studentUsername,
-        instructorId: currentUser._docId || currentUser.id,
-        instructorName: currentUser.fullName,
-        requestId: req._docId
-    });
+        await dbUpdate(passwordRequestsRef, req._docId, {
+            status: 'rejected',
+            reviewedAt: new Date().toISOString(),
+            reviewedBy: currentUser._docId || currentUser.id,
+            reviewedByName: currentUser.fullName
+        });
 
-    closeRecoveryReview();
-    showToast(`Recovery request for ${req.studentName} has been rejected.`, 'info');
-    await loadPasswordRecovery();
+        await logAuditAction({
+            action: 'password_reset_rejected',
+            studentId: req.studentId,
+            studentName: req.studentName,
+            username: req.studentUsername,
+            instructorId: currentUser._docId || currentUser.id,
+            instructorName: currentUser.fullName,
+            requestId: req._docId
+        });
+
+        closeRecoveryReview();
+        showToast(`Recovery request for ${req.studentName} has been rejected.`, 'info');
+        await loadPasswordRecovery();
+    } catch (err) {
+        console.error('[Recovery] reject error:', err);
+        showToast('Failed to reject recovery request. Please try again.', 'error');
+    } finally {
+        _recoveryRejectBusy = false;
+        if (rejectBtn) {
+            rejectBtn.classList.remove('is-loading');
+            rejectBtn.disabled = false;
+        }
+    }
 }
 
 
@@ -5390,81 +5478,126 @@ function closeAdminRecoveryConfirm() {
     hide('admin-recovery-confirm-dialog');
 }
 
+let _adminRecoveryBusy = false;
+let _adminRecoveryRejectBusy = false;
+
 async function approveAdminRecoveryRequest() {
+    if (_adminRecoveryBusy) return;
     hide('admin-recovery-confirm-dialog');
     if (!currentAdminReviewRequestId) return;
 
-    const req = await dbGet(passwordRequestsRef, currentAdminReviewRequestId);
-    if (!req || req.status !== 'pending') {
-        showToast('This request is no longer pending.', 'error');
-        closeAdminRecoveryReview();
-        return;
+    const approveBtn = $id('admin-recovery-confirm-approve-btn');
+    _adminRecoveryBusy = true;
+    if (approveBtn) {
+        approveBtn.classList.add('is-loading');
+        approveBtn.disabled = true;
     }
 
-    const tokenBytes = new Uint8Array(32);
-    crypto.getRandomValues(tokenBytes);
-    const resetToken = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-    const tokenExpiresAt = Date.now() + (30 * 60 * 1000); // 30 minutes
+    try {
+        const req = await dbGet(passwordRequestsRef, currentAdminReviewRequestId);
+        if (!req || req.status !== 'pending') {
+            showToast('This request is no longer pending.', 'error');
+            closeAdminRecoveryReview();
+            return;
+        }
 
-    const adminId = currentUser ? (currentUser._docId || currentUser.id) : 'admin';
-    const adminName = currentUser ? currentUser.fullName : 'Administrator';
+        const tokenBytes = new Uint8Array(32);
+        crypto.getRandomValues(tokenBytes);
+        const resetToken = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        const tokenExpiresAt = Date.now() + (30 * 60 * 1000); // 30 minutes
 
-    await dbUpdate(passwordRequestsRef, req._docId, {
-        status: 'approved',
-        resetToken: resetToken,
-        tokenExpiresAt: tokenExpiresAt,
-        tokenUsed: false,
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: adminId,
-        reviewedByName: adminName
-    });
+        const adminId = currentUser ? (currentUser._docId || currentUser.id) : 'admin';
+        const adminName = currentUser ? currentUser.fullName : 'Administrator';
 
-    await logAuditAction({
-        action: 'password_reset_approved',
-        studentId: req.studentId || req.userId,
-        studentName: req.studentName || req.instructorName,
-        username: req.studentUsername || req.instructorUsername,
-        instructorId: adminId,
-        instructorName: adminName,
-        requestId: req._docId
-    });
+        await dbUpdate(passwordRequestsRef, req._docId, {
+            status: 'approved',
+            resetToken: resetToken,
+            tokenExpiresAt: tokenExpiresAt,
+            tokenUsed: false,
+            reviewedAt: new Date().toISOString(),
+            reviewedBy: adminId,
+            reviewedByName: adminName
+        });
 
-    const instName = req.studentName || req.instructorName || 'Instructor';
-    closeAdminRecoveryReview();
-    showToast(`Password reset approved for ${instName}. Token valid for 30 minutes.`, 'success');
-    await loadPasswordRequests();
+        await logAuditAction({
+            action: 'password_reset_approved',
+            studentId: req.studentId || req.userId,
+            studentName: req.studentName || req.instructorName,
+            username: req.studentUsername || req.instructorUsername,
+            instructorId: adminId,
+            instructorName: adminName,
+            requestId: req._docId
+        });
+
+        const instName = req.studentName || req.instructorName || 'Instructor';
+        closeAdminRecoveryReview();
+        showToast(`Password reset approved for ${instName}. Token valid for 30 minutes.`, 'success');
+        await loadPasswordRequests();
+    } catch (err) {
+        console.error('[Recovery] approve error:', err);
+        showToast('Failed to approve recovery request. Please try again.', 'error');
+    } finally {
+        _adminRecoveryBusy = false;
+        if (approveBtn) {
+            approveBtn.classList.remove('is-loading');
+            approveBtn.disabled = false;
+        }
+    }
 }
 
 async function rejectAdminRecoveryRequest() {
+    if (_adminRecoveryRejectBusy) return;
     if (!currentAdminReviewRequestId) return;
 
-    const req = await dbGet(passwordRequestsRef, currentAdminReviewRequestId);
-    if (!req) return;
+    const rejectBtn = $id('admin-recovery-reject-btn');
+    _adminRecoveryRejectBusy = true;
+    if (rejectBtn) {
+        rejectBtn.classList.add('is-loading');
+        rejectBtn.disabled = true;
+    }
 
-    const adminId = currentUser ? (currentUser._docId || currentUser.id) : 'admin';
-    const adminName = currentUser ? currentUser.fullName : 'Administrator';
+    try {
+        const req = await dbGet(passwordRequestsRef, currentAdminReviewRequestId);
+        if (!req || req.status !== 'pending') {
+            showToast('This request is no longer pending.', 'error');
+            closeAdminRecoveryReview();
+            return;
+        }
 
-    await dbUpdate(passwordRequestsRef, req._docId, {
-        status: 'rejected',
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: adminId,
-        reviewedByName: adminName
-    });
+        const adminId = currentUser ? (currentUser._docId || currentUser.id) : 'admin';
+        const adminName = currentUser ? currentUser.fullName : 'Administrator';
 
-    await logAuditAction({
-        action: 'password_reset_rejected',
-        studentId: req.studentId || req.userId,
-        studentName: req.studentName || req.instructorName,
-        username: req.studentUsername || req.instructorUsername,
-        instructorId: adminId,
-        instructorName: adminName,
-        requestId: req._docId
-    });
+        await dbUpdate(passwordRequestsRef, req._docId, {
+            status: 'rejected',
+            reviewedAt: new Date().toISOString(),
+            reviewedBy: adminId,
+            reviewedByName: adminName
+        });
 
-    const instName = req.studentName || req.instructorName || 'Instructor';
-    closeAdminRecoveryReview();
-    showToast(`Recovery request for ${instName} has been rejected.`, 'info');
-    await loadPasswordRequests();
+        await logAuditAction({
+            action: 'password_reset_rejected',
+            studentId: req.studentId || req.userId,
+            studentName: req.studentName || req.instructorName,
+            username: req.studentUsername || req.instructorUsername,
+            instructorId: adminId,
+            instructorName: adminName,
+            requestId: req._docId
+        });
+
+        const instName = req.studentName || req.instructorName || 'Instructor';
+        closeAdminRecoveryReview();
+        showToast(`Recovery request for ${instName} has been rejected.`, 'info');
+        await loadPasswordRequests();
+    } catch (err) {
+        console.error('[Recovery] reject error:', err);
+        showToast('Failed to reject recovery request. Please try again.', 'error');
+    } finally {
+        _adminRecoveryRejectBusy = false;
+        if (rejectBtn) {
+            rejectBtn.classList.remove('is-loading');
+            rejectBtn.disabled = false;
+        }
+    }
 }
 
 
