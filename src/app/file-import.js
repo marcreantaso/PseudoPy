@@ -14,12 +14,23 @@ async function handleFileUpload(event, targetEditorId) {
             if (editor) editor.value = text;
             showToast('Text file loaded successfully!', 'success');
         } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+            showToast('Extracting PDF text...', 'info');
+
             if (typeof pdfjsLib === 'undefined') {
-                showToast('PDF library not loaded yet.', 'error');
-                return;
+                await new Promise(function (resolve, reject) {
+                    loadScripts(CDN_BASE_URLS.pdfjs, function () {
+                        if (typeof pdfjsLib !== 'undefined') {
+                            try {
+                                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                            } catch (e) { /* non-critical */ }
+                            resolve();
+                        } else {
+                            reject(new Error('PDF library could not be loaded.'));
+                        }
+                    }, reject);
+                });
             }
 
-            showToast('Extracting PDF text...', 'info');
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 

@@ -22,37 +22,48 @@ function refreshIcons(root) {
     lucide.createIcons({ root: root || document, icons: lucide.icons });
 }
 
+function runWithAnime(cb) {
+    if (typeof anime !== 'undefined' && typeof anime.animate === 'function') { cb(); return; }
+    loadScripts(CDN_BASE_URLS.anime, function () {
+        if (typeof anime !== 'undefined' && typeof anime.animate === 'function') cb();
+    }, function () {});
+}
+
 function animateAnalyticsCards() {
-    if (typeof anime === 'undefined' || typeof anime.animate !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const analyticsPage = $id('page-analytics');
     if (!analyticsPage || analyticsPage.classList.contains('hidden')) return;
-    anime.animate('.an-kpi-card', {
-        opacity: [0, 1],
-        translateY: [14, 0],
-        delay: anime.stagger(70),
-        duration: 500,
-        ease: 'outCubic'
+    runWithAnime(function () {
+        anime.animate('.an-kpi-card', {
+            opacity: [0, 1],
+            translateY: [14, 0],
+            delay: anime.stagger(70),
+            duration: 500,
+            ease: 'outCubic'
+        });
     });
 }
 
 function animateAnalyticsCharts() {
-    if (typeof anime === 'undefined' || typeof anime.animate !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const analyticsPage = $id('page-analytics');
     if (!analyticsPage || analyticsPage.classList.contains('hidden')) return;
-    const bars = document.querySelectorAll('#chart-submissions .an-bar-inner');
-    if (bars.length) {
-        anime.animate(bars, {
-            scaleY: [0, 1],
-            opacity: [0, 1],
-            delay: anime.stagger(55),
-            duration: 550,
-            ease: 'outCubic'
-        });
-    }
-    const donut = $id('an-donut-chart');
-    const legend = $id('an-donut-legend');
-    if (donut) anime.animate(donut, { scale: [0.8, 1], opacity: [0, 1], duration: 600, ease: 'outBack' });
-    if (legend) anime.animate(legend, { opacity: [0, 1], translateX: [12, 0], duration: 450, delay: 180, ease: 'outCubic' });
+    runWithAnime(function () {
+        const bars = document.querySelectorAll('#chart-submissions .an-bar-inner');
+        if (bars.length) {
+            anime.animate(bars, {
+                scaleY: [0, 1],
+                opacity: [0, 1],
+                delay: anime.stagger(55),
+                duration: 550,
+                ease: 'outCubic'
+            });
+        }
+        const donut = $id('an-donut-chart');
+        const legend = $id('an-donut-legend');
+        if (donut) anime.animate(donut, { scale: [0.8, 1], opacity: [0, 1], duration: 600, ease: 'outBack' });
+        if (legend) anime.animate(legend, { opacity: [0, 1], translateX: [12, 0], duration: 450, delay: 180, ease: 'outCubic' });
+    });
 }
 
 function initializeLucideIcons() {

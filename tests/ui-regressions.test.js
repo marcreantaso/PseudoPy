@@ -81,3 +81,38 @@ test('mobile touch targets meet the 44px guideline', () => {
     const css = read('style.css');
     assert.match(css, /min-height:\s*44px;/);
 });
+
+test('physical robots.txt exists so Vercel rewrites do not hijack it', () => {
+    const robots = read('robots.txt');
+    assert.match(robots, /User-agent:\s*\*/);
+    assert.match(robots, /Allow:\s*\/\s*$/m);
+});
+
+test('head has no render-blocking CDN scripts', () => {
+    const html = read('index.html');
+    const head = html.match(/<head>[\s\S]*<\/head>/)[0];
+    assert.ok(!head.includes('<script src="http'), 'render-blocking external script in head');
+    assert.match(head, /rel="preconnect" href="https:\/\/fonts.googleapis.com"/);
+    assert.match(head, /rel="dns-prefetch" href="https:\/\/cdn\.jsdelivr\.net"/);
+});
+
+test('heavy libraries are loaded on demand, not at page load', () => {
+    const html = read('index.html');
+    assert.ok(!html.includes('skulpt.min.js'), 'skulpt still statically loaded');
+    assert.ok(!html.includes('pdf.min.js'), 'pdf.js still statically loaded');
+    assert.ok(!html.includes('anime.umd'), 'anime still statically loaded');
+    assert.match(html, /initLucideOnDemand/, 'lucide lazy-init missing');
+    assert.match(html, /on-demand\.js/, 'on-demand loader comment missing');
+
+    const app = read('app.js');
+    assert.match(app, /function loadScripts/, 'loadScripts missing from bundle');
+    assert.match(app, /CDN_BASE_URLS/, 'CDN_BASE_URLS missing from bundle');
+    assert.match(app, /Loading Python runtime\.\.\./, 'skulpt lazy-load branch missing');
+});
+
+test('service worker no longer pre-caches lazy libraries', () => {
+    const sw = read('sw.js');
+    assert.ok(!sw.includes('skulpt.'), 'sw still pre-caches skulpt');
+    assert.ok(!sw.includes('pdf.min.js'), 'sw still pre-caches pdf.js');
+    assert.ok(sw.includes('./robots.txt'), 'sw does not cache robots.txt');
+});

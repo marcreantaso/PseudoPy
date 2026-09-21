@@ -35,15 +35,25 @@ function runPythonCode(code, outputElementId) {
     outputEl.innerHTML = '';
     outputEl.className = 'output-content';
 
+    if (typeof Sk === 'undefined') {
+        outputEl.textContent = 'Loading Python runtime...';
+        const fallback = function () {
+            outputEl.textContent = 'Skulpt library not loaded. Please check your internet connection.\n\nFalling back to static analysis...\n\n';
+            outputEl.textContent += simulateExecution(code);
+        };
+        loadScripts(CDN_BASE_URLS.skulpt, function () {
+            if (typeof Sk !== 'undefined') {
+                runPythonCode(code, outputElementId);
+            } else {
+                fallback();
+            }
+        }, fallback);
+        return;
+    }
+
     // The compiler now handles str() wrapping correctly in smartPrintExpr(),
     // so no runtime code fixup is needed. Use code as-is.
     const cleanCode = code;
-
-    if (typeof Sk === 'undefined') {
-        outputEl.textContent = 'Skulpt library not loaded. Please check your internet connection.\n\nFalling back to static analysis...\n\n';
-        outputEl.textContent += simulateExecution(code);
-        return;
-    }
 
     // Helper: append text to the console output (HTML-safe)
     function appendOutput(text) {

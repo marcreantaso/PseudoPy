@@ -132,6 +132,38 @@ function toggleHidden(id, hidden) {
 }
 
 /* ============================================================
+   ON-DEMAND THIRD-PARTY LIBRARY LOADING
+   Heavy libraries (Skulpt, PDF.js, anime, lucide) are no longer
+   loaded at page start. They download on first use so the app
+   shell, login and navigation render without waiting on CDNs.
+   ============================================================ */
+
+const CDN_BASE_URLS = {
+    lucide: 'https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.js',
+    skulpt: ['https://skulpt.org/js/skulpt.min.js', 'https://skulpt.org/js/skulpt-stdlib.js'],
+    pdfjs: ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'],
+    anime: ['https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js']
+};
+
+function loadScripts(srcList, onSuccess, onError) {
+    if (!srcList || !srcList.length) { if (onSuccess) onSuccess(); return; }
+    let index = 0;
+    function next() {
+        if (index >= srcList.length) {
+            if (onSuccess) onSuccess();
+            return;
+        }
+        const s = document.createElement('script');
+        s.src = srcList[index++] + '?v=on-demand';
+        s.async = true;
+        s.onload = next;
+        s.onerror = function () {
+            if (onError) onError(new Error('Failed to load script: ' + s.src));
+        };
+        document.head.appendChild(s);
+    }
+    next();
+}/* ============================================================
    INITIALIZATION
    ============================================================ */
 
@@ -790,37 +822,48 @@ function refreshIcons(root) {
     lucide.createIcons({ root: root || document, icons: lucide.icons });
 }
 
+function runWithAnime(cb) {
+    if (typeof anime !== 'undefined' && typeof anime.animate === 'function') { cb(); return; }
+    loadScripts(CDN_BASE_URLS.anime, function () {
+        if (typeof anime !== 'undefined' && typeof anime.animate === 'function') cb();
+    }, function () {});
+}
+
 function animateAnalyticsCards() {
-    if (typeof anime === 'undefined' || typeof anime.animate !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const analyticsPage = $id('page-analytics');
     if (!analyticsPage || analyticsPage.classList.contains('hidden')) return;
-    anime.animate('.an-kpi-card', {
-        opacity: [0, 1],
-        translateY: [14, 0],
-        delay: anime.stagger(70),
-        duration: 500,
-        ease: 'outCubic'
+    runWithAnime(function () {
+        anime.animate('.an-kpi-card', {
+            opacity: [0, 1],
+            translateY: [14, 0],
+            delay: anime.stagger(70),
+            duration: 500,
+            ease: 'outCubic'
+        });
     });
 }
 
 function animateAnalyticsCharts() {
-    if (typeof anime === 'undefined' || typeof anime.animate !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const analyticsPage = $id('page-analytics');
     if (!analyticsPage || analyticsPage.classList.contains('hidden')) return;
-    const bars = document.querySelectorAll('#chart-submissions .an-bar-inner');
-    if (bars.length) {
-        anime.animate(bars, {
-            scaleY: [0, 1],
-            opacity: [0, 1],
-            delay: anime.stagger(55),
-            duration: 550,
-            ease: 'outCubic'
-        });
-    }
-    const donut = $id('an-donut-chart');
-    const legend = $id('an-donut-legend');
-    if (donut) anime.animate(donut, { scale: [0.8, 1], opacity: [0, 1], duration: 600, ease: 'outBack' });
-    if (legend) anime.animate(legend, { opacity: [0, 1], translateX: [12, 0], duration: 450, delay: 180, ease: 'outCubic' });
+    runWithAnime(function () {
+        const bars = document.querySelectorAll('#chart-submissions .an-bar-inner');
+        if (bars.length) {
+            anime.animate(bars, {
+                scaleY: [0, 1],
+                opacity: [0, 1],
+                delay: anime.stagger(55),
+                duration: 550,
+                ease: 'outCubic'
+            });
+        }
+        const donut = $id('an-donut-chart');
+        const legend = $id('an-donut-legend');
+        if (donut) anime.animate(donut, { scale: [0.8, 1], opacity: [0, 1], duration: 600, ease: 'outBack' });
+        if (legend) anime.animate(legend, { opacity: [0, 1], translateX: [12, 0], duration: 450, delay: 180, ease: 'outCubic' });
+    });
 }
 
 function initializeLucideIcons() {
@@ -981,12 +1024,23 @@ async function handleFileUpload(event, targetEditorId) {
             if (editor) editor.value = text;
             showToast('Text file loaded successfully!', 'success');
         } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+            showToast('Extracting PDF text...', 'info');
+
             if (typeof pdfjsLib === 'undefined') {
-                showToast('PDF library not loaded yet.', 'error');
-                return;
+                await new Promise(function (resolve, reject) {
+                    loadScripts(CDN_BASE_URLS.pdfjs, function () {
+                        if (typeof pdfjsLib !== 'undefined') {
+                            try {
+                                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                            } catch (e) { /* non-critical */ }
+                            resolve();
+                        } else {
+                            reject(new Error('PDF library could not be loaded.'));
+                        }
+                    }, reject);
+                });
             }
 
-            showToast('Extracting PDF text...', 'info');
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
@@ -1078,15 +1132,25 @@ function runPythonCode(code, outputElementId) {
     outputEl.innerHTML = '';
     outputEl.className = 'output-content';
 
+    if (typeof Sk === 'undefined') {
+        outputEl.textContent = 'Loading Python runtime...';
+        const fallback = function () {
+            outputEl.textContent = 'Skulpt library not loaded. Please check your internet connection.\n\nFalling back to static analysis...\n\n';
+            outputEl.textContent += simulateExecution(code);
+        };
+        loadScripts(CDN_BASE_URLS.skulpt, function () {
+            if (typeof Sk !== 'undefined') {
+                runPythonCode(code, outputElementId);
+            } else {
+                fallback();
+            }
+        }, fallback);
+        return;
+    }
+
     // The compiler now handles str() wrapping correctly in smartPrintExpr(),
     // so no runtime code fixup is needed. Use code as-is.
     const cleanCode = code;
-
-    if (typeof Sk === 'undefined') {
-        outputEl.textContent = 'Skulpt library not loaded. Please check your internet connection.\n\nFalling back to static analysis...\n\n';
-        outputEl.textContent += simulateExecution(code);
-        return;
-    }
 
     // Helper: append text to the console output (HTML-safe)
     function appendOutput(text) {

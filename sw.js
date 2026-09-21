@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-icons-20260920-v2';
+const CACHE_NAME = 'pseudopy-icons-20260921-v3';
 const LOCAL_ASSETS = [
     './',
     './index.html',
@@ -12,14 +12,17 @@ const LOCAL_ASSETS = [
     './mapper.js',
     './app.js',
     './app.js?v=icons-2',
-    './devtools.js?v=icons-1',
+    './devtools.js?v=20260909',
     './ui-icons.js?v=2',
     './ui-icons.css?v=1',
     './compiler.js',
+    './compiler.js?v=20260903',
     './dataset.json',
     './metrics.js',
+    './metrics.js?v=20260903',
     './manifest.json',
     './database.js',
+    './robots.txt',
     './icons/icon.svg',
     './icons/pseudopy-logo.png?v=2',
     './icons/pseudopy-192.png?v=2',
@@ -28,12 +31,11 @@ const LOCAL_ASSETS = [
     './icons/pseudopy-maskable.png?v=2'
 ];
 
+// Only always-needed external assets are pre-cached. Skulpt, PDF.js, lucide
+// and anime are fetched on first use (see src/app/on-demand.js) and cached
+// lazily by the fetch handler, so installation never pays for unused code.
 const EXTERNAL_ASSETS = [
     'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap',
-    'https://skulpt.org/js/skulpt.min.js',
-    'https://skulpt.org/js/skulpt-stdlib.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
     'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
     'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js'
 ];

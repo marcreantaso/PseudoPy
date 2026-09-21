@@ -129,12 +129,35 @@ function devToolsRunPipeline() {
 // PYTHON EXECUTION — USES REAL SKULPT RUNTIME
 // ══════════════════════════════════════════════════════════════
 
+function _devToolsRenderSkulptUnavailable(statusEl, stderrEl, pipeRuntime) {
+    if (statusEl) statusEl.textContent = '{{ui:TriangleAlert}} Skulpt not loaded';
+    if (stderrEl) stderrEl.textContent = 'Skulpt library not available.';
+    if (pipeRuntime) pipeRuntime.className = 'pipeline-stage status-ERROR';
+    compilerTrace.emit({ type: 'EXECUTION_COMPLETE', stage: 'EXECUTION', status: 'ERROR', data: { error: 'Skulpt not loaded' } });
+    compilerTrace.disable();
+    _updateEventLog(compilerTrace.getEvents());
+}
+
 function _devToolsExecutePython(pythonCode, attempt) {
     const statusEl = document.getElementById('devtools-runtime-status');
     const timeEl = document.getElementById('devtools-runtime-time');
     const stdoutEl = document.getElementById('devtools-runtime-stdout');
     const stderrEl = document.getElementById('devtools-runtime-stderr');
     const pipeRuntime = document.getElementById('pipe-runtime');
+
+    if (typeof Sk === 'undefined') {
+        if (statusEl) statusEl.textContent = 'Loading Python runtime...';
+        loadScripts(CDN_BASE_URLS.skulpt, function () {
+            if (typeof Sk !== 'undefined') {
+                _devToolsExecutePython(pythonCode, attempt);
+            } else {
+                _devToolsRenderSkulptUnavailable(statusEl, stderrEl, pipeRuntime);
+            }
+        }, function () {
+            _devToolsRenderSkulptUnavailable(statusEl, stderrEl, pipeRuntime);
+        });
+        return;
+    }
 
     if (pipeRuntime) {
         pipeRuntime.className = 'pipeline-stage status-RUNNING';
@@ -146,16 +169,6 @@ function _devToolsExecutePython(pythonCode, attempt) {
 
     compilerTrace.enable();
     compilerTrace.emit({ type: 'EXECUTION_START', stage: 'EXECUTION', status: 'RUNNING', data: { pythonLength: pythonCode.length } });
-
-    if (typeof Sk === 'undefined') {
-        if (statusEl) statusEl.textContent = '{{ui:TriangleAlert}} Skulpt not loaded';
-        if (stderrEl) stderrEl.textContent = 'Skulpt library not available.';
-        if (pipeRuntime) pipeRuntime.className = 'pipeline-stage status-ERROR';
-        compilerTrace.emit({ type: 'EXECUTION_COMPLETE', stage: 'EXECUTION', status: 'ERROR', data: { error: 'Skulpt not loaded' } });
-        compilerTrace.disable();
-        _updateEventLog(compilerTrace.getEvents());
-        return;
-    }
 
     const stdoutBuffer = [];
     const execStart = performance.now();

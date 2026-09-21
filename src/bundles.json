@@ -2,6 +2,7 @@
   "app.js": [
     "src/app/state.js",
     "src/app/dom.js",
+    "src/app/on-demand.js",
     "src/app/initialization.js",
     "src/app/data-refresh.js",
     "src/app/toasts.js",

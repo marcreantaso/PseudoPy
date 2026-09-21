@@ -34,7 +34,13 @@
   <link rel="stylesheet" href="ui-icons.css?v=1">
   <script src="ui-icons.js?v=2" defer></script>
   <link rel="icon" href="icons/pseudopy-favicon.png?v=2" type="image/png" sizes="32x32">
-  <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.js"></script>
+
+  <!-- Preconnect so late-loading fonts and on-demand CDN libraries start early -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+  <link rel="dns-prefetch" href="https://skulpt.org">
 </head>
 
 <body>
@@ -2674,23 +2680,29 @@
   <!-- Database Config & Client (Firebase Firestore) -->
   <script src="database.js"></script>
 
-  <!-- Skulpt for Python execution -->
-  <script src="https://skulpt.org/js/skulpt.min.js" type="text/javascript"></script>
-  <script src="https://skulpt.org/js/skulpt-stdlib.js" type="text/javascript"></script>
-
-  <!-- PDF.js for PDF text extraction -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
-  <script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
-
-  <!-- App Logic -->
+  <!-- App Logic. Skulpt, PDF.js and anime are loaded on demand from
+       src/app/on-demand.js so they never block the initial render. -->
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
   <script src="app.js?v=icons-2"></script>
   <script src="devtools.js?v=20260909"></script>
   <script>
-    if (window.lucide) lucide.createIcons({ icons: lucide.icons });
+    // Lazy-init lucide: every createIcons call site is guarded, so the icon
+    // library is fetched on load (not at parse) and icons render once it lands.
+    (function initLucideOnDemand() {
+      function renderIcons() {
+        if (window.lucide && window.lucide.createIcons) {
+          try { lucide.createIcons({ icons: lucide.icons }); } catch (e) {}
+        }
+      }
+      if (window.lucide) { renderIcons(); return; }
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.js';
+      s.async = true;
+      s.onload = renderIcons;
+      document.head.appendChild(s);
+    })();
   </script>
 
   <!-- Service Worker Registration -->
