@@ -47,7 +47,7 @@ async function loadPasswordRecovery() {
         const canReview = r.status === 'pending';
         return `
         <tr>
-          <td><div class="user-cell"><div class="avatar-sm">${(r.studentName || '?').charAt(0)}</div><div>
+          <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div>
             <div style="font-weight:600;color:var(--text-primary)">${r.studentName || 'Unknown'}</div>
             <div style="font-size:0.75rem;color:var(--text-muted)">@${r.studentUsername || '—'}</div>
           </div></div></td>

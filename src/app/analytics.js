@@ -615,7 +615,7 @@ function renderFilteredActivityTable(activityList) {
         <tr>
           <td>
             <div class="an-user-cell">
-              <div class="an-avatar-sm">${(a.student || '?').charAt(0)}</div>
+              <div class="an-avatar-sm">{{ui:UserRound}}</div>
               <span class="an-user-name">${a.student || '—'}</span>
             </div>
           </td>

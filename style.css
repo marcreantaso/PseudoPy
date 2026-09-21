@@ -193,6 +193,11 @@
   --status-violet-bg: #f5f3ff;
   --status-violet-border: #c4b5fd;
 
+  /* Monochrome avatar surfaces (light): white circle, dark icon. */
+  --avatar-bg: #ffffff;
+  --avatar-fg: #111111;
+  --avatar-border: #111111;
+
   /* DevTools syntax colors (light). */
   --dt-syntax-keyword: #7c3aed;
   --dt-syntax-identifier: #0e7490;
@@ -252,6 +257,11 @@
   --status-violet-fg: #c4b5fd;
   --status-violet-bg: rgba(139, 92, 246, 0.15);
   --status-violet-border: rgba(196, 181, 253, 0.35);
+
+  /* Monochrome avatar surfaces (dark): black circle, white icon. */
+  --avatar-bg: #111111;
+  --avatar-fg: #ffffff;
+  --avatar-border: rgba(255, 255, 255, 0.7);
 
   --dt-syntax-keyword: #c084fc;
   --dt-syntax-identifier: #67e8f9;
@@ -1723,41 +1733,70 @@ svg.lucide {
 .tour-bubble {
   position: absolute;
   z-index: 1002;
-  width: min(92vw, 360px);
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 1rem;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  padding: 1.1rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+.tour-bubble:focus {
+  outline: none;
 }
 
 .tour-bubble-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.55rem;
 }
 
 .tour-bubble-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.7rem;
-  height: 1.7rem;
+  width: 2rem;
+  height: 2rem;
   border-radius: 50%;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), #2563eb);
   color: #fff;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.tour-bubble-icon i { width: 1rem; height: 1rem; }
+
+.tour-bubble-step {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
   flex-shrink: 0;
 }
 
-.tour-bubble-icon i { width: 0.95rem; height: 0.95rem; }
+.tour-bubble-title { margin: 0 0 0.3rem; font-size: 1rem; font-weight: 800; color: var(--text-primary); }
 
-.tour-bubble-title { margin: 0; font-size: 0.95rem; color: var(--text-primary); }
+.tour-bubble-text { margin: 0 0 0.85rem; font-size: 0.83rem; color: var(--text-secondary); line-height: 1.55; }
 
-.tour-bubble-text { margin: 0 0 0.75rem; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; }
+.tour-bubble-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
 
-.tour-bubble-dots { display: flex; gap: 0.35rem; margin-bottom: 0.75rem; }
+.tour-bubble-dots { display: flex; gap: 0.35rem; align-items: center; }
 
 .tour-dot {
   width: 0.4rem;
@@ -1765,11 +1804,17 @@ svg.lucide {
   border-radius: 50%;
   background: var(--border);
   display: inline-block;
+  transition: all 0.2s var(--ease);
 }
 
-.tour-dot.active { background: var(--accent); width: 0.75rem; border-radius: 999px; }
+.tour-dot.active { background: var(--accent); width: 0.85rem; border-radius: 999px; }
 
-.tour-bubble-actions { display: flex; gap: 0.5rem; align-items: center; }
+.tour-bubble-actions { display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; }
+
+.tour-bubble .btn-primary,
+.tour-bubble .btn-secondary {
+  width: auto;
+}
 
 .tour-bubble-actions .tour-skip { margin-right: auto; color: var(--text-muted); }
 
@@ -1926,13 +1971,20 @@ svg.lucide {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-full);
-  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  background: var(--avatar-bg);
+  color: var(--avatar-fg);
+  border: 1px solid var(--avatar-border);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.75rem;
   font-weight: 700;
   flex-shrink: 0;
+}
+
+.data-table .user-cell .avatar-sm .ui-symbol {
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .badge {
@@ -4389,10 +4441,11 @@ select.form-input {
 .an-user-cell { display: flex; align-items: center; gap: 0.6rem; }
 .an-avatar-sm {
   width: 26px; height: 26px; border-radius: 9999px;
-  background: var(--muted); color: var(--secondary-foreground);
+  background: var(--avatar-bg); color: var(--avatar-fg); border: 1px solid var(--avatar-border);
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 0.7rem; font-weight: 600; flex-shrink: 0;
 }
+.an-avatar-sm .ui-symbol { width: 0.95rem; height: 0.95rem; }
 .an-user-name { font-weight: 500; color: var(--card-foreground); font-size: 0.85rem; }
 .an-cell-muted { color: var(--muted-foreground); font-size: 0.82rem; }
 .an-cell-mono { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; }
@@ -5237,6 +5290,66 @@ select.form-input {
 .device-action-revoke:hover {
   background: var(--status-warning-border);
   border-color: var(--status-warning-fg);
+}
+
+/* Device modal action column - buttons stay fully visible, never clipped */
+#instructor-devices-modal .modal {
+  max-width: 720px;
+}
+
+#instructor-devices-modal .btn {
+  flex-shrink: 0;
+}
+
+.device-action-group {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+@media (min-width: 641px) {
+  #instructor-devices-modal table.data-table {
+    min-width: 560px;
+  }
+
+  #instructor-devices-modal table.data-table th,
+  #instructor-devices-modal table.data-table td {
+    padding: 0.6rem 0.75rem;
+    white-space: nowrap;
+  }
+
+  #instructor-devices-modal table.data-table th:nth-child(5),
+  #instructor-devices-modal table.data-table td.device-action-cell {
+    width: 230px;
+  }
+}
+
+/* Loading state that keeps the button label visible (e.g. "Approving...") */
+.btn.is-loading-text {
+  position: relative;
+  pointer-events: none;
+  cursor: progress;
+  opacity: 0.85;
+}
+
+.btn.is-loading-text:disabled {
+  opacity: 0.85;
+  filter: none;
+}
+
+.btn.is-loading-text::after {
+  content: '';
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-left: 0.45em;
+  vertical-align: -0.15em;
+  border-radius: 50%;
+  border: 2px solid var(--border-hover);
+  border-top-color: currentColor;
+  animation: dt-spin 0.6s linear infinite;
 }
 
 /* Device table card reflow on small screens */

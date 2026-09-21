@@ -95,7 +95,7 @@ async function loadPasswordRequests() {
                 const username = r.studentUsername || r.instructorUsername || '—';
                 return `
                 <tr>
-                  <td><div class="user-cell"><div class="avatar-sm">${name.charAt(0)}</div><div>
+                  <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div>
                     <div style="font-weight:600;color:var(--text-primary)">${name}</div>
                     <div style="font-size:0.75rem;color:var(--text-muted)">${r.email || 'Instructor'}</div>
                   </div></div></td>
@@ -158,7 +158,7 @@ async function loadPasswordRequests() {
                 const username = r.username || '—';
                 return `
                 <tr>
-                  <td><div class="user-cell"><div class="avatar-sm">${name.charAt(0)}</div>
+                  <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div>
                     <div>
                       <div style="font-weight:600;color:var(--text-primary)">${name}</div>
                       <div style="font-size:0.75rem;color:var(--text-muted)">@${username}</div>

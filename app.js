@@ -2596,7 +2596,6 @@ function renderInstructorTable() {
     }
 
     tbody.innerHTML = slice.map(u => {
-        const initial = (u.fullName || 'I').charAt(0).toUpperCase();
         const isArchived = u.status === 'archived';
         const statusBadge = u.status === 'active'
             ? `<span class="badge badge-active">ACTIVE</span>`
@@ -2615,7 +2614,7 @@ function renderInstructorTable() {
         <tr>
           <td>
             <div class="user-cell">
-              <div class="avatar-sm" style="background:hsl(${(initial.charCodeAt(0) * 17) % 360},55%,45%)">${initial}</div>
+              <div class="avatar-sm">{{ui:UserRound}}</div>
               <div>
                 <div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div>
                 <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace">@${u.username}</div>
@@ -2629,29 +2628,26 @@ function renderInstructorTable() {
           <td style="font-size:0.8rem;color:var(--text-muted)">${lastLogin}</td>
           <td>
             <div style="display:flex;gap:0.35rem;align-items:center">
-              <button class="btn btn-ghost btn-sm" onclick="viewInstructor('${instructorId}')" title="View Details" style="padding:0.3rem 0.5rem;font-size:0.8rem">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <button class="btn btn-ghost btn-sm" onclick="viewInstructor('${instructorId}')" title="View Details" aria-label="View instructor details" style="padding:0.3rem 0.5rem;font-size:0.8rem">
+                {{ui:Eye}}
               </button>
-              <button class="btn btn-ghost btn-sm" onclick="openInstructorEditModal('${instructorId}')" title="Edit" style="padding:0.3rem 0.5rem;font-size:0.8rem">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              <button class="btn btn-ghost btn-sm" onclick="openInstructorEditModal('${instructorId}')" title="Edit" aria-label="Edit instructor" style="padding:0.3rem 0.5rem;font-size:0.8rem">
+                {{ui:Pencil}}
               </button>
-              <button class="btn btn-ghost btn-sm device-action-btn" onclick="openInstructorDevicesModal('${instructorId}')" title="Manage Authorized Devices (${userDevices.length} registered${pendingCount > 0 ? `, ${pendingCount} pending approval` : ''})" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${pendingCount > 0 ? '#f59e0b' : '#38bdf8'}">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              <button class="btn btn-ghost btn-sm device-action-btn" onclick="openInstructorDevicesModal('${instructorId}')" title="Manage Authorized Devices (${userDevices.length} registered${pendingCount > 0 ? `, ${pendingCount} pending approval` : ''})" aria-label="Manage authorized devices (${userDevices.length} registered${pendingCount > 0 ? `, ${pendingCount} pending approval` : ''})" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${pendingCount > 0 ? '#f59e0b' : '#38bdf8'}">
+                {{ui:Monitor}}
                 ${pendingCount > 0 ? `<span class="device-pending-badge"></span>` : ''}
               </button>
               ${isArchived ? `
-                <button class="btn btn-ghost btn-sm" onclick="openRestoreInstructorModal('${instructorId}')" title="Restore Instructor" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--success)">
+                <button class="btn btn-ghost btn-sm" onclick="openRestoreInstructorModal('${instructorId}')" title="Restore Instructor" aria-label="Restore instructor" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--success)">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                 </button>
               ` : `
-                <button class="btn btn-ghost btn-sm" onclick="confirmToggleInstructorStatus('${instructorId}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${u.status === 'active' ? 'var(--warning)' : 'var(--success)'}">
-                  ${u.status === 'active'
-                  ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
-                  : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`
-                  }
+                <button class="btn btn-ghost btn-sm" onclick="confirmToggleInstructorStatus('${instructorId}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" aria-label="${u.status === 'active' ? 'Deactivate instructor' : 'Activate instructor'}" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${u.status === 'active' ? 'var(--warning)' : 'var(--success)'}">
+                  ${u.status === 'active' ? '{{ui:LockKeyhole}}' : '{{ui:LockKeyholeOpen}}'}
                 </button>
-                <button class="btn btn-ghost btn-sm" onclick="openArchiveInstructorModal('${instructorId}')" ${instructorId === currentUser?.id || instructorId === currentUser?._docId ? 'disabled title="Cannot archive yourself"' : 'title="Archive Instructor"'} style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--warning)">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
+                <button class="btn btn-ghost btn-sm" onclick="openArchiveInstructorModal('${instructorId}')" ${instructorId === currentUser?.id || instructorId === currentUser?._docId ? 'disabled title="Cannot archive yourself"' : 'title="Archive Instructor" aria-label="Archive instructor"'} style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--warning)">
+                  {{ui:Archive}}
                 </button>
               `}
             </div>
@@ -2772,14 +2768,14 @@ async function renderDeviceModalTable() {
             <div style="font-size:0.7rem; color:var(--text-muted);">Active: ${lastSeen}</div>
           </td>
           <td data-label="Status">${statusBadge}</td>
-          <td data-label="Action" style="text-align:right;">
-            <div style="display:flex; gap:0.35rem; justify-content:flex-end;">
+          <td data-label="Action" class="device-action-cell" style="text-align:right;">
+            <div class="device-action-group">
               ${d.status !== 'approved' ? `
-                <button class="btn btn-sm device-action-approve" data-device-action="${d._docId}" onclick="approveDevice('${d._docId}')" title="Approve this device">
-                  {{ui:CircleCheck}} Approve
+                <button class="btn btn-sm device-action-approve" data-device-action="${d._docId}" data-device-action-label="${d.status === 'revoked' ? 'Approve Again' : 'Approve'}" onclick="approveDevice('${d._docId}')" title="${d.status === 'revoked' ? 'Approve this device again' : 'Approve this device'}">
+                  {{ui:CircleCheck}} ${d.status === 'revoked' ? 'Approve Again' : 'Approve'}
                 </button>
               ` : `
-                <button class="btn btn-sm device-action-revoke" data-device-action="${d._docId}" onclick="revokeDevice('${d._docId}')" title="Revoke authorization">
+                <button class="btn btn-sm device-action-revoke" data-device-action="${d._docId}" data-device-action-label="Revoke" onclick="revokeDevice('${d._docId}')" title="Revoke authorization">
                   {{ui:LockKeyhole}} Revoke
                 </button>
               `}
@@ -2801,11 +2797,19 @@ function _deviceActionButtons(docId) {
 function _setDeviceButtonsBusy(docId, busy) {
     _deviceActionButtons(docId).forEach(b => {
         if (busy) {
-            b.classList.add('is-loading');
-            b.disabled = true;
-        } else {
+            b.classList.add('is-loading-text');
             b.classList.remove('is-loading');
+            b.disabled = true;
+            b.setAttribute('aria-busy', 'true');
+            const action = (b.dataset.deviceActionLabel || (
+                b.classList.contains('device-action-approve') ? 'Approve' : 'Revoke'
+            )).trim();
+            const stem = action.toLowerCase().startsWith('approve') ? 'Approving' : 'Revoking';
+            b.textContent = stem + '...';
+        } else {
+            b.classList.remove('is-loading-text', 'is-loading');
             b.disabled = false;
+            b.removeAttribute('aria-busy');
         }
     });
 }
@@ -3050,12 +3054,6 @@ async function viewInstructor(id) {
     if (!user) return;
 
     // Update all fields in the detail modal
-    const initial = (user.fullName || 'I').charAt(0).toUpperCase();
-    const avatarEl = $id('idm-avatar');
-    if (avatarEl) {
-        avatarEl.textContent = initial;
-        avatarEl.style.background = `hsl(${(initial.charCodeAt(0) * 17) % 360},55%,45%)`;
-    }
     setText('idm-name', user.fullName || 'N/A');
     setText('idm-username', '@' + (user.username || 'N/A'));
     setText('idm-email', user.email || 'N/A');
@@ -3225,7 +3223,7 @@ async function loadStudents() {
 
     tbody.innerHTML = students.map(u => `
     <tr>
-      <td><div class="user-cell"><div class="avatar-sm">${u.fullName.charAt(0)}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
+      <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
       <td>${u.studentId || '—'}</td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">
@@ -4009,7 +4007,7 @@ function renderFilteredActivityTable(activityList) {
         <tr>
           <td>
             <div class="an-user-cell">
-              <div class="an-avatar-sm">${(a.student || '?').charAt(0)}</div>
+              <div class="an-avatar-sm">{{ui:UserRound}}</div>
               <span class="an-user-name">${a.student || '—'}</span>
             </div>
           </td>
@@ -4414,7 +4412,7 @@ async function loadPasswordRequests() {
 
     tbody.innerHTML = sorted.map(r => `
     <tr>
-      <td><div class="user-cell"><div class="avatar-sm">${r.fullName ? r.fullName.charAt(0) : '?'}</div><div><div style="font-weight:600;color:var(--text-primary)">${r.fullName || 'Unknown'}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${r.username || 'unknown'}</div></div></div></td>
+      <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div><div style="font-weight:600;color:var(--text-primary)">${r.fullName || 'Unknown'}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${r.username || 'unknown'}</div></div></div></td>
       <td>${r.changedAt || '\u2014'}</td>
       <td><span class="badge badge-approved">{{ui:CircleCheck}} Changed</span></td>
     </tr>`).join('');
@@ -4786,7 +4784,7 @@ async function loadPasswordRecovery() {
         const canReview = r.status === 'pending';
         return `
         <tr>
-          <td><div class="user-cell"><div class="avatar-sm">${(r.studentName || '?').charAt(0)}</div><div>
+          <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div>
             <div style="font-weight:600;color:var(--text-primary)">${r.studentName || 'Unknown'}</div>
             <div style="font-size:0.75rem;color:var(--text-muted)">@${r.studentUsername || '—'}</div>
           </div></div></td>
@@ -5310,7 +5308,7 @@ async function loadPasswordRequests() {
                 const username = r.studentUsername || r.instructorUsername || '—';
                 return `
                 <tr>
-                  <td><div class="user-cell"><div class="avatar-sm">${name.charAt(0)}</div><div>
+                  <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div>
                     <div style="font-weight:600;color:var(--text-primary)">${name}</div>
                     <div style="font-size:0.75rem;color:var(--text-muted)">${r.email || 'Instructor'}</div>
                   </div></div></td>
@@ -5373,7 +5371,7 @@ async function loadPasswordRequests() {
                 const username = r.username || '—';
                 return `
                 <tr>
-                  <td><div class="user-cell"><div class="avatar-sm">${name.charAt(0)}</div>
+                  <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div>
                     <div>
                       <div style="font-weight:600;color:var(--text-primary)">${name}</div>
                       <div style="font-size:0.75rem;color:var(--text-muted)">@${username}</div>
@@ -7611,7 +7609,9 @@ const onboardingState = {
     spotlight: null,
     bubble: null,
     current: 0,
-    active: false
+    active: false,
+    returnFocus: null,
+    safeAreas: null
 };
 
 /* ── State adapter (localStorage now; DB-backed in Phase 6) ── */
@@ -7656,12 +7656,15 @@ function onbEnsureOverlay() {
     overlay.className = 'tour-overlay hidden';
     overlay.innerHTML = `
       <div class="tour-spotlight"></div>
-      <div class="tour-bubble">
-        <div class="tour-bubble-head"><span class="tour-bubble-icon"></span><h4 class="tour-bubble-title"></h4></div>
+      <div class="tour-bubble" role="dialog" aria-modal="true" aria-label="Beginner tutorial" tabindex="-1">
+        <div class="tour-bubble-head"><span class="tour-bubble-icon" aria-hidden="true"></span><span class="tour-bubble-step" aria-hidden="true"></span></div>
+        <h4 class="tour-bubble-title"></h4>
         <p class="tour-bubble-text"></p>
-        <div class="tour-bubble-dots"></div>
-        <div class="tour-bubble-actions">
+        <div class="tour-bubble-meta">
+          <div class="tour-bubble-dots" role="group" aria-label="Tour progress"></div>
           <button class="btn btn-ghost btn-sm tour-skip">Skip tour</button>
+        </div>
+        <div class="tour-bubble-actions">
           <button class="btn btn-secondary btn-sm tour-prev" disabled>Back</button>
           <button class="btn btn-primary btn-sm tour-next">Next</button>
         </div>
@@ -7683,8 +7686,65 @@ function onbEnsureOverlay() {
         if (onboardingState.current >= ONBOARDING.steps.length - 1) onbFinish();
         else onbGo(onboardingState.current + 1);
     });
-    window.addEventListener('resize', onbReposition);
+
+    bubbleEl().addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape') {
+            ev.stopPropagation();
+            onbStop();
+            return;
+        }
+        if (ev.key === 'Tab') onbTrapFocus(ev);
+    });
+    document.addEventListener('keydown', (ev) => {
+        if (onboardingState.active && ev.key === 'Escape') onbStop();
+    });
+
+    window.addEventListener('resize', () => { onboardingState.safeAreas = null; onbReposition(); });
     window.addEventListener('scroll', onbReposition, { passive: true });
+    window.addEventListener('orientationchange', () => { onboardingState.safeAreas = null; onbReposition(); });
+}
+
+function bubbleEl() {
+    return onboardingState.bubble;
+}
+
+function onbTrapFocus(ev) {
+    const focusables = bubbleEl().querySelectorAll('button:not([disabled])');
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (ev.shiftKey && document.activeElement === first) {
+        ev.preventDefault();
+        last.focus();
+    } else if (!ev.shiftKey && document.activeElement === last) {
+        ev.preventDefault();
+        first.focus();
+    }
+}
+
+function onbSafeAreas() {
+    if (onboardingState.safeAreas) return onboardingState.safeAreas;
+    if (typeof CSS === 'undefined' || !CSS.supports('padding-bottom', 'env(safe-area-inset-bottom)')) {
+        onboardingState.safeAreas = { safeTop: 0, safeLeft: 0, safeBottom: 0, safeRight: 0 };
+        return onboardingState.safeAreas;
+    }
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;';
+    probe.style.paddingTop = 'env(safe-area-inset-top)';
+    probe.style.paddingBottom = 'env(safe-area-inset-bottom)';
+    probe.style.paddingLeft = 'env(safe-area-inset-left)';
+    probe.style.paddingRight = 'env(safe-area-inset-right)';
+    document.body.appendChild(probe);
+    const cs = getComputedStyle(probe);
+    const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+    onboardingState.safeAreas = {
+        safeTop: num(cs.paddingTop),
+        safeBottom: num(cs.paddingBottom),
+        safeLeft: num(cs.paddingLeft),
+        safeRight: num(cs.paddingRight)
+    };
+    probe.remove();
+    return onboardingState.safeAreas;
 }
 
 function onbPositionFor(target) {
@@ -7701,41 +7761,23 @@ function onbPositionFor(target) {
     onboardingState.spotlight.style.height = height + 'px';
 
     const step = ONBOARDING.steps[onboardingState.current];
-    const bubbleStyle = onbBubbleStyle(step.placement || 'below', rect, top, left, width, height);
-    Object.keys(bubbleStyle).forEach(k => (onboardingState.bubble.style[k] = bubbleStyle[k]));
-    const icon = document.createElement('i');
-    icon.setAttribute('data-lucide', step.icon);
-    const iconSlot = onboardingState.bubble.querySelector('.tour-bubble-icon');
-    iconSlot.innerHTML = '';
-    iconSlot.appendChild(icon);
-    overlay.style.setProperty('--tour-bubble-w', onboardingState.bubble.offsetWidth + 'px');
-}
-
-function onbBubbleStyle(placement, rect, top, left, width, height) {
-    const gap = 12;
-    const base = { position: 'absolute' };
-    const vw = window.innerWidth;
-    if (placement === 'above') {
-        base.bottom = (window.innerHeight - rect.top + gap) + 'px';
-        base.left = (left + width / 2) + 'px';
-        base.transform = 'translateX(-50%)';
-    } else if (placement === 'left') {
-        base.right = (vw - rect.left + gap) + 'px';
-        base.top = (top + height / 2) + 'px';
-        base.transform = 'translateY(-50%)';
-        if (onboardingState.bubble && (vw - rect.left - gap - onboardingState.bubble.offsetWidth) < 8) {
-            base.right = '12px';
-        }
-    } else {
-        base.top = (rect.top + height + gap) + 'px';
-        base.left = (left + width / 2) + 'px';
-        base.transform = 'translateX(-50%)';
-        if (onboardingState.bubble && (rect.left + width / 2 + onboardingState.bubble.offsetWidth / 2) > vw - 12) {
-            base.left = (vw - 12) + 'px';
-            base.transform = 'translateX(-100%)';
-        }
-    }
-    return base;
+    const bubble = bubbleEl();
+    const viewport = {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        margin: 16,
+        safeTop: onbSafeAreas().safeTop,
+        safeLeft: onbSafeAreas().safeLeft,
+        safeBottom: onbSafeAreas().safeBottom,
+        safeRight: onbSafeAreas().safeRight
+    };
+    const targetRect = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+    const size = { width: bubble.offsetWidth, height: bubble.offsetHeight };
+    const pos = computeTourBubbleRect(viewport, targetRect, step.placement || 'below', size);
+    bubble.style.left = pos.left + 'px';
+    bubble.style.top = pos.top + 'px';
+    bubble.style.right = 'auto';
+    bubble.style.bottom = 'auto';
 }
 
 function onbReposition() {
@@ -7749,20 +7791,37 @@ function onbRender() {
     const step = ONBOARDING.steps[onboardingState.current];
     const target = document.getElementById(step.targetId);
     if (!target) { onbStop(); return; }
-    onboardingState.bubble.querySelector('.tour-bubble-title').textContent = step.title;
-    onboardingState.bubble.querySelector('.tour-bubble-text').textContent = step.text;
-    onboardingState.bubble.querySelector('.tour-prev').disabled = onboardingState.current === 0;
-    const nextBtn = onboardingState.bubble.querySelector('.tour-next');
+    const bubble = bubbleEl();
+
+    const iconEl = bubble.querySelector('.tour-bubble-icon');
+    iconEl.innerHTML = '';
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', step.icon);
+    icon.setAttribute('aria-hidden', 'true');
+    iconEl.appendChild(icon);
+
+    bubble.querySelector('.tour-bubble-step').textContent = (onboardingState.current + 1) + ' / ' + ONBOARDING.steps.length;
+    bubble.querySelector('.tour-bubble-title').textContent = step.title;
+    bubble.querySelector('.tour-bubble-text').textContent = step.text;
+    bubble.querySelector('.tour-prev').disabled = onboardingState.current === 0;
+    const nextBtn = bubble.querySelector('.tour-next');
     nextBtn.textContent = onboardingState.current >= ONBOARDING.steps.length - 1 ? 'Finish' : 'Next';
 
-    const dots = onboardingState.bubble.querySelector('.tour-bubble-dots');
+    const dots = bubble.querySelector('.tour-bubble-dots');
+    dots.setAttribute('aria-label', 'Step ' + (onboardingState.current + 1) + ' of ' + ONBOARDING.steps.length);
     dots.innerHTML = '';
     ONBOARDING.steps.forEach((_, i) => {
         const dot = document.createElement('span');
         dot.className = 'tour-dot' + (i === onboardingState.current ? ' active' : '');
+        dot.setAttribute('aria-hidden', 'true');
         dots.appendChild(dot);
     });
+
     onbPositionFor(target);
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        try { lucide.createIcons({ icons: lucide.icons }); } catch (e) { /* icon render must never break the tour */ }
+    }
+    bubble.focus({ preventScroll: true });
 }
 
 function onbGo(index) {
@@ -7775,9 +7834,13 @@ function startBeginnerTutorial() {
     onbEnsureOverlay();
     onboardingState.active = true;
     onboardingState.current = 0;
-    onboardingState.overlay.classList.remove('hidden');
+    onboardingState.returnFocus = document.activeElement;
+    overlayEl().classList.remove('hidden');
     onbRender();
-    if (typeof lucide !== 'undefined') lucide.createIcons({ icons: lucide.icons });
+}
+
+function overlayEl() {
+    return onboardingState.overlay;
 }
 
 function onbFinish() {
@@ -7797,8 +7860,13 @@ function restartBeginnerTutorial() {
 }
 
 function onbStop() {
+    const wasActive = onboardingState.active;
     onboardingState.active = false;
     if (onboardingState.overlay) onboardingState.overlay.classList.add('hidden');
+    if (wasActive && onboardingState.returnFocus && typeof onboardingState.returnFocus.focus === 'function' && document.contains(onboardingState.returnFocus)) {
+        try { onboardingState.returnFocus.focus({ preventScroll: true }); } catch (e) { /* no-op */ }
+    }
+    onboardingState.returnFocus = null;
 }
 
 function maybeAutoStartTutorial() {
@@ -7813,6 +7881,105 @@ PseudoPyLearning.register.onboarding = {
     autoStart: maybeAutoStartTutorial,
     isCompleted: onbGetCompleted
 };/* ============================================================
+   PSEUDOPY TOUR POSITIONING — pure viewport-aware geometry
+   ------------------------------------------------------------
+   Kept free of DOM so it can be unit-tested under Node. The
+   browser bundle registers the same function as a global.
+   ============================================================ */
+
+function computeTourBubbleRect(viewport, target, placement, bubbleSize) {
+    const gap = 12;
+    const margin = Number.isFinite(viewport.margin) ? viewport.margin : 16;
+    const safeTop = Number.isFinite(viewport.safeTop) ? viewport.safeTop : 0;
+    const safeLeft = Number.isFinite(viewport.safeLeft) ? viewport.safeLeft : 0;
+    const safeBottom = Number.isFinite(viewport.safeBottom) ? viewport.safeBottom : 0;
+    const safeRight = Number.isFinite(viewport.safeRight) ? viewport.safeRight : 0;
+
+    const limitW = Math.max(0, viewport.width - safeLeft - safeRight - margin * 2);
+    const limitH = Math.max(0, viewport.height - safeTop - safeBottom - margin * 2);
+    const width = Math.min(bubbleSize.width, limitW);
+    const height = Math.min(bubbleSize.height, limitH);
+
+    const minLeft = safeLeft + margin;
+    const minTop = safeTop + margin;
+    const maxLeft = viewport.width - safeRight - margin - width;
+    const maxTop = viewport.height - safeBottom - margin - height;
+
+    const targetLeft = target.left;
+    const targetTop = target.top;
+    const targetRight = Number.isFinite(target.right) ? target.right : target.left + target.width;
+    const targetBottom = Number.isFinite(target.bottom) ? target.bottom : target.top + target.height;
+    const targetWidth = Number.isFinite(target.width) ? target.width : targetRight - targetLeft;
+    const targetHeight = Number.isFinite(target.height) ? target.height : targetBottom - targetTop;
+
+    const clampX = x => Math.max(minLeft, Math.min(maxLeft, x));
+    const clampY = y => Math.max(minTop, Math.min(maxTop, y));
+
+    function fits(left, top) {
+        return left >= minLeft && left + width <= viewport.width - safeRight - margin &&
+               top >= minTop && top + height <= viewport.height - safeBottom - margin;
+    }
+
+    function candidate(place) {
+        switch (place) {
+            case 'above':
+                return {
+                    left: targetLeft + targetWidth / 2 - width / 2,
+                    top: targetTop - gap - height,
+                    placement: 'above'
+                };
+            case 'below':
+                return {
+                    left: targetLeft + targetWidth / 2 - width / 2,
+                    top: targetBottom + gap,
+                    placement: 'below'
+                };
+            case 'left':
+                return {
+                    left: targetLeft - gap - width,
+                    top: targetTop + targetHeight / 2 - height / 2,
+                    placement: 'left'
+                };
+            default:
+                return {
+                    left: targetRight + gap,
+                    top: targetTop + targetHeight / 2 - height / 2,
+                    placement: 'right'
+                };
+        }
+    }
+
+    const requested = candidate(placement);
+    if (fits(requested.left, requested.top)) return rectOf(requested, width, height);
+
+    const opposite = { above: 'below', below: 'above', left: 'right', right: 'left' };
+    const flipped = candidate(opposite[placement] || 'below');
+    if (fits(flipped.left, flipped.top)) return rectOf(flipped, width, height);
+
+    const order = ['below', 'above', 'right', 'left'];
+    for (const place of order) {
+        const c = candidate(place);
+        if (fits(c.left, c.top)) return rectOf(c, width, height);
+    }
+
+    return rectOf({ left: clampX(requested.left), top: clampY(requested.top), placement: requested.placement }, width, height);
+}
+
+function rectOf(c, width, height) {
+    return {
+        left: c.left,
+        top: c.top,
+        right: c.left + width,
+        bottom: c.top + height,
+        width,
+        height,
+        placement: c.placement
+    };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { computeTourBubbleRect };
+}/* ============================================================
    PSEUDOPY LEARNING LAYER — Evidence Store
    ------------------------------------------------------------
    Persists one EvidenceRecord per translation attempt for

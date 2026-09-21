@@ -138,7 +138,6 @@ function renderInstructorTable() {
     }
 
     tbody.innerHTML = slice.map(u => {
-        const initial = (u.fullName || 'I').charAt(0).toUpperCase();
         const isArchived = u.status === 'archived';
         const statusBadge = u.status === 'active'
             ? `<span class="badge badge-active">ACTIVE</span>`
@@ -157,7 +156,7 @@ function renderInstructorTable() {
         <tr>
           <td>
             <div class="user-cell">
-              <div class="avatar-sm" style="background:hsl(${(initial.charCodeAt(0) * 17) % 360},55%,45%)">${initial}</div>
+              <div class="avatar-sm">{{ui:UserRound}}</div>
               <div>
                 <div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div>
                 <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace">@${u.username}</div>
@@ -171,29 +170,26 @@ function renderInstructorTable() {
           <td style="font-size:0.8rem;color:var(--text-muted)">${lastLogin}</td>
           <td>
             <div style="display:flex;gap:0.35rem;align-items:center">
-              <button class="btn btn-ghost btn-sm" onclick="viewInstructor('${instructorId}')" title="View Details" style="padding:0.3rem 0.5rem;font-size:0.8rem">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <button class="btn btn-ghost btn-sm" onclick="viewInstructor('${instructorId}')" title="View Details" aria-label="View instructor details" style="padding:0.3rem 0.5rem;font-size:0.8rem">
+                {{ui:Eye}}
               </button>
-              <button class="btn btn-ghost btn-sm" onclick="openInstructorEditModal('${instructorId}')" title="Edit" style="padding:0.3rem 0.5rem;font-size:0.8rem">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              <button class="btn btn-ghost btn-sm" onclick="openInstructorEditModal('${instructorId}')" title="Edit" aria-label="Edit instructor" style="padding:0.3rem 0.5rem;font-size:0.8rem">
+                {{ui:Pencil}}
               </button>
-              <button class="btn btn-ghost btn-sm device-action-btn" onclick="openInstructorDevicesModal('${instructorId}')" title="Manage Authorized Devices (${userDevices.length} registered${pendingCount > 0 ? `, ${pendingCount} pending approval` : ''})" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${pendingCount > 0 ? '#f59e0b' : '#38bdf8'}">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              <button class="btn btn-ghost btn-sm device-action-btn" onclick="openInstructorDevicesModal('${instructorId}')" title="Manage Authorized Devices (${userDevices.length} registered${pendingCount > 0 ? `, ${pendingCount} pending approval` : ''})" aria-label="Manage authorized devices (${userDevices.length} registered${pendingCount > 0 ? `, ${pendingCount} pending approval` : ''})" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${pendingCount > 0 ? '#f59e0b' : '#38bdf8'}">
+                {{ui:Monitor}}
                 ${pendingCount > 0 ? `<span class="device-pending-badge"></span>` : ''}
               </button>
               ${isArchived ? `
-                <button class="btn btn-ghost btn-sm" onclick="openRestoreInstructorModal('${instructorId}')" title="Restore Instructor" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--success)">
+                <button class="btn btn-ghost btn-sm" onclick="openRestoreInstructorModal('${instructorId}')" title="Restore Instructor" aria-label="Restore instructor" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--success)">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                 </button>
               ` : `
-                <button class="btn btn-ghost btn-sm" onclick="confirmToggleInstructorStatus('${instructorId}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${u.status === 'active' ? 'var(--warning)' : 'var(--success)'}">
-                  ${u.status === 'active'
-                  ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
-                  : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`
-                  }
+                <button class="btn btn-ghost btn-sm" onclick="confirmToggleInstructorStatus('${instructorId}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" aria-label="${u.status === 'active' ? 'Deactivate instructor' : 'Activate instructor'}" style="padding:0.3rem 0.5rem;font-size:0.8rem;color:${u.status === 'active' ? 'var(--warning)' : 'var(--success)'}">
+                  ${u.status === 'active' ? '{{ui:LockKeyhole}}' : '{{ui:LockKeyholeOpen}}'}
                 </button>
-                <button class="btn btn-ghost btn-sm" onclick="openArchiveInstructorModal('${instructorId}')" ${instructorId === currentUser?.id || instructorId === currentUser?._docId ? 'disabled title="Cannot archive yourself"' : 'title="Archive Instructor"'} style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--warning)">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>
+                <button class="btn btn-ghost btn-sm" onclick="openArchiveInstructorModal('${instructorId}')" ${instructorId === currentUser?.id || instructorId === currentUser?._docId ? 'disabled title="Cannot archive yourself"' : 'title="Archive Instructor" aria-label="Archive instructor"'} style="padding:0.3rem 0.5rem;font-size:0.8rem;color:var(--warning)">
+                  {{ui:Archive}}
                 </button>
               `}
             </div>
@@ -314,14 +310,14 @@ async function renderDeviceModalTable() {
             <div style="font-size:0.7rem; color:var(--text-muted);">Active: ${lastSeen}</div>
           </td>
           <td data-label="Status">${statusBadge}</td>
-          <td data-label="Action" style="text-align:right;">
-            <div style="display:flex; gap:0.35rem; justify-content:flex-end;">
+          <td data-label="Action" class="device-action-cell" style="text-align:right;">
+            <div class="device-action-group">
               ${d.status !== 'approved' ? `
-                <button class="btn btn-sm device-action-approve" data-device-action="${d._docId}" onclick="approveDevice('${d._docId}')" title="Approve this device">
-                  {{ui:CircleCheck}} Approve
+                <button class="btn btn-sm device-action-approve" data-device-action="${d._docId}" data-device-action-label="${d.status === 'revoked' ? 'Approve Again' : 'Approve'}" onclick="approveDevice('${d._docId}')" title="${d.status === 'revoked' ? 'Approve this device again' : 'Approve this device'}">
+                  {{ui:CircleCheck}} ${d.status === 'revoked' ? 'Approve Again' : 'Approve'}
                 </button>
               ` : `
-                <button class="btn btn-sm device-action-revoke" data-device-action="${d._docId}" onclick="revokeDevice('${d._docId}')" title="Revoke authorization">
+                <button class="btn btn-sm device-action-revoke" data-device-action="${d._docId}" data-device-action-label="Revoke" onclick="revokeDevice('${d._docId}')" title="Revoke authorization">
                   {{ui:LockKeyhole}} Revoke
                 </button>
               `}
@@ -343,11 +339,19 @@ function _deviceActionButtons(docId) {
 function _setDeviceButtonsBusy(docId, busy) {
     _deviceActionButtons(docId).forEach(b => {
         if (busy) {
-            b.classList.add('is-loading');
-            b.disabled = true;
-        } else {
+            b.classList.add('is-loading-text');
             b.classList.remove('is-loading');
+            b.disabled = true;
+            b.setAttribute('aria-busy', 'true');
+            const action = (b.dataset.deviceActionLabel || (
+                b.classList.contains('device-action-approve') ? 'Approve' : 'Revoke'
+            )).trim();
+            const stem = action.toLowerCase().startsWith('approve') ? 'Approving' : 'Revoking';
+            b.textContent = stem + '...';
+        } else {
+            b.classList.remove('is-loading-text', 'is-loading');
             b.disabled = false;
+            b.removeAttribute('aria-busy');
         }
     });
 }
@@ -592,12 +596,6 @@ async function viewInstructor(id) {
     if (!user) return;
 
     // Update all fields in the detail modal
-    const initial = (user.fullName || 'I').charAt(0).toUpperCase();
-    const avatarEl = $id('idm-avatar');
-    if (avatarEl) {
-        avatarEl.textContent = initial;
-        avatarEl.style.background = `hsl(${(initial.charCodeAt(0) * 17) % 360},55%,45%)`;
-    }
     setText('idm-name', user.fullName || 'N/A');
     setText('idm-username', '@' + (user.username || 'N/A'));
     setText('idm-email', user.email || 'N/A');
@@ -767,7 +765,7 @@ async function loadStudents() {
 
     tbody.innerHTML = students.map(u => `
     <tr>
-      <td><div class="user-cell"><div class="avatar-sm">${u.fullName.charAt(0)}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
+      <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
       <td>${u.studentId || '—'}</td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">

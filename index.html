@@ -2335,7 +2335,7 @@
       <div class="drawer-body">
         <!-- Avatar & Name Header -->
         <div style="text-align:center;padding:0.75rem 0 1.25rem;border-bottom:1px solid var(--border);margin-bottom:1rem">
-          <div class="avatar-lg" id="idm-avatar" style="width:68px;height:68px;border-radius:50%;background:#8b5cf6;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:700;margin:0 auto 0.6rem;box-shadow:0 0 20px rgba(139,92,246,0.3)">M</div>
+          <div class="avatar-lg" id="idm-avatar" style="width:68px;height:68px;border-radius:50%;background:var(--avatar-bg);color:var(--avatar-fg);border:1px solid var(--avatar-border);display:flex;align-items:center;justify-content:center;margin:0 auto 0.6rem;">{{ui:UserRound}}</div>
           <h3 id="idm-name" style="margin-bottom:0.15rem;color:var(--text-primary);font-size:1.2rem">Marc Reantaso</h3>
           <div id="idm-username" style="font-size:0.85rem;color:var(--text-muted);font-family:monospace">@mreantaso_instructor</div>
         </div>
@@ -2496,7 +2496,7 @@
 
   <!-- ── Instructor Devices Management Modal (Admin) ── -->
   <div id="instructor-devices-modal" class="modal-overlay hidden" style="z-index: 10002;">
-    <div class="modal" style="max-width: 680px; width: 95%;">
+    <div class="modal" style="max-width: 720px; width: 95%;">
       <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center;">
         <div style="display:flex; align-items:center; gap:0.6rem;">
           <span style="font-size:1.4rem;">{{ui:Monitor}}</span>

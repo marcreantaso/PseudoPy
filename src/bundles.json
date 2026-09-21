@@ -34,6 +34,7 @@
     "src/learning/pipeline.js",
     "src/learning/learning-ui.js",
     "src/learning/onboarding.js",
+    "src/learning/tour-positioning.js",
     "src/learning/evidence-store.js",
     "src/app/compiler-dashboard.js",
     "src/app/pwa.js",
