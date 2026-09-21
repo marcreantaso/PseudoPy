@@ -151,3 +151,27 @@ test('sidebar profile icons use consistent 18px sizing', () => {
     assert.match(css, /\.sidebar-footer \.btn svg\.lucide\s*\{[^}]*height:\s*18px;/);
     assert.match(css, /\.user-details \.user-name\s*\{[^}]*text-overflow:\s*ellipsis;/);
 });
+test('settings renderer preserves names and renders a user icon for each account', async () => {
+    const vm = require('node:vm');
+    for (const fullName of ['Mikaella Daet', 'Marc Reantaso', 'Administrator']) {
+        const values = new Map();
+        const context = vm.createContext({
+            currentUser: { id: 'test', fullName, username: 'test', email: 'test@example.test', role: 'student' },
+            passwordRequestsRef: 'history', dbGetAll: async () => [],
+            setText: (id, value) => values.set(id, value), setHtml: (id, value) => values.set(id, value),
+            $id: () => null
+        });
+        vm.runInContext(read('src/app/student-settings.js'), context);
+        await context.loadStudentSettings();
+        assert.equal(values.get('settings-avatar'), '{{ui:UserRound}}');
+        assert.equal(values.get('settings-fullname'), fullName);
+    }
+});
+
+test('profile avatar markup and colors match the monochrome account avatars', () => {
+    assert.match(read('index.html'), /id="settings-avatar" aria-hidden="true">\{\{ui:UserRound\}\}/);
+    const rule = read('style.css').match(/\.profile-avatar\s*\{[^}]+\}/)[0];
+    assert.match(rule, /var\(--avatar-bg\)/);
+    assert.match(rule, /var\(--avatar-fg\)/);
+    assert.doesNotMatch(rule, /gradient/);
+});

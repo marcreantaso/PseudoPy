@@ -4499,7 +4499,7 @@ async function loadStudentSettings() {
     if (!currentUser) return;
 
     // Populate profile info
-    setText('settings-avatar', currentUser.fullName.charAt(0).toUpperCase());
+    setHtml('settings-avatar', '{{ui:UserRound}}');
     setText('settings-fullname', currentUser.fullName);
     setText('settings-username', '@' + currentUser.username);
     setText('settings-email', currentUser.email);
