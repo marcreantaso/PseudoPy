@@ -2,11 +2,97 @@
    FEEDBACK & SUGGESTIONS
    ============================================================ */
 
+const _fbEsc = s => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const _fbTry = (fn, fallback) => { try { const v = fn(); return v === undefined ? fallback : v; } catch (e) { return fallback; } };
+
 function analyzePseudocode() {
     const input = getValue('feedback-input');
     if (!input.trim()) { showToast('Please paste some pseudocode to analyze.', 'error'); return; }
     renderFeedback(generateFeedback(input));
+
+    const clustering = _fbTry(() => PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.feedbackClusterer);
+    const moderation = _fbTry(() => PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.validationEngine);
+    let clusters = [];
+    if (clustering && moderation) {
+        try {
+            const compileResult = compilerEngine.compile(input);
+            const validation = moderation.runValidation(compileResult, input);
+            const patterns = (compileResult && compileResult.valid)
+                ? _fbTry(() => PseudoPyLearning.register.patternDetector.detectPatterns({
+                    source: input,
+                    ast: compileResult.ast,
+                    symbolTable: compileResult.symbolTable
+                  }), [])
+                : [];
+            clusters = clustering.clusterFeedback(validation.items, patterns);
+        } catch (e) {
+            clusters = [];
+        }
+    }
+    renderFeedbackClusters(clusters);
     showToast('Analysis complete!', 'success');
+}
+
+/**
+ * Renders the clustered Learning Summary (progressive disclosure):
+ * the legacy flat feed keeps its contract; this panel adds the
+ * category-level view with expandable items underneath.
+ */
+function renderFeedbackClusters(clusters) {
+    const container = $id('feedback-summary-container');
+    const results = $id('feedback-summary-results');
+    if (!container || !results) return;
+    if (!clusters || !clusters.length) { container.classList.add('hidden'); return; }
+    container.classList.remove('hidden');
+
+    const sums = _fbTry(() => PseudoPyLearning.register.feedbackClusterer.summarizeClusters(clusters), { error: 0, warning: 0, suggestion: 0, success: 0 });
+    const state = sums.error > 0 ? 'error' : (sums.warning > 0 ? 'warning' : (sums.suggestion > 0 ? 'suggestion' : 'success'));
+    const stateMeta = (PseudoPyLearning.LABELS.severity[state] || { label: '', icon: 'info' });
+
+    const cardHtml = clusters.map(c => {
+        const meta = PseudoPyLearning.LABELS.category[c.category] || { label: c.category, icon: 'circle-check', description: '' };
+        const state = _fbTry(() => PseudoPyLearning.register.feedbackClusterer.clusterState(c), 'success');
+        const stateIcon = (PseudoPyLearning.LABELS.severity[state] || {}).icon || 'circle-check';
+        const counts = [
+            c.errorCount ? 'error ' + c.errorCount : '',
+            c.warningCount ? 'warning ' + c.warningCount : '',
+            c.suggestionCount ? 'suggestion ' + c.suggestionCount : '',
+            c.successCount ? 'success ' + c.successCount : ''
+        ].filter(Boolean).join(' &middot; ');
+        const items = c.items.map(it => {
+            const sev = PseudoPyLearning.LABELS.severity[it.severity] || { label: it.severity, icon: 'info' };
+            return `
+            <li class="lc-item lc-item-${it.severity}">
+              <strong>${icon(sev.icon)} ${_fbEsc(it.message)}</strong>
+              <div class="lc-expl">${_fbEsc(it.explanation)}</div>
+              ${it.suggestion && it.suggestion !== 'Nothing to change here — keep using this approach.' ? `<div class="lc-sugg"><em>Suggestion:</em> ${_fbEsc(it.suggestion)}</div>` : ''}
+              ${it.line ? `<div class="lc-line">Line ${_fbEsc(String(it.line))}</div>` : ''}
+            </li>`;
+        }).join('');
+        return `
+        <div class="learning-cluster-card lc-state-${state}">
+          <div class="lc-head">
+            <span class="lc-icon">${icon(meta.icon)}</span>
+            <span class="lc-title">${_fbEsc(meta.label)}</span>
+            <span class="lc-counts">${counts}</span>
+            <span class="lc-state-icon">${icon(stateIcon)}</span>
+          </div>
+          <div class="lc-desc">${_fbEsc(meta.description || '')}</div>
+          <details class="lc-details">
+            <summary>View details</summary>
+            <ul class="lc-list">${items}</ul>
+          </details>
+        </div>`;
+    }).join('');
+
+    setHtml('feedback-summary-results', `
+      <div class="learning-summary-verdict lc-state-${state}">
+        ${icon(stateMeta.icon)} <strong>${_fbEsc(stateMeta.label)}:</strong> ${_fbEsc(_fbTry(() => PseudoPyLearning.register.feedbackClusterer.overallVerdict(clusters.flatMap(c => c.items))), '')}
+      </div>
+      <div class="learning-cluster-grid">${cardHtml}</div>
+    `);
+    refreshIcons(results);
 }
 
 /**

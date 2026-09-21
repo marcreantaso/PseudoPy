@@ -1374,6 +1374,223 @@ svg.lucide {
 }
 
 /* ============================================================
+   LEARNING LAYER — Clustered Feedback Summary
+   ============================================================ */
+
+.learning-summary-verdict {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  background: var(--bg-input);
+}
+
+.lc-next {
+  padding: 0.7rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px dashed var(--border);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.lc-next-cat {
+  display: inline-block;
+  margin: 0 0.35rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.lc-next-msg { color: var(--text-secondary); }
+
+.lc-next-sugg { color: var(--text-secondary); }
+
+.learning-cluster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 1rem;
+}
+
+.learning-cluster-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  padding: 0.85rem 1rem;
+}
+
+.learning-cluster-card .lc-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.learning-cluster-card .lc-icon {
+  font-size: 1.05rem;
+  flex-shrink: 0;
+}
+
+.learning-cluster-card .lc-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.learning-cluster-card .lc-counts {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-transform: lowercase;
+}
+
+.learning-cluster-card .lc-state-icon {
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.learning-cluster-card .lc-desc {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin: 0.4rem 0 0.5rem;
+}
+
+.learning-cluster-card .lc-details {
+  font-size: 0.8rem;
+}
+
+.learning-cluster-card .lc-details summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.learning-cluster-card .lc-list {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.learning-cluster-card .lc-item {
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border-left: 3px solid var(--accent);
+}
+
+.learning-cluster-card .lc-item.lc-item-error { border-left-color: var(--error); }
+.learning-cluster-card .lc-item.lc-item-warning { border-left-color: var(--warning); }
+.learning-cluster-card .lc-item.lc-item-suggestion { border-left-color: var(--accent); }
+.learning-cluster-card .lc-item.lc-item-success { border-left-color: var(--success); }
+
+.learning-cluster-card .lc-expl {
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+  line-height: 1.4;
+}
+
+.learning-cluster-card .lc-sugg {
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+  line-height: 1.4;
+}
+
+.learning-cluster-card .lc-line {
+  margin-top: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--accent);
+}
+
+.lc-state-error { box-shadow: inset 3px 0 0 var(--error); }
+.lc-state-warning { box-shadow: inset 3px 0 0 var(--warning); }
+.lc-state-suggestion { box-shadow: inset 3px 0 0 var(--accent); }
+.lc-state-success { box-shadow: inset 3px 0 0 var(--success); }
+
+/* ============================================================
+   LEARNING LAYER — Beginner Tutorial Overlay
+   ============================================================ */
+
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(2, 6, 23, 0.55);
+}
+
+.tour-spotlight {
+  position: absolute;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(2, 6, 23, 0.6);
+  border: 2px solid var(--accent);
+  transition: all 0.25s ease;
+  pointer-events: none;
+  z-index: 1001;
+}
+
+.tour-bubble {
+  position: absolute;
+  z-index: 1002;
+  width: min(92vw, 360px);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.tour-bubble-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.tour-bubble-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.tour-bubble-icon i { width: 0.95rem; height: 0.95rem; }
+
+.tour-bubble-title { margin: 0; font-size: 0.95rem; color: var(--text-primary); }
+
+.tour-bubble-text { margin: 0 0 0.75rem; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; }
+
+.tour-bubble-dots { display: flex; gap: 0.35rem; margin-bottom: 0.75rem; }
+
+.tour-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--border);
+  display: inline-block;
+}
+
+.tour-dot.active { background: var(--accent); width: 0.75rem; border-radius: 999px; }
+
+.tour-bubble-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+.tour-bubble-actions .tour-skip { margin-right: auto; color: var(--text-muted); }
+
+/* ============================================================
    FULL-WIDTH PAGES (Exercises, Analytics, Admin)
    ============================================================ */
 

@@ -11,6 +11,9 @@ function clearEditor() {
     setText('line-count', '0 lines');
     currentErrorLineNumbers = [];
     updateGutter();
+    if (PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.learningUi) {
+        try { PseudoPyLearning.register.learningUi.clearLearningPanel(); } catch (e) { /* non-critical */ }
+    }
 }
 
 function clearOutput() {

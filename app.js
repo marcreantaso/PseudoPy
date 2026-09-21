@@ -529,6 +529,13 @@ async function handleLogin() {
             currentUser.lastLogin = new Date().toISOString();
         } catch (e) { /* non-critical */ }
 
+        // Seed learning evidence once the collections are empty (non-blocking).
+        try {
+            if (PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.evidenceStore) {
+                PseudoPyLearning.register.evidenceStore.seedEvidenceIfEmpty();
+            }
+        } catch (e) { /* non-critical */ }
+
         showToast(`Welcome back, ${currentUser.fullName}!`, 'success');
         showApp();
     } catch (err) {
@@ -703,7 +710,12 @@ function navigateTo(pageId) {
     if (pageId === 'compiler-metrics') loadCompilerMetrics();
     if (pageId === 'developer-options' && typeof initDevTools === 'function') initDevTools();
     // Refresh student progress pill whenever the Write Pseudocode page is shown
-    if (pageId === 'write-pseudocode' && currentUser && currentUser.role === 'student') loadStudentProgress();
+    if (pageId === 'write-pseudocode' && currentUser && currentUser.role === 'student') {
+        loadStudentProgress();
+        if (typeof maybeAutoStartTutorial === 'function') {
+            try { maybeAutoStartTutorial(); } catch (e) { /* tour must never block navigation */ }
+        }
+    }
 }
 
 /* ============================================================
@@ -761,6 +773,16 @@ window.addEventListener('resize', () => {
 function icon(name, label) {
     const aria = label ? ` aria-label="${label}"` : ' aria-hidden="true"';
     return `<i data-lucide="${name}"${aria}></i>`;
+}
+
+function maybeRenderLearningPanel(outputId) {
+    if (outputId !== 'python-output') return;
+    if (!PseudoPyLearning || !PseudoPyLearning.register || !PseudoPyLearning.register.learningUi) return;
+    try {
+        PseudoPyLearning.register.learningUi.renderLearningPanel(PseudoPyLearning.lastTranslation);
+    } catch (e) {
+        /* UI must never break translation */
+    }
 }
 
 function refreshIcons(root) {
@@ -830,6 +852,30 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
 
         const result = pseudocodeToPython(input);
         const validation = result;
+
+        // Learning layer hook (non-destructive): run the feedback pipeline so
+        // the post-translation Learning Panel and evidence store have data.
+        // The learning layer must never break translation.
+        if (PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.pipeline) {
+            try {
+                PseudoPyLearning.lastTranslation = PseudoPyLearning.register.pipeline.run(input, result);
+                if (PseudoPyLearning.register.evidenceStore && PseudoPyLearning.register.evidenceStore.capture) {
+                    PseudoPyLearning.register.evidenceStore.capture(PseudoPyLearning.lastTranslation);
+                }
+            } catch (e) {
+                console.error('Learning pipeline error:', e);
+            }
+        } else if (typeof runValidation === 'function' && PseudoPyLearning) {
+            try {
+                PseudoPyLearning.lastTranslation = {
+                    source: input,
+                    compile: result,
+                    validation: runValidation(result, input)
+                };
+            } catch (e) {
+                /* learning layer must never break translation */
+            }
+        }
         const consoleEl = consoleId ? $id(consoleId) : null;
         const runBtn = runBtnSelector ? $qs(runBtnSelector) : null;
 
@@ -845,6 +891,7 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
                 currentErrorLineNumbers = validation.errors.map(err => err.line);
                 updateGutter();
             }
+            maybeRenderLearningPanel(outputId);
             return;
         }
 
@@ -860,6 +907,7 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
         }
         if (runBtn) runBtn.disabled = false;
         showToast(successToast, 'success');
+        maybeRenderLearningPanel(outputId);
         if (typeof updateState === 'function') updateState();
     } catch (e) {
         console.error('Translation Engine Crash:', e);
@@ -1190,11 +1238,97 @@ function simulateExecution(code) {
    FEEDBACK & SUGGESTIONS
    ============================================================ */
 
+const _fbEsc = s => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const _fbTry = (fn, fallback) => { try { const v = fn(); return v === undefined ? fallback : v; } catch (e) { return fallback; } };
+
 function analyzePseudocode() {
     const input = getValue('feedback-input');
     if (!input.trim()) { showToast('Please paste some pseudocode to analyze.', 'error'); return; }
     renderFeedback(generateFeedback(input));
+
+    const clustering = _fbTry(() => PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.feedbackClusterer);
+    const moderation = _fbTry(() => PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.validationEngine);
+    let clusters = [];
+    if (clustering && moderation) {
+        try {
+            const compileResult = compilerEngine.compile(input);
+            const validation = moderation.runValidation(compileResult, input);
+            const patterns = (compileResult && compileResult.valid)
+                ? _fbTry(() => PseudoPyLearning.register.patternDetector.detectPatterns({
+                    source: input,
+                    ast: compileResult.ast,
+                    symbolTable: compileResult.symbolTable
+                  }), [])
+                : [];
+            clusters = clustering.clusterFeedback(validation.items, patterns);
+        } catch (e) {
+            clusters = [];
+        }
+    }
+    renderFeedbackClusters(clusters);
     showToast('Analysis complete!', 'success');
+}
+
+/**
+ * Renders the clustered Learning Summary (progressive disclosure):
+ * the legacy flat feed keeps its contract; this panel adds the
+ * category-level view with expandable items underneath.
+ */
+function renderFeedbackClusters(clusters) {
+    const container = $id('feedback-summary-container');
+    const results = $id('feedback-summary-results');
+    if (!container || !results) return;
+    if (!clusters || !clusters.length) { container.classList.add('hidden'); return; }
+    container.classList.remove('hidden');
+
+    const sums = _fbTry(() => PseudoPyLearning.register.feedbackClusterer.summarizeClusters(clusters), { error: 0, warning: 0, suggestion: 0, success: 0 });
+    const state = sums.error > 0 ? 'error' : (sums.warning > 0 ? 'warning' : (sums.suggestion > 0 ? 'suggestion' : 'success'));
+    const stateMeta = (PseudoPyLearning.LABELS.severity[state] || { label: '', icon: 'info' });
+
+    const cardHtml = clusters.map(c => {
+        const meta = PseudoPyLearning.LABELS.category[c.category] || { label: c.category, icon: 'circle-check', description: '' };
+        const state = _fbTry(() => PseudoPyLearning.register.feedbackClusterer.clusterState(c), 'success');
+        const stateIcon = (PseudoPyLearning.LABELS.severity[state] || {}).icon || 'circle-check';
+        const counts = [
+            c.errorCount ? 'error ' + c.errorCount : '',
+            c.warningCount ? 'warning ' + c.warningCount : '',
+            c.suggestionCount ? 'suggestion ' + c.suggestionCount : '',
+            c.successCount ? 'success ' + c.successCount : ''
+        ].filter(Boolean).join(' &middot; ');
+        const items = c.items.map(it => {
+            const sev = PseudoPyLearning.LABELS.severity[it.severity] || { label: it.severity, icon: 'info' };
+            return `
+            <li class="lc-item lc-item-${it.severity}">
+              <strong>${icon(sev.icon)} ${_fbEsc(it.message)}</strong>
+              <div class="lc-expl">${_fbEsc(it.explanation)}</div>
+              ${it.suggestion && it.suggestion !== 'Nothing to change here — keep using this approach.' ? `<div class="lc-sugg"><em>Suggestion:</em> ${_fbEsc(it.suggestion)}</div>` : ''}
+              ${it.line ? `<div class="lc-line">Line ${_fbEsc(String(it.line))}</div>` : ''}
+            </li>`;
+        }).join('');
+        return `
+        <div class="learning-cluster-card lc-state-${state}">
+          <div class="lc-head">
+            <span class="lc-icon">${icon(meta.icon)}</span>
+            <span class="lc-title">${_fbEsc(meta.label)}</span>
+            <span class="lc-counts">${counts}</span>
+            <span class="lc-state-icon">${icon(stateIcon)}</span>
+          </div>
+          <div class="lc-desc">${_fbEsc(meta.description || '')}</div>
+          <details class="lc-details">
+            <summary>View details</summary>
+            <ul class="lc-list">${items}</ul>
+          </details>
+        </div>`;
+    }).join('');
+
+    setHtml('feedback-summary-results', `
+      <div class="learning-summary-verdict lc-state-${state}">
+        ${icon(stateMeta.icon)} <strong>${_fbEsc(stateMeta.label)}:</strong> ${_fbEsc(_fbTry(() => PseudoPyLearning.register.feedbackClusterer.overallVerdict(clusters.flatMap(c => c.items))), '')}
+      </div>
+      <div class="learning-cluster-grid">${cardHtml}</div>
+    `);
+    refreshIcons(results);
 }
 
 /**
@@ -5385,6 +5519,9 @@ function clearEditor() {
     setText('line-count', '0 lines');
     currentErrorLineNumbers = [];
     updateGutter();
+    if (PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.learningUi) {
+        try { PseudoPyLearning.register.learningUi.clearLearningPanel(); } catch (e) { /* non-critical */ }
+    }
 }
 
 function clearOutput() {
@@ -5694,6 +5831,2066 @@ function setupRealtimeValidation() {
 
 
 /* ============================================================
+   PSEUDOPY LEARNING LAYER — Shared Types & Constants
+   ------------------------------------------------------------
+   Structured, deterministic model used by the validation engine,
+   pattern detector, feedback clustering, evidence store and the
+   instructor analytics. No AI / ML — every field is produced by
+   rule-based analysis of the compiler's AST, tokens or messages.
+
+   TypeScript is not used in this project, so the JSDoc typedefs
+   below are the canonical shape contract. All objects produced
+   by this layer are plain, serializable data (safe to store).
+   ============================================================ */
+
+/**
+ * Namespace object for the PseudoPy learning layer.
+ * All learning modules register factories and analysis functions
+ * onto this object instead of polluting the global scope.
+ */
+const PseudoPyLearning = { version: '1.0.0' };
+
+// Also expose on globalThis so tests, devtools and other classic-script
+// files can reach the namespace without relying on lexical scoping rules.
+if (typeof globalThis !== 'undefined') { globalThis.PseudoPyLearning = PseudoPyLearning; }
+
+/**
+ * Severity levels used across every learning result.
+ * Ordered weakest → strongest for clustering/ordering.
+ * @readonly @enum {string}
+ */
+PseudoPyLearning.SEVERITY = Object.freeze({
+    SUCCESS: 'success',
+    SUGGESTION: 'suggestion',
+    WARNING: 'warning',
+    ERROR: 'error'
+});
+
+PseudoPyLearning.SEVERITY_ORDER = Object.freeze([
+    PseudoPyLearning.SEVERITY.SUCCESS,
+    PseudoPyLearning.SEVERITY.SUGGESTION,
+    PseudoPyLearning.SEVERITY.WARNING,
+    PseudoPyLearning.SEVERITY.ERROR
+]);
+
+/**
+ * Fine-grained kind of a result. Used for evidence + gap analytics.
+ * @readonly @enum {string}
+ */
+PseudoPyLearning.RESULT_TYPE = Object.freeze({
+    SYNTAX: 'syntax',
+    STRUCTURE: 'structure',
+    LOGIC: 'logic',
+    VARIABLE: 'variable',
+    IO: 'io',
+    PATTERN: 'pattern',
+    TRANSLATION: 'translation',
+    READABILITY: 'readability',
+    BEST_PRACTICE: 'best-practice'
+});
+
+/**
+ * High-level feedback categories used to cluster results
+ * into the collapsible summary shown to students.
+ * @readonly @enum {string}
+ */
+PseudoPyLearning.FEEDBACK_CATEGORY = Object.freeze({
+    SYNTAX: 'syntax',
+    LOGIC: 'logic',
+    STRUCTURE: 'structure',
+    PROGRAMMING_PATTERN: 'programming-pattern',
+    READABILITY: 'readability',
+    TRANSLATION: 'translation',
+    BEST_PRACTICES: 'best-practices'
+});
+
+/**
+ * Programming patterns the pattern detector recognises.
+ * @readonly @enum {string}
+ */
+PseudoPyLearning.PATTERN_TYPE = Object.freeze({
+    SEQUENCE: 'sequence',
+    SELECTION: 'selection',
+    REPETITION: 'repetition',
+    COUNTER_CONTROLLED_LOOP: 'counter-controlled-loop',
+    SENTINEL_CONTROLLED_LOOP: 'sentinel-controlled-loop',
+    ACCUMULATOR: 'accumulator',
+    INPUT_PROCESS_OUTPUT: 'input-process-output',
+    VALIDATION_LOOP: 'validation-loop',
+    NESTED_SELECTION: 'nested-selection',
+    NESTED_ITERATION: 'nested-iteration',
+    FUNCTION: 'function'
+});
+
+/**
+ * Learning-gap categories presented to instructors in Phase 8.
+ * These are the curriculum dimensions a category level is measured on.
+ * @readonly @enum {string}
+ */
+PseudoPyLearning.GAP_CATEGORY = Object.freeze({
+    SYNTAX: 'syntax',
+    STRUCTURE: 'structure',
+    LOGIC: 'logic',
+    LOOP: 'loop',
+    CONDITIONAL: 'conditional',
+    VARIABLE: 'variable',
+    FUNCTION: 'function',
+    IO: 'io',
+    PATTERN: 'pattern',
+    TRANSLATION: 'translation',
+    READABILITY: 'readability'
+});
+
+/**
+ * Human-readable labels + icons for the public enum values.
+ * Icons are Lucide icon names (rendered with the icon() helper).
+ */
+PseudoPyLearning.LABELS = {
+    severity: {
+        [PseudoPyLearning.SEVERITY.ERROR]: { label: 'Error', icon: 'circle-x' },
+        [PseudoPyLearning.SEVERITY.WARNING]: { label: 'Warning', icon: 'triangle-alert' },
+        [PseudoPyLearning.SEVERITY.SUGGESTION]: { label: 'Suggestion', icon: 'lightbulb' },
+        [PseudoPyLearning.SEVERITY.SUCCESS]: { label: 'Great work', icon: 'circle-check' }
+    },
+    category: {
+        [PseudoPyLearning.FEEDBACK_CATEGORY.SYNTAX]: { label: 'Syntax', icon: 'braces', description: 'Pseudocode must follow the sentence forms the translator understands.' },
+        [PseudoPyLearning.FEEDBACK_CATEGORY.LOGIC]: { label: 'Logic', icon: 'brain', description: 'Conditions, calculations and output should describe the intended behaviour.' },
+        [PseudoPyLearning.FEEDBACK_CATEGORY.STRUCTURE]: { label: 'Structure', icon: 'layers', description: 'Program blocks (BEGIN/END, IF/ENDIF, loops) must open and close correctly.' },
+        [PseudoPyLearning.FEEDBACK_CATEGORY.PROGRAMMING_PATTERN]: { label: 'Programming Pattern', icon: 'puzzle', description: 'Recognised algorithmic structures used to solve the problem.' },
+        [PseudoPyLearning.FEEDBACK_CATEGORY.READABILITY]: { label: 'Readability', icon: 'align-left', description: 'Clear indentation, naming and line length make pseudocode easier to follow.' },
+        [PseudoPyLearning.FEEDBACK_CATEGORY.TRANSLATION]: { label: 'Translation', icon: 'braces', description: 'Behavior preserved when pseudocode becomes Python code.' },
+        [PseudoPyLearning.FEEDBACK_CATEGORY.BEST_PRACTICES]: { label: 'Best Practices', icon: 'award', description: 'Recommended habits that keep programs reliable and easy to maintain.' }
+    }
+};
+
+/** @typedef {'error'|'warning'|'suggestion'|'success'} LearningSeverity */
+
+/**
+ * @typedef {Object} ValidationResult
+ * A single structured finding about a pseudocode submission.
+ * @property {string} id              Stable unique id.
+ * @property {string} type            One of PseudoPyLearning.RESULT_TYPE.
+ * @property {LearningSeverity} severity One of PseudoPyLearning.SEVERITY.
+ * @property {string} category        One of PseudoPyLearning.FEEDBACK_CATEGORY.
+ * @property {string} message         Short headline (one sentence, actionable).
+ * @property {string} explanation     Why this matters for learning.
+ * @property {number|null} line       Source line the finding refers to (1-based).
+ * @property {string} suggestion      Concrete fix the student can apply.
+ * @property {string} example         Optional short before/after snippet.
+ */
+
+/**
+ * @typedef {Object} DetectedPattern
+ * @property {string} id
+ * @property {string} type            One of PseudoPyLearning.PATTERN_TYPE.
+ * @property {string} name            Human-friendly name, e.g. "Accumulator".
+ * @property {number} startLine       First line of the pattern block.
+ * @property {number} endLine         Last line of the pattern block.
+ * @property {string} explanation     What this pattern means / why it is useful.
+ * @property {string} pseudocodeSlice Example sourcing lines (display).
+ * @property {string} pythonSlice     Generated Python lines (display).
+ * @property {number} confidence      1 (fully rule-derived; kept for API stability).
+ */
+
+/**
+ * @typedef {Object} FeedbackCluster
+ * A group of validation results under one category for display.
+ * @property {string} category
+ * @property {string} label
+ * @property {string} icon
+ * @property {string} description
+ * @property {ValidationResult[]} items
+ * @property {number} errorCount
+ * @property {number} warningCount
+ * @property {number} suggestionCount
+ * @property {number} successCount
+ */
+
+/**
+ * @typedef {Object} TranslationResult
+ * Everything produced for a single translate/validate invocation.
+ * @property {boolean} valid
+ * @property {string} source
+ * @property {string} python
+ * @property {ValidationResult[]} validation
+ * @property {DetectedPattern[]} patterns
+ * @property {FeedbackCluster[]} clusters
+ * @property {Object} compile            The raw compile() output.
+ */
+
+/**
+ * @typedef {Object} EvidenceRecord
+ * One persisted translation attempt (Phase 6). Derived, never fake.
+ * @property {string} _docId
+ * @property {string} studentId
+ * @property {string} studentAccountId
+ * @property {string} instructorId
+ * @property {string} section
+ * @property {string|null} exerciseId
+ * @property {string|null} exercise
+ * @property {string} timestamp ISO string.
+ * @property {number} attemptNumber Per-student counter for the day.
+ * @property {boolean} valid
+ * @property {number} errorCount
+ * @property {number} warningCount
+ * @property {number} suggestionCount
+ * @property {Object} errorCategories   category → count.
+ * @property {Object} gapCategories     GAP_CATEGORY → error count (Phase 8).
+ * @property {string[]} patterns        Detected pattern types.
+ * @property {Object} compileMetadata   { complexity, tokenCount, totalTimeMs }
+ */
+
+/* ── Small helpers ─────────────────────────────────────────── */
+
+function learningId(prefix) {
+    const p = prefix || 'lv';
+    return p + '_' + Date.now().toString(36) + '_' + Math.floor(Math.random() * 1e6).toString(36);
+}
+
+function isInEnum(value, enumObj) {
+    return typeof value === 'string' && Object.values(enumObj).includes(value);
+}
+
+/* ── Factories ─────────────────────────────────────────────── */
+
+function defaultSuggestionForSeverity(severity) {
+    switch (severity) {
+        case PseudoPyLearning.SEVERITY.SUCCESS: return 'Nothing to change here — keep using this approach.';
+        case PseudoPyLearning.SEVERITY.SUGGESTION: return 'Consider applying the suggestion above.';
+        case PseudoPyLearning.SEVERITY.WARNING: return 'Review and update the reported line.';
+        case PseudoPyLearning.SEVERITY.ERROR:
+        default: return 'Fix the reported line before translating again.';
+    }
+}
+
+function defaultExplanationForCategory(category) {
+    const meta = PseudoPyLearning.LABELS.category[category];
+    return meta ? meta.description : 'This finding relates to the overall quality of the pseudocode.';
+}
+
+/**
+ * Create a ValidationResult with validated enums + sane defaults.
+ * Unknown enum values are coerced instead of silently accepted,
+ * so downstream consumers can always trust the shape & vocabulary.
+ * @param {Object} partial
+ * @returns {ValidationResult}
+ */
+function makeValidationResult(partial) {
+    const src = partial || {};
+    const type = isInEnum(src.type, PseudoPyLearning.RESULT_TYPE) ? src.type : PseudoPyLearning.RESULT_TYPE.SYNTAX;
+    const severity = isInEnum(src.severity, PseudoPyLearning.SEVERITY) ? src.severity : PseudoPyLearning.SEVERITY.WARNING;
+    const category = isInEnum(src.category, PseudoPyLearning.FEEDBACK_CATEGORY) ? src.category : defaultCategoryForType(type);
+    return {
+        id: src.id || learningId('vr'),
+        type: type,
+        severity: severity,
+        category: category,
+        message: String(src.message || ''),
+        explanation: String(src.explanation || defaultExplanationForCategory(category)),
+        line: typeof src.line === 'number' ? src.line : null,
+        suggestion: String(src.suggestion || defaultSuggestionForSeverity(severity)),
+        example: String(src.example || '')
+    };
+}
+
+/**
+ * Map a fine-grained RESULT_TYPE to its FEEDBACK_CATEGORY.
+ * @param {string} type
+ * @returns {string}
+ */
+function defaultCategoryForType(type) {
+    switch (type) {
+        case PseudoPyLearning.RESULT_TYPE.SYNTAX: return PseudoPyLearning.FEEDBACK_CATEGORY.SYNTAX;
+        case PseudoPyLearning.RESULT_TYPE.STRUCTURE: return PseudoPyLearning.FEEDBACK_CATEGORY.STRUCTURE;
+        case PseudoPyLearning.RESULT_TYPE.LOGIC:
+        case PseudoPyLearning.RESULT_TYPE.VARIABLE:
+        case PseudoPyLearning.RESULT_TYPE.IO: return PseudoPyLearning.FEEDBACK_CATEGORY.LOGIC;
+        case PseudoPyLearning.RESULT_TYPE.PATTERN: return PseudoPyLearning.FEEDBACK_CATEGORY.PROGRAMMING_PATTERN;
+        case PseudoPyLearning.RESULT_TYPE.READABILITY: return PseudoPyLearning.FEEDBACK_CATEGORY.READABILITY;
+        case PseudoPyLearning.RESULT_TYPE.TRANSLATION: return PseudoPyLearning.FEEDBACK_CATEGORY.TRANSLATION;
+        case PseudoPyLearning.RESULT_TYPE.BEST_PRACTICE:
+        default: return PseudoPyLearning.FEEDBACK_CATEGORY.BEST_PRACTICES;
+    }
+}
+
+/**
+ * Create a DetectedPattern backed by the AST walker data.
+ * @param {Object} partial
+ * @returns {DetectedPattern}
+ */
+function makeDetectedPattern(partial) {
+    const src = partial || {};
+    const type = isInEnum(src.type, PseudoPyLearning.PATTERN_TYPE) ? src.type : PseudoPyLearning.PATTERN_TYPE.SEQUENCE;
+    return {
+        id: src.id || learningId('pt'),
+        type: type,
+        name: String(src.name || src.type || type),
+        startLine: typeof src.startLine === 'number' ? src.startLine : 1,
+        endLine: typeof src.endLine === 'number' ? src.endLine : (typeof src.startLine === 'number' ? src.startLine : 1),
+        explanation: String(src.explanation || ''),
+        pseudocodeSlice: String(src.pseudocodeSlice || ''),
+        pythonSlice: String(src.pythonSlice || ''),
+        confidence: 1
+    };
+}
+
+/**
+ * Create a FeedbackCluster (initial counts are zero; use fold* helpers).
+ * @param {string} category
+ * @returns {FeedbackCluster}
+ */
+function makeFeedbackCluster(category) {
+    const meta = (PseudoPyLearning.LABELS.category[category] || {});
+    return {
+        category: category in PseudoPyLearning.LABELS.category ? category : PseudoPyLearning.FEEDBACK_CATEGORY.BEST_PRACTICES,
+        label: meta.label || category,
+        icon: meta.icon || 'circle-check',
+        description: meta.description || '',
+        items: [],
+        errorCount: 0,
+        warningCount: 0,
+        suggestionCount: 0,
+        successCount: 0
+    };
+}
+
+/**
+ * Plugin registry — lets other modules contribute helpers without
+ * depending on file ordering beyond types.js itself.
+ */
+PseudoPyLearning.register = {};
+PseudoPyLearning.types = {
+    learningId: learningId,
+    isInEnum: isInEnum,
+    makeValidationResult: makeValidationResult,
+    makeDetectedPattern: makeDetectedPattern,
+    makeFeedbackCluster: makeFeedbackCluster,
+    defaultCategoryForType: defaultCategoryForType
+};/* ============================================================
+   PSEUDOPY LEARNING LAYER — Validation Engine
+   ------------------------------------------------------------
+   Converts the compiler pipeline output (errors + warnings + AST
+   + tokens) into a deterministic, structured list of ValidationResult
+   objects. Every item carries severity, category, a plain-language
+   explanation, a concrete suggestion and an example, so feedback
+   can be rendered AND persisted as learning evidence.
+
+   The existing parser / semantic analyzer are NOT modified: we
+   classify their output and add educator checks on top.
+   ============================================================ */
+
+/**
+ * Map a raw compiler error/warning message to a fine-grained RESULT_TYPE.
+ * Ordered rule list — the first matching rule wins.
+ * @param {string} message
+ * @returns {string} A PseudoPyLearning.RESULT_TYPE value.
+ */
+function classifyCompilerIssue(message) {
+    const m = String(message || '').toUpperCase();
+
+    // 1. Block / structure problems (BEGIN/END, IF..ENDIF, loops).
+    if (
+        m.includes('UNCLOSED') ||
+        m.includes('BLOCK MISMATCH') ||
+        m.includes('MISSING BEGIN') ||
+        m.includes('MISSING END') ||
+        m.includes('UNEXPECTED END') ||
+        m.includes('END STATEMENT') ||
+        m.includes('SENTINEL') ||
+        m.includes('REQUIRES IN') ||
+        m.includes('REQUIRES FROM') ||
+        m.includes('REQUIRES TO') ||
+        /STATEMENT MISSING/.test(m)
+    ) {
+        return PseudoPyLearning.RESULT_TYPE.STRUCTURE;
+    }
+
+    // 2. Variable declaration / usage problems.
+    if (
+        m.includes('DECLARE') ||
+        m.includes('UNDECLARED') ||
+        m.includes('NOT DECLARED') ||
+        m.includes('INCREMENT') ||
+        m.includes('DECREMENT')
+    ) {
+        return PseudoPyLearning.RESULT_TYPE.VARIABLE;
+    }
+
+    // 3. Input / output statement problems.
+    if (
+        m.includes('INPUT') ||
+        m.includes('PROMPT') ||
+        m.includes(' AFTER READ')
+    ) {
+        return PseudoPyLearning.RESULT_TYPE.IO;
+    }
+
+    // 4. Plain syntax / lexical problems.
+    if (
+        m.includes('UNRECOGNIZED') ||
+        m.includes('UNTERMINATED') ||
+        m.includes('UNSUPPORTED CHARACTER') ||
+        m.includes('UNEXPECTED TOKEN') ||
+        m.includes('MISSING OPERAND') ||
+        m.includes('LEADING ZERO') ||
+        m.includes('MISSING CLOSING') ||
+        m.includes('EXPECTED')
+    ) {
+        return PseudoPyLearning.RESULT_TYPE.SYNTAX;
+    }
+
+    // 5. Leftover textual hints default to syntax.
+    return PseudoPyLearning.RESULT_TYPE.SYNTAX;
+}
+
+/**
+ * Explanations are written to teach, not just restate the problem.
+ * @param {string} type RESULT_TYPE value.
+ * @param {string} message Original compiler message.
+ * @returns {string} Plain-language reason this matters.
+ */
+function explainIssue(type, message) {
+    const m = String(message || '').toUpperCase();
+    switch (type) {
+        case PseudoPyLearning.RESULT_TYPE.STRUCTURE:
+            if (m.includes('BEGIN')) {
+                return 'Every pseudocode program opens with a BEGIN statement so the translator knows where the code starts. Without it the compiler cannot build the program structure.';
+            }
+            if (m.includes('END')) {
+                return 'Every block you open (IF, FOR, WHILE, FUNCTION) must be closed. The translator uses these closing lines to understand which statements belong inside the block.';
+            }
+            if (m.includes('THEN')) {
+                return 'An IF statement always needs the sentinel keyword THEN after its condition. It signals that the following indented lines are the true-branch.';
+            }
+            return 'The structure of the program (how blocks are opened and closed) is not valid. Fix the blocks in the order the error messages describe.';
+        case PseudoPyLearning.RESULT_TYPE.VARIABLE:
+            if (m.includes('DECLARE') || m.includes('NOT DECLARED')) {
+                return 'Declaring variables with DECLARE keeps the translator aware of their type, which produces safer Python code and prevents accidental typos from silently creating new variables.';
+            }
+            return 'Variables in pseudocode should be declared with DECLARE name AS type before first use so the program behaves predictably.';
+        case PseudoPyLearning.RESULT_TYPE.IO:
+            return 'INPUT statements read a value, and DISPLAY/PRINT/OUTPUT statements write one. The compiler needs a valid variable name (for INPUT) or expression (for DISPLAY) on these lines.';
+        case PseudoPyLearning.RESULT_TYPE.LOGIC:
+            return 'The logic of an expression or condition does not describe the intended behaviour. Check the numbers, operators and comparisons on the reported line.';
+        case PseudoPyLearning.RESULT_TYPE.TRANSLATION:
+            return 'This constructs behaviour in a way that is not reliably preserved when the pseudocode becomes Python. Consider restructuring it.';
+        case PseudoPyLearning.RESULT_TYPE.READABILITY:
+            return 'Readable pseudocode is reviewed and debugged faster. Small, clear lines beat long, dense ones.';
+        case PseudoPyLearning.RESULT_TYPE.SYNTAX:
+        default:
+            return 'Pseudocode must follow the sentence forms the translator understands. The reported line does not fit any known statement form.';
+    }
+}
+
+/**
+ * Default constructive suggestion for a category.
+ * @param {string} type
+ * @returns {string}
+ */
+function suggestionForType(type) {
+    switch (type) {
+        case PseudoPyLearning.RESULT_TYPE.STRUCTURE: return 'Match every opening block with the correct closing keyword (END IF, END FOR, END WHILE).';
+        case PseudoPyLearning.RESULT_TYPE.VARIABLE: return 'Add DECLARE <name> AS <type> before using the variable.';
+        case PseudoPyLearning.RESULT_TYPE.IO: return 'Write INPUT <variable> to read, or DISPLAY <expression> to show a result.';
+        case PseudoPyLearning.RESULT_TYPE.LOGIC: return 'Re-check the operators, values and conditions on the reported line.';
+        case PseudoPyLearning.RESULT_TYPE.TRANSLATION: return 'Rewrite the statement using supported pseudocode forms.';
+        case PseudoPyLearning.RESULT_TYPE.READABILITY: return 'Split long lines and use meaningful, short names.';
+        case PseudoPyLearning.RESULT_TYPE.SYNTAX:
+        default: return 'Consult the syntax guide and correct the reported line.';
+    }
+}
+
+/**
+ * Small illustrative snippet shown with the feedback item.
+ * @param {string} type
+ * @returns {string}
+ */
+function exampleForType(type) {
+    switch (type) {
+        case PseudoPyLearning.RESULT_TYPE.STRUCTURE: return 'END IF, END FOR, END WHILE';
+        case PseudoPyLearning.RESULT_TYPE.VARIABLE: return 'DECLARE total AS INTEGER';
+        case PseudoPyLearning.RESULT_TYPE.IO: return 'INPUT name\nDISPLAY "Hello", name';
+        case PseudoPyLearning.RESULT_TYPE.LOGIC: return 'IF score >= 50 THEN';
+        case PseudoPyLearning.RESULT_TYPE.TRANSLATION: return 'Use SET x TO <expression>';
+        case PseudoPyLearning.RESULT_TYPE.READABILITY: return 'total = total + item\n(one idea per line)';
+        case PseudoPyLearning.RESULT_TYPE.SYNTAX:
+        default: return 'SET variable TO value';
+    }
+}
+
+/**
+ * Build a ValidationResult from a single compiler error/warning.
+ * @param {Object} issue { line, message, suggestion }
+ * @param {boolean} isWarning
+ * @returns {ValidationResult}
+ */
+function resultFromCompilerIssue(issue, isWarning) {
+    const message = String((issue && issue.message) || 'An issue was detected in the pseudocode.');
+    const type = classifyCompilerIssue(message);
+    return makeValidationResult({
+        type: type,
+        severity: isWarning ? PseudoPyLearning.SEVERITY.WARNING : PseudoPyLearning.SEVERITY.ERROR,
+        message: message,
+        explanation: explainIssue(type, message),
+        line: typeof issue.line === 'number' ? issue.line : null,
+        suggestion: (issue && issue.suggestion) || suggestionForType(type),
+        example: exampleForType(type)
+    });
+}
+
+/* ── AST helpers ───────────────────────────────────────────── */
+
+/**
+ * Walk the AST to find the maximum block nesting depth.
+ * Blocks: IfStatement (elseIfs/elseBody), loops, FunctionDef.
+ * @param {Object} ast
+ * @returns {number}
+ */
+function computeAstMaxNesting(ast) {
+    let maxDepth = 0;
+    function walk(node, depth) {
+        if (!node) return;
+        if (depth > maxDepth) maxDepth = depth;
+
+        const body = [];
+        switch (node.type) {
+            case 'Program': node.body.forEach(n => body.push(n)); break;
+            case 'IfStatement':
+                node.body && node.body.forEach(n => body.push(n));
+                if (node.elseIfs) node.elseIfs.forEach(e => e.body && e.body.forEach(n => body.push(n)));
+                if (node.elseBody) node.elseBody.forEach(n => body.push(n));
+                walkChildren(body, depth + 1);
+                return;
+            case 'WhileStatement':
+            case 'ForStatement':
+            case 'ForEachStatement':
+                node.body && node.body.forEach(n => body.push(n));
+                walkChildren(body, depth + 1);
+                return;
+            case 'FunctionDef':
+                node.body && node.body.forEach(n => body.push(n));
+                walkChildren(body, depth + 1);
+                return;
+            default:
+                walkChildren(node.body, depth);
+                return;
+        }
+    }
+    function walkChildren(list, depth) {
+        (list || []).forEach(n => walk(n, depth));
+    }
+    walk(ast, 0);
+    return maxDepth;
+}
+
+/**
+ * Count AST nodes and factual composition for positive feedback.
+ * @param {Object} ast
+ * @returns {{statements:number, declared:number, outputs:number, loops:number, conditionals:number}}
+ */
+function summarizeAst(ast) {
+    const summary = { statements: 0, declared: 0, outputs: 0, loops: 0, conditionals: 0, assigned: 0, inputs: 0, functions: 0 };
+    function walk(node) {
+        if (!node) return;
+        if (Array.isArray(node)) { node.forEach(walk); return; }
+        summary.statements++;
+        switch (node.type) {
+            case 'DeclareStatement': summary.declared++; break;
+            case 'AssignmentStatement': summary.assigned++; break;
+            case 'PrintStatement': summary.outputs++; break;
+            case 'InputStatement': summary.inputs++; break;
+            case 'WhileStatement':
+            case 'ForStatement':
+            case 'ForEachStatement': summary.loops++; break;
+            case 'IfStatement': summary.conditionals++; break;
+            case 'FunctionDef': summary.functions++; break;
+        }
+        node.body && walk(node.body);
+        if (node.elseIfs) node.elseIfs.forEach(walk);
+        if (node.elseBody) walk(node.elseBody);
+    }
+    if (ast && ast.body) ast.body.forEach(walk);
+    return summary;
+}
+
+/* ── Educator checks (valid programs only) ─────────────────── */
+
+/**
+ * Additional encouraging / advisory results produced for valid code.
+ * These reuse the same AST already compiled, so they stay cheap and
+ * fully deterministic. Original compiler warnings are NOT repeated.
+ * @param {Object} ctx { source, ast, tokens, hasVariableWarnings }
+ * @returns {ValidationResult[]}
+ */
+function runEducationalChecks(ctx) {
+    const items = [];
+    const source = String(ctx.source || '');
+    const lines = source.split('\n');
+    const trimmedLines = lines.map(l => l.trim()).filter(l => l.length > 0);
+    const summary = summarizeAst(ctx.ast);
+
+    const kwTokens = (ctx.tokens || []).filter(t => (t.type === 'KEYWORD' || t.type === 'keyword')).map(t => String(t.value || '').toUpperCase());
+
+    // 1. Translation success stays encouraging.
+    items.push(makeValidationResult({
+        type: PseudoPyLearning.RESULT_TYPE.BEST_PRACTICE,
+        severity: PseudoPyLearning.SEVERITY.SUCCESS,
+        message: 'Your pseudocode is valid and was translated into Python with no syntax errors.',
+        explanation: 'The translator successfully understood every statement. Review the generated Python to confirm the behaviour matches your intent.',
+        line: null
+    }));
+
+    // 2. Explicit typing recommendation (only when not already warned).
+    if (!ctx.hasVariableWarnings && summary.statements > 0 && summary.declared === 0 && summary.assigned > 0) {
+        items.push(makeValidationResult({
+            type: PseudoPyLearning.RESULT_TYPE.BEST_PRACTICE,
+            severity: PseudoPyLearning.SEVERITY.SUGGESTION,
+            message: 'Consider declaring your variables with DECLARE statements.',
+            explanation: 'DECLARE x AS INTEGER records the type of each variable, which lets the translator generate safer Python and helps readers understand the data.',
+            suggestion: 'Add DECLARE lines before the variables are first assigned.',
+            example: 'DECLARE total AS INTEGER'
+        }));
+    }
+
+    // 3. Output visibility.
+    if (summary.outputs > 0) {
+        items.push(makeValidationResult({
+            type: PseudoPyLearning.RESULT_TYPE.BEST_PRACTICE,
+            severity: PseudoPyLearning.SEVERITY.SUCCESS,
+            message: 'The program displays its results with DISPLAY/PRINT statements.',
+            explanation: 'Showing the outcome (or at least progress) is what makes an algorithm useful to a user.',
+            line: null
+        }));
+    } else if (summary.statements > 0) {
+        items.push(makeValidationResult({
+            type: PseudoPyLearning.RESULT_TYPE.BEST_PRACTICE,
+            severity: PseudoPyLearning.SEVERITY.SUGGESTION,
+            message: 'Add DISPLAY statements to show the result of the computation.',
+            explanation: 'A program that computes but never shows a result cannot be verified or used by anyone.',
+            suggestion: 'Add DISPLAY followed by the variable or expression you want to show.',
+            example: 'DISPLAY total'
+        }));
+    }
+
+    // 4. Indentation / readability.
+    const indentedLines = lines.filter(l => l.match(/^\s+/));
+    if (indentedLines.length > 0) {
+        items.push(makeValidationResult({
+            type: PseudoPyLearning.RESULT_TYPE.READABILITY,
+            severity: PseudoPyLearning.SEVERITY.SUCCESS,
+            message: 'You indented the body of your blocks.',
+            explanation: 'Consistent indentation mirrors the Python output and makes the control flow visible at a glance.',
+            line: null
+        }));
+    } else if (lines.length > 3) {
+        items.push(makeValidationResult({
+            type: PseudoPyLearning.RESULT_TYPE.READABILITY,
+            severity: PseudoPyLearning.SEVERITY.SUGGESTION,
+            message: 'Indent the statements inside IF/FOR/WHILE blocks.',
+            explanation: 'Indentation shows which statements belong to each block — the same indentation that the generated Python will use.',
+            suggestion: 'Press Tab or space once inside each block.',
+            example: 'WHILE x < n DO\n  x = x + 1\nENDWHILE'
+        }));
+    }
+
+    // 5. Long lines.
+    lines.forEach((raw, idx) => {
+        if (raw.length > 72) {
+            items.push(makeValidationResult({
+                type: PseudoPyLearning.RESULT_TYPE.READABILITY,
+                severity: PseudoPyLearning.SEVERITY.SUGGESTION,
+                message: 'Line ' + (idx + 1) + ' is ' + raw.length + ' characters long.',
+                explanation: 'Long lines are hard to read in an editor and hide their true structure. One idea per line is the pseudocode ideal.',
+                suggestion: 'Split the line into smaller steps.',
+                line: idx + 1
+            }));
+        }
+    });
+
+    // 6. Nesting depth.
+    const maxDepth = computeAstMaxNesting(ctx.ast);
+    if (maxDepth > 3) {
+        items.push(makeValidationResult({
+            type: PseudoPyLearning.RESULT_TYPE.STRUCTURE,
+            severity: PseudoPyLearning.SEVERITY.WARNING,
+            message: 'Your program nests control blocks ' + maxDepth + ' levels deep.',
+            explanation: 'Deeply nested structures are harder to read and debug. Consider extracting a function or simplifying the conditions.',
+            suggestion: 'Extract repeated inner logic into a FUNCTION or flatten conditions with AND/OR.',
+            line: null
+        }));
+    } else if (maxDepth > 0) {
+        items.push(makeValidationResult({
+            type: PseudoPyLearning.RESULT_TYPE.STRUCTURE,
+            severity: PseudoPyLearning.SEVERITY.SUCCESS,
+            message: 'Nesting depth is ' + maxDepth + ' level(s).',
+            explanation: 'Shallow nesting keeps each block easy to follow.',
+            line: null
+        }));
+    }
+
+    // 7. Control flow recognition (positive boosts for later analytics).
+    if (summary.loops > 0 && summary.conditionals > 0) {
+        items.push(makeValidationResult({
+            type: PseudoPyLearning.RESULT_TYPE.LOGIC,
+            severity: PseudoPyLearning.SEVERITY.SUCCESS,
+            message: 'The program combines loops and conditional branching.',
+            explanation: 'Combining repetition with decisions is a core building block of most algorithms.',
+            line: null
+        }));
+    } else if (summary.loops > 0) {
+        items.push(makeValidationResult({
+            type: PseudoPyLearning.RESULT_TYPE.LOGIC,
+            severity: PseudoPyLearning.SEVERITY.SUCCESS,
+            message: 'The program repeats work with a loop.',
+            explanation: 'A single pass of the block is written once, and the loop controls how many times it runs.',
+            line: null
+        }));
+    }
+
+    return items;
+}
+
+/* ── Public API ────────────────────────────────────────────── */
+
+/**
+ * Run the full deterministic validation over a compile() result.
+ * @param {Object} compileResult Output of PseudocodeCompiler.compile().
+ * @param {string} source The original pseudocode text.
+ * @returns {{valid:boolean, items:ValidationResult[]}}
+ */
+function runValidation(compileResult, source) {
+    const result = compileResult || {};
+    const valid = !!result.valid;
+    const items = [];
+
+    const errors = Array.isArray(result.errors) ? result.errors : [];
+    const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+
+    errors.forEach(err => items.push(resultFromCompilerIssue(err, false)));
+    warnings.forEach(warn => items.push(resultFromCompilerIssue(warn, true)));
+
+    if (valid && errors.length === 0) {
+        const hasVariableWarnings = warnings.some(w => {
+            const m = String(w.message || '').toUpperCase();
+            return m.includes('DECLARE') || m.includes('UNDECLARED') || m.includes('NOT DECLARED');
+        });
+        items.push(...runEducationalChecks({
+            source: source,
+            ast: result.ast || null,
+            tokens: result.tokens || [],
+            hasVariableWarnings: hasVariableWarnings
+        }));
+    }
+
+    items.sort(compareValidationResults);
+    return { valid: valid, items: items };
+}
+
+/**
+ * Ordering: ERRORs first, then WARNING, SUGGESTION, SUCCESS; by line.
+ * @param {ValidationResult} a
+ * @param {ValidationResult} b
+ * @returns {number}
+ */
+function compareValidationResults(a, b) {
+    const rank = PseudoPyLearning.SEVERITY_ORDER.indexOf(a.severity) - PseudoPyLearning.SEVERITY_ORDER.indexOf(b.severity);
+    if (rank !== 0) return rank;
+    if (a.line === null && b.line === null) return 0;
+    if (a.line === null) return 1;
+    if (b.line === null) return -1;
+    return a.line - b.line;
+}
+
+/**
+ * Reduce a ValidationResult[] into compact counts.
+ * Used by the evidence store and analytics (Phases 6-9).
+ * @param {ValidationResult[]} items
+ * @returns {{bySeverity:Object, byCategory:Object, byType:Object}}
+ */
+function summarizeValidation(items) {
+    const bySeverity = {};
+    const byCategory = {};
+    const byType = {};
+    (items || []).forEach(item => {
+        bySeverity[item.severity] = (bySeverity[item.severity] || 0) + 1;
+        byCategory[item.category] = (byCategory[item.category] || 0) + 1;
+        byType[item.type] = (byType[item.type] || 0) + 1;
+    });
+    return { bySeverity: bySeverity, byCategory: byCategory, byType: byType };
+}
+
+/**
+ * Map a RESULT_TYPE to the instructor-facing GAP_CATEGORY.
+ * @param {string} resultType
+ * @returns {string}
+ */
+function gapCategoryForResultType(resultType) {
+    switch (resultType) {
+        case PseudoPyLearning.RESULT_TYPE.STRUCTURE: return PseudoPyLearning.GAP_CATEGORY.STRUCTURE;
+        case PseudoPyLearning.RESULT_TYPE.VARIABLE: return PseudoPyLearning.GAP_CATEGORY.VARIABLE;
+        case PseudoPyLearning.RESULT_TYPE.LOGIC: return PseudoPyLearning.GAP_CATEGORY.LOGIC;
+        case PseudoPyLearning.RESULT_TYPE.IO: return PseudoPyLearning.GAP_CATEGORY.IO;
+        case PseudoPyLearning.RESULT_TYPE.PATTERN: return PseudoPyLearning.GAP_CATEGORY.PATTERN;
+        case PseudoPyLearning.RESULT_TYPE.TRANSLATION: return PseudoPyLearning.GAP_CATEGORY.TRANSLATION;
+        case PseudoPyLearning.RESULT_TYPE.READABILITY: return PseudoPyLearning.GAP_CATEGORY.READABILITY;
+        case PseudoPyLearning.RESULT_TYPE.SYNTAX:
+        default: return PseudoPyLearning.GAP_CATEGORY.SYNTAX;
+    }
+}
+
+PseudoPyLearning.register.validationEngine = {
+    runValidation: runValidation,
+    classifyCompilerIssue: classifyCompilerIssue,
+    summarizeValidation: summarizeValidation,
+    gapCategoryForResultType: gapCategoryForResultType,
+    computeAstMaxNesting: computeAstMaxNesting
+};/* ============================================================
+   PSEUDOPY LEARNING LAYER — Pattern Detector
+   ------------------------------------------------------------
+   Walks the parser AST and recognises the common algorithmic
+   patterns a beginner is expected to master. Fully deterministic:
+   every detection decision comes from AST node types, expression
+   tokens or source ranges. Output is a list of DetectedPattern
+   objects that the feedback clustering (Phase 3) and the evidence
+   store (Phase 6) can consume.
+   ============================================================ */
+
+/* Pattern display metadata (Lucide icons). */
+Object.assign(PseudoPyLearning.LABELS.pattern || (PseudoPyLearning.LABELS.pattern = {}), {
+    [PseudoPyLearning.PATTERN_TYPE.SEQUENCE]: { label: 'Sequence', icon: 'list', description: 'Statements run one after another, top to bottom.' },
+    [PseudoPyLearning.PATTERN_TYPE.SELECTION]: { label: 'Selection', icon: 'git-branch', description: 'A decision chooses which block of statements runs.' },
+    [PseudoPyLearning.PATTERN_TYPE.REPETITION]: { label: 'Repetition', icon: 'refresh-cw', description: 'A block of statements repeats under control of a loop.' },
+    [PseudoPyLearning.PATTERN_TYPE.COUNTER_CONTROLLED_LOOP]: { label: 'Counter-Controlled Loop', icon: 'repeat', description: 'A FOR loop that repeats a fixed number of times using a counter.' },
+    [PseudoPyLearning.PATTERN_TYPE.SENTINEL_CONTROLLED_LOOP]: { label: 'Sentinel-Controlled Loop', icon: 'flag', description: 'A loop that keeps reading input until a sentinel value ends it.' },
+    [PseudoPyLearning.PATTERN_TYPE.ACCUMULATOR]: { label: 'Accumulator', icon: 'sigma', description: 'A total (or product) built up by adding to it during each iteration.' },
+    [PseudoPyLearning.PATTERN_TYPE.INPUT_PROCESS_OUTPUT]: { label: 'Input-Process-Output', icon: 'wholefish', description: 'Read values, process them, then display the result.' },
+    [PseudoPyLearning.PATTERN_TYPE.VALIDATION_LOOP]: { label: 'Validation Loop', icon: 'shield-check', description: 'A loop that re-reads input until the value satisfies a rule.' },
+    [PseudoPyLearning.PATTERN_TYPE.NESTED_SELECTION]: { label: 'Nested Selection', icon: 'network', description: 'A decision placed inside another decision.' },
+    [PseudoPyLearning.PATTERN_TYPE.NESTED_ITERATION]: { label: 'Nested Iteration', icon: 'container', description: 'A loop placed inside the body of another loop.' },
+    [PseudoPyLearning.PATTERN_TYPE.FUNCTION]: { label: 'Function / Procedure', icon: 'puzzle', description: 'A named, reusable unit of behavior with parameters.' }
+});
+
+const PATTERN_SLICE_LIMIT = 8; // lines per slice shown to the student
+
+/**
+ * Collect the deepest line covered by an AST subtree.
+ * @param {Object} node
+ * @returns {number}
+ */
+function patternNodeEndLine(node) {
+    if (!node) return 1;
+    const list = [];
+    if (node.body && Array.isArray(node.body)) list.push(...node.body);
+    if (node.elseIfs && Array.isArray(node.elseIfs)) list.push(...node.elseIfs);
+    const candidates = [node.line || 1];
+    for (const child of list) candidates.push(patternNodeEndLine(child));
+    if (node.elseBody && Array.isArray(node.elseBody)) {
+        for (const child of node.elseBody) candidates.push(patternNodeEndLine(child));
+    }
+    return Math.max.apply(null, candidates);
+}
+
+/**
+ * True when a statement appears somewhere inside another statement's body.
+ * Used to distinguish "Nested Selection" / "Nested Iteration" from
+ * top-level occurrences, without sacrificing the type-specific pattern.
+ * @param {Object} outer
+ * @param {Object} inner
+ * @returns {boolean}
+ */
+function containsNode(outer, inner) {
+    if (!outer || !inner) return false;
+    const lists = [outer.body];
+    if (outer.elseIfs) lists.push(...outer.elseIfs.map(e => e.body));
+    if (outer.elseBody) lists.push(outer.elseBody);
+    for (const list of lists) {
+        if (!Array.isArray(list)) continue;
+        for (const child of list) {
+            if (child === inner) return true;
+            if (containsNode(child, inner)) return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Slices source lines [startLine..endLine] into a compact display string.
+ * @param {string} source
+ * @param {number} startLine
+ * @param {number} endLine
+ * @returns {string}
+ */
+function sourceSlice(source, startLine, endLine) {
+    const lines = String(source || '').split('\n');
+    let out = [];
+    for (let i = Math.max(0, startLine - 1); i < Math.min(lines.length, endLine); i++) {
+        out.push(lines[i].trim());
+        if (out.length >= PATTERN_SLICE_LIMIT) break;
+    }
+    return out.filter(Boolean).join('\n');
+}
+
+/**
+ * Regenerates the Python projection of a single AST subtree by wrapping
+ * it in a Program and reusing the existing CodeGenerator (Phase 10 keeps
+ * shared logic in one place). Helper preludes are trimmed for readability.
+ * @param {Object} node
+ * @param {Object} symbolTable Plain { id: {} } object from compile().
+ * @returns {string}
+ */
+function patternPythonSlice(node, symbolTable) {
+    try {
+        const symMap = symbolTable && typeof symbolTable.entries === 'function' ? symbolTable : (symbolTable ? new Map(Object.entries(symbolTable || {})) : new Map());
+        const generator = new CodeGenerator(symMap);
+        const program = node && node.type === 'Program' ? node : { type: 'Program', body: [node] };
+        const generated = generator.generate(program) || '';
+        let lines = generated.split('\n');
+        // Trim reusable helper preludes (def _pseudopy_range/_pseudopy_input_cast).
+        const blank = lines.lastIndexOf('');
+        if (blank !== -1) lines = lines.slice(blank + 1);
+        return lines.filter(Boolean).slice(0, PATTERN_SLICE_LIMIT).join('\n');
+    } catch (e) {
+        return '';
+    }
+}
+
+/**
+ * Expression token helper: the visible operand/operator values.
+ * @param {Object} expr AST expression node with .tokens
+ * @returns {string[]}
+ */
+function exprValues(expr) {
+    if (!expr || !Array.isArray(expr.tokens)) return [];
+    return expr.tokens.map(t => String(t.value || ''));
+}
+
+/**
+ * True when the statement carries a declaration type hint (INTEGER...).
+ * @param {Object} node
+ * @returns {string}
+ */
+function declaredAssignments(ast) {
+    const out = [];
+    function walk(node) {
+        if (!node) return;
+        if (node.type === 'AssignmentStatement') out.push(node);
+        walk(node.body);
+        if (node.elseIfs) node.elseIfs.forEach(walk);
+        if (node.elseBody) walk(node.elseBody);
+    }
+    walk(ast);
+    return out;
+}
+
+/**
+ * Detect the accumulator/counter variables initialised before each loop.
+ * Returns Map id → initialisation line for simple constant assignments.
+ * @param {Object} programBody
+ * @returns {Map<string, number>}
+ */
+function collectInitializers(programBody) {
+    const init = new Map();
+    (programBody || []).forEach(node => {
+        if (node.type === 'DeclareStatement') init.set(node.id, node.line || 1);
+        else if (node.type === 'AssignmentStatement') {
+            const vals = exprValues(node.expr);
+            if (vals.length === 1 && /^\d+(\.\d+)?$/.test(vals[0])) init.set(node.id, node.line || 1);
+        }
+    });
+    return init;
+}
+
+/**
+ * True when an assignment inside a loop updates an already-initialised
+ * variable with an arithmetic operation involving itself (the classic
+ * accumulator `total = total + item` / counter `count = count + 1`).
+ * @param {Object} assign AssignmentStatement
+ * @param {Map<string, number>} initializers
+ */
+function isAccumulatorAssignment(assign, initializers) {
+    if (!assign || !assign.expr) return false;
+    if (!initializers.has(assign.id)) return false;
+    const vals = exprValues(assign.expr);
+    const hasSelf = vals.includes(assign.id);
+    const hasOp = vals.some(v => ['+', '-', '*', '/', '//', '%', 'MOD', 'DIV'].includes(v));
+    return hasSelf && hasOp;
+}
+
+/**
+ * Whether the loop body reads input into the given variable set.
+ * @param {Object[]} body
+ * @returns {string[]} variable names read via INPUT/READ in the body
+ */
+function inputVarsInBody(body, acc) {
+    acc = acc || [];
+    (body || []).forEach(node => {
+        if (node.type === 'InputStatement') acc.push(node.id);
+        inputVarsInBody(node.body, acc);
+        if (node.elseIfs) node.elseIfs.forEach(e => inputVarsInBody(e.body, acc));
+        if (node.elseBody) inputVarsInBody(node.elseBody, acc);
+    });
+    return acc;
+}
+
+function containsKeyword(values, keywords) {
+    return values.some(v => keywords.includes(v.toUpperCase()));
+}
+
+/**
+ * Classify a WHILE loop into Sentinel / Validation / Repetition.
+ * @param {Object} node WhileStatement
+ * @param {string[]} bodyInputs
+ * @returns {string} PATTERN_TYPE value
+ */
+function classifyWhile(node, bodyInputs) {
+    const cond = exprValues(node.condition).map(v => v.toUpperCase());
+    const condHasInputVar = bodyInputs.some(name => cond.includes(name.toUpperCase()));
+    const hasString = containsKeyword(cond, []);
+    const rawStrings = (node.condition.tokens || []).filter(t => t.type === 'STRING').length;
+    const hasCompare = ['<', '>', '=', '==', '!=', '<>', 'MOD', 'DIV'].some(op => cond.includes(op));
+
+    if (!condHasInputVar) return PseudoPyLearning.PATTERN_TYPE.REPETITION;
+    if (rawStrings > 0 || hasString) return PseudoPyLearning.PATTERN_TYPE.SENTINEL_CONTROLLED_LOOP;
+    if (hasCompare) return PseudoPyLearning.PATTERN_TYPE.VALIDATION_LOOP;
+    return PseudoPyLearning.PATTERN_TYPE.SENTINEL_CONTROLLED_LOOP;
+}
+
+/* ── Per-construct detectors ───────────────────────────────── */
+
+function detectSequences(ast, source) {
+    const patterns = [];
+    const body = (ast && ast.body) || [];
+    const procedural = body.filter(n => !['DeclareStatement'].includes(n.type));
+    if (procedural.length >= 2) {
+        const start = Math.min.apply(null, procedural.map(n => n.line || 1));
+        const end = Math.max.apply(null, procedural.map(n => patternNodeEndLine(n)));
+        patterns.push(makeDetectedPattern({
+            type: PseudoPyLearning.PATTERN_TYPE.SEQUENCE,
+            name: 'Sequence',
+            startLine: start,
+            endLine: end,
+            explanation: 'Statements are executed one after another from top to bottom. This is the default flow of every pseudocode program.',
+            pseudocodeSlice: sourceSlice(source, start, end),
+            pythonSlice: patternPythonSlice({ type: 'Program', body: procedural.slice(0, 2) }, {})
+        }));
+    }
+    return patterns;
+}
+
+function detectSelection(ast, { source, symbolTable, inLoop }) {
+    const patterns = [];
+    const ifs = [];
+    const walk = node => {
+        if (!node) return;
+        if (node.type === 'IfStatement') ifs.push(node);
+        if (node.body) node.body.forEach(walk);
+        if (node.elseIfs) node.elseIfs.forEach(e => e.body && e.body.forEach(walk));
+        if (node.elseBody) node.elseBody.forEach(walk);
+    };
+    walk(ast);
+
+    ifs.forEach(outer => {
+        const hasNested = ifs.some(inner => inner !== outer && containsNode(outer, inner));
+        const start = outer.line || 1;
+        const end = patternNodeEndLine(outer);
+        if (hasNested) {
+            patterns.push(makeDetectedPattern({
+                type: PseudoPyLearning.PATTERN_TYPE.NESTED_SELECTION,
+                name: 'Nested Selection',
+                startLine: start,
+                endLine: end,
+                explanation: 'A decision sits inside the true/false branch of an outer decision. The inner IF only runs when the outer condition is met.',
+                pseudocodeSlice: sourceSlice(source, start, end),
+                pythonSlice: patternPythonSlice(outer, symbolTable)
+            }));
+        } else {
+            patterns.push(makeDetectedPattern({
+                type: PseudoPyLearning.PATTERN_TYPE.SELECTION,
+                name: 'Selection',
+                startLine: start,
+                endLine: end,
+                explanation: 'The IF condition picks one of several branches. Only the matching branch executes.',
+                pseudocodeSlice: sourceSlice(source, start, end),
+                pythonSlice: patternPythonSlice(outer, symbolTable)
+            }));
+        }
+    });
+    return patterns;
+}
+
+function detectLoops(ast, { source, symbolTable }) {
+    const patterns = [];
+    const programBody = (ast && ast.body) || [];
+    const initializers = collectInitializers(programBody);
+    const loops = [];
+
+    const walk = node => {
+        if (!node) return;
+        if (node.type === 'WhileStatement' || node.type === 'ForStatement' || node.type === 'ForEachStatement') loops.push(node);
+        if (node.body) node.body.forEach(walk);
+        if (node.elseIfs) node.elseIfs.forEach(e => e.body && e.body.forEach(walk));
+        if (node.elseBody) node.elseBody.forEach(walk);
+    };
+    walk(ast);
+
+    loops.forEach(loop => {
+        const start = loop.line || 1;
+        const end = patternNodeEndLine(loop);
+        const bodyInputs = inputVarsInBody(loop.body, []);
+        let type, name, explanation;
+        const accordion = isAccumulatorLoop(loop, initializers);
+
+        if (loop.type === 'ForStatement') {
+            type = PseudoPyLearning.PATTERN_TYPE.COUNTER_CONTROLLED_LOOP;
+            name = 'Counter-Controlled Loop';
+            explanation = 'A FOR loop steps a counter through a fixed range, running the body once per value. The loop controls the count; you control the body.';
+        } else if (loop.type === 'ForEachStatement') {
+            type = PseudoPyLearning.PATTERN_TYPE.REPETITION;
+            name = 'Repetition over a collection';
+            explanation = 'A FOR EACH loop visits every element of an array or list once, binding each one to the iterator in turn.';
+        } else {
+            type = classifyWhile(loop, bodyInputs);
+            name = type === PseudoPyLearning.PATTERN_TYPE.VALIDATION_LOOP ? 'Validation Loop'
+                : type === PseudoPyLearning.PATTERN_TYPE.SENTINEL_CONTROLLED_LOOP ? 'Sentinel-Controlled Loop'
+                    : 'Repetition (While loop)';
+            explanation = type === PseudoPyLearning.PATTERN_TYPE.VALIDATION_LOOP
+                ? 'The WHILE loop repeatedly asks for input until the value passes a validation rule, so bad input never escapes the loop.'
+                : type === PseudoPyLearning.PATTERN_TYPE.SENTINEL_CONTROLLED_LOOP
+                    ? 'The WHILE loop keeps reading values until a special sentinel value signals the end of the data.'
+                    : 'A WHILE loop repeats as long as its condition stays true. The body must eventually make the condition false or the loop never ends.';
+        }
+
+        patterns.push(makeDetectedPattern({
+            type: type,
+            name: name,
+            startLine: start,
+            endLine: end,
+            explanation: explanation,
+            pseudocodeSlice: sourceSlice(source, start, end),
+            pythonSlice: patternPythonSlice(loop, symbolTable)
+        }));
+
+        if (accordion.accumulated.length > 0) {
+            patterns.push(makeDetectedPattern({
+                type: PseudoPyLearning.PATTERN_TYPE.ACCUMULATOR,
+                name: 'Accumulator',
+                startLine: start,
+                endLine: end,
+                explanation: 'An accumulating variable (' + accordion.accumulated.join(', ') + ') is initialised before the loop and updated during every iteration. Each pass adds (or multiplies) its previous value with the new one.',
+                pseudocodeSlice: sourceSlice(source, start, end),
+                pythonSlice: patternPythonSlice(loop, symbolTable)
+            }));
+        }
+    });
+
+    // Nested iteration — any loop contained in another loop.
+    loops.forEach(inner => {
+        const wraps = loops.some(outer => outer !== inner && containsNode(outer, inner));
+        if (!wraps) return;
+        const start = inner.line || 1;
+        const end = patternNodeEndLine(inner);
+        patterns.push(makeDetectedPattern({
+            type: PseudoPyLearning.PATTERN_TYPE.NESTED_ITERATION,
+            name: 'Nested Iteration',
+            startLine: start,
+            endLine: end,
+            explanation: 'One loop is placed inside another. The inner loop runs completely for every single pass of the outer loop.',
+            pseudocodeSlice: sourceSlice(source, start, end),
+            pythonSlice: patternPythonSlice(inner, symbolTable)
+        }));
+    });
+
+    return patterns;
+}
+
+function isAccumulatorLoop(loop, initializers) {
+    const accumulated = [];
+    const walk = node => {
+        if (!node) return;
+        if (node.type === 'AssignmentStatement' && isAccumulatorAssignment(node, initializers) && !accumulated.includes(node.id)) accumulated.push(node.id);
+        if (node.body) node.body.forEach(walk);
+        if (node.elseIfs) node.elseIfs.forEach(e => e.body && e.body.forEach(walk));
+        if (node.elseBody) node.elseBody.forEach(walk);
+    };
+    walk(loop);
+    return { accumulated };
+}
+
+function detectFunctionsAndIPO(ast, { source, symbolTable }) {
+    const patterns = [];
+    const funcs = [];
+    let hasInput = false, hasOutput = false;
+    let firstInputLine = null, lastOutputLine = null;
+
+    const walk = node => {
+        if (!node) return;
+        if (node.type === 'FunctionDef') funcs.push(node);
+        if (node.type === 'InputStatement') {
+            hasInput = true;
+            if (firstInputLine === null) firstInputLine = node.line || 1;
+        }
+        if (node.type === 'PrintStatement') {
+            hasOutput = true;
+            lastOutputLine = Math.max(lastOutputLine || 0, node.line || 1);
+        }
+        if (node.body) node.body.forEach(walk);
+        if (node.elseIfs) node.elseIfs.forEach(e => e.body && e.body.forEach(walk));
+        if (node.elseBody) node.elseBody.forEach(walk);
+    };
+    walk(ast);
+
+    funcs.forEach(fn => {
+        const start = fn.line || 1;
+        const end = patternNodeEndLine(fn);
+        patterns.push(makeDetectedPattern({
+            type: PseudoPyLearning.PATTERN_TYPE.FUNCTION,
+            name: 'Function / Procedure',
+            startLine: start,
+            endLine: end,
+            explanation: 'The code is organised into a named, reusable block. Parameters pass values in and RETURN sends a result back, keeping the main flow short.',
+            pseudocodeSlice: sourceSlice(source, start, end),
+            pythonSlice: patternPythonSlice(fn, symbolTable)
+        }));
+    });
+
+    if (hasInput && hasOutput && firstInputLine !== null && lastOutputLine !== null && lastOutputLine > firstInputLine) {
+        patterns.push(makeDetectedPattern({
+            type: PseudoPyLearning.PATTERN_TYPE.INPUT_PROCESS_OUTPUT,
+            name: 'Input-Process-Output',
+            startLine: firstInputLine,
+            endLine: lastOutputLine,
+            explanation: 'Your program follows the classic Input → Process → Output shape: it reads a value, does some work, then shows a result.',
+            pseudocodeSlice: sourceSlice(source, firstInputLine, lastOutputLine),
+            pythonSlice: patternPythonSlice({ type: 'Program', body: ast.body || [] }, symbolTable)
+        }));
+    }
+
+    return patterns;
+}
+
+/* ── Public API ────────────────────────────────────────────── */
+
+/**
+ * Detect all recognised algorithmic patterns in a compiled program.
+ * @param {Object} ctx { ast, source, python, symbolTable }
+ * @returns {DetectedPattern[]} Sorted by start line.
+ */
+function detectPatterns(ctx) {
+    const ast = (ctx && ctx.ast) || { body: [] };
+    const source = String((ctx && ctx.source) || '');
+    const symbolTable = (ctx && ctx.symbolTable) || null;
+    const scope = { source: source, symbolTable: symbolTable };
+
+    let out = [];
+    out.push(...detectSequences(ast, source));
+    out.push(...detectSelection(ast, scope));
+    out.push(...detectLoops(ast, scope));
+    out.push(...detectFunctionsAndIPO(ast, scope));
+
+    // De-duplicate identical (type, startLine) pairs and sort by line.
+    const seen = new Set();
+    out = out.filter(p => {
+        const key = p.type + ':' + p.startLine;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    }).sort((a, b) => a.startLine - b.startLine || b.endLine - a.endLine);
+
+    return out;
+}
+
+PseudoPyLearning.register.patternDetector = {
+    detectPatterns: detectPatterns,
+    classifyWhile: classifyWhile,
+    computeAstMaxNesting: function (ast) {
+        // aliased from the validation engine when present; fallback inline
+        if (PseudoPyLearning.register.validationEngine && PseudoPyLearning.register.validationEngine.computeAstMaxNesting) {
+            return PseudoPyLearning.register.validationEngine.computeAstMaxNesting(ast);
+        }
+        return 0;
+    }
+};/* ============================================================
+   PSEUDOPY LEARNING LAYER — Feedback Clustering
+   ------------------------------------------------------------
+   Groups the structured ValidationResults and DetectedPatterns
+   into the high-level FEEDBACK_CATEGORY clusters shown to the
+   student with progressive disclosure. Pure functions — no DOM,
+   no storage — so they are unit-testable and reusable by the
+   analytics layer.
+   ============================================================ */
+
+/** Preferred display order for the categories. */
+const LEARNING_CATEGORY_ORDER = [
+    PseudoPyLearning.FEEDBACK_CATEGORY.SYNTAX,
+    PseudoPyLearning.FEEDBACK_CATEGORY.STRUCTURE,
+    PseudoPyLearning.FEEDBACK_CATEGORY.LOGIC,
+    PseudoPyLearning.FEEDBACK_CATEGORY.PROGRAMMING_PATTERN,
+    PseudoPyLearning.FEEDBACK_CATEGORY.READABILITY,
+    PseudoPyLearning.FEEDBACK_CATEGORY.TRANSLATION,
+    PseudoPyLearning.FEEDBACK_CATEGORY.BEST_PRACTICES
+];
+
+/**
+ * Fold one ValidationResult into its cluster, updating counts.
+ * @param {Object} clusters category → FeedbackCluster
+ * @param {ValidationResult} item
+ */
+function foldResultIntoCluster(clusters, item) {
+    const cat = item.category;
+    if (!clusters[cat]) clusters[cat] = makeFeedbackCluster(cat);
+    const cluster = clusters[cat];
+    cluster.items.push(item);
+    if (item.severity === PseudoPyLearning.SEVERITY.ERROR) cluster.errorCount++;
+    else if (item.severity === PseudoPyLearning.SEVERITY.WARNING) cluster.warningCount++;
+    else if (item.severity === PseudoPyLearning.SEVERITY.SUGGESTION) cluster.suggestionCount++;
+    else cluster.successCount++;
+}
+
+/**
+ * Add one recognised programming pattern as a positive item
+ * inside the "Programming Pattern" cluster.
+ * @param {Object} clusters
+ * @param {DetectedPattern} pattern
+ */
+function foldPatternIntoCluster(clusters, pattern) {
+    const meta = (PseudoPyLearning.LABELS.pattern[pattern.type] || {});
+    const label = meta.label || pattern.name;
+    const cat = PseudoPyLearning.FEEDBACK_CATEGORY.PROGRAMMING_PATTERN;
+    if (!clusters[cat]) clusters[cat] = makeFeedbackCluster(cat);
+    const cluster = clusters[cat];
+    cluster.items.push(makeValidationResult({
+        type: PseudoPyLearning.RESULT_TYPE.PATTERN,
+        severity: PseudoPyLearning.SEVERITY.SUCCESS,
+        category: cat,
+        message: 'Pattern detected: ' + label,
+        explanation: pattern.explanation,
+        line: pattern.startLine,
+        suggestion: 'Return to this area of the code and check you understand why this pattern solves the problem.'
+    }));
+    cluster.successCount++;
+}
+
+/**
+ * Determine the headline visual state of a cluster.
+ * @param {FeedbackCluster} cluster
+ * @returns {string} One of PseudoPyLearning.SEVERITY.
+ */
+function clusterState(cluster) {
+    if (!cluster) return PseudoPyLearning.SEVERITY.SUCCESS;
+    if (cluster.errorCount > 0) return PseudoPyLearning.SEVERITY.ERROR;
+    if (cluster.warningCount > 0) return PseudoPyLearning.SEVERITY.WARNING;
+    if (cluster.suggestionCount > 0) return PseudoPyLearning.SEVERITY.SUGGESTION;
+    return PseudoPyLearning.SEVERITY.SUCCESS;
+}
+
+/**
+ * Cluster validation items + recognised patterns into FeedbackCluster[],
+ * ordered by LEARNING_CATEGORY_ORDER. Empty clusters are omitted.
+ * @param {ValidationResult[]} validationItems
+ * @param {DetectedPattern[]} patterns
+ * @returns {FeedbackCluster[]}
+ */
+function clusterFeedback(validationItems, patterns) {
+    const clusters = {};
+    (validationItems || []).forEach(item => foldResultIntoCluster(clusters, item));
+    (patterns || []).forEach(p => foldPatternIntoCluster(clusters, p));
+    return LEARNING_CATEGORY_ORDER.filter(cat => clusters[cat]).map(cat => clusters[cat]);
+}
+
+/**
+ * Compact whole-result stats across clusters.
+ * @param {FeedbackCluster[]} clusters
+ * @returns {{error:number, warning:number, suggestion:number, success:number, total:number}}
+ */
+function summarizeClusters(clusters) {
+    const sums = { error: 0, warning: 0, suggestion: 0, success: 0, total: 0 };
+    (clusters || []).forEach(c => {
+        sums.error += c.errorCount;
+        sums.warning += c.warningCount;
+        sums.suggestion += c.suggestionCount;
+        sums.success += c.successCount;
+    });
+    sums.total = sums.error + sums.warning + sums.suggestion + sums.success;
+    return sums;
+}
+
+/**
+ * A short one-line verdict used by lists and headers.
+ * @param {ValidationResult[]} items
+ * @returns {string}
+ */
+function overallVerdict(items) {
+    const by = summarizeValidation(items).bySeverity;
+    const errors = by.error || 0;
+    const warnings = by.warning || 0;
+    if (errors > 0) return errors + ' issue(s) to fix before your pseudocode can be translated.';
+    if (warnings > 0) return 'Your pseudocode is valid, with ' + warnings + ' point(s) worth reviewing.';
+    return 'Your pseudocode translated cleanly. Review the suggestions to polish it further.';
+}
+
+PseudoPyLearning.register.feedbackClusterer = {
+    clusterFeedback: clusterFeedback,
+    summarizeClusters: summarizeClusters,
+    clusterState: clusterState,
+    overallVerdict: overallVerdict,
+    LEARNING_CATEGORY_ORDER: LEARNING_CATEGORY_ORDER
+};/* ============================================================
+   PSEUDOPY LEARNING LAYER — Feedback Pipeline
+   ------------------------------------------------------------
+   Orchestrates validation → pattern detection → clustering into
+   a single TranslationResult that the UI and the evidence store
+   can both consume. Pure computation, no DOM, no storage.
+   ============================================================ */
+
+/**
+ * Compose the final learning result for one translation.
+ * @param {string} source Original pseudocode.
+ * @param {object} compileResult Output of PseudocodeCompiler.compile().
+ * @returns {TranslationResult}
+ */
+function runLearningPipeline(source, compileResult) {
+    const validationEngine = PseudoPyLearning.register.validationEngine;
+    const patternDetector = PseudoPyLearning.register.patternDetector;
+    const clusterer = PseudoPyLearning.register.feedbackClusterer;
+
+    const validation = validationEngine.runValidation(compileResult, source);
+    const patterns = (compileResult && compileResult.valid)
+        ? patternDetector.detectPatterns({ source: source, ast: compileResult.ast, symbolTable: compileResult.symbolTable })
+        : [];
+
+    const items = validation.items;
+    const clusters = clusterer.clusterFeedback(items, patterns);
+
+    const errors = items.filter(it => it.severity === PseudoPyLearning.SEVERITY.ERROR);
+    const warnings = items.filter(it => it.severity === PseudoPyLearning.SEVERITY.WARNING);
+    const suggestions = items.filter(it => it.severity === PseudoPyLearning.SEVERITY.SUGGESTION);
+    const successes = items.filter(it => it.severity === PseudoPyLearning.SEVERITY.SUCCESS);
+
+    const errorCategories = uniqueSorted(errors.map(it => it.category));
+    const gapCategories = uniqueSorted(errors.map(it => gapCategoryForResultType(it.type)).filter(Boolean));
+    const patternTypes = uniqueSorted(patterns.map(p => p.type));
+
+    return {
+        source: source,
+        compile: compileResult,
+        valid: validation.valid,
+        validation: validation,
+        items: items,
+        patterns: patterns,
+        clusters: clusters,
+        summary: clusterer.summarizeClusters(clusters),
+        verdict: clusterer.overallVerdict(items),
+        tallies: { error: errors.length, warning: warnings.length, suggestion: suggestions.length, success: successes.length },
+        errorCategories: errorCategories,
+        gapCategories: gapCategories,
+        patternTypes: patternTypes
+    };
+}
+
+function uniqueSorted(arr) {
+    return Array.from(new Set(arr.filter(Boolean))).sort();
+}
+
+PseudoPyLearning.register.pipeline = {
+    run: runLearningPipeline,
+    uniqueSorted: uniqueSorted
+};/* ============================================================
+   PSEUDOPY LEARNING LAYER — Learning UI
+   ------------------------------------------------------------
+   Renders the post-translation Learning Panel on the Write
+   Pseudocode page using the clustered TranslationResult produced
+   by the pipeline. Reuses the shared cluster-card styles defined
+   in style.css. Non-destructive: every render is defensive.
+   ============================================================ */
+
+const LU_ESC = s => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function luTry(fn, fallback) { try { const v = fn(); return v === undefined ? fallback : v; } catch (e) { return fallback; } }
+
+function luSeverityLabel(sev) {
+    return luTry(() => PseudoPyLearning.LABELS.severity[sev], { label: sev, icon: 'info' });
+}
+
+function luCategoryMeta(cat) {
+    return luTry(() => PseudoPyLearning.LABELS.category[cat], { label: cat, icon: 'circle-check', description: '' });
+}
+
+/** Build one expandable cluster card. */
+function buildClusterCard(c) {
+    const meta = luCategoryMeta(c.category);
+    const state = luTry(() => PseudoPyLearning.register.feedbackClusterer.clusterState(c), 'success');
+    const stateIcon = luSeverityLabel(state).icon || 'circle-check';
+    const counts = [
+        c.errorCount ? 'error ' + c.errorCount : '',
+        c.warningCount ? 'warning ' + c.warningCount : '',
+        c.suggestionCount ? 'suggestion ' + c.suggestionCount : '',
+        c.successCount ? 'success ' + c.successCount : ''
+    ].filter(Boolean).join(' &middot; ');
+    const items = c.items.map(it => {
+        const sev = luSeverityLabel(it.severity);
+        const la = (it.line != null) ? `<div class="lc-line">Line ${LU_ESC(String(it.line))}</div>` : '';
+        return `
+            <li class="lc-item lc-item-${it.severity}">
+              <strong>${icon(sev.icon)} ${LU_ESC(it.message)}</strong>
+              <div class="lc-expl">${LU_ESC(it.explanation)}</div>
+              ${it.suggestion && it.suggestion !== 'Nothing to change here — keep using this approach.' ? `<div class="lc-sugg"><em>Suggestion:</em> ${LU_ESC(it.suggestion)}</div>` : ''}
+              ${la}
+            </li>`;
+    }).join('');
+    return `
+        <div class="learning-cluster-card lc-state-${state}">
+          <div class="lc-head">
+            <span class="lc-icon">${icon(meta.icon)}</span>
+            <span class="lc-title">${LU_ESC(meta.label)}</span>
+            <span class="lc-counts">${counts}</span>
+            <span class="lc-state-icon">${icon(stateIcon)}</span>
+          </div>
+          <div class="lc-desc">${LU_ESC(meta.description || '')}</div>
+          <details class="lc-details">
+            <summary>View details</summary>
+            <ul class="lc-list">${items}</ul>
+          </details>
+        </div>`;
+}
+
+/**
+ * Recommend the single most useful next step to the student:
+ * the first category that has something more than a success.
+ */
+function suggestNextStep(clusters) {
+    if (!clusters || !clusters.length) return null;
+    const actionable = clusters.find(c => c.errorCount > 0 || c.warningCount > 0 || c.suggestionCount > 0);
+    if (!actionable) return { cluster: null, message: 'Every area looks great — continue to the next task.' };
+    const item = actionable.items.find(i => i.severity === PseudoPyLearning.SEVERITY.ERROR)
+        || actionable.items.find(i => i.severity === PseudoPyLearning.SEVERITY.WARNING)
+        || actionable.items.find(i => i.severity === PseudoPyLearning.SEVERITY.SUGGESTION);
+    return { cluster: actionable, item: item };
+}
+
+/**
+ * Render (or hide) the post-translation learning panel.
+ * @param {TranslationResult|null} pipelineResult
+ */
+function renderLearningPanel(pipelineResult) {
+    const panel = document.getElementById('learning-feedback-panel');
+    const body = document.getElementById('learning-feedback-panel-body');
+    if (!panel || !body) return;
+    if (!pipelineResult || !pipelineResult.clusters || !pipelineResult.clusters.length) { panel.classList.add('hidden'); return; }
+    panel.classList.remove('hidden');
+
+    const verdictState = pipelineResult.summary.error > 0 ? 'error'
+        : (pipelineResult.summary.warning > 0 ? 'warning'
+            : (pipelineResult.summary.suggestion > 0 ? 'suggestion' : 'success'));
+    const verdictMeta = luSeverityLabel(verdictState);
+    const next = suggestNextStep(pipelineResult.clusters);
+
+    const nextHtml = next
+        ? `<div class="lc-next">
+             <strong>Next step:</strong>
+             ${next.cluster ? `<span class="lc-next-cat">${LU_ESC(luCategoryMeta(next.cluster.category).label)}</span>` : ''}
+             <span class="lc-next-msg">${LU_ESC(next.item ? next.item.message : next.message)}</span>
+             ${next.item && next.item.suggestion ? ` <span class="lc-next-sugg">${LU_ESC(next.item.suggestion)}</span>` : ''}
+           </div>`
+        : '';
+
+    body.innerHTML = `
+        <div class="learning-summary-verdict lc-state-${verdictState}">
+          ${icon(verdictMeta.icon)} <strong>${LU_ESC(verdictMeta.label)}:</strong> ${LU_ESC(pipelineResult.verdict)}
+        </div>
+        ${nextHtml}
+        <div class="learning-cluster-grid">
+          ${pipelineResult.clusters.map(buildClusterCard).join('')}
+        </div>`;
+    refreshIcons(body);
+}
+
+/** Hide the panel (e.g. when the editor is cleared). */
+function clearLearningPanel() {
+    const panel = document.getElementById('learning-feedback-panel');
+    if (panel) panel.classList.add('hidden');
+}
+
+PseudoPyLearning.register.learningUi = {
+    renderLearningPanel: renderLearningPanel,
+    clearLearningPanel: clearLearningPanel,
+    buildClusterCard: buildClusterCard,
+    suggestNextStep: suggestNextStep
+};/* ============================================================
+   PSEUDOPY LEARNING LAYER — Beginner Tutorial (Onboarding)
+   ------------------------------------------------------------
+   A step-by-step guided tour of the Write Pseudocode page for
+   students. State is stored under 'pseudopy_tutorial_completed'
+   behind a small adapter so Phase 6 can back it with the
+   pseudopy_tutorialProgress DB ref without changing the UI code.
+   ============================================================ */
+
+const ONBOARDING = {
+    storageKey: 'pseudopy_tutorial_completed',
+    steps: [
+        {
+            targetId: 'pseudocode-editor',
+            icon: 'square-pen',
+            title: 'Start in the Editor',
+            text: 'Write your pseudocode here in plain English. You can use BEGIN/END, DECLARE, INPUT, SET, IF/ELSE, FOR and WHILE.',
+            placement: 'below'
+        },
+        {
+            targetId: 'btn-translate-pseudocode',
+            icon: 'refresh-cw',
+            title: 'Translate to Python',
+            text: 'Click this button to convert your pseudocode into real Python code using the built-in translator.',
+            placement: 'below'
+        },
+        {
+            targetId: 'python-output',
+            icon: 'code-2',
+            title: 'Read the Python Output',
+            text: 'The translated Python appears here. Use the Learning Feedback panel below it to review what you did well and what to improve.',
+            placement: 'above'
+        },
+        {
+            targetId: 'btn-run-code',
+            icon: 'play',
+            title: 'Run Your Code',
+            text: 'Run the translated Python locally to check that it behaves as you expected.',
+            placement: 'above'
+        },
+        {
+            targetId: 'console-output',
+            icon: 'terminal',
+            title: 'See Your Results',
+            text: 'Program output, errors and runtime messages appear here — just like a real console.',
+            placement: 'above'
+        },
+        {
+            targetId: 'topbar-progress-pill',
+            icon: 'trophy',
+            title: 'Track Your Progress',
+            text: 'Your skill progress and improvement summary live in Settings. From there you can replay this tutorial any time.',
+            placement: 'left'
+        }
+    ]
+};
+
+const onboardingState = {
+    overlay: null,
+    spotlight: null,
+    bubble: null,
+    current: 0,
+    active: false
+};
+
+/* ── State adapter (localStorage now; DB-backed in Phase 6) ── */
+
+function onbGetCompleted() {
+    try { return onbStorageGet(ONBOARDING.storageKey) === 'true'; } catch (e) { return false; }
+}
+
+function onbSetCompleted(done) {
+    try {
+        const key = ONBOARDING.storageKey;
+        const userId = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser._docId || currentUser.id) : 'anonymous';
+        onbStorageSet(key + '_' + userId, done ? 'true' : '');
+        onbStorageSet(key + '_shown_' + userId, 'true');
+    } catch (e) { /* non-critical */ }
+}
+
+function onbStorageGet(key) {
+    return localStorage.getItem(key);
+}
+
+function onbStorageSet(key, value) {
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+}
+
+function onbShouldAutoStart() {
+    if (typeof currentUser === 'undefined' || !currentUser) return false;
+    if (currentUser.role !== 'student') return false;
+    try {
+        const userId = currentUser._docId || currentUser.id;
+        return localStorage.getItem(ONBOARDING.storageKey + '_' + userId) !== 'true';
+    } catch (e) { return false; }
+}
+
+/* ── Overlay construction ──────────────────────────────────── */
+
+function onbEnsureOverlay() {
+    if (onboardingState.overlay) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'tour-overlay';
+    overlay.className = 'tour-overlay hidden';
+    overlay.innerHTML = `
+      <div class="tour-spotlight"></div>
+      <div class="tour-bubble">
+        <div class="tour-bubble-head"><span class="tour-bubble-icon"></span><h4 class="tour-bubble-title"></h4></div>
+        <p class="tour-bubble-text"></p>
+        <div class="tour-bubble-dots"></div>
+        <div class="tour-bubble-actions">
+          <button class="btn btn-ghost btn-sm tour-skip">Skip tour</button>
+          <button class="btn btn-secondary btn-sm tour-prev" disabled>Back</button>
+          <button class="btn btn-primary btn-sm tour-next">Next</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    onboardingState.overlay = overlay;
+    onboardingState.spotlight = overlay.querySelector('.tour-spotlight');
+    onboardingState.bubble = overlay.querySelector('.tour-bubble');
+
+    overlay.addEventListener('click', (ev) => {
+        if (ev.target === overlay || ev.target.classList.contains('tour-overlay')) {
+            onbStop();
+        }
+    });
+    overlay.querySelector('.tour-skip').addEventListener('click', () => onbStop());
+    overlay.querySelector('.tour-prev').addEventListener('click', () => onbGo(onboardingState.current - 1));
+    overlay.querySelector('.tour-next').addEventListener('click', () => {
+        if (onboardingState.current >= ONBOARDING.steps.length - 1) onbFinish();
+        else onbGo(onboardingState.current + 1);
+    });
+    window.addEventListener('resize', onbReposition);
+    window.addEventListener('scroll', onbReposition, { passive: true });
+}
+
+function onbPositionFor(target) {
+    const rect = target.getBoundingClientRect();
+    const overlay = onboardingState.overlay;
+    const pad = 6;
+    const top = Math.max(0, rect.top - pad);
+    const left = Math.max(0, rect.left - pad);
+    const width = rect.width + pad * 2;
+    const height = rect.height + pad * 2;
+    onboardingState.spotlight.style.top = top + 'px';
+    onboardingState.spotlight.style.left = left + 'px';
+    onboardingState.spotlight.style.width = width + 'px';
+    onboardingState.spotlight.style.height = height + 'px';
+
+    const step = ONBOARDING.steps[onboardingState.current];
+    const bubbleStyle = onbBubbleStyle(step.placement || 'below', rect, top, left, width, height);
+    Object.keys(bubbleStyle).forEach(k => (onboardingState.bubble.style[k] = bubbleStyle[k]));
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', step.icon);
+    const iconSlot = onboardingState.bubble.querySelector('.tour-bubble-icon');
+    iconSlot.innerHTML = '';
+    iconSlot.appendChild(icon);
+    overlay.style.setProperty('--tour-bubble-w', onboardingState.bubble.offsetWidth + 'px');
+}
+
+function onbBubbleStyle(placement, rect, top, left, width, height) {
+    const gap = 12;
+    const base = { position: 'absolute' };
+    const vw = window.innerWidth;
+    if (placement === 'above') {
+        base.bottom = (window.innerHeight - rect.top + gap) + 'px';
+        base.left = (left + width / 2) + 'px';
+        base.transform = 'translateX(-50%)';
+    } else if (placement === 'left') {
+        base.right = (vw - rect.left + gap) + 'px';
+        base.top = (top + height / 2) + 'px';
+        base.transform = 'translateY(-50%)';
+        if (onboardingState.bubble && (vw - rect.left - gap - onboardingState.bubble.offsetWidth) < 8) {
+            base.right = '12px';
+        }
+    } else {
+        base.top = (rect.top + height + gap) + 'px';
+        base.left = (left + width / 2) + 'px';
+        base.transform = 'translateX(-50%)';
+        if (onboardingState.bubble && (rect.left + width / 2 + onboardingState.bubble.offsetWidth / 2) > vw - 12) {
+            base.left = (vw - 12) + 'px';
+            base.transform = 'translateX(-100%)';
+        }
+    }
+    return base;
+}
+
+function onbReposition() {
+    if (!onboardingState.active) return;
+    const step = ONBOARDING.steps[onboardingState.current];
+    const target = document.getElementById(step.targetId);
+    if (target) onbPositionFor(target);
+}
+
+function onbRender() {
+    const step = ONBOARDING.steps[onboardingState.current];
+    const target = document.getElementById(step.targetId);
+    if (!target) { onbStop(); return; }
+    onboardingState.bubble.querySelector('.tour-bubble-title').textContent = step.title;
+    onboardingState.bubble.querySelector('.tour-bubble-text').textContent = step.text;
+    onboardingState.bubble.querySelector('.tour-prev').disabled = onboardingState.current === 0;
+    const nextBtn = onboardingState.bubble.querySelector('.tour-next');
+    nextBtn.textContent = onboardingState.current >= ONBOARDING.steps.length - 1 ? 'Finish' : 'Next';
+
+    const dots = onboardingState.bubble.querySelector('.tour-bubble-dots');
+    dots.innerHTML = '';
+    ONBOARDING.steps.forEach((_, i) => {
+        const dot = document.createElement('span');
+        dot.className = 'tour-dot' + (i === onboardingState.current ? ' active' : '');
+        dots.appendChild(dot);
+    });
+    onbPositionFor(target);
+}
+
+function onbGo(index) {
+    if (index < 0 || index >= ONBOARDING.steps.length) return;
+    onboardingState.current = index;
+    onbRender();
+}
+
+function startBeginnerTutorial() {
+    onbEnsureOverlay();
+    onboardingState.active = true;
+    onboardingState.current = 0;
+    onboardingState.overlay.classList.remove('hidden');
+    onbRender();
+    if (typeof lucide !== 'undefined') lucide.createIcons({ icons: lucide.icons });
+}
+
+function onbFinish() {
+    onbSetCompleted(true);
+    try {
+        if (PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.evidenceStore) {
+            PseudoPyLearning.register.evidenceStore.saveTutorialProgress(evUserId(), { completed: true, step: ONBOARDING.steps.length, finishedAt: new Date().toISOString() });
+        }
+    } catch (e) { /* non-critical */ }
+    onbStop();
+    showToast('Tutorial completed. You can replay it from Settings.', 'success');
+}
+
+function restartBeginnerTutorial() {
+    onbSetCompleted(false);
+    startBeginnerTutorial();
+}
+
+function onbStop() {
+    onboardingState.active = false;
+    if (onboardingState.overlay) onboardingState.overlay.classList.add('hidden');
+}
+
+function maybeAutoStartTutorial() {
+    if (!onbShouldAutoStart()) return;
+    try { startBeginnerTutorial(); } catch (e) { /* never block navigation */ }
+}
+
+PseudoPyLearning.register.onboarding = {
+    start: startBeginnerTutorial,
+    restart: restartBeginnerTutorial,
+    stop: onbStop,
+    autoStart: maybeAutoStartTutorial,
+    isCompleted: onbGetCompleted
+};/* ============================================================
+   PSEUDOPY LEARNING LAYER — Evidence Store
+   ------------------------------------------------------------
+   Persists one EvidenceRecord per translation attempt for
+   students, seeds a rich deterministic demo dataset derived from
+   SEED_ACTIVITY_LIST, and tracks tutorial progress. All DB
+   access is defensive: the learning layer must never break the
+   main translator or accounts.
+   ============================================================ */
+
+function evHash(text) {
+    let h = 5381;
+    const s = String(text || '');
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; }
+    return 'h' + Math.abs(h).toString(16);
+}
+
+function evUserId() {
+    try {
+        if (typeof currentUser === 'undefined' || !currentUser) return null;
+        return currentUser._docId || currentUser.id;
+    } catch (e) { return null; }
+}
+
+function evUserName() {
+    try { return currentUser ? currentUser.fullName : ''; } catch (e) { return ''; }
+}
+
+function evInstructorId() {
+    try { return currentUser ? (currentUser.instructorId || 'u2') : 'u2'; } catch (e) { return 'u2'; }
+}
+
+/**
+ * Build an EvidenceRecord from a runLearningPipeline() result.
+ * @param {TranslationResult} pipelineResult
+ * @returns {EvidenceRecord|null}
+ */
+function buildEvidenceRecord(pipelineResult) {
+    if (!pipelineResult || !pipelineResult.compile) return null;
+    const userId = evUserId();
+    const t = pipelineResult.tallies || {};
+    const errorTypes = (pipelineResult.compile.errors || []).map(e => e.type || e.message || 'Error');
+    const unique = arr => Array.from(new Set(arr.filter(Boolean)));
+    return {
+        studentId: userId,
+        studentName: evUserName(),
+        instructorId: evInstructorId(),
+        valid: !!pipelineResult.valid,
+        tallies: {
+            error: t.error || 0,
+            warning: t.warning || 0,
+            suggestion: t.suggestion || 0,
+            success: t.success || 0
+        },
+        errorCategories: unique(pipelineResult.errorCategories || []),
+        gapCategories: unique(pipelineResult.gapCategories || []),
+        patternTypes: unique(pipelineResult.patternTypes || []),
+        compileMetadata: {
+            errorTypes: unique(errorTypes),
+            hasSource: !!pipelineResult.source,
+            sourceHash: evHash(pipelineResult.source)
+        },
+        timestamp: new Date().toISOString()
+    };
+}
+
+/** Persist one evidence record for the current logged-in student. */
+async function captureEvidence(pipelineResult) {
+    const userId = evUserId();
+    if (!userId) return null;
+    const record = buildEvidenceRecord(pipelineResult, { studentId: userId });
+    if (!record) return null;
+    record._docId = 'ev_' + userId + '_' + Date.now();
+    try { return await dbAdd(evidenceRef, record); } catch (e) { return null; }
+}
+
+/* ── Seeded demo evidence (deterministic, from SEED_ACTIVITY_LIST) ── */
+
+function evSeedDocIdFromStudent(student, studentId) {
+    if (student === 'Eduard John Mirandilla') return 'u_stu_emirandilla';
+    if (student === 'Mikaella Daet') return 'u_stu_mdaet';
+    const n = parseInt(String(studentId || '').replace(/\D/g, ''), 10);
+    if (n >= 1 && n <= 30) return 'u_stu_' + (n + 2);
+    return 'u_stu_' + (n || 99);
+}
+
+const EV_ERROR_TYPE_CATEGORIES = {
+    'Syntax Error': ['syntax'],
+    'Logic Error': ['logic'],
+    'Missing END': ['structure'],
+    'Indentation Error': ['structure', 'readability'],
+    'Type Error': ['logic', 'translation']
+};
+
+const EV_EXERCISE_PATTERNS = [
+    { match: /sum of odd|while loop|series/i, patterns: ['sentinel-controlled-loop', 'accumulator'] },
+    { match: /factorial/i, patterns: ['counter-controlled-loop', 'accumulator'] },
+    { match: /branching|multiples of/i, patterns: ['counter-controlled-loop', 'selection'] },
+    { match: /multiply|array/i, patterns: ['counter-controlled-loop'] }
+];
+
+function evPatternsForExercise(exerciseTitle) {
+    const hit = EV_EXERCISE_PATTERNS.find(p => p.match.test(exerciseTitle || ''));
+    return hit ? hit.patterns : ['sequence'];
+}
+
+function evCategoriesForErrorType(errorType) {
+    return EV_ERROR_TYPE_CATEGORIES[errorType] || ['syntax'];
+}
+
+function evGapForCategories(categories) {
+    const map = { syntax: 'syntax', structure: 'structure', logic: 'logic', readability: 'readability', translation: 'translation' };
+    return categories.map(c => map[c]).filter(Boolean);
+}
+
+/**
+ * Deterministically derive an EvidenceRecord from one SEED_ACTIVITY_LIST row.
+ * No random values — everything follows from the seed fields + index.
+ */
+function buildSeedEvidenceFromActivity(activity, index) {
+    const completed = activity.status === 'Completed';
+    const failed = activity.status === 'Failed';
+    const score = parseInt(String(activity.score || '0').replace(/\D/g, ''), 10) || 0;
+
+    const errorTypes = failed ? [activity.errorType || 'Syntax Error'] : [];
+    const errorCategories = failed ? evCategoriesForErrorType(activity.errorType) : [];
+    const gapCategories = failed ? evGapForCategories(errorCategories) : [];
+    const patternTypes = completed ? evPatternsForExercise(activity.exercise) : [];
+
+    const warningCount = completed ? (score < 100 ? 1 : 0) : 0;
+    const suggestionCount = completed ? (activity.difficulty === 'hard' ? 1 : 0) : 0;
+    const successCount = completed ? 1 : 0;
+
+    return {
+        _docId: 'ev_seed_' + activity._docId,
+        studentId: evSeedDocIdFromStudent(activity.student, activity.studentId),
+        studentName: activity.student,
+        instructorId: activity.instructorId || 'u2',
+        valid: completed,
+        tallies: {
+            error: failed ? errorCategories.length || 1 : 0,
+            warning: warningCount,
+            suggestion: suggestionCount,
+            success: successCount
+        },
+        errorCategories: errorCategories,
+        gapCategories: gapCategories,
+        patternTypes: patternTypes,
+        compileMetadata: {
+            errorTypes: errorTypes,
+            hasSource: true,
+            sourceHash: evHash(activity.pseudocode || activity.submittedCode)
+        },
+        exerciseTitle: activity.exercise,
+        difficulty: activity.difficulty,
+        score: completed ? score : 0,
+        seededFrom: 'activity:' + activity._docId,
+        timestamp: new Date(activity.time || new Date().toISOString()).toISOString()
+    };
+}
+
+/** Full deterministic demo evidence set derived from SEED_ACTIVITY_LIST. */
+function getSeedEvidence() {
+    return SEED_ACTIVITY_LIST
+        .filter(a => a.status !== 'Pending')
+        .map((a, i) => buildSeedEvidenceFromActivity(a, i));
+}
+
+/** Seed the evidence collection only when it is empty (mirrors seedDatabase). */
+async function seedEvidenceIfEmpty() {
+    try {
+        const existing = await dbGetAll(evidenceRef);
+        if (existing && existing.length >= 5) return true;
+        const seeds = getSeedEvidence();
+        for (const record of seeds) {
+            try { await dbAdd(evidenceRef, record); } catch (e) { /* skip */ }
+        }
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+/* ── Tutorial progress (per-student) ───────────────────────── */
+
+async function getTutorialProgress(userId) {
+    const id = userId || evUserId();
+    if (!id) return null;
+    try { return await dbGet(tutorialProgressRef, id); } catch (e) { return null; }
+}
+
+async function saveTutorialProgress(userId, data) {
+    const id = userId || evUserId();
+    if (!id) return null;
+    const payload = Object.assign({
+        updatedAt: new Date().toISOString(),
+        completed: false,
+        step: 0
+    }, data || {});
+    try { return await dbSet(tutorialProgressRef, id, payload); } catch (e) { return null; }
+}
+
+PseudoPyLearning.register.evidenceStore = {
+    buildRecord: buildEvidenceRecord,
+    capture: captureEvidence,
+    getSeedEvidence: getSeedEvidence,
+    seedEvidenceIfEmpty: seedEvidenceIfEmpty,
+    seedFromActivity: buildSeedEvidenceFromActivity,
+    getTutorialProgress: getTutorialProgress,
+    saveTutorialProgress: saveTutorialProgress,
+    hash: evHash
+};/* ============================================================
    COMPILER METRICS DASHBOARD (Panel 1 — Evaluation)
    Benchmark runner, session metrics, and improvement tracking
    ============================================================ */

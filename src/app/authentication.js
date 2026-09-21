@@ -157,6 +157,13 @@ async function handleLogin() {
             currentUser.lastLogin = new Date().toISOString();
         } catch (e) { /* non-critical */ }
 
+        // Seed learning evidence once the collections are empty (non-blocking).
+        try {
+            if (PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.evidenceStore) {
+                PseudoPyLearning.register.evidenceStore.seedEvidenceIfEmpty();
+            }
+        } catch (e) { /* non-critical */ }
+
         showToast(`Welcome back, ${currentUser.fullName}!`, 'success');
         showApp();
     } catch (err) {

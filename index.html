@@ -549,6 +549,17 @@
               begin.</div>
           </div>
         </div>
+
+        <!-- Learning Panel (post-translation feedback for students) -->
+        <div id="learning-feedback-panel" class="feedback-container hidden" style="margin-top:1.5rem">
+          <div class="panel-header">
+            <h3><i data-lucide="graduation-cap" aria-hidden="true"></i> Learning Feedback</h3>
+          </div>
+          <div id="learning-feedback-panel-body" class="panel-body" style="padding:1.5rem;"></div>
+        </div>
+
+        <!-- Learning Progress Mini (per-student evidence summary) -->
+        <div id="learning-progress-mini" class="hidden" style="margin-top:1rem"></div>
       </div>
 
       <!-- ═══════════════════════════════════
@@ -688,6 +699,14 @@
               <p>Paste your pseudocode above and click "Analyze" to receive feedback and suggestions.</p>
             </div>
           </div>
+        </div>
+
+        <!-- Learning Summary (clustered feedback) -->
+        <div id="feedback-summary-container" class="feedback-container hidden" style="margin-top:1.5rem">
+          <div class="panel-header">
+            <h3><i data-lucide="list-checks" aria-hidden="true"></i> Feedback Summary</h3>
+          </div>
+          <div id="feedback-summary-results" class="panel-body" style="padding:1.5rem;"></div>
         </div>
 
         <!-- Logic Analysis Card -->
@@ -1987,6 +2006,23 @@
               <span class="detail-label"><i data-lucide="circle" aria-hidden="true"></i> Status</span>
               <span class="detail-value" id="settings-status">Active</span>
             </div>
+          </div>
+        </div>
+
+        <!-- Learning & Tutorial Section -->
+        <div class="settings-section">
+          <div class="section-header">
+            <h3><i data-lucide="graduation-cap" aria-hidden="true"></i> Learning &amp; Tutorial</h3>
+            <p>Review your learning progress and replay the beginner tutorial.</p>
+          </div>
+          <div id="settings-improvement-summary">
+            <!-- Improvement summary injected by the learning layer -->
+          </div>
+          <div class="form-group" style="margin-top:0.5rem">
+            <button class="btn btn-secondary" style="width:auto" onclick="restartBeginnerTutorial()">
+              <i data-lucide="refresh-cw" aria-hidden="true"></i> Restart Tutorial
+            </button>
+            <span style="font-size:0.75rem;color:var(--text-muted)">Replay the guided tour of the Write Pseudocode page.</span>
           </div>
         </div>
 

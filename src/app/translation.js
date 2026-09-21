@@ -7,6 +7,16 @@ function icon(name, label) {
     return `<i data-lucide="${name}"${aria}></i>`;
 }
 
+function maybeRenderLearningPanel(outputId) {
+    if (outputId !== 'python-output') return;
+    if (!PseudoPyLearning || !PseudoPyLearning.register || !PseudoPyLearning.register.learningUi) return;
+    try {
+        PseudoPyLearning.register.learningUi.renderLearningPanel(PseudoPyLearning.lastTranslation);
+    } catch (e) {
+        /* UI must never break translation */
+    }
+}
+
 function refreshIcons(root) {
     if (typeof lucide === 'undefined') return;
     lucide.createIcons({ root: root || document, icons: lucide.icons });
@@ -74,6 +84,30 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
 
         const result = pseudocodeToPython(input);
         const validation = result;
+
+        // Learning layer hook (non-destructive): run the feedback pipeline so
+        // the post-translation Learning Panel and evidence store have data.
+        // The learning layer must never break translation.
+        if (PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.pipeline) {
+            try {
+                PseudoPyLearning.lastTranslation = PseudoPyLearning.register.pipeline.run(input, result);
+                if (PseudoPyLearning.register.evidenceStore && PseudoPyLearning.register.evidenceStore.capture) {
+                    PseudoPyLearning.register.evidenceStore.capture(PseudoPyLearning.lastTranslation);
+                }
+            } catch (e) {
+                console.error('Learning pipeline error:', e);
+            }
+        } else if (typeof runValidation === 'function' && PseudoPyLearning) {
+            try {
+                PseudoPyLearning.lastTranslation = {
+                    source: input,
+                    compile: result,
+                    validation: runValidation(result, input)
+                };
+            } catch (e) {
+                /* learning layer must never break translation */
+            }
+        }
         const consoleEl = consoleId ? $id(consoleId) : null;
         const runBtn = runBtnSelector ? $qs(runBtnSelector) : null;
 
@@ -89,6 +123,7 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
                 currentErrorLineNumbers = validation.errors.map(err => err.line);
                 updateGutter();
             }
+            maybeRenderLearningPanel(outputId);
             return;
         }
 
@@ -104,6 +139,7 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
         }
         if (runBtn) runBtn.disabled = false;
         showToast(successToast, 'success');
+        maybeRenderLearningPanel(outputId);
         if (typeof updateState === 'function') updateState();
     } catch (e) {
         console.error('Translation Engine Crash:', e);

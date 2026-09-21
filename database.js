@@ -61,6 +61,8 @@ const passwordRequestsRef = "pseudopy_passwordRequests";
 const auditLogRef = "pseudopy_auditLog";
 const notificationsRef = "pseudopy_notifications";
 const devicesRef = "pseudopy_devices";
+const evidenceRef = "pseudopy_evidence";
+const tutorialProgressRef = "pseudopy_tutorialProgress";
 
 // ══════════════════════════════════════════════════════════════
 //  PASSWORD HASHING — Web Crypto API (SHA-256 + Salt)
@@ -535,6 +537,7 @@ function getLocalCollection(ref) {
         if (ref === usersRef) list = getInitialSeedUsers();
         else if (ref === exercisesRef) list = SEED_EXERCISES_LIST;
         else if (ref === activityRef) list = getInitialSeedActivity();
+        else if (ref === evidenceRef && PseudoPyLearning && PseudoPyLearning.register) list = PseudoPyLearning.register.evidenceStore.getSeedEvidence();
         else list = [];
     }
 
@@ -847,6 +850,16 @@ async function seedDatabase() {
             console.log('[Database] Seeding sample activity into Firestore...');
             await batchSeed(activityRef, SEED_ACTIVITY_LIST);
             console.log('[Database] Activity seeded ✅');
+        }
+
+        if (PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.evidenceStore) {
+            const evSnap = await withFirestoreTimeout(firestore.collection(evidenceRef).get());
+            if (evSnap.empty) {
+                console.log('[Database] Seeding learning evidence into Firestore...');
+                const seeds = PseudoPyLearning.register.evidenceStore.getSeedEvidence();
+                await batchSeed(evidenceRef, seeds);
+                console.log('[Database] Learning evidence seeded ✅');
+            }
         }
     } catch (err) {
         console.warn('[Database] Seeding notice (local fallback active):', err.message);

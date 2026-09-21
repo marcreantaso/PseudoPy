@@ -61,4 +61,6 @@ const passwordRequestsRef = "pseudopy_passwordRequests";
 const auditLogRef = "pseudopy_auditLog";
 const notificationsRef = "pseudopy_notifications";
 const devicesRef = "pseudopy_devices";
+const evidenceRef = "pseudopy_evidence";
+const tutorialProgressRef = "pseudopy_tutorialProgress";
 

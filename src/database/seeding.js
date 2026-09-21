@@ -37,6 +37,16 @@ async function seedDatabase() {
             await batchSeed(activityRef, SEED_ACTIVITY_LIST);
             console.log('[Database] Activity seeded ✅');
         }
+
+        if (PseudoPyLearning && PseudoPyLearning.register && PseudoPyLearning.register.evidenceStore) {
+            const evSnap = await withFirestoreTimeout(firestore.collection(evidenceRef).get());
+            if (evSnap.empty) {
+                console.log('[Database] Seeding learning evidence into Firestore...');
+                const seeds = PseudoPyLearning.register.evidenceStore.getSeedEvidence();
+                await batchSeed(evidenceRef, seeds);
+                console.log('[Database] Learning evidence seeded ✅');
+            }
+        }
     } catch (err) {
         console.warn('[Database] Seeding notice (local fallback active):', err.message);
     }

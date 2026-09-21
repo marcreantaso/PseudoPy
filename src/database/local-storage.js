@@ -15,6 +15,7 @@ function getLocalCollection(ref) {
         if (ref === usersRef) list = getInitialSeedUsers();
         else if (ref === exercisesRef) list = SEED_EXERCISES_LIST;
         else if (ref === activityRef) list = getInitialSeedActivity();
+        else if (ref === evidenceRef && PseudoPyLearning && PseudoPyLearning.register) list = PseudoPyLearning.register.evidenceStore.getSeedEvidence();
         else list = [];
     }
 
