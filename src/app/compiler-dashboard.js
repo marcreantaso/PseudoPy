@@ -36,12 +36,12 @@ function loadCompilerMetrics() {
     const session = metricsEngine.getSessionMetrics();
     const improvement = metricsEngine.getImprovementMetrics();
 
-    setText('metric-total-translations', session.totalTranslations);
-    setText('metric-compilation-rate', session.compilationSuccessRate + '%');
-    setText('metric-runtime-error-rate', session.runtimeErrorRate + '%');
-    setText('metric-avg-gen-time', session.avgGenerationTime + 'ms');
-    setText('metric-total-errors', session.totalErrors);
-    setText('metric-total-executions', session.totalExecutions);
+    setText('metric-total-translations', formatMetricValue(session.totalTranslations));
+    setText('metric-compilation-rate', formatPercent(session.compilationSuccessRate));
+    setText('metric-runtime-error-rate', formatPercent(session.runtimeErrorRate));
+    setText('metric-avg-gen-time', formatDuration(session.avgGenerationTime));
+    setText('metric-total-errors', formatMetricValue(session.totalErrors));
+    setText('metric-total-executions', formatMetricValue(session.totalExecutions));
 
     // Error trend badge
     const trendEl = $id('metric-error-trend');
@@ -59,17 +59,17 @@ function loadCompilerMetrics() {
         <div class="stats-grid" style="margin-bottom: 1rem;">
           <div class="stat-card">
             <div class="stat-icon">{{ui:ChartNoAxesCombined}}</div>
-            <div class="stat-value">${improvement.correctnessImprovement}%</div>
+            <div class="stat-value">${formatPercent(improvement.correctnessImprovement)}</div>
             <div class="stat-label">Correctness Improvement</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon">{{ui:Zap}}</div>
-            <div class="stat-value">${improvement.speedImprovement}%</div>
+            <div class="stat-value">${formatPercent(improvement.speedImprovement)}</div>
             <div class="stat-label">Speed Improvement</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon">{{ui:CircleCheck}}</div>
-            <div class="stat-value">${improvement.overallSuccessRate}%</div>
+            <div class="stat-value">${formatPercent(improvement.overallSuccessRate)}</div>
             <div class="stat-label">Overall Success Rate</div>
           </div>
         </div>`;
@@ -88,7 +88,53 @@ function loadCompilerMetrics() {
     // ── Restore previous benchmark results if available ──
     if (metricsEngine.benchmarkResults) {
         renderBenchmarkResults(metricsEngine.benchmarkResults);
+    } else {
+        renderBenchmarkEmpty();
     }
+}
+
+/** Guards against overlapping benchmark runs. */
+let benchmarkRunning = false;
+
+/**
+ * Show the "not run yet" panel and neutralise the summary cards.
+ */
+function renderBenchmarkEmpty() {
+    _showState('benchmark-empty-state');
+    ['benchmark-accuracy', 'benchmark-precision', 'benchmark-recall', 'benchmark-f1',
+        'benchmark-compile-rate', 'benchmark-avg-time'].forEach(id => {
+            const el = $id(id);
+            if (el) el.textContent = formatMetricValue(null);
+        });
+    const wrapper = $id('benchmark-detail-wrapper');
+    if (wrapper) wrapper.style.display = 'none';
+}
+
+/**
+ * Show the loading panel while a benchmark is being computed.
+ */
+function renderBenchmarkLoading() {
+    _showState('benchmark-loading-state');
+}
+
+/**
+ * Show an error panel with the failure reason and a Retry action.
+ */
+function renderBenchmarkError(message) {
+    const errorEl = $id('benchmark-error-state');
+    _showState('benchmark-error-state');
+    if (errorEl) {
+        const msg = $id('benchmark-error-message');
+        if (msg) msg.textContent = message ? String(message) : 'Unexpected failure.';
+    }
+}
+
+/** Toggle one state panel (empty/loading/error) and hide the others. */
+function _showState(id) {
+    ['benchmark-empty-state', 'benchmark-loading-state', 'benchmark-error-state'].forEach(name => {
+        const el = $id(name);
+        if (el) el.classList.toggle('hidden', name !== id);
+    });
 }
 
 /**
@@ -98,8 +144,11 @@ function loadCompilerMetrics() {
  * Deliverable  : Populates all dashboard cards, per-test table, concept mastery.
  */
 async function runBenchmarkTest() {
+    if (benchmarkRunning) return;
     const btn = $id('run-benchmark-btn');
+    benchmarkRunning = true;
     if (btn) { btn.disabled = true; btn.textContent = '{{ui:Hourglass}} Running...'; }
+    renderBenchmarkLoading();
     showToast('Running benchmark... loading exercises from database.', 'info');
 
     try {
@@ -107,11 +156,12 @@ async function runBenchmarkTest() {
         const dataset = await loadExercisesFromDB();
 
         if (!dataset || dataset.length === 0) {
+            renderBenchmarkError('No test cases found. Please reload the app to seed the database.');
             showToast('No test cases found. Please reload the app to seed the database.', 'error');
             return;
         }
 
-        showToast(`Running ${dataset.length} test cases through the compiler…`, 'info');
+        showToast(`Running ${dataset.length} test cases through the compiler\u2026`, 'info');
 
         // Yield to browser so toast renders before heavy synchronous computation
         await new Promise(r => setTimeout(r, 80));
@@ -123,13 +173,15 @@ async function runBenchmarkTest() {
         renderBenchmarkResults(results);
 
         showToast(
-            `{{ui:CircleCheck}} Benchmark complete! Accuracy: ${results.accuracy}% · F1: ${results.f1Score}% · ${results.totalTestCases} test cases.`,
+            `{{ui:CircleCheck}} Benchmark complete! Accuracy: ${formatPercent(results.accuracy)} \u00b7 F1: ${formatPercent(results.f1Score)} \u00b7 ${results.totalTestCases} test cases.`,
             'success'
         );
     } catch (err) {
         console.error('[Benchmark] Error:', err);
-        showToast('Benchmark failed: ' + err.message, 'error');
+        renderBenchmarkError(err && err.message ? err.message : 'Unexpected failure.');
+        showToast('Benchmark failed: ' + (err && err.message ? err.message : err), 'error');
     } finally {
+        benchmarkRunning = false;
         if (btn) { btn.disabled = false; btn.textContent = '{{ui:FlaskConical}} Run Benchmark'; }
     }
 }
@@ -140,12 +192,15 @@ async function runBenchmarkTest() {
  */
 function renderBenchmarkResults(results) {
     // ── Summary Cards ──
-    setText('benchmark-accuracy', results.accuracy + '%');
-    setText('benchmark-precision', results.avgPrecision + '%');
-    setText('benchmark-recall', results.avgRecall + '%');
-    setText('benchmark-f1', results.f1Score + '%');
-    setText('benchmark-compile-rate', results.compilationSuccessRate + '%');
-    setText('benchmark-avg-time', results.avgTimeMs + 'ms');
+    setText('benchmark-accuracy', formatPercent(results.accuracy));
+    setText('benchmark-precision', formatPercent(results.avgPrecision));
+    setText('benchmark-recall', formatPercent(results.avgRecall));
+    setText('benchmark-f1', formatPercent(results.f1Score));
+    setText('benchmark-compile-rate', formatPercent(results.compilationSuccessRate));
+    setText('benchmark-avg-time', formatDuration(results.avgTimeMs));
+
+    // Benchmark has produced results — hide the empty/loading/error panels.
+    _showState('');
 
     // Per-Test-Case Detail Table
     const wrapper = $id('benchmark-detail-wrapper');
@@ -162,9 +217,9 @@ function renderBenchmarkResults(results) {
           <td>${r.concept}</td>
           <td><span class="badge ${r.compiled ? 'badge-active' : 'badge-inactive'}">${r.compiled ? '{{ui:CircleCheck}} Pass' : '{{ui:CircleX}} Fail'}</span></td>
           <td><span class="badge ${r.exactMatch ? 'badge-active' : 'badge-student'}">${r.exactMatch ? '{{ui:CircleCheck}} Match' : '{{ui:TriangleAlert}} Diff'}</span></td>
-          <td style="font-weight:500">${(r.precision * 100).toFixed(0)}%</td>
-          <td style="font-weight:500">${(r.recall * 100).toFixed(0)}%</td>
-          <td style="color:var(--text-muted)">${r.timeMs}ms</td>
+          <td style="font-weight:500">${formatPercent(r.precision * 100)}</td>
+          <td style="font-weight:500">${formatPercent(r.recall * 100)}</td>
+          <td style="color:var(--text-muted)">${formatDuration(r.timeMs)}</td>
         </tr>`).join('');
     }
 
@@ -176,19 +231,17 @@ function renderBenchmarkResults(results) {
             masteryBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--text-muted)">No concept data available.</td></tr>';
         } else {
             masteryBody.innerHTML = conceptData.map(c => {
-                let masteryLabel, masteryColor;
-                if (c.accuracy >= 80) { masteryLabel = '{{ui:Circle}} Expert'; masteryColor = 'var(--icon-success)'; }
-                else if (c.accuracy >= 60) { masteryLabel = '{{ui:Circle}} Proficient'; masteryColor = 'var(--text-accent)'; }
-                else if (c.accuracy >= 40) { masteryLabel = '{{ui:Circle}} Developing'; masteryColor = 'var(--icon-warning)'; }
-                else { masteryLabel = '{{ui:Circle}} Beginner'; masteryColor = 'var(--icon-danger)'; }
+                const level = masteryInfo(c.accuracy);
+                const label = c.mastery || level.label;
+                const color = level.color;
 
                 return `<tr>
                   <td style="font-weight:600;color:var(--text-primary)">${c.concept}</td>
-                  <td style="color:var(--text-secondary)">${c.total}</td>
-                  <td><span style="font-weight:600;color:${c.successRate >= 80 ? 'var(--icon-success)' : 'var(--icon-warning)'}">${c.successRate}%</span></td>
-                  <td><span style="font-weight:600;color:${c.accuracy >= 60 ? 'var(--icon-success)' : 'var(--icon-danger)'}">${c.accuracy}%</span></td>
-                  <td>${c.precision}%</td>
-                  <td><span style="color:${masteryColor};font-weight:700">${masteryLabel}</span></td>
+                  <td style="color:var(--text-secondary)">${formatMetricValue(c.total)}</td>
+                  <td><span style="font-weight:600;color:${c.successRate >= 80 ? 'var(--icon-success)' : 'var(--icon-warning)'}">${formatPercent(c.successRate)}</span></td>
+                  <td><span style="font-weight:600;color:${color}">${formatPercent(c.accuracy)}</span></td>
+                  <td>${formatPercent(c.avgPrecision)}</td>
+                  <td><span style="color:${color};font-weight:700">{{ui:Circle}} ${label}</span></td>
                 </tr>`;
             }).join('');
         }

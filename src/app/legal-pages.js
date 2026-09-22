@@ -57,7 +57,8 @@ function renderLegalPlaceholders() {
     set('legal-app-name-2', APP_INFO.name);
     set('legal-org', APP_INFO.organization);
     set('legal-org-2', APP_INFO.organization);
-    set('legal-team', (APP_INFO.developmentTeam || []).join(', '));
+    const team = (APP_INFO.developmentTeam || []).join(', ');
+    set('legal-team', team);
     set('legal-version', APP_INFO.version ? 'v' + APP_INFO.version : '');
     set('legal-collections', (APP_INFO.collections || []).join(', '));
     set('legal-contact', APP_INFO.contactEmail);
@@ -71,7 +72,10 @@ function renderLegalPlaceholders() {
     set('about-app-version', APP_INFO.version ? 'v' + APP_INFO.version : '');
     set('about-app-description', APP_INFO.description);
     set('about-org', APP_INFO.organization);
-    set('about-team', (APP_INFO.developmentTeam || []).join(', '));
+    const founder = APP_INFO.founder || '';
+    const coFounder = APP_INFO.coFounder || '';
+    const tech = (APP_INFO.technicalTeam || []).join(', ');
+    set('about-team', 'Founder: ' + founder + (coFounder ? ' \u00b7 Co-Founder: ' + coFounder : '') + (tech ? ' \u00b7 Technical Team: ' + tech : ''));
     set('about-contact', APP_INFO.contactEmail);
 
     const pending = $id('legal-pending-notice');
@@ -79,9 +83,9 @@ function renderLegalPlaceholders() {
         pending.classList.toggle('hidden', !appInfoPending());
         const intro = $id('legal-pending-text');
         if (intro) {
-            intro.textContent = 'This document is a development preview: '
-                + 'the system owner must confirm the organization, contact details and '
-                + 'effective dates below before public launch. Fields marked '
+            intro.textContent = 'Project ownership is confirmed. Organization details, '
+                + 'official contact information, and effective dates must still be '
+                + 'reviewed before public launch. Fields marked '
                 + '\u201c[pending owner configuration]\u201d are not yet finalized.';
         }
     }

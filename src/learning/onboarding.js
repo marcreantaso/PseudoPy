@@ -9,51 +9,10 @@
 
 const ONBOARDING = {
     storageKey: STORAGE_KEYS.TUTORIAL_COMPLETED,
-    steps: [
-        {
-            targetId: 'pseudocode-editor',
-            icon: 'square-pen',
-            title: 'Start in the Editor',
-            text: 'Write your pseudocode here in plain English. You can use BEGIN/END, DECLARE, INPUT, SET, IF/ELSE, FOR and WHILE.',
-            placement: 'below'
-        },
-        {
-            targetId: 'btn-translate-pseudocode',
-            icon: 'refresh-cw',
-            title: 'Translate to Python',
-            text: 'Click this button to convert your pseudocode into real Python code using the built-in translator.',
-            placement: 'below'
-        },
-        {
-            targetId: 'python-output',
-            icon: 'code-2',
-            title: 'Read the Python Output',
-            text: 'The translated Python appears here. Use the Learning Feedback panel below it to review what you did well and what to improve.',
-            placement: 'above'
-        },
-        {
-            targetId: 'btn-run-code',
-            icon: 'play',
-            title: 'Run Your Code',
-            text: 'Run the translated Python locally to check that it behaves as you expected.',
-            placement: 'above'
-        },
-        {
-            targetId: 'console-output',
-            icon: 'terminal',
-            title: 'See Your Results',
-            text: 'Program output, errors and runtime messages appear here — just like a real console.',
-            placement: 'above'
-        },
-        {
-            targetId: 'topbar-progress-pill',
-            icon: 'trophy',
-            title: 'Track Your Progress',
-            text: 'Your skill progress and improvement summary live in Settings. From there you can replay this tutorial any time.',
-            placement: 'left'
-        }
-    ]
+    steps: TOUR_STEPS
 };
+
+const tourModel = createTourModel(TOUR_STEPS);
 
 const onboardingState = {
     overlay: null,
@@ -132,10 +91,10 @@ function onbEnsureOverlay() {
         }
     });
     overlay.querySelector('.tour-skip').addEventListener('click', () => onbStop());
-    overlay.querySelector('.tour-prev').addEventListener('click', () => onbGo(onboardingState.current - 1));
+    overlay.querySelector('.tour-prev').addEventListener('click', () => onbGo(tourModel.getIndex() - 1));
     overlay.querySelector('.tour-next').addEventListener('click', () => {
-        if (onboardingState.current >= ONBOARDING.steps.length - 1) onbFinish();
-        else onbGo(onboardingState.current + 1);
+        if (tourModel.isLast()) onbFinish();
+        else onbGo(tourModel.getIndex() + 1);
     });
 
     bubbleEl().addEventListener('keydown', (ev) => {
@@ -153,6 +112,8 @@ function onbEnsureOverlay() {
     window.addEventListener('resize', () => { onboardingState.safeAreas = null; onbReposition(); });
     window.addEventListener('scroll', onbReposition, { passive: true });
     window.addEventListener('orientationchange', () => { onboardingState.safeAreas = null; onbReposition(); });
+    // Layout can shift if the sidebar/panels collapse mid-tour; reposition when announced.
+    document.addEventListener('layoutchange', () => onbReposition());
 }
 
 function bubbleEl() {
@@ -211,7 +172,7 @@ function onbPositionFor(target) {
     onboardingState.spotlight.style.width = width + 'px';
     onboardingState.spotlight.style.height = height + 'px';
 
-    const step = ONBOARDING.steps[onboardingState.current];
+    const step = tourModel.current() || ONBOARDING.steps[onboardingState.current];
     const bubble = bubbleEl();
     const viewport = {
         width: window.innerWidth,
@@ -233,15 +194,56 @@ function onbPositionFor(target) {
 
 function onbReposition() {
     if (!onboardingState.active) return;
-    const step = ONBOARDING.steps[onboardingState.current];
+    const step = tourModel.current() || ONBOARDING.steps[onboardingState.current];
     const target = document.getElementById(step.targetId);
     if (target) onbPositionFor(target);
 }
 
-function onbRender() {
-    const step = ONBOARDING.steps[onboardingState.current];
-    const target = document.getElementById(step.targetId);
-    if (!target) { onbStop(); return; }
+/**
+ * Resolve the current step's target element.
+ * Policy: (1) immediate hit; (2) navigate to the step's page when a
+ * step lives there and the element is not in the DOM yet; (3) bounded
+ * retries after the navigation settles.
+ */
+async function onbResolveTarget(step) {
+    let target = document.getElementById(step.targetId);
+    if (target) return target;
+
+    if (step.page && (typeof currentPage === 'undefined' || currentPage !== step.page)) {
+        try { navigateTo(step.page); } catch (e) { /* navigation must never throw */ }
+        await new Promise((r) => {
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => requestAnimationFrame(r));
+            } else {
+                setTimeout(r, 50);
+            }
+        });
+        target = document.getElementById(step.targetId);
+        if (target) return target;
+    }
+
+    // Bounded retry — pages render their targets asynchronously (data loads).
+    for (let i = 0; i < 4 && !target; i++) {
+        await new Promise((r) => setTimeout(r, 250));
+        target = document.getElementById(step.targetId);
+    }
+    return target;
+}
+
+async function onbRender() {
+    const step = tourModel.current();
+    if (!step) { onbStop(); return; }
+
+    const target = await onbResolveTarget(step);
+    if (!target) {
+        // Missing target policy: skip forward; never block the student.
+        console.warn(`[Tour] Step target #${step.targetId} not found; skipping step.`);
+        showToast('One of the tutorial steps could not be found and was skipped.', 'info');
+        if (!tourModel.isLast()) onbGo(tourModel.getIndex() + 1);
+        else onbFinish();
+        return;
+    }
+
     const bubble = bubbleEl();
 
     const iconEl = bubble.querySelector('.tour-bubble-icon');
@@ -251,19 +253,19 @@ function onbRender() {
     icon.setAttribute('aria-hidden', 'true');
     iconEl.appendChild(icon);
 
-    bubble.querySelector('.tour-bubble-step').textContent = (onboardingState.current + 1) + ' / ' + ONBOARDING.steps.length;
+    bubble.querySelector('.tour-bubble-step').textContent = (tourModel.getIndex() + 1) + ' / ' + ONBOARDING.steps.length;
     bubble.querySelector('.tour-bubble-title').textContent = step.title;
     bubble.querySelector('.tour-bubble-text').textContent = step.text;
-    bubble.querySelector('.tour-prev').disabled = onboardingState.current === 0;
+    bubble.querySelector('.tour-prev').disabled = tourModel.isFirst();
     const nextBtn = bubble.querySelector('.tour-next');
-    nextBtn.textContent = onboardingState.current >= ONBOARDING.steps.length - 1 ? 'Finish' : 'Next';
+    nextBtn.textContent = tourModel.isLast() ? 'Finish' : 'Next';
 
     const dots = bubble.querySelector('.tour-bubble-dots');
-    dots.setAttribute('aria-label', 'Step ' + (onboardingState.current + 1) + ' of ' + ONBOARDING.steps.length);
+    dots.setAttribute('aria-label', 'Step ' + (tourModel.getIndex() + 1) + ' of ' + ONBOARDING.steps.length);
     dots.innerHTML = '';
     ONBOARDING.steps.forEach((_, i) => {
         const dot = document.createElement('span');
-        dot.className = 'tour-dot' + (i === onboardingState.current ? ' active' : '');
+        dot.className = 'tour-dot' + (i === tourModel.getIndex() ? ' active' : '');
         dot.setAttribute('aria-hidden', 'true');
         dots.appendChild(dot);
     });
@@ -276,14 +278,15 @@ function onbRender() {
 }
 
 function onbGo(index) {
-    if (index < 0 || index >= ONBOARDING.steps.length) return;
-    onboardingState.current = index;
-    onbRender();
+    if (!tourModel.go(index)) onbStop();
+    else onbRender();
 }
 
 function startBeginnerTutorial() {
+    if (onboardingState.active && !overlayEl().classList.contains('hidden')) return;
     onbEnsureOverlay();
     onboardingState.active = true;
+    tourModel.reset();
     onboardingState.current = 0;
     onboardingState.returnFocus = document.activeElement;
     overlayEl().classList.remove('hidden');

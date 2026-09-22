@@ -178,11 +178,19 @@ const APP_INFO = {
     description: 'An educational pseudocode-to-Python translator with role-based '
         + 'dashboards, exercises, learning analytics and authorized-device security.',
     organization: 'Pamantasan ng Cabuyao - College of Computing Studies',
+    // Ownership confirmed by the project lead.
+    founder: 'Mikaella C. Daet',
+    coFounder: 'Marc Gian R. Reantaso',
+    technicalTeam: [
+        'Eduard Mirandilla',
+        'Mark Bautista'
+    ],
+    // Backward-compatible full list for legacy UI paths.
     developmentTeam: [
-        'Bautista, Mark Andrew S.',
-        'Daet, Mikaella C.',
-        'Mirandilla, Eduard John',
-        'Reantaso, Marc Gian R.'
+        'Mikaella C. Daet',
+        'Marc Gian R. Reantaso',
+        'Eduard Mirandilla',
+        'Mark Bautista'
     ],
     contactEmail: '',
     privacyEffectiveDate: '',
@@ -1085,6 +1093,7 @@ function setMobileSidebar(open) {
     if (open) sidebar.querySelector('.sidebar-close')?.focus();
     else if (sidebarPreviousFocus && sidebar.contains(document.activeElement)) sidebarPreviousFocus.focus();
     if (!open) sidebarPreviousFocus = null;
+    if (typeof Event === 'function') document.dispatchEvent(new Event('layoutchange'));
 }
 function toggleMobileSidebar() { setMobileSidebar(!$qs('.sidebar')?.classList.contains('open')); }
 function closeMobileSidebar() { setMobileSidebar(false); }
@@ -3596,7 +3605,7 @@ async function loadStudents() {
     tbody.innerHTML = students.map(u => `
     <tr>
       <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
-      <td>${u.studentId || '—'}</td>
+      <td>${readStudentNumber(u)}</td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">
         <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit" aria-label="Edit user">{{ui:Pencil}}</button>
@@ -3729,8 +3738,19 @@ async function saveUser() {
             if (currentUser.role === 'instructor') {
                 userData.instructorId = currentUser.id;
             }
+            if (role === 'student') {
+                try {
+                    userData.studentNumber = await allocateStudentNumber();
+                } catch (allocErr) {
+                    console.error('[StudentNumber] Allocation failed:', allocErr);
+                    showToast(allocErr && allocErr.message ? allocErr.message : 'Failed to generate student number.', 'error');
+                    return;
+                }
+            }
             await dbSet(usersRef, newId, userData);
-            showToast('User created successfully!', 'success');
+            showToast(role === 'student' && userData.studentNumber
+                ? `${userData.fullName} · Student No. ${userData.studentNumber} · @${userData.username} created successfully!`
+                : 'User created successfully!', 'success');
         }
         closeUserModal();
         if (currentUser.role === 'admin') {
@@ -3766,6 +3786,207 @@ async function deleteUser(id) {
 
 
 /* ============================================================
+   STUDENT NUMBER MIGRATION (Admin only)
+   Assigns 230-series student numbers to student accounts that
+   still carry legacy 'studentId' (2024-xxx) placeholders or none.
+   The preview is side-effect-free; only the confirm step writes
+   user records, and it touches ONLY the document's
+   'studentNumber' field.
+   ============================================================ */
+
+let _snMigrationRunning = false;
+
+async function obtainAllStudentsCached() {
+    let users = cachedUsers;
+    if (!users || users.length === 0) {
+        users = await refreshUsers();
+    }
+    return users;
+}
+
+/** Highest ''230'' sequence currently in use by ANY user document. */
+function _max230Sequence(users) {
+    let max = 0;
+    (Array.isArray(users) ? users : []).forEach((u) => {
+        const sn = u && u.studentNumber;
+        if (isValidStudentNumber(sn)) {
+            const n = parseInt(sn.slice(3), 10);
+            if (n > max) max = n;
+        }
+    });
+    return max;
+}
+
+/**
+ * Preview migration plan. Never mutates the counter or users.
+ * Returns a list of { user, current, proposed } sorted by
+ * current legacy id then account id, plus the base sequence used.
+ */
+async function buildStudentNumberMigrationPlan() {
+    const users = await obtainAllStudentsCached();
+    const targets = (users || []).filter(
+        (u) => u && u.role === 'student' && !isValidStudentNumber(u.studentNumber)
+    );
+    targets.sort((a, b) => String(a.id || a._docId || '').localeCompare(String(b.id || b._docId || '')));
+
+    let baseSeq = _max230Sequence(users);
+    const rows = targets.map((u) => {
+        baseSeq += 1;
+        return {
+            user: u,
+            current: readStudentNumber(u),
+            proposed: formatStudentNumber(baseSeq)
+        };
+    });
+
+    // Duplicate detection within the proposed plan + against live users.
+    let duplicateConflict = null;
+    const proposedSeen = new Set();
+    for (const row of rows) {
+        if (proposedSeen.has(row.proposed) || (users || []).some(
+            (u) => u && u.studentNumber === row.proposed && u !== row.user)
+        ) {
+            duplicateConflict = row.proposed;
+            break;
+        }
+        proposedSeen.add(row.proposed);
+    }
+
+    return { rows, duplicateConflict };
+}
+
+/**
+ * Render the preview modal (side-effect-free) with an admin guard.
+ */
+async function openStudentNumberMigration() {
+    if (!currentUser || currentUser.role !== 'admin') {
+        showToast('Only administrators can manage student numbers.', 'error');
+        return;
+    }
+    const modal = $id('sn-migration-modal');
+    if (!modal) return;
+
+    $id('sn-migration-body').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">Preparing preview...</td></tr>';
+    $id('sn-migration-total').textContent = '…';
+    modal.classList.remove('hidden');
+
+    try {
+        const { rows, duplicateConflict } = await buildStudentNumberMigrationPlan();
+        const tbody = $id('sn-migration-body');
+        if (duplicateConflict) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--danger)">Duplicate proposed number detected (${duplicateConflict}). Aborting — contact your developer.</td></tr>`;
+            $id('sn-migration-total').textContent = 'ERROR';
+            const runBtn = $id('sn-migration-run-btn');
+            if (runBtn) runBtn.disabled = true;
+            return;
+        }
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">All student accounts already have 230-series numbers. Nothing to migrate.</td></tr>';
+            $id('sn-migration-total').textContent = '0';
+            const runBtn = $id('sn-migration-run-btn');
+            if (runBtn) runBtn.disabled = true;
+            return;
+        }
+        tbody.innerHTML = rows.map((row) => `
+            <tr>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar-sm">{{ui:UserRound}}</div>
+                  <div>
+                    <div style="font-weight:600;color:var(--text-primary)">${row.user.fullName || ''}</div>
+                    <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace">@${row.user.username || ''}</div>
+                  </div>
+                </div>
+              </td>
+              <td style="font-family:monospace;font-size:0.85rem;color:var(--text-muted)">${row.current}</td>
+              <td style="font-family:monospace;font-size:0.85rem;color:var(--text-accent)">${row.proposed}</td>
+              <td><span class="badge badge-active">READY</span></td>
+            </tr>`).join('');
+        $id('sn-migration-total').textContent = String(rows.length) + ' student(s)';
+        const runBtn = $id('sn-migration-run-btn');
+        if (runBtn) {
+            runBtn.disabled = false;
+            runBtn.dataset.count = String(rows.length);
+        }
+    } catch (err) {
+        console.error('[StudentMigration] Preview error:', err);
+        $id('sn-migration-body').innerHTML = `<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--danger)">${err && err.message ? err.message : 'Failed to prepare migration preview.'}</td></tr>`;
+        $id('sn-migration-total').textContent = 'ERROR';
+    }
+}
+
+function closeStudentNumberMigration() {
+    const modal = $id('sn-migration-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * Confirmed migration: allocate + patch 'studentNumber' only.
+ * Re-snapshots users so we never double-write an account that was
+ * allocated in the meantime.
+ */
+async function runStudentNumberMigration() {
+    if (!currentUser || currentUser.role !== 'admin') {
+        showToast('Only administrators can manage student numbers.', 'error');
+        return;
+    }
+    if (_snMigrationRunning) return;
+    const runBtn = $id('sn-migration-run-btn');
+    if (runBtn) {
+        runBtn.disabled = true;
+        runBtn.innerHTML = '{{ui:Loader}} Migrating…';
+    }
+    _snMigrationRunning = true;
+
+    try {
+        let users = await refreshUsers();
+        let targets = (users || []).filter(
+            (u) => u && u.role === 'student' && !isValidStudentNumber(u.studentNumber)
+        );
+        targets.sort((a, b) => String(a.id || a._docId || '').localeCompare(String(b.id || b._docId || '')));
+
+        if (targets.length === 0) {
+            showToast('All student accounts already have 230-series numbers.', 'info');
+            closeStudentNumberMigration();
+            return;
+        }
+
+        let assigned = 0;
+        let failed = 0;
+        for (const u of targets) {
+            try {
+                const number = await allocateStudentNumber();
+                await dbUpdate(usersRef, u._docId || u.id, { studentNumber: number });
+                assigned++;
+            } catch (rowErr) {
+                failed++;
+                console.error(`[StudentMigration] Failed for ${u.username}:`, rowErr);
+            }
+        }
+
+        await refreshUsers();
+        let toastTxt;
+        if (failed === 0) {
+            toastTxt = `Assigned 230-series numbers to ${assigned} student(s).`;
+        } else if (assigned === 0) {
+            toastTxt = `Migration failed for all ${failed} student(s).`;
+        } else {
+            toastTxt = `Assigned numbers to ${assigned} student(s); ${failed} failed.`;
+        }
+        showToast(toastTxt, failed === 0 ? 'success' : 'warning');
+        closeStudentNumberMigration();
+    } catch (err) {
+        console.error('[StudentMigration] Migration error:', err);
+        showToast(err && err.message ? err.message : 'Migration failed.', 'error');
+        closeStudentNumberMigration();
+    } finally {
+        _snMigrationRunning = false;
+        if (runBtn) {
+            runBtn.disabled = false;
+            runBtn.innerHTML = '{{ui:CheckCheck}} Migrate Now';
+        }
+    }
+}/* ============================================================
    ANALYTICS (Instructor)
    ============================================================ */
 
@@ -4642,6 +4863,11 @@ async function loadStudentSettings() {
     setText('settings-fullname', currentUser.fullName);
     setText('settings-username', '@' + currentUser.username);
     setText('settings-email', currentUser.email);
+    const studentNumberEl = $id('settings-student-number');
+    if (studentNumberEl) {
+        const sn = readStudentNumber(currentUser);
+        studentNumberEl.textContent = sn === '\u2014' ? 'Not yet assigned' : sn;
+    }
     setText('settings-role', currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1));
         const status = (currentUser.status || 'active').toLowerCase();
         const statusEl = $id('settings-status');
@@ -4867,18 +5093,18 @@ async function submitRecoveryRequest() {
     const rawInput = getValue('fp-username-input').trim();
     const usernameOrId = typeof normalizeUsername === 'function' ? normalizeUsername(rawInput) : rawInput;
     if (!usernameOrId) {
-        showToast('Please enter your username, email, or Student ID.', 'error');
+        showToast('Please enter your username, email, Student ID, or Student Number.', 'error');
         return;
     }
 
     await refreshUsers();
     const targetUser = cachedUsers.find(u =>
-        (u.username === usernameOrId || u.username === rawInput || u.studentId === rawInput || u.email === rawInput) &&
+        (u.username === usernameOrId || u.username === rawInput || u.studentId === rawInput || u.studentNumber === rawInput || u.email === rawInput) &&
         (u.role === 'student' || u.role === 'instructor')
     );
 
     if (!targetUser) {
-        showToast('Account not found. Check your username, email, or Student ID.', 'error');
+        showToast('Account not found. Check your username, email, Student ID, or Student Number.', 'error');
         return;
     }
 
@@ -4962,13 +5188,13 @@ async function checkRecoveryStatus() {
     const lookupVal = typeof normalizeUsername === 'function' ? normalizeUsername(rawLookup) : rawLookup;
 
     if (!lookupVal) {
-        showToast('Please enter your username, email, or Student ID.', 'error');
+        showToast('Please enter your username, email, Student ID, or Student Number.', 'error');
         return;
     }
 
     await refreshUsers();
     const targetUser = cachedUsers.find(u =>
-        (u.username === lookupVal || u.username === rawLookup || u.studentId === rawLookup || u.email === rawLookup) &&
+        (u.username === lookupVal || u.username === rawLookup || u.studentId === rawLookup || u.studentNumber === rawLookup || u.email === rawLookup) &&
         (u.role === 'student' || u.role === 'instructor')
     );
 
@@ -5110,6 +5336,7 @@ function backToLoginAfterReset() {
     setValue('fp-username-input', '');
     setValue('fp-check-username', '');
 }
+
 
 
 /* ============================================================
@@ -7909,6 +8136,96 @@ PseudoPyLearning.register.learningUi = {
     buildClusterCard: buildClusterCard,
     suggestNextStep: suggestNextStep
 };/* ============================================================
+   TOUR STEP DEFINITIONS — data only (no DOM, no state, no I/O)
+   Each step may declare a `page` (navigation route) containing its
+   target, so the tutorial controller can navigate students there
+   at runtime. Steps without a page live in the persistent topbar.
+   ============================================================ */
+
+const TOUR_STEPS = [
+    {
+        targetId: 'pseudocode-editor',
+        page: 'write-pseudocode',
+        icon: 'square-pen',
+        title: 'Start in the Editor',
+        text: 'Write your pseudocode here in plain English. You can use BEGIN/END, DECLARE, INPUT, SET, IF/ELSE, FOR and WHILE.',
+        placement: 'below'
+    },
+    {
+        targetId: 'btn-translate-pseudocode',
+        page: 'write-pseudocode',
+        icon: 'refresh-cw',
+        title: 'Translate to Python',
+        text: 'Click this button to convert your pseudocode into real Python code using the built-in translator.',
+        placement: 'below'
+    },
+    {
+        targetId: 'python-output',
+        page: 'write-pseudocode',
+        icon: 'code-2',
+        title: 'Read the Python Output',
+        text: 'The translated Python appears here. Use the Learning Feedback panel below it to review what you did well and what to improve.',
+        placement: 'above'
+    },
+    {
+        targetId: 'btn-run-code',
+        page: 'write-pseudocode',
+        icon: 'play',
+        title: 'Run Your Code',
+        text: 'Run the translated Python locally to check that it behaves as you expected.',
+        placement: 'above'
+    },
+    {
+        targetId: 'console-output',
+        page: 'write-pseudocode',
+        icon: 'terminal',
+        title: 'See Your Results',
+        text: 'Program output, errors and runtime messages appear here — just like a real console.',
+        placement: 'above'
+    },
+    {
+        targetId: 'topbar-progress-pill',
+        page: '',
+        icon: 'trophy',
+        title: 'Track Your Progress',
+        text: 'Your skill progress and improvement summary live in Settings. From there you can replay this tutorial any time.',
+        placement: 'left'
+    }
+];
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { TOUR_STEPS };
+}/* ============================================================
+   TOUR MODEL — pure step progression (no DOM, no state, no I/O)
+   The controller keeps one model instance per tutorial run so all
+   boundary/skip logic is testable under Node.
+   ============================================================ */
+
+function createTourModel(steps) {
+    const list = Array.isArray(steps) ? steps : [];
+    let index = 0;
+
+    return {
+        get steps() { return list; },
+        getIndex() { return index; },
+        current() { return list[index] || null; },
+        prev() { index = Math.max(0, index - 1); return this.current(); },
+        next() { index = Math.min(list.length - 1, index + 1); return this.current(); },
+        go(i) {
+            const n = Number(i);
+            if (Number.isFinite(n) && n >= 0 && n < list.length) index = n;
+            return this.current();
+        },
+        reset() { index = 0; return this.current(); },
+        isFirst() { return index === 0; },
+        isLast() { return index === list.length - 1; },
+        length() { return list.length; }
+    };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { createTourModel };
+}/* ============================================================
    PSEUDOPY LEARNING LAYER — Beginner Tutorial (Onboarding)
    ------------------------------------------------------------
    A step-by-step guided tour of the Write Pseudocode page for
@@ -7919,51 +8236,10 @@ PseudoPyLearning.register.learningUi = {
 
 const ONBOARDING = {
     storageKey: STORAGE_KEYS.TUTORIAL_COMPLETED,
-    steps: [
-        {
-            targetId: 'pseudocode-editor',
-            icon: 'square-pen',
-            title: 'Start in the Editor',
-            text: 'Write your pseudocode here in plain English. You can use BEGIN/END, DECLARE, INPUT, SET, IF/ELSE, FOR and WHILE.',
-            placement: 'below'
-        },
-        {
-            targetId: 'btn-translate-pseudocode',
-            icon: 'refresh-cw',
-            title: 'Translate to Python',
-            text: 'Click this button to convert your pseudocode into real Python code using the built-in translator.',
-            placement: 'below'
-        },
-        {
-            targetId: 'python-output',
-            icon: 'code-2',
-            title: 'Read the Python Output',
-            text: 'The translated Python appears here. Use the Learning Feedback panel below it to review what you did well and what to improve.',
-            placement: 'above'
-        },
-        {
-            targetId: 'btn-run-code',
-            icon: 'play',
-            title: 'Run Your Code',
-            text: 'Run the translated Python locally to check that it behaves as you expected.',
-            placement: 'above'
-        },
-        {
-            targetId: 'console-output',
-            icon: 'terminal',
-            title: 'See Your Results',
-            text: 'Program output, errors and runtime messages appear here — just like a real console.',
-            placement: 'above'
-        },
-        {
-            targetId: 'topbar-progress-pill',
-            icon: 'trophy',
-            title: 'Track Your Progress',
-            text: 'Your skill progress and improvement summary live in Settings. From there you can replay this tutorial any time.',
-            placement: 'left'
-        }
-    ]
+    steps: TOUR_STEPS
 };
+
+const tourModel = createTourModel(TOUR_STEPS);
 
 const onboardingState = {
     overlay: null,
@@ -8042,10 +8318,10 @@ function onbEnsureOverlay() {
         }
     });
     overlay.querySelector('.tour-skip').addEventListener('click', () => onbStop());
-    overlay.querySelector('.tour-prev').addEventListener('click', () => onbGo(onboardingState.current - 1));
+    overlay.querySelector('.tour-prev').addEventListener('click', () => onbGo(tourModel.getIndex() - 1));
     overlay.querySelector('.tour-next').addEventListener('click', () => {
-        if (onboardingState.current >= ONBOARDING.steps.length - 1) onbFinish();
-        else onbGo(onboardingState.current + 1);
+        if (tourModel.isLast()) onbFinish();
+        else onbGo(tourModel.getIndex() + 1);
     });
 
     bubbleEl().addEventListener('keydown', (ev) => {
@@ -8063,6 +8339,8 @@ function onbEnsureOverlay() {
     window.addEventListener('resize', () => { onboardingState.safeAreas = null; onbReposition(); });
     window.addEventListener('scroll', onbReposition, { passive: true });
     window.addEventListener('orientationchange', () => { onboardingState.safeAreas = null; onbReposition(); });
+    // Layout can shift if the sidebar/panels collapse mid-tour; reposition when announced.
+    document.addEventListener('layoutchange', () => onbReposition());
 }
 
 function bubbleEl() {
@@ -8121,7 +8399,7 @@ function onbPositionFor(target) {
     onboardingState.spotlight.style.width = width + 'px';
     onboardingState.spotlight.style.height = height + 'px';
 
-    const step = ONBOARDING.steps[onboardingState.current];
+    const step = tourModel.current() || ONBOARDING.steps[onboardingState.current];
     const bubble = bubbleEl();
     const viewport = {
         width: window.innerWidth,
@@ -8143,15 +8421,56 @@ function onbPositionFor(target) {
 
 function onbReposition() {
     if (!onboardingState.active) return;
-    const step = ONBOARDING.steps[onboardingState.current];
+    const step = tourModel.current() || ONBOARDING.steps[onboardingState.current];
     const target = document.getElementById(step.targetId);
     if (target) onbPositionFor(target);
 }
 
-function onbRender() {
-    const step = ONBOARDING.steps[onboardingState.current];
-    const target = document.getElementById(step.targetId);
-    if (!target) { onbStop(); return; }
+/**
+ * Resolve the current step's target element.
+ * Policy: (1) immediate hit; (2) navigate to the step's page when a
+ * step lives there and the element is not in the DOM yet; (3) bounded
+ * retries after the navigation settles.
+ */
+async function onbResolveTarget(step) {
+    let target = document.getElementById(step.targetId);
+    if (target) return target;
+
+    if (step.page && (typeof currentPage === 'undefined' || currentPage !== step.page)) {
+        try { navigateTo(step.page); } catch (e) { /* navigation must never throw */ }
+        await new Promise((r) => {
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => requestAnimationFrame(r));
+            } else {
+                setTimeout(r, 50);
+            }
+        });
+        target = document.getElementById(step.targetId);
+        if (target) return target;
+    }
+
+    // Bounded retry — pages render their targets asynchronously (data loads).
+    for (let i = 0; i < 4 && !target; i++) {
+        await new Promise((r) => setTimeout(r, 250));
+        target = document.getElementById(step.targetId);
+    }
+    return target;
+}
+
+async function onbRender() {
+    const step = tourModel.current();
+    if (!step) { onbStop(); return; }
+
+    const target = await onbResolveTarget(step);
+    if (!target) {
+        // Missing target policy: skip forward; never block the student.
+        console.warn(`[Tour] Step target #${step.targetId} not found; skipping step.`);
+        showToast('One of the tutorial steps could not be found and was skipped.', 'info');
+        if (!tourModel.isLast()) onbGo(tourModel.getIndex() + 1);
+        else onbFinish();
+        return;
+    }
+
     const bubble = bubbleEl();
 
     const iconEl = bubble.querySelector('.tour-bubble-icon');
@@ -8161,19 +8480,19 @@ function onbRender() {
     icon.setAttribute('aria-hidden', 'true');
     iconEl.appendChild(icon);
 
-    bubble.querySelector('.tour-bubble-step').textContent = (onboardingState.current + 1) + ' / ' + ONBOARDING.steps.length;
+    bubble.querySelector('.tour-bubble-step').textContent = (tourModel.getIndex() + 1) + ' / ' + ONBOARDING.steps.length;
     bubble.querySelector('.tour-bubble-title').textContent = step.title;
     bubble.querySelector('.tour-bubble-text').textContent = step.text;
-    bubble.querySelector('.tour-prev').disabled = onboardingState.current === 0;
+    bubble.querySelector('.tour-prev').disabled = tourModel.isFirst();
     const nextBtn = bubble.querySelector('.tour-next');
-    nextBtn.textContent = onboardingState.current >= ONBOARDING.steps.length - 1 ? 'Finish' : 'Next';
+    nextBtn.textContent = tourModel.isLast() ? 'Finish' : 'Next';
 
     const dots = bubble.querySelector('.tour-bubble-dots');
-    dots.setAttribute('aria-label', 'Step ' + (onboardingState.current + 1) + ' of ' + ONBOARDING.steps.length);
+    dots.setAttribute('aria-label', 'Step ' + (tourModel.getIndex() + 1) + ' of ' + ONBOARDING.steps.length);
     dots.innerHTML = '';
     ONBOARDING.steps.forEach((_, i) => {
         const dot = document.createElement('span');
-        dot.className = 'tour-dot' + (i === onboardingState.current ? ' active' : '');
+        dot.className = 'tour-dot' + (i === tourModel.getIndex() ? ' active' : '');
         dot.setAttribute('aria-hidden', 'true');
         dots.appendChild(dot);
     });
@@ -8186,14 +8505,15 @@ function onbRender() {
 }
 
 function onbGo(index) {
-    if (index < 0 || index >= ONBOARDING.steps.length) return;
-    onboardingState.current = index;
-    onbRender();
+    if (!tourModel.go(index)) onbStop();
+    else onbRender();
 }
 
 function startBeginnerTutorial() {
+    if (onboardingState.active && !overlayEl().classList.contains('hidden')) return;
     onbEnsureOverlay();
     onboardingState.active = true;
+    tourModel.reset();
     onboardingState.current = 0;
     onboardingState.returnFocus = document.activeElement;
     overlayEl().classList.remove('hidden');
@@ -8553,6 +8873,85 @@ PseudoPyLearning.register.evidenceStore = {
     saveTutorialProgress: saveTutorialProgress,
     hash: evHash
 };/* ============================================================
+   METRICS FORMATTERS
+   Pure, Node-testable helpers used by the Compiler Metrics page.
+   Any invalid / missing value renders as an em dash so the UI
+   never shows fake zeros or "NaN".
+   ============================================================ */
+
+function _isFiniteNumber(value) {
+    return value !== null && value !== undefined && Number.isFinite(Number(value));
+}
+
+/** Round to at most one decimal and drop a trailing ".0". */
+function _trim(n) {
+    const rounded = Math.round(n * 10) / 10;
+    return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+}
+
+/**
+ * Format a percentage value.
+ * Values are assumed to already be on a 0-100 scale (the engine's
+ * convention). Pass { fromRatio: true } for 0-1 fractions.
+ * Returns "—" for null / undefined / NaN / Infinity.
+ */
+function formatPercent(value, options) {
+    if (!_isFiniteNumber(value)) return '\u2014';
+    let n = Number(value);
+    const opts = options || {};
+    if (opts.fromRatio && n >= 0 && n <= 1) n = n * 100;
+    return _trim(n) + '%';
+}
+
+/**
+ * Format a duration. Milliseconds < 1000 are shown as "ms";
+ * durations >= 1 second are converted to seconds ("1.24 s").
+ * Returns "—" for missing values.
+ */
+function formatDuration(value) {
+    if (!_isFiniteNumber(value)) return '\u2014';
+    const v = Number(value);
+    if (v >= 1000) {
+        const secs = Math.round((v / 1000) * 100) / 100;
+        return _trim(secs) + ' s';
+    }
+    return _trim(v) + ' ms';
+}
+
+/**
+ * Format a plain metric (counts, raw numbers).
+ * Returns "—" for missing values and a readable number otherwise.
+ */
+function formatMetricValue(value) {
+    if (!_isFiniteNumber(value)) return '\u2014';
+    return _trim(Number(value));
+}
+
+/**
+ * Single source of truth for mastery thresholds, kept in sync with
+ * the MetricsEngine taxonomy (Expert >= 80, Proficient >= 65,
+ * Developing >= 40, Beginner < 40).
+ */
+const MASTERY_LEVELS = [
+    { min: 80, label: 'Expert', color: 'var(--icon-success)' },
+    { min: 65, label: 'Proficient', color: 'var(--text-accent)' },
+    { min: 40, label: 'Developing', color: 'var(--icon-warning)' },
+    { min: 0, label: 'Beginner', color: 'var(--icon-danger)' }
+];
+
+/** Resolve the mastery label (+ color) for an exact-match accuracy (0-100). */
+function masteryInfo(accuracy) {
+    if (!_isFiniteNumber(accuracy)) return MASTERY_LEVELS[MASTERY_LEVELS.length - 1];
+    const a = Number(accuracy);
+    for (let i = 0; i < MASTERY_LEVELS.length; i++) {
+        if (a >= MASTERY_LEVELS[i].min) return MASTERY_LEVELS[i];
+    }
+    return MASTERY_LEVELS[MASTERY_LEVELS.length - 1];
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { formatPercent, formatDuration, formatMetricValue, MASTERY_LEVELS, masteryInfo };
+}/* ============================================================
    COMPILER METRICS DASHBOARD (Panel 1 — Evaluation)
    Benchmark runner, session metrics, and improvement tracking
    ============================================================ */
@@ -8590,12 +8989,12 @@ function loadCompilerMetrics() {
     const session = metricsEngine.getSessionMetrics();
     const improvement = metricsEngine.getImprovementMetrics();
 
-    setText('metric-total-translations', session.totalTranslations);
-    setText('metric-compilation-rate', session.compilationSuccessRate + '%');
-    setText('metric-runtime-error-rate', session.runtimeErrorRate + '%');
-    setText('metric-avg-gen-time', session.avgGenerationTime + 'ms');
-    setText('metric-total-errors', session.totalErrors);
-    setText('metric-total-executions', session.totalExecutions);
+    setText('metric-total-translations', formatMetricValue(session.totalTranslations));
+    setText('metric-compilation-rate', formatPercent(session.compilationSuccessRate));
+    setText('metric-runtime-error-rate', formatPercent(session.runtimeErrorRate));
+    setText('metric-avg-gen-time', formatDuration(session.avgGenerationTime));
+    setText('metric-total-errors', formatMetricValue(session.totalErrors));
+    setText('metric-total-executions', formatMetricValue(session.totalExecutions));
 
     // Error trend badge
     const trendEl = $id('metric-error-trend');
@@ -8613,17 +9012,17 @@ function loadCompilerMetrics() {
         <div class="stats-grid" style="margin-bottom: 1rem;">
           <div class="stat-card">
             <div class="stat-icon">{{ui:ChartNoAxesCombined}}</div>
-            <div class="stat-value">${improvement.correctnessImprovement}%</div>
+            <div class="stat-value">${formatPercent(improvement.correctnessImprovement)}</div>
             <div class="stat-label">Correctness Improvement</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon">{{ui:Zap}}</div>
-            <div class="stat-value">${improvement.speedImprovement}%</div>
+            <div class="stat-value">${formatPercent(improvement.speedImprovement)}</div>
             <div class="stat-label">Speed Improvement</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon">{{ui:CircleCheck}}</div>
-            <div class="stat-value">${improvement.overallSuccessRate}%</div>
+            <div class="stat-value">${formatPercent(improvement.overallSuccessRate)}</div>
             <div class="stat-label">Overall Success Rate</div>
           </div>
         </div>`;
@@ -8642,7 +9041,53 @@ function loadCompilerMetrics() {
     // ── Restore previous benchmark results if available ──
     if (metricsEngine.benchmarkResults) {
         renderBenchmarkResults(metricsEngine.benchmarkResults);
+    } else {
+        renderBenchmarkEmpty();
     }
+}
+
+/** Guards against overlapping benchmark runs. */
+let benchmarkRunning = false;
+
+/**
+ * Show the "not run yet" panel and neutralise the summary cards.
+ */
+function renderBenchmarkEmpty() {
+    _showState('benchmark-empty-state');
+    ['benchmark-accuracy', 'benchmark-precision', 'benchmark-recall', 'benchmark-f1',
+        'benchmark-compile-rate', 'benchmark-avg-time'].forEach(id => {
+            const el = $id(id);
+            if (el) el.textContent = formatMetricValue(null);
+        });
+    const wrapper = $id('benchmark-detail-wrapper');
+    if (wrapper) wrapper.style.display = 'none';
+}
+
+/**
+ * Show the loading panel while a benchmark is being computed.
+ */
+function renderBenchmarkLoading() {
+    _showState('benchmark-loading-state');
+}
+
+/**
+ * Show an error panel with the failure reason and a Retry action.
+ */
+function renderBenchmarkError(message) {
+    const errorEl = $id('benchmark-error-state');
+    _showState('benchmark-error-state');
+    if (errorEl) {
+        const msg = $id('benchmark-error-message');
+        if (msg) msg.textContent = message ? String(message) : 'Unexpected failure.';
+    }
+}
+
+/** Toggle one state panel (empty/loading/error) and hide the others. */
+function _showState(id) {
+    ['benchmark-empty-state', 'benchmark-loading-state', 'benchmark-error-state'].forEach(name => {
+        const el = $id(name);
+        if (el) el.classList.toggle('hidden', name !== id);
+    });
 }
 
 /**
@@ -8652,8 +9097,11 @@ function loadCompilerMetrics() {
  * Deliverable  : Populates all dashboard cards, per-test table, concept mastery.
  */
 async function runBenchmarkTest() {
+    if (benchmarkRunning) return;
     const btn = $id('run-benchmark-btn');
+    benchmarkRunning = true;
     if (btn) { btn.disabled = true; btn.textContent = '{{ui:Hourglass}} Running...'; }
+    renderBenchmarkLoading();
     showToast('Running benchmark... loading exercises from database.', 'info');
 
     try {
@@ -8661,11 +9109,12 @@ async function runBenchmarkTest() {
         const dataset = await loadExercisesFromDB();
 
         if (!dataset || dataset.length === 0) {
+            renderBenchmarkError('No test cases found. Please reload the app to seed the database.');
             showToast('No test cases found. Please reload the app to seed the database.', 'error');
             return;
         }
 
-        showToast(`Running ${dataset.length} test cases through the compiler…`, 'info');
+        showToast(`Running ${dataset.length} test cases through the compiler\u2026`, 'info');
 
         // Yield to browser so toast renders before heavy synchronous computation
         await new Promise(r => setTimeout(r, 80));
@@ -8677,13 +9126,15 @@ async function runBenchmarkTest() {
         renderBenchmarkResults(results);
 
         showToast(
-            `{{ui:CircleCheck}} Benchmark complete! Accuracy: ${results.accuracy}% · F1: ${results.f1Score}% · ${results.totalTestCases} test cases.`,
+            `{{ui:CircleCheck}} Benchmark complete! Accuracy: ${formatPercent(results.accuracy)} \u00b7 F1: ${formatPercent(results.f1Score)} \u00b7 ${results.totalTestCases} test cases.`,
             'success'
         );
     } catch (err) {
         console.error('[Benchmark] Error:', err);
-        showToast('Benchmark failed: ' + err.message, 'error');
+        renderBenchmarkError(err && err.message ? err.message : 'Unexpected failure.');
+        showToast('Benchmark failed: ' + (err && err.message ? err.message : err), 'error');
     } finally {
+        benchmarkRunning = false;
         if (btn) { btn.disabled = false; btn.textContent = '{{ui:FlaskConical}} Run Benchmark'; }
     }
 }
@@ -8694,12 +9145,15 @@ async function runBenchmarkTest() {
  */
 function renderBenchmarkResults(results) {
     // ── Summary Cards ──
-    setText('benchmark-accuracy', results.accuracy + '%');
-    setText('benchmark-precision', results.avgPrecision + '%');
-    setText('benchmark-recall', results.avgRecall + '%');
-    setText('benchmark-f1', results.f1Score + '%');
-    setText('benchmark-compile-rate', results.compilationSuccessRate + '%');
-    setText('benchmark-avg-time', results.avgTimeMs + 'ms');
+    setText('benchmark-accuracy', formatPercent(results.accuracy));
+    setText('benchmark-precision', formatPercent(results.avgPrecision));
+    setText('benchmark-recall', formatPercent(results.avgRecall));
+    setText('benchmark-f1', formatPercent(results.f1Score));
+    setText('benchmark-compile-rate', formatPercent(results.compilationSuccessRate));
+    setText('benchmark-avg-time', formatDuration(results.avgTimeMs));
+
+    // Benchmark has produced results — hide the empty/loading/error panels.
+    _showState('');
 
     // Per-Test-Case Detail Table
     const wrapper = $id('benchmark-detail-wrapper');
@@ -8716,9 +9170,9 @@ function renderBenchmarkResults(results) {
           <td>${r.concept}</td>
           <td><span class="badge ${r.compiled ? 'badge-active' : 'badge-inactive'}">${r.compiled ? '{{ui:CircleCheck}} Pass' : '{{ui:CircleX}} Fail'}</span></td>
           <td><span class="badge ${r.exactMatch ? 'badge-active' : 'badge-student'}">${r.exactMatch ? '{{ui:CircleCheck}} Match' : '{{ui:TriangleAlert}} Diff'}</span></td>
-          <td style="font-weight:500">${(r.precision * 100).toFixed(0)}%</td>
-          <td style="font-weight:500">${(r.recall * 100).toFixed(0)}%</td>
-          <td style="color:var(--text-muted)">${r.timeMs}ms</td>
+          <td style="font-weight:500">${formatPercent(r.precision * 100)}</td>
+          <td style="font-weight:500">${formatPercent(r.recall * 100)}</td>
+          <td style="color:var(--text-muted)">${formatDuration(r.timeMs)}</td>
         </tr>`).join('');
     }
 
@@ -8730,19 +9184,17 @@ function renderBenchmarkResults(results) {
             masteryBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--text-muted)">No concept data available.</td></tr>';
         } else {
             masteryBody.innerHTML = conceptData.map(c => {
-                let masteryLabel, masteryColor;
-                if (c.accuracy >= 80) { masteryLabel = '{{ui:Circle}} Expert'; masteryColor = 'var(--icon-success)'; }
-                else if (c.accuracy >= 60) { masteryLabel = '{{ui:Circle}} Proficient'; masteryColor = 'var(--text-accent)'; }
-                else if (c.accuracy >= 40) { masteryLabel = '{{ui:Circle}} Developing'; masteryColor = 'var(--icon-warning)'; }
-                else { masteryLabel = '{{ui:Circle}} Beginner'; masteryColor = 'var(--icon-danger)'; }
+                const level = masteryInfo(c.accuracy);
+                const label = c.mastery || level.label;
+                const color = level.color;
 
                 return `<tr>
                   <td style="font-weight:600;color:var(--text-primary)">${c.concept}</td>
-                  <td style="color:var(--text-secondary)">${c.total}</td>
-                  <td><span style="font-weight:600;color:${c.successRate >= 80 ? 'var(--icon-success)' : 'var(--icon-warning)'}">${c.successRate}%</span></td>
-                  <td><span style="font-weight:600;color:${c.accuracy >= 60 ? 'var(--icon-success)' : 'var(--icon-danger)'}">${c.accuracy}%</span></td>
-                  <td>${c.precision}%</td>
-                  <td><span style="color:${masteryColor};font-weight:700">${masteryLabel}</span></td>
+                  <td style="color:var(--text-secondary)">${formatMetricValue(c.total)}</td>
+                  <td><span style="font-weight:600;color:${c.successRate >= 80 ? 'var(--icon-success)' : 'var(--icon-warning)'}">${formatPercent(c.successRate)}</span></td>
+                  <td><span style="font-weight:600;color:${color}">${formatPercent(c.accuracy)}</span></td>
+                  <td>${formatPercent(c.avgPrecision)}</td>
+                  <td><span style="color:${color};font-weight:700">{{ui:Circle}} ${label}</span></td>
                 </tr>`;
             }).join('');
         }
@@ -9186,7 +9638,8 @@ function renderLegalPlaceholders() {
     set('legal-app-name-2', APP_INFO.name);
     set('legal-org', APP_INFO.organization);
     set('legal-org-2', APP_INFO.organization);
-    set('legal-team', (APP_INFO.developmentTeam || []).join(', '));
+    const team = (APP_INFO.developmentTeam || []).join(', ');
+    set('legal-team', team);
     set('legal-version', APP_INFO.version ? 'v' + APP_INFO.version : '');
     set('legal-collections', (APP_INFO.collections || []).join(', '));
     set('legal-contact', APP_INFO.contactEmail);
@@ -9200,7 +9653,10 @@ function renderLegalPlaceholders() {
     set('about-app-version', APP_INFO.version ? 'v' + APP_INFO.version : '');
     set('about-app-description', APP_INFO.description);
     set('about-org', APP_INFO.organization);
-    set('about-team', (APP_INFO.developmentTeam || []).join(', '));
+    const founder = APP_INFO.founder || '';
+    const coFounder = APP_INFO.coFounder || '';
+    const tech = (APP_INFO.technicalTeam || []).join(', ');
+    set('about-team', 'Founder: ' + founder + (coFounder ? ' \u00b7 Co-Founder: ' + coFounder : '') + (tech ? ' \u00b7 Technical Team: ' + tech : ''));
     set('about-contact', APP_INFO.contactEmail);
 
     const pending = $id('legal-pending-notice');
@@ -9208,9 +9664,9 @@ function renderLegalPlaceholders() {
         pending.classList.toggle('hidden', !appInfoPending());
         const intro = $id('legal-pending-text');
         if (intro) {
-            intro.textContent = 'This document is a development preview: '
-                + 'the system owner must confirm the organization, contact details and '
-                + 'effective dates below before public launch. Fields marked '
+            intro.textContent = 'Project ownership is confirmed. Organization details, '
+                + 'official contact information, and effective dates must still be '
+                + 'reviewed before public launch. Fields marked '
                 + '\u201c[pending owner configuration]\u201d are not yet finalized.';
         }
     }

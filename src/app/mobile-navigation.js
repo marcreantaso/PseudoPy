@@ -22,6 +22,7 @@ function setMobileSidebar(open) {
     if (open) sidebar.querySelector('.sidebar-close')?.focus();
     else if (sidebarPreviousFocus && sidebar.contains(document.activeElement)) sidebarPreviousFocus.focus();
     if (!open) sidebarPreviousFocus = null;
+    if (typeof Event === 'function') document.dispatchEvent(new Event('layoutchange'));
 }
 function toggleMobileSidebar() { setMobileSidebar(!$qs('.sidebar')?.classList.contains('open')); }
 function closeMobileSidebar() { setMobileSidebar(false); }

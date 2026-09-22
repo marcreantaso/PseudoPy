@@ -47,17 +47,17 @@
 
   <a class="skip-link" href="#main-content">Skip to main content</a>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  <!-- ════════════════════════════════════════
        TOAST CONTAINER
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+       ════════════════════════════════════════ -->
   <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-       LOGIN PAGE â€” Split Layout
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+  <!-- ════════════════════════════════════════
+       LOGIN PAGE — Split Layout
+       ════════════════════════════════════════ -->
   <div id="login-page" class="login-page">
 
-    <!-- â”€â”€ Left Hero Panel â”€â”€ -->
+    <!-- ── Left Hero Panel ── -->
     <div class="login-hero">
       <div class="hero-bg-shapes">
         <div class="hero-shape hero-shape-1"></div>
@@ -72,7 +72,7 @@
         <h1 class="hero-tagline">
           Transform<br>your ideas<br>into <span class="hero-highlight">code</span>.
         </h1>
-        <p class="hero-subtitle">Translating Pseudocode to Python â€” An Algorithmic Approach to Automated Code Generation
+        <p class="hero-subtitle">Translating Pseudocode to Python — An Algorithmic Approach to Automated Code Generation
         </p>
 
         <!-- Decorative floating code card -->
@@ -91,7 +91,7 @@
       </div>
     </div>
 
-    <!-- â”€â”€ Right Form Panel â”€â”€ -->
+    <!-- ── Right Form Panel ── -->
     <div class="login-form-section">
         <div id="login-form-section-inner">
           <div class="login-card-header">
@@ -99,7 +99,7 @@
             <p>Enter your credentials to continue.</p>
           </div>
 
-          <!-- â”€â”€ Login Credentials Guide â”€â”€ -->
+          <!-- ── Login Credentials Guide ── -->
           <div class="login-hint-box">
             <div class="login-hint-header" onclick="toggleLoginHint(this)">
               <span><i data-lucide="lightbulb" aria-hidden="true"></i> How to log in</span>
@@ -174,7 +174,7 @@
           </div>
         </div>
 
-        <!-- â”€â”€ Forgot Password Panel (hidden by default) â”€â”€ -->
+        <!-- ── Forgot Password Panel (hidden by default) ── -->
         <div id="forgot-password-panel" class="hidden">
           <div class="login-card-header">
             <h2><i data-lucide="lock-keyhole" aria-hidden="true"></i> Forgot Password?</h2>
@@ -211,7 +211,7 @@
               <input type="text" id="fp-check-username" class="form-input" placeholder="e.g. mdaet_student, mreantaso_instructor or 2024-032">
             </div>
             <div style="display:flex; gap:0.75rem; margin-top:1rem;">
-              <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">â† Back to Login</button>
+              <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">← Back to Login</button>
               <button class="btn btn-primary" onclick="checkRecoveryStatus()" style="flex:2"><i data-lucide="search" aria-hidden="true"></i> Check Status</button>
             </div>
           </div>
@@ -234,7 +234,7 @@
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('fp-reset-new-password', this)"
                   aria-label="Show password"
-                  style="position:absolute; right:0.25rem; background:transparent; border:none; font-size:1.1rem; opacity:0.7; cursor:pointer;">â€¢â€¢â€¢</button>
+                  style="position:absolute; right:0.25rem; background:transparent; border:none; font-size:1.1rem; opacity:0.7; cursor:pointer;">•••</button>
               </div>
             </div>
             <div class="form-group">
@@ -245,12 +245,12 @@
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('fp-reset-confirm-password', this)"
                   aria-label="Show password"
-                  style="position:absolute; right:0.25rem; background:transparent; border:none; font-size:1.1rem; opacity:0.7; cursor:pointer;">â€¢â€¢â€¢</button>
+                  style="position:absolute; right:0.25rem; background:transparent; border:none; font-size:1.1rem; opacity:0.7; cursor:pointer;">•••</button>
               </div>
             </div>
               <div>{{ui:Check}} Passwords must match</div>
             <div style="display:flex; gap:0.75rem; margin-top:1.25rem;">
-              <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">â† Cancel</button>
+              <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">← Cancel</button>
               <button class="btn btn-primary" onclick="submitPasswordReset()" style="flex:2"><i data-lucide="lock-keyhole" aria-hidden="true"></i> Reset Password</button>
             </div>
           </div>
@@ -263,7 +263,7 @@
               <p>You can now log in with your new password.</p>
             </div>
             <button class="btn btn-primary" onclick="backToLoginAfterReset()" style="width:100%; margin-top:1.25rem;">
-              â†’ Back to Login
+              → Back to Login
             </button>
           </div>
         </div>
@@ -271,14 +271,14 @@
     </div>
   </div>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  <!-- ════════════════════════════════════════
        APP LAYOUT (Sidebar + Main)
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+       ════════════════════════════════════════ -->
   <div id="app-layout" class="app-layout hidden">
 
-    <!-- â”€â”€ Sidebar â”€â”€ -->
+    <!-- ── Sidebar ── -->
     <aside class="sidebar" id="app-sidebar" aria-label="Main navigation">
-      <button class="btn btn-ghost sidebar-close" type="button" onclick="closeMobileSidebar()" aria-label="Close navigation">Close menu <span aria-hidden="true">Ã—</span></button>
+      <button class="btn btn-ghost sidebar-close" type="button" onclick="closeMobileSidebar()" aria-label="Close navigation">Close menu <span aria-hidden="true">×</span></button>
       <div class="sidebar-header">
         <div class="brand">
           <div class="brand-icon"><img class="pseudopy-logo" src="icons/pseudopy-192.png?v=2" width="32" height="32" alt="" aria-hidden="true"></div>
@@ -374,10 +374,10 @@
       </div>
     </aside>
 
-    <!-- â”€â”€ Mobile Sidebar Overlay â”€â”€ -->
+    <!-- ── Mobile Sidebar Overlay ── -->
     <div id="sidebar-overlay" class="sidebar-overlay hidden" onclick="closeMobileSidebar()"></div>
 
-    <!-- â”€â”€ Top Bar â”€â”€ -->
+    <!-- ── Top Bar ── -->
     <div class="topbar">
       <div style="display:flex;align-items:center;gap:0.75rem">
         <button id="hamburger-btn" type="button" aria-label="Open navigation" aria-controls="app-sidebar" aria-expanded="false" class="btn btn-ghost btn-icon hamburger-btn" onclick="toggleMobileSidebar()">
@@ -420,12 +420,12 @@
       </div>
     </div>
 
-    <!-- â”€â”€ Main Content Area â”€â”€ -->
+    <!-- ── Main Content Area ── -->
       <main class="main-content" id="main-content" tabindex="-1">
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Write Pseudocode (Student)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-write-pseudocode" class="page-view">
         <details class="operator-guide">
           <summary>Python operators &amp; pseudocode rules</summary>
@@ -586,9 +586,9 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Translate (Student)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-translate" class="page-view hidden">
         <details class="operator-guide">
           <summary>Python operators &amp; pseudocode rules</summary>
@@ -650,9 +650,9 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Execute Code (Student)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-execute" class="page-view hidden">
         <div class="page-header">
           <div>
@@ -686,9 +686,9 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Feedback & Suggestions (Student)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-feedback" class="page-view hidden">
         <div class="page-header">
           <div>
@@ -744,12 +744,12 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Student Exercises
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+           ═══════════════════════════════════ -->
+      <!-- ═══════════════════════════════════
            PAGE: Student Exercises
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-exercises-student" class="page-view hidden">
         <div class="page-header student-ex-header" style="justify-content: space-between; align-items: flex-end; margin-bottom: 1.25rem;">
           <div>
@@ -813,9 +813,9 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Learning Analytics (Instructor)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-analytics" class="page-view hidden">
 
         <!-- Page Header -->
@@ -896,7 +896,7 @@
               <div class="an-kpi-value" id="stat-students">0</div>
               <div class="an-kpi-label">Active Students</div>
               <div class="an-kpi-trend" id="stat-students-trend">
-                <span class="positive">â€”</span> <span
+                <span class="positive">—</span> <span
                   style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">vs last week</span>
               </div>
             </div>
@@ -909,7 +909,7 @@
               <div class="an-kpi-value" id="stat-submissions">0</div>
               <div class="an-kpi-label">Total Submissions</div>
               <div class="an-kpi-trend" id="stat-submissions-trend">
-                <span class="positive">â€”</span> <span
+                <span class="positive">—</span> <span
                   style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">vs last week</span>
               </div>
             </div>
@@ -922,7 +922,7 @@
               <div class="an-kpi-value" id="stat-success-rate">0%</div>
               <div class="an-kpi-label">Success Rate</div>
               <div class="an-kpi-trend" id="stat-success-trend">
-                <span class="positive">â€”</span> <span
+                <span class="positive">—</span> <span
                   style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">vs last week</span>
               </div>
             </div>
@@ -935,7 +935,7 @@
               <div class="an-kpi-value" id="stat-common-errors">0</div>
               <div class="an-kpi-label">Common Errors</div>
               <div class="an-kpi-trend" id="stat-errors-trend">
-                <span class="negative">â€”</span> <span
+                <span class="negative">—</span> <span
                   style="opacity:0.5;font-size:0.65rem;color:var(--text-muted)">vs last week</span>
               </div>
             </div>
@@ -1145,9 +1145,9 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Manage Exercises (Instructor)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-manage-exercises" class="page-view hidden">
         <div class="page-header">
           <div>
@@ -1198,16 +1198,16 @@
             </thead>
             <tbody id="exercises-table-body">
               <tr>
-                <td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">Loading exercisesâ€¦</td>
+                <td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">Loading exercises…</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Manage Students (Instructor)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-manage-students" class="page-view hidden">
         <div class="page-header">
           <div>
@@ -1255,9 +1255,9 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Generate Code (Instructor)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-generate-code" class="page-view hidden">
         <details class="operator-guide">
           <summary>Python operators &amp; pseudocode rules</summary>
@@ -1318,9 +1318,9 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Compiler Metrics (Instructor)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-compiler-metrics" class="page-view hidden">
         <div class="page-header">
           <div>
@@ -1352,7 +1352,7 @@
           </div>
         </div>
 
-        <!-- â”€â”€ Section: Live Session Metrics â”€â”€ -->
+        <!-- ── Section: Live Session Metrics ── -->
         <div style="margin-bottom:0.6rem;">
           <h3
             style="font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;">
@@ -1360,12 +1360,12 @@
           <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">Updated automatically each time you
             translate pseudocode or execute Python code in this session.</p>
         </div>
-        <div class="stats-grid" style="margin-bottom:1.5rem">
+        <div class="metrics-grid" style="margin-bottom:1.5rem">
           <div class="stat-card">
             <div class="stat-icon"><i data-lucide="refresh-cw" aria-hidden="true"></i></div>
             <div class="stat-value" id="metric-total-translations">0</div>
             <div class="stat-label">Total Translations</div>
-            <div class="stat-change" id="metric-error-trend">â€” Stable</div>
+            <div class="stat-change" id="metric-error-trend">— Stable</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon"><i data-lucide="circle-check" aria-hidden="true"></i></div>
@@ -1401,7 +1401,7 @@
           </div>
         </div>
 
-        <!-- â”€â”€ Improvement Tracking â”€â”€ -->
+        <!-- ── Improvement Tracking ── -->
         <div class="data-table-container" tabindex="0" role="region" aria-label="Scrollable data table" style="margin-bottom:1.5rem">
           <div class="panel-header">
             <h3><i data-lucide="trending-up" aria-hidden="true"></i> Improvement Tracking</h3>
@@ -1417,14 +1417,14 @@
           </div>
         </div>
 
-        <!-- â”€â”€ Pipeline Stage Timing â”€â”€ -->
+        <!-- ── Pipeline Stage Timing ── -->
         <div class="charts-grid" style="margin-bottom:1.5rem">
           <div class="chart-container">
             <div class="panel-header">
               <h3>{{ui:Timer}} Pipeline Stage Timing (Avg)</h3>
             </div>
             <div style="padding:0.4rem 1rem 0;font-size:0.78rem;color:var(--text-muted);">Average milliseconds spent in
-              each compiler stage: Lexer â†’ Parser â†’ Semantic Analysis â†’ Code Generation.</div>
+              each compiler stage: Lexer → Parser → Semantic Analysis → Code Generation.</div>
             <div id="chart-pipeline-timing" class="chart-body" style="padding-bottom:2.5rem">
               <div style="text-align:center;color:var(--text-muted);padding:2rem;">No timing data yet. Translate some
                 pseudocode first.</div>
@@ -1432,7 +1432,7 @@
           </div>
         </div>
 
-        <!-- â”€â”€ Section: Benchmark Results â”€â”€ -->
+        <!-- ── Section: Benchmark Results ── -->
         <div style="margin-bottom:0.6rem;">
           <h3
             style="font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;">
@@ -1442,43 +1442,64 @@
             these.
           </p>
         </div>
-        <div class="stats-grid" style="margin-bottom:1rem">
+        <div class="metrics-grid metrics-grid--benchmark" style="margin-bottom:0.5rem">
           <div class="stat-card">
             <div class="stat-icon">{{ui:Target}}</div>
-            <div class="stat-value" id="benchmark-accuracy">â€”</div>
+            <div class="stat-value" id="benchmark-accuracy">—</div>
             <div class="stat-label">Accuracy</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Exact-match vs. ground truth</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon">{{ui:Search}}</div>
-            <div class="stat-value" id="benchmark-precision">â€”</div>
+            <div class="stat-value" id="benchmark-precision">—</div>
             <div class="stat-label">Avg Precision</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Correct lines / generated lines
             </div>
           </div>
           <div class="stat-card">
             <div class="stat-icon">{{ui:Radio}}</div>
-            <div class="stat-value" id="benchmark-recall">â€”</div>
+            <div class="stat-value" id="benchmark-recall">—</div>
             <div class="stat-label">Avg Recall</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Expected lines covered</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon">{{ui:ChartColumn}}</div>
-            <div class="stat-value" id="benchmark-f1">â€”</div>
+            <div class="stat-value" id="benchmark-f1">—</div>
             <div class="stat-label">F1 Score</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Harmonic mean of P &amp; R</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon">{{ui:Wrench}}</div>
-            <div class="stat-value" id="benchmark-compile-rate">â€”</div>
+            <div class="stat-value" id="benchmark-compile-rate">—</div>
             <div class="stat-label">Compile Rate</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">% of test cases compiled OK</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon">{{ui:Zap}}</div>
-            <div class="stat-value" id="benchmark-avg-time">â€”</div>
+            <div class="stat-value" id="benchmark-avg-time">—</div>
             <div class="stat-label">Avg Time / Test</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Mean ms per test case</div>
+          </div>
+        </div>
+
+        <!-- Benchmark state panels (empty / running / failed) -->
+        <div id="benchmark-states" style="margin-bottom:1rem">
+          <div id="benchmark-empty-state" class="empty-state metrics-empty-state">
+            <div class="empty-icon">{{ui:FlaskConical}}</div>
+            <h3>Benchmark not run yet</h3>
+            <p>Run the full dataset benchmark to populate accuracy, precision, recall, F1 and compile-rate cards.</p>
+          </div>
+          <div id="benchmark-loading-state" class="metrics-feedback metrics-loading hidden">
+            {{ui:Hourglass}} Running the benchmark across the full dataset. This may take a moment…
+          </div>
+          <div id="benchmark-error-state" class="metrics-feedback metrics-error hidden">
+            <span>
+              <strong>{{ui:CircleX}} Benchmark failed.</strong>
+              <span id="benchmark-error-message" style="display:block;margin-top:0.15rem;"></span>
+            </span>
+            <button class="btn btn-secondary btn-sm" type="button" onclick="runBenchmarkTest()" style="width:auto">
+              {{ui:RefreshCw}} Retry
+            </button>
           </div>
         </div>
 
@@ -1506,14 +1527,14 @@
           </div>
         </div>
 
-        <!-- â”€â”€ Concept Mastery Analysis â”€â”€ -->
+        <!-- ── Concept Mastery Analysis ── -->
         <div class="data-table-container" tabindex="0" role="region" aria-label="Scrollable data table" style="margin-top: 1.5rem;">
           <div class="panel-header">
             <h3>{{ui:GraduationCap}} Concept Mastery Analytics (Constructivism Model)</h3>
           </div>
           <div style="padding:0.4rem 1rem 0;font-size:0.78rem;color:var(--text-muted);">Groups benchmark test results by
-            programming concept. <strong>Mastery Level</strong> is determined by the exact-match accuracy: â‰¥80% =
-            Expert, â‰¥60% = Proficient, â‰¥40% = Developing, &lt;40% = Beginner.</div>
+            programming concept. <strong>Mastery Level</strong> is determined by the exact-match accuracy: ≥80% =
+            Expert, ≥65% = Proficient, ≥40% = Developing, &lt;40% = Beginner.</div>
           <table class="data-table">
             <thead>
               <tr>
@@ -1535,9 +1556,9 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Password Recovery (Instructor)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-password-recovery" class="page-view hidden">
         <div class="page-header">
           <div>
@@ -1578,12 +1599,12 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Manage Users (Admin)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+           ═══════════════════════════════════ -->
+      <!-- ═══════════════════════════════════
            PAGE: Manage Instructors (Admin)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-manage-users" class="page-view hidden">
         <div class="page-header">
           <div>
@@ -1716,7 +1737,7 @@
                   <th scope="col">Email</th>
                   <th scope="col">Role</th>
                   <th scope="col">Status</th>
-                  <th scope="col">Date Added <span style="font-size:0.75rem">â†“</span></th>
+                  <th scope="col">Date Added <span style="font-size:0.75rem">↓</span></th>
                   <th scope="col">Last Login</th>
                   <th scope="col">Actions</th>
                 </tr>
@@ -1733,17 +1754,17 @@
           <div class="an-pagination-row" style="padding:1rem 1.5rem">
             <span id="instructor-page-info" class="an-page-info">Showing 0 of 0 results</span>
             <div class="an-page-controls">
-              <button id="instructor-prev-btn" class="an-page-btn" onclick="instructorPageNav(-1)">â€¹ Previous</button>
+              <button id="instructor-prev-btn" class="an-page-btn" onclick="instructorPageNav(-1)">‹ Previous</button>
               <span id="instructor-page-numbers" class="an-page-numbers"></span>
-              <button id="instructor-next-btn" class="an-page-btn" onclick="instructorPageNav(1)">Next â€º</button>
+              <button id="instructor-next-btn" class="an-page-btn" onclick="instructorPageNav(1)">Next ›</button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Change Password (Student / Instructor)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-change-password" class="page-view hidden">
         <div class="page-header">
           <div>
@@ -1807,14 +1828,14 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Developer Options (Admin Only)
            Compiler Debugger & Algorithm Flow
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-developer-options" class="page-view hidden">
         <div class="page-header">
           <div>
-            <h2><i data-lucide="bug" aria-hidden="true"></i> Developer Options â€” Compiler Debugger</h2>
+            <h2><i data-lucide="bug" aria-hidden="true"></i> Developer Options — Compiler Debugger</h2>
             <p>Inspect exactly how the compiler processes pseudocode from input through Python execution and output.</p>
           </div>
         </div>
@@ -1831,19 +1852,19 @@
 
         <!-- Pipeline Visualizer -->
         <div class="devtools-pipeline" id="devtools-pipeline">
-          <div class="pipeline-stage" data-stage="PREPROCESSING" id="pipe-preprocess"><div class="pipe-status-dot"></div><div class="pipe-label">Preprocessing</div><div class="pipe-func">preprocessPseudocode()</div><div class="pipe-time" id="pipe-preprocess-time">â€”</div></div>
-          <div class="pipeline-arrow">â†’</div>
-          <div class="pipeline-stage" data-stage="NLP_MAPPING" id="pipe-nlp"><div class="pipe-status-dot"></div><div class="pipe-label">NLP Mapping</div><div class="pipe-func">nlpMapper.map()</div><div class="pipe-time" id="pipe-nlp-time">â€”</div></div>
-          <div class="pipeline-arrow">â†’</div>
-          <div class="pipeline-stage" data-stage="LEXICAL_ANALYSIS" id="pipe-lexer"><div class="pipe-status-dot"></div><div class="pipe-label">Lexical Analysis</div><div class="pipe-func">Lexer.tokenize()</div><div class="pipe-time" id="pipe-lexer-time">â€”</div></div>
-          <div class="pipeline-arrow">â†’</div>
-          <div class="pipeline-stage" data-stage="SYNTAX_ANALYSIS" id="pipe-parser"><div class="pipe-status-dot"></div><div class="pipe-label">Syntax Analysis</div><div class="pipe-func">Parser.parse()</div><div class="pipe-time" id="pipe-parser-time">â€”</div></div>
-          <div class="pipeline-arrow">â†’</div>
-          <div class="pipeline-stage" data-stage="SEMANTIC_ANALYSIS" id="pipe-semantic"><div class="pipe-status-dot"></div><div class="pipe-label">Semantic Analysis</div><div class="pipe-func">SemanticAnalyzer.analyze()</div><div class="pipe-time" id="pipe-semantic-time">â€”</div></div>
-          <div class="pipeline-arrow">â†’</div>
-          <div class="pipeline-stage" data-stage="CODE_GENERATION" id="pipe-codegen"><div class="pipe-status-dot"></div><div class="pipe-label">Code Generation</div><div class="pipe-func">CodeGenerator.generate()</div><div class="pipe-time" id="pipe-codegen-time">â€”</div></div>
-          <div class="pipeline-arrow">â†’</div>
-          <div class="pipeline-stage" data-stage="EXECUTION" id="pipe-runtime"><div class="pipe-status-dot"></div><div class="pipe-label">Python Runtime</div><div class="pipe-func">Skulpt</div><div class="pipe-time" id="pipe-runtime-time">â€”</div></div>
+          <div class="pipeline-stage" data-stage="PREPROCESSING" id="pipe-preprocess"><div class="pipe-status-dot"></div><div class="pipe-label">Preprocessing</div><div class="pipe-func">preprocessPseudocode()</div><div class="pipe-time" id="pipe-preprocess-time">—</div></div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-stage" data-stage="NLP_MAPPING" id="pipe-nlp"><div class="pipe-status-dot"></div><div class="pipe-label">NLP Mapping</div><div class="pipe-func">nlpMapper.map()</div><div class="pipe-time" id="pipe-nlp-time">—</div></div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-stage" data-stage="LEXICAL_ANALYSIS" id="pipe-lexer"><div class="pipe-status-dot"></div><div class="pipe-label">Lexical Analysis</div><div class="pipe-func">Lexer.tokenize()</div><div class="pipe-time" id="pipe-lexer-time">—</div></div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-stage" data-stage="SYNTAX_ANALYSIS" id="pipe-parser"><div class="pipe-status-dot"></div><div class="pipe-label">Syntax Analysis</div><div class="pipe-func">Parser.parse()</div><div class="pipe-time" id="pipe-parser-time">—</div></div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-stage" data-stage="SEMANTIC_ANALYSIS" id="pipe-semantic"><div class="pipe-status-dot"></div><div class="pipe-label">Semantic Analysis</div><div class="pipe-func">SemanticAnalyzer.analyze()</div><div class="pipe-time" id="pipe-semantic-time">—</div></div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-stage" data-stage="CODE_GENERATION" id="pipe-codegen"><div class="pipe-status-dot"></div><div class="pipe-label">Code Generation</div><div class="pipe-func">CodeGenerator.generate()</div><div class="pipe-time" id="pipe-codegen-time">—</div></div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-stage" data-stage="EXECUTION" id="pipe-runtime"><div class="pipe-status-dot"></div><div class="pipe-label">Python Runtime</div><div class="pipe-func">Skulpt</div><div class="pipe-time" id="pipe-runtime-time">—</div></div>
         </div>
 
         <!-- Three-Column Layout -->
@@ -1902,7 +1923,7 @@
 
           <div class="devtools-tab-panel" id="devtools-panel-semantic"><div id="devtools-semantic-output"><div class="devtools-idle-message"><p>No semantic analysis data.</p></div></div></div>
 
-          <div class="devtools-tab-panel" id="devtools-panel-translation"><div id="devtools-translation-view"><div class="devtools-idle-message"><p>Run the pipeline to see AST â†’ Python translation mapping.</p></div></div></div>
+          <div class="devtools-tab-panel" id="devtools-panel-translation"><div id="devtools-translation-view"><div class="devtools-idle-message"><p>Run the pipeline to see AST → Python translation mapping.</p></div></div></div>
 
           <div class="devtools-tab-panel" id="devtools-panel-errors">
             <div class="devtools-panel-toolbar">
@@ -1913,8 +1934,8 @@
           </div>
 
           <div class="devtools-tab-panel" id="devtools-panel-runtime">
-            <div class="devtools-runtime-info"><div class="devtools-kv"><span class="devtools-kv-key">Status:</span> <span id="devtools-runtime-status">Not executed</span></div><div class="devtools-kv"><span class="devtools-kv-key">Execution Time:</span> <span id="devtools-runtime-time">â€”</span></div></div>
-            <div class="devtools-runtime-panels"><div class="devtools-runtime-section"><h4>stdout</h4><pre id="devtools-runtime-stdout" class="devtools-output-pre">â€”</pre></div><div class="devtools-runtime-section"><h4>stderr / Errors</h4><pre id="devtools-runtime-stderr" class="devtools-output-pre">â€”</pre></div></div>
+            <div class="devtools-runtime-info"><div class="devtools-kv"><span class="devtools-kv-key">Status:</span> <span id="devtools-runtime-status">Not executed</span></div><div class="devtools-kv"><span class="devtools-kv-key">Execution Time:</span> <span id="devtools-runtime-time">—</span></div></div>
+            <div class="devtools-runtime-panels"><div class="devtools-runtime-section"><h4>stdout</h4><pre id="devtools-runtime-stdout" class="devtools-output-pre">—</pre></div><div class="devtools-runtime-section"><h4>stderr / Errors</h4><pre id="devtools-runtime-stderr" class="devtools-output-pre">—</pre></div></div>
           </div>
 
           <div class="devtools-tab-panel" id="devtools-panel-trace"><div id="devtools-exec-trace"><div class="devtools-idle-message"><p>Run the pipeline and execute to see a step-by-step trace.</p></div></div></div>
@@ -1925,29 +1946,29 @@
 
           <div class="devtools-tab-panel" id="devtools-panel-metrics">
             <div class="devtools-metrics-grid" id="devtools-metrics-grid">
-              <div class="devtools-metric-card"><div class="devtools-metric-label">Lex Time</div><div class="devtools-metric-value" id="dm-lex-time">â€”</div></div>
-              <div class="devtools-metric-card"><div class="devtools-metric-label">Parse Time</div><div class="devtools-metric-value" id="dm-parse-time">â€”</div></div>
-              <div class="devtools-metric-card"><div class="devtools-metric-label">Semantic Time</div><div class="devtools-metric-value" id="dm-semantic-time">â€”</div></div>
-              <div class="devtools-metric-card"><div class="devtools-metric-label">CodeGen Time</div><div class="devtools-metric-value" id="dm-codegen-time">â€”</div></div>
-              <div class="devtools-metric-card"><div class="devtools-metric-label">Total Time</div><div class="devtools-metric-value" id="dm-total-time">â€”</div></div>
-              <div class="devtools-metric-card"><div class="devtools-metric-label">Execution Time</div><div class="devtools-metric-value" id="dm-exec-time">â€”</div></div>
-              <div class="devtools-metric-card"><div class="devtools-metric-label">Token Count</div><div class="devtools-metric-value" id="dm-token-count">â€”</div></div>
-              <div class="devtools-metric-card"><div class="devtools-metric-label">AST Nodes</div><div class="devtools-metric-value" id="dm-ast-nodes">â€”</div></div>
-              <div class="devtools-metric-card"><div class="devtools-metric-label" title="Loop-depth heuristic; ignores bounds, calls and recursion">Loop nesting estimate</div><div class="devtools-metric-value" id="dm-complexity">â€”</div></div>
-              <div class="devtools-metric-card"><div class="devtools-metric-label">Attempt #</div><div class="devtools-metric-value" id="dm-attempt-num">â€”</div></div>
-              <div class="devtools-metric-card"><div class="devtools-metric-label">Auto-Fix Count</div><div class="devtools-metric-value" id="dm-autofix-count">â€”</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Lex Time</div><div class="devtools-metric-value" id="dm-lex-time">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Parse Time</div><div class="devtools-metric-value" id="dm-parse-time">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Semantic Time</div><div class="devtools-metric-value" id="dm-semantic-time">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">CodeGen Time</div><div class="devtools-metric-value" id="dm-codegen-time">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Total Time</div><div class="devtools-metric-value" id="dm-total-time">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Execution Time</div><div class="devtools-metric-value" id="dm-exec-time">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Token Count</div><div class="devtools-metric-value" id="dm-token-count">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">AST Nodes</div><div class="devtools-metric-value" id="dm-ast-nodes">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label" title="Loop-depth heuristic; ignores bounds, calls and recursion">Loop nesting estimate</div><div class="devtools-metric-value" id="dm-complexity">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Attempt #</div><div class="devtools-metric-value" id="dm-attempt-num">—</div></div>
+              <div class="devtools-metric-card"><div class="devtools-metric-label">Auto-Fix Count</div><div class="devtools-metric-value" id="dm-autofix-count">—</div></div>
             </div>
           </div>
 
           <div class="devtools-tab-panel" id="devtools-panel-rawjson">
             <div class="devtools-raw-sections">
-              <details class="devtools-raw-detail"><summary>Raw Tokens</summary><pre id="devtools-raw-tokens" class="devtools-raw-pre">â€”</pre></details>
-              <details class="devtools-raw-detail"><summary>Raw AST</summary><pre id="devtools-raw-ast" class="devtools-raw-pre">â€”</pre></details>
-              <details class="devtools-raw-detail"><summary>Raw Symbol Table</summary><pre id="devtools-raw-symtable" class="devtools-raw-pre">â€”</pre></details>
-              <details class="devtools-raw-detail"><summary>Raw Compiler Result</summary><pre id="devtools-raw-result" class="devtools-raw-pre">â€”</pre></details>
-              <details class="devtools-raw-detail"><summary>Raw Runtime Result</summary><pre id="devtools-raw-runtime" class="devtools-raw-pre">â€”</pre></details>
-              <details class="devtools-raw-detail"><summary>Raw Trace Events</summary><pre id="devtools-raw-events" class="devtools-raw-pre">â€”</pre></details>
-              <details class="devtools-raw-detail"><summary>Raw Metrics</summary><pre id="devtools-raw-metrics" class="devtools-raw-pre">â€”</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw Tokens</summary><pre id="devtools-raw-tokens" class="devtools-raw-pre">—</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw AST</summary><pre id="devtools-raw-ast" class="devtools-raw-pre">—</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw Symbol Table</summary><pre id="devtools-raw-symtable" class="devtools-raw-pre">—</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw Compiler Result</summary><pre id="devtools-raw-result" class="devtools-raw-pre">—</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw Runtime Result</summary><pre id="devtools-raw-runtime" class="devtools-raw-pre">—</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw Trace Events</summary><pre id="devtools-raw-events" class="devtools-raw-pre">—</pre></details>
+              <details class="devtools-raw-detail"><summary>Raw Metrics</summary><pre id="devtools-raw-metrics" class="devtools-raw-pre">—</pre></details>
             </div>
           </div>
         </div>
@@ -1959,9 +1980,9 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Admin Execute Code
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-admin-execute" class="page-view hidden">
         <div class="page-header">
           <div>
@@ -1993,9 +2014,9 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Student Settings / Profile
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-student-settings" class="page-view hidden">
         <div class="page-header">
           <div>
@@ -2015,12 +2036,16 @@
           </div>
           <div class="profile-details">
             <div class="profile-detail-row">
+              <span class="detail-label">{{ui:BadgeCheck}} Student Number</span>
+              <span class="detail-value" id="settings-student-number">—</span>
+            </div>
+            <div class="profile-detail-row">
               <span class="detail-label">{{ui:UserRound}} Username</span>
-              <span class="detail-value" id="settings-username">â€”</span>
+              <span class="detail-value" id="settings-username">—</span>
             </div>
             <div class="profile-detail-row">
               <span class="detail-label">{{ui:Mail}} Email</span>
-              <span class="detail-value" id="settings-email">â€”</span>
+              <span class="detail-value" id="settings-email">—</span>
             </div>
             <div class="profile-detail-row">
               <span class="detail-label">{{ui:GraduationCap}} Role</span>
@@ -2118,15 +2143,15 @@
           <div class="profile-details">
             <div class="profile-detail-row">
               <span class="detail-label"><i data-lucide="package" aria-hidden="true"></i> Version</span>
-              <span class="detail-value" id="settings-version">â€”</span>
+              <span class="detail-value" id="settings-version">—</span>
             </div>
             <div class="profile-detail-row">
               <span class="detail-label"><i data-lucide="building-2" aria-hidden="true"></i> Organization</span>
-              <span class="detail-value" id="settings-org">â€”</span>
+              <span class="detail-value" id="settings-org">—</span>
             </div>
             <div class="profile-detail-row">
               <span class="detail-label"><i data-lucide="mail" aria-hidden="true"></i> Contact</span>
-              <span class="detail-value" id="settings-contact">â€”</span>
+              <span class="detail-value" id="settings-contact">—</span>
             </div>
             <div class="profile-detail-row">
               <span class="detail-label"><i data-lucide="scroll-text" aria-hidden="true"></i> Documents</span>
@@ -2142,9 +2167,9 @@
         </div>
       </div>
 
-      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      <!-- ═══════════════════════════════════
            PAGE: Password Requests (Admin)
-           â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+           ═══════════════════════════════════ -->
       <div id="page-password-requests" class="page-view hidden">
         <div class="page-header">
           <div>
@@ -2191,6 +2216,57 @@
           </table>
         </div>
 
+        <div class="data-table-container" tabindex="0" role="region" aria-label="Student number migration panel" style="margin-bottom:2rem">
+          <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">
+            <h3><i data-lucide="id-card" aria-hidden="true"></i> Student Number Migration</h3>
+            <span style="font-size:0.8rem; color:var(--text-muted);">230-series assignment</span>
+          </div>
+          <div style="padding:1.25rem 1.4rem">
+            <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:1rem">
+              Assign canonical <code style="font-family:monospace;color:var(--text-accent)">230xxxx</code> student numbers to accounts
+              that still use legacy placeholders. The preview is read-only;
+              migration updates only the <code style="font-family:monospace">studentNumber</code> field and never rewrites existing IDs.
+            </p>
+            <button class="btn btn-secondary btn-sm" onclick="openStudentNumberMigration()" title="Preview and assign 230-series student numbers">
+              <i data-lucide="id-card" aria-hidden="true"></i> Manage Student Numbers
+            </button>
+          </div>
+        </div>
+
+        <!-- Student Number Migration Modal -->
+        <div id="sn-migration-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Student number migration preview">
+          <div class="modal">
+            <div class="modal-header">
+              <h3>Student Number Migration</h3>
+              <button class="btn btn-ghost btn-icon" aria-label="Close migration preview" onclick="closeStudentNumberMigration()">{{ui:X}}</button>
+            </div>
+            <div class="modal-body">
+              <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:1rem">
+                The following student accounts will receive new 230-series numbers.
+                <span id="sn-migration-total" style="font-weight:700;color:var(--text-accent)">0</span>.
+                Existing IDs are preserved.
+              </p>
+              <div class="data-table-container" tabindex="0" role="region" aria-label="Migration preview table">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Student</th>
+                      <th scope="col">Current ID</th>
+                      <th scope="col">Proposed</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sn-migration-body"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:0.6rem;padding:1rem 1.4rem;border-top:1px solid var(--border-divider)">
+              <button class="btn btn-ghost" onclick="closeStudentNumberMigration()">Cancel</button>
+              <button class="btn btn-primary" id="sn-migration-run-btn" onclick="runStudentNumberMigration()">{{ui:CheckCheck}} Migrate Now</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Security Event Log Panel -->
         <div class="data-table-container" tabindex="0" role="region" aria-label="Scrollable data table">
           <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center">
@@ -2216,9 +2292,9 @@
       </main><!-- /main-content -->
   </div><!-- /app-layout -->
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  <!-- ════════════════════════════════════════
        MODALS
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+       ════════════════════════════════════════ -->
   <!-- Add/Edit Exercise Modal -->
   <div id="exercise-modal" class="modal-overlay hidden">
     <div class="modal">
@@ -2556,7 +2632,7 @@
     </div>
   </div>
 
-  <!-- â”€â”€ Instructor Devices Management Modal (Admin) â”€â”€ -->
+  <!-- ── Instructor Devices Management Modal (Admin) ── -->
   <div id="instructor-devices-modal" class="modal-overlay hidden" style="z-index: 10002;">
     <div class="modal" style="max-width: 720px; width: 95%;">
       <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center;">
@@ -2573,8 +2649,8 @@
         <div style="background:var(--bg-card-hover); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem 1rem; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
           <div>
             <div style="font-size:0.8rem; color:var(--text-muted);">Instructor Profile</div>
-            <div style="font-weight:600; font-size:0.95rem; color:var(--text-primary);" id="device-modal-instructor-name">â€”</div>
-            <div style="font-size:0.75rem; color:var(--text-muted); font-family:monospace;" id="device-modal-instructor-handle">@â€”</div>
+            <div style="font-weight:600; font-size:0.95rem; color:var(--text-primary);" id="device-modal-instructor-name">—</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-family:monospace;" id="device-modal-instructor-handle">@—</div>
           </div>
           <div style="display:flex; gap:0.75rem;">
             <div style="text-align:center; padding:0.3rem 0.6rem; background:rgba(255,255,255,0.03); border-radius:6px;">
@@ -2625,7 +2701,7 @@
     </div>
   </div>
 
-  <!-- â”€â”€ New Device Pending Login Notification Modal â”€â”€ -->
+  <!-- ── New Device Pending Login Notification Modal ── -->
   <div id="new-device-pending-modal" class="modal-overlay hidden" style="z-index: 10005;">
     <div class="modal" style="max-width: 480px; text-align: center; padding: 2rem 1.5rem;">
       <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(245, 158, 11, 0.15); color: #f59e0b; display: flex; align-items: center; justify-content: center; font-size: 2rem; margin: 0 auto 1.25rem;">
@@ -2666,7 +2742,7 @@
     </div>
   </div>
 
-  <!-- â”€â”€ Archive Instructor Confirmation Modal â”€â”€ -->
+  <!-- ── Archive Instructor Confirmation Modal ── -->
   <div id="archive-instructor-modal" class="modal-overlay hidden" style="z-index: 10004;">
     <div class="modal" style="max-width: 460px;">
       <div class="modal-header">
@@ -2690,7 +2766,7 @@
     </div>
   </div>
 
-  <!-- â”€â”€ Restore Instructor Confirmation Modal â”€â”€ -->
+  <!-- ── Restore Instructor Confirmation Modal ── -->
   <div id="restore-instructor-modal" class="modal-overlay hidden" style="z-index: 10004;">
     <div class="modal" style="max-width: 460px;">
       <div class="modal-header">
@@ -2786,11 +2862,11 @@
     </div>
   </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+<!-- ═══════════════════════════════════
        LEGAL PAGES (Privacy Policy / Terms of Use)
        In-app documents, pre-login and offline reachable.
        Dynamic identity values come from APP_INFO.
-       â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+       ═══════════════════════════════════ -->
   <div id="legal-pages" class="hidden">
     <div class="legal-doc">
       <div class="legal-header">
@@ -2803,7 +2879,7 @@
         <p id="legal-pending-text"></p>
       </div>
 
-      <!-- â”€â”€ Privacy Policy â”€â”€ -->
+      <!-- ── Privacy Policy ── -->
       <section id="legal-section-privacy" aria-labelledby="privacy-h1">
         <h1 id="privacy-h1">Privacy Policy</h1>
         <p class="legal-lead">Effective date: <span id="legal-privacy-date"></span></p>
@@ -2904,7 +2980,7 @@
         <p class="legal-lead">Version: <span id="legal-version"></span></p>
       </section>
 
-      <!-- â”€â”€ Terms of Use â”€â”€ -->
+      <!-- ── Terms of Use ── -->
       <section id="legal-section-terms" class="hidden" aria-labelledby="terms-h1">
         <h1 id="terms-h1">Terms of Use</h1>
         <p class="legal-lead">Effective date: <span id="legal-terms-date"></span></p>
@@ -2969,33 +3045,33 @@
           <span id="legal-org-2"></span>.</p>
       </section>
 
-      <!-- â”€â”€ About / System Information â”€â”€ -->
+      <!-- ── About / System Information ── -->
       <section id="legal-section-about" class="hidden" aria-labelledby="about-h1">
         <h1 id="about-h1">About PseudoPy</h1>
         <div class="profile-details">
           <div class="profile-detail-row">
             <span class="detail-label">Name</span>
-            <span class="detail-value" id="about-app-name">â€”</span>
+            <span class="detail-value" id="about-app-name">—</span>
           </div>
           <div class="profile-detail-row">
             <span class="detail-label">Version</span>
-            <span class="detail-value" id="about-app-version">â€”</span>
+            <span class="detail-value" id="about-app-version">—</span>
           </div>
           <div class="profile-detail-row">
             <span class="detail-label">Purpose</span>
-            <span class="detail-value" id="about-app-description">â€”</span>
+            <span class="detail-value" id="about-app-description">—</span>
           </div>
           <div class="profile-detail-row">
             <span class="detail-label">Organization</span>
-            <span class="detail-value" id="about-org">â€”</span>
+            <span class="detail-value" id="about-org">—</span>
           </div>
           <div class="profile-detail-row">
             <span class="detail-label">Development team</span>
-            <span class="detail-value" id="about-team">â€”</span>
+            <span class="detail-value" id="about-team">—</span>
           </div>
           <div class="profile-detail-row">
             <span class="detail-label">Contact</span>
-            <span class="detail-value" id="about-contact">â€”</span>
+            <span class="detail-value" id="about-contact">—</span>
           </div>
         </div>
         <p class="legal-lead">If the contact value above reads &ldquo;[pending owner

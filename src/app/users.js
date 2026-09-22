@@ -769,7 +769,7 @@ async function loadStudents() {
     tbody.innerHTML = students.map(u => `
     <tr>
       <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
-      <td>${u.studentId || '—'}</td>
+      <td>${readStudentNumber(u)}</td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">
         <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit" aria-label="Edit user">{{ui:Pencil}}</button>
@@ -902,8 +902,19 @@ async function saveUser() {
             if (currentUser.role === 'instructor') {
                 userData.instructorId = currentUser.id;
             }
+            if (role === 'student') {
+                try {
+                    userData.studentNumber = await allocateStudentNumber();
+                } catch (allocErr) {
+                    console.error('[StudentNumber] Allocation failed:', allocErr);
+                    showToast(allocErr && allocErr.message ? allocErr.message : 'Failed to generate student number.', 'error');
+                    return;
+                }
+            }
             await dbSet(usersRef, newId, userData);
-            showToast('User created successfully!', 'success');
+            showToast(role === 'student' && userData.studentNumber
+                ? `${userData.fullName} · Student No. ${userData.studentNumber} · @${userData.username} created successfully!`
+                : 'User created successfully!', 'success');
         }
         closeUserModal();
         if (currentUser.role === 'admin') {

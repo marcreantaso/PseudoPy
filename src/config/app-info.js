@@ -20,11 +20,19 @@ const APP_INFO = {
     description: 'An educational pseudocode-to-Python translator with role-based '
         + 'dashboards, exercises, learning analytics and authorized-device security.',
     organization: 'Pamantasan ng Cabuyao - College of Computing Studies',
+    // Ownership confirmed by the project lead.
+    founder: 'Mikaella C. Daet',
+    coFounder: 'Marc Gian R. Reantaso',
+    technicalTeam: [
+        'Eduard Mirandilla',
+        'Mark Bautista'
+    ],
+    // Backward-compatible full list for legacy UI paths.
     developmentTeam: [
-        'Bautista, Mark Andrew S.',
-        'Daet, Mikaella C.',
-        'Mirandilla, Eduard John',
-        'Reantaso, Marc Gian R.'
+        'Mikaella C. Daet',
+        'Marc Gian R. Reantaso',
+        'Eduard Mirandilla',
+        'Mark Bautista'
     ],
     contactEmail: '',
     privacyEffectiveDate: '',

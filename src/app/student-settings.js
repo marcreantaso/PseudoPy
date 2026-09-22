@@ -22,6 +22,11 @@ async function loadStudentSettings() {
     setText('settings-fullname', currentUser.fullName);
     setText('settings-username', '@' + currentUser.username);
     setText('settings-email', currentUser.email);
+    const studentNumberEl = $id('settings-student-number');
+    if (studentNumberEl) {
+        const sn = readStudentNumber(currentUser);
+        studentNumberEl.textContent = sn === '\u2014' ? 'Not yet assigned' : sn;
+    }
     setText('settings-role', currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1));
         const status = (currentUser.status || 'active').toLowerCase();
         const statusEl = $id('settings-status');

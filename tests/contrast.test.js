@@ -155,3 +155,40 @@ test('select arrow and echo text no longer use hardcoded low-contrast colors', (
     assert.ok(css.includes('color: var(--text-cyan);'), 'echo value must use --text-cyan');
     assert.ok(css.includes('color: var(--text-success);'), 'output-content must use --text-success');
 });
+
+// ── Light-mode contrast hardening tokens (WS2) ──
+
+const ALIAS_KEYS = [
+    '--border-strong', '--border-divider', '--border-input',
+    '--bg-input-soft', '--focus-ring', '--icon-muted', '--text-disabled'
+];
+
+test('light-mode semantic tokens exist and differ between themes', () => {
+    for (const key of ALIAS_KEYS) {
+        assert.ok(L[key], `light theme missing ${key}`);
+        assert.ok(D[key], `dark theme missing ${key}`);
+        assert.notEqual(L[key], D[key], `${key} must be themed (light vs dark)`);
+    }
+});
+
+test('light border tokens are opaque (never ultra-faint rgba)', () => {
+    const opaque = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+    for (const key of ['--border-strong', '--border-divider', '--border-input', '--bg-input-soft']) {
+        assert.match(L[key], opaque, `light ${key} must be an opaque hex value, got ${L[key]}`);
+        assert.match(D[key], opaque, `dark ${key} must be an opaque hex value, got ${D[key]}`);
+    }
+});
+
+test('surface borders and input focus reference the new tokens', () => {
+    assert.ok(css.includes('border: 1px solid var(--border-input);'), '.form-input must use --border-input');
+    assert.ok(css.includes('box-shadow: 0 0 0 3px var(--focus-ring);'), '.form-input focus must use --focus-ring');
+    assert.ok(css.includes('border: 1px solid var(--border-strong);'), 'cards must use --border-strong');
+    assert.ok(css.includes('border-bottom: 1px solid var(--border-divider);'), 'table rows/panels must use --border-divider');
+    assert.ok(css.includes('color: var(--icon-muted);'), 'stat icons must use --icon-muted');
+});
+
+test('stat labels are weight-600 for legibility', () => {
+    const block = css.match(/\.stat-card \.stat-label \{[^}]*\}/);
+    assert.ok(block, '.stat-card .stat-label rule must exist');
+    assert.ok(block[0].includes('font-weight: 600;'), '.stat-card .stat-label must be weight-600');
+});

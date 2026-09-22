@@ -1,11 +1,11 @@
 ﻿/* ============================================================
-   PSEUDOCODE TO PYTHON â€” AUTOMATED CODE GENERATION SYSTEM
-   Design System â€” Bold, Clean, Dark Theme
+   PSEUDOCODE TO PYTHON — AUTOMATED CODE GENERATION SYSTEM
+   Design System — Bold, Clean, Dark Theme
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
-/* â”€â”€ CSS Variables â”€â”€ */
+/* ── CSS Variables ── */
 :root {
   /* Light Theme (Default) */
   --bg-primary: #f8fafc;
@@ -43,6 +43,17 @@
   --border: #e2e8f0;
   --border-hover: #cbd5e1;
   --border-accent: rgba(59, 130, 246, 0.2);
+
+  /* Semantic border/bg tokens — used to keep surfaces, inputs,
+     tables and icons visibly separated in light mode. Dark values
+     mirror these at the theme's brightness. */
+  --border-strong: #cbd5e1;
+  --border-divider: #cbd5e1;
+  --border-input: #94a3b8;
+  --bg-input-soft: #f8fafc;
+  --focus-ring: rgba(59, 130, 246, 0.35);
+  --icon-muted: #475569;
+  --text-disabled: #94a3b8;
 
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -95,6 +106,14 @@
   --border: #1e1e2e;
   --border-hover: #2a2a3e;
   --border-accent: rgba(59, 130, 246, 0.3);
+
+  --border-strong: #33334a;
+  --border-divider: #232334;
+  --border-input: #3f3f56;
+  --bg-input-soft: #0e0e16;
+  --focus-ring: rgba(59, 130, 246, 0.45);
+  --icon-muted: #8b8ba0;
+  --text-disabled: #5a5a6e;
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
@@ -163,7 +182,7 @@
   --input-bg: var(--bg-input);
   --primary: #2563eb;
 
-  /* Auth Hero â€” permanently-dark navy surface (theme-independent). */
+  /* Auth Hero — permanently-dark navy surface (theme-independent). */
   --auth-hero-bg: linear-gradient(145deg, #080818 0%, #0d1530 40%, #0a1628 100%);
   --auth-hero-foreground: #ffffff;
   --auth-hero-heading: #f8fafc;
@@ -178,7 +197,7 @@
   --auth-hero-code-fn: #60a5fa;
   --auth-hero-code-str: #34d399;
 
-  /* Developer tools â€” light surface hierarchy. */
+  /* Developer tools — light surface hierarchy. */
   --dt-surface: #ffffff;
   --dt-surface-subtle: #f8fafc;
   --dt-surface-hover: #f1f5f9;
@@ -293,7 +312,7 @@
   --error-cat-validation: #14b8a6;
 }
 
-/* â”€â”€ Reset â”€â”€ */
+/* ── Reset ── */
 *,
 *::before,
 *::after {
@@ -318,7 +337,7 @@ body {
   min-height: 100dvh;
 }
 
-/* â”€â”€ Scrollbar â”€â”€ */
+/* ── Scrollbar ── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -337,12 +356,12 @@ body {
   background: var(--text-muted);
 }
 
-/* â”€â”€ Utility â”€â”€ */
+/* ── Utility ── */
 .hidden {
   display: none !important;
 }
 
-/* â”€â”€ Typography â”€â”€ */
+/* ── Typography ── */
 h1,
 h2,
 h3,
@@ -368,7 +387,7 @@ h4 {
   font-size: 1rem;
 }
 
-/* â”€â”€ Utility â”€â”€ */
+/* ── Utility ── */
 .hidden {
   display: none !important;
 }
@@ -378,7 +397,7 @@ h4 {
 }
 
 /* ============================================================
-   LOGIN PAGE â€” Split Layout
+   LOGIN PAGE — Split Layout
    ============================================================ */
 
 .login-page {
@@ -389,7 +408,7 @@ h4 {
   overflow: hidden;
 }
 
-/* â”€â”€ Left Hero Panel â”€â”€ */
+/* ── Left Hero Panel ── */
 .login-hero {
   position: relative;
   display: flex;
@@ -543,7 +562,7 @@ h4 {
   margin-bottom: 2.5rem;
 }
 
-/* â”€â”€ Decorative Code Card â”€â”€ */
+/* ── Decorative Code Card ── */
 .hero-code-card {
   background: var(--auth-hero-code-bg);
   border: 1px solid var(--auth-hero-card-border);
@@ -624,7 +643,7 @@ h4 {
   color: var(--auth-hero-code-str);
 }
 
-/* â”€â”€ Right Form Panel â”€â”€ */
+/* ── Right Form Panel ── */
 .login-form-section {
   display: flex;
   align-items: center;
@@ -665,7 +684,7 @@ h4 {
   font-size: 0.9rem;
 }
 
-/* â”€â”€ Form Elements â”€â”€ */
+/* ── Form Elements ── */
 .form-group {
   margin-bottom: 1.25rem;
   text-align: left;
@@ -684,23 +703,25 @@ h4 {
 .form-input {
   width: 100%;
   padding: 0.8rem 1rem;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
+  background: var(--bg-input-soft);
+  border: 1px solid var(--border-input);
   border-radius: var(--radius-md);
   color: var(--text-primary);
   font-family: inherit;
   font-size: 0.9rem;
   transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
   outline: none;
+  caret-color: var(--accent);
 }
 
 .form-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .form-input::placeholder {
   color: var(--text-muted);
+  opacity: 1;
 }
 
 .role-selector {
@@ -767,7 +788,7 @@ h4 {
   color: var(--text-secondary);
 }
 
-/* â”€â”€ Login Responsive â”€â”€ */
+/* ── Login Responsive ── */
 @media (max-width: 1024px) {
   .hero-tagline {
     font-size: 2.75rem;
@@ -828,7 +849,7 @@ h4 {
   }
 }
 
-/* â”€â”€ Buttons â”€â”€ */
+/* ── Buttons ── */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -923,7 +944,7 @@ h4 {
   border-radius: var(--radius-sm);
 }
 
-/* â”€â”€ Button states â”€â”€ */
+/* ── Button states ── */
 .btn:disabled,
 .btn[aria-disabled='true'],
 .btn.disabled {
@@ -1021,7 +1042,7 @@ svg.lucide {
   overflow: hidden;
 }
 
-/* â”€â”€ Sidebar â”€â”€ */
+/* ── Sidebar ── */
 .sidebar {
   grid-row: 1 / -1;
   width: 200px;
@@ -1193,7 +1214,7 @@ svg.lucide {
   height: 18px;
 }
 
-/* â”€â”€ Top Bar â”€â”€ */
+/* ── Top Bar ── */
 .topbar {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
@@ -1214,7 +1235,7 @@ svg.lucide {
   gap: 0.75rem;
 }
 
-/* â”€â”€ Main Content â”€â”€ */
+/* ── Main Content ── */
 .main-content {
   padding: 1rem;
   overflow-y: auto;
@@ -1225,7 +1246,7 @@ svg.lucide {
 }
 
 /* ============================================================
-   STUDENT DASHBOARD â€” PSEUDOCODE EDITOR
+   STUDENT DASHBOARD — PSEUDOCODE EDITOR
    ============================================================ */
 
 .editor-layout {
@@ -1251,7 +1272,7 @@ svg.lucide {
   justify-content: space-between;
   padding: 0.5rem 0.85rem;
   background: var(--bg-elevated);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-divider);
   min-height: 40px;
 }
 
@@ -1323,7 +1344,7 @@ svg.lucide {
   flex-wrap: wrap;
 }
 
-/* â”€â”€ Action Bar (Translate / Execute) â”€â”€ */
+/* ── Action Bar (Translate / Execute) ── */
 .action-bar {
   display: flex;
   align-items: center;
@@ -1336,7 +1357,7 @@ svg.lucide {
   padding: 0.65rem 1.5rem;
 }
 
-/* â”€â”€ Output Panel â”€â”€ */
+/* ── Output Panel ── */
 .output-container {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -1362,7 +1383,7 @@ svg.lucide {
 }
 
 
-/* â”€â”€ Validation Error Panel â”€â”€ */
+/* ── Validation Error Panel ── */
 .validation-error-panel {
   max-height: 140px;
   overflow-y: auto;
@@ -1413,7 +1434,7 @@ svg.lucide {
   box-shadow: inset 0 0 20px rgba(239, 68, 68, 0.05);
 }
 
-/* â”€â”€ Sample Dropdown â”€â”€ */
+/* ── Sample Dropdown ── */
 .sample-dropdown {
   position: absolute;
   bottom: 100%;
@@ -1448,7 +1469,7 @@ svg.lucide {
   color: var(--text-accent);
 }
 
-/* â”€â”€ Disabled Run Button â”€â”€ */
+/* ── Disabled Run Button ── */
 .btn-success:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1550,7 +1571,7 @@ svg.lucide {
   font-weight: 600;
 }
 
-/* â”€â”€ Feedback Panel â”€â”€ */
+/* ── Feedback Panel ── */
 .feedback-container {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -1607,7 +1628,7 @@ svg.lucide {
 }
 
 /* ============================================================
-   LEARNING LAYER â€” Clustered Feedback Summary
+   LEARNING LAYER — Clustered Feedback Summary
    ============================================================ */
 
 .learning-summary-verdict {
@@ -1750,7 +1771,7 @@ svg.lucide {
 .lc-state-success { box-shadow: inset 3px 0 0 var(--success); }
 
 /* ============================================================
-   LEARNING LAYER â€” Beginner Tutorial Overlay
+   LEARNING LAYER — Beginner Tutorial Overlay
    ============================================================ */
 
 .tour-overlay {
@@ -1881,7 +1902,7 @@ svg.lucide {
   margin-top: 0.25rem;
 }
 
-/* â”€â”€ Stats Cards â”€â”€ */
+/* ── Stats Cards ── */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1891,7 +1912,7 @@ svg.lucide {
 
 .stat-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   padding: 1.25rem 1.5rem;
   transition: all var(--duration) var(--ease);
@@ -1906,6 +1927,7 @@ svg.lucide {
 .stat-card .stat-icon {
   font-size: 1.5rem;
   margin-bottom: 0.75rem;
+  color: var(--icon-muted);
 }
 
 .stat-card .stat-icon svg.lucide {
@@ -1942,7 +1964,7 @@ svg.lucide {
 .stat-card .stat-label {
   font-size: 0.8rem;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .stat-card .stat-change {
@@ -1959,10 +1981,79 @@ svg.lucide {
   color: var(--error);
 }
 
-/* â”€â”€ Data Table â”€â”€ */
+/* ── Metrics Grid (Compiler Metrics page) ──
+   Deterministic columns so 6 metric cards never leave an orphan
+   (i.e. never 5 + 1). Auto-fit is the base; explicit breakpoints
+   control the column count. */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.metrics-grid .stat-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+@media (min-width: 1440px) {
+  .metrics-grid { grid-template-columns: repeat(6, minmax(170px, 1fr)); }
+}
+
+@media (min-width: 1024px) and (max-width: 1439.98px) {
+  .metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 767.98px) {
+  .metrics-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Benchmark empty / running / failed panels */
+.metrics-empty-state {
+  margin: 0;
+}
+
+.metrics-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1.1rem;
+  font-size: 0.85rem;
+}
+
+.metrics-feedback strong {
+  color: var(--text-primary);
+}
+
+.metrics-loading {
+  background: var(--accent-subtle);
+  border: 1px solid var(--border-accent);
+  color: var(--text-secondary);
+}
+
+.metrics-error {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: var(--danger);
+}
+
+.metrics-error strong {
+  color: var(--danger);
+}
+
+/* ── Data Table ── */
 .data-table-container {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -1984,14 +2075,14 @@ svg.lucide {
   letter-spacing: 0.08em;
   padding: 0.85rem 1.25rem;
   text-align: left;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--border-strong);
 }
 
 .data-table td {
   padding: 0.85rem 1.25rem;
   font-size: 0.85rem;
   color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-divider);
 }
 
 .data-table tr:last-child td {
@@ -2096,7 +2187,7 @@ svg.lucide {
   border-color: var(--status-danger-border);
 }
 
-/* â”€â”€ Chart Placeholder â”€â”€ */
+/* ── Chart Placeholder ── */
 .chart-container {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -2152,7 +2243,7 @@ svg.lucide {
   margin-bottom: 2rem;
 }
 
-/* â”€â”€ Student Exercises & Tasks â”€â”€ */
+/* ── Student Exercises & Tasks ── */
 .student-guidelines-panel {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -2284,7 +2375,7 @@ svg.lucide {
   margin-bottom: 0.4rem;
 }
 
-/* â”€â”€ Exercise Cards Grid â”€â”€ */
+/* ── Exercise Cards Grid ── */
 .exercises-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -2460,7 +2551,7 @@ svg.lucide {
   font-weight: 600;
 }
 
-/* â”€â”€ Pagination Wrapper â”€â”€ */
+/* ── Pagination Wrapper ── */
 .pagination-wrapper {
   display: flex;
   align-items: center;
@@ -2529,7 +2620,7 @@ svg.lucide {
   font-weight: 500;
 }
 
-/* â”€â”€ Modal â”€â”€ */
+/* ── Modal ── */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -2601,7 +2692,7 @@ svg.lucide {
   border-top: 1px solid var(--border);
 }
 
-/* â”€â”€ Side Drawer / Right Panel â”€â”€ */
+/* ── Side Drawer / Right Panel ── */
 .drawer-overlay {
   position: fixed;
   inset: 0;
@@ -2679,7 +2770,7 @@ svg.lucide {
   padding-left: 1.5rem;
 }
 
-/* â”€â”€ Toast â”€â”€ */
+/* ── Toast ── */
 .toast-container {
   position: fixed;
   top: 1.5rem;
@@ -2728,7 +2819,7 @@ svg.lucide {
   }
 }
 
-/* â”€â”€ Hamburger Button (hidden on desktop) â”€â”€ */
+/* ── Hamburger Button (hidden on desktop) ── */
 .hamburger-btn {
   display: none;
   font-size: 1.25rem;
@@ -2739,7 +2830,7 @@ svg.lucide {
   line-height: 1;
 }
 
-/* â”€â”€ Sidebar Overlay (mobile) â”€â”€ */
+/* ── Sidebar Overlay (mobile) ── */
 .sidebar-overlay {
   position: fixed;
   inset: 0;
@@ -2750,7 +2841,7 @@ svg.lucide {
   animation: fadeIn 0.2s var(--ease) forwards;
 }
 
-/* â”€â”€ Responsive Grid Breakpoints â”€â”€ */
+/* ── Responsive Grid Breakpoints ── */
 @media (max-width: 1200px) {
   .exercises-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -2791,7 +2882,7 @@ svg.lucide {
 }
 
 /* ============================================================
-   RESPONSIVE â€” Tablet (â‰¤ 576px)
+   RESPONSIVE — Tablet (≤ 576px)
    ============================================================ */
 
 @media (max-width: 576px) {
@@ -2864,7 +2955,7 @@ svg.lucide {
 }
 
 /* ============================================================
-   RESPONSIVE â€” Phone (â‰¤ 480px)
+   RESPONSIVE — Phone (≤ 480px)
    ============================================================ */
 
 @media (max-width: 480px) {
@@ -3046,7 +3137,7 @@ svg.lucide {
 }
 
 /* ============================================================
-   RESPONSIVE â€” Small Phone (â‰¤ 380px)
+   RESPONSIVE — Small Phone (≤ 380px)
    ============================================================ */
 
 @media (max-width: 380px) {
@@ -3071,7 +3162,7 @@ svg.lucide {
 }
 
 /* ============================================================
-   PWA â€” iOS Safe Areas & Standalone Mode
+   PWA — iOS Safe Areas & Standalone Mode
    ============================================================ */
 
 /* iOS notch / home indicator safe areas */
@@ -3151,7 +3242,7 @@ body.ios-standalone {
   }
 }
 
-/* â”€â”€ Loading spinner â”€â”€ */
+/* ── Loading spinner ── */
 .spinner {
   width: 20px;
   height: 20px;
@@ -3167,7 +3258,7 @@ body.ios-standalone {
   }
 }
 
-/* â”€â”€ Empty state â”€â”€ */
+/* ── Empty state ── */
 .empty-state {
   text-align: center;
   padding: 3rem 2rem;
@@ -3191,7 +3282,7 @@ body.ios-standalone {
   margin: 0 auto;
 }
 
-/* â”€â”€ Student exercise view â”€â”€ */
+/* ── Student exercise view ── */
 .exercise-attempt {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -3213,7 +3304,7 @@ body.ios-standalone {
   margin-bottom: 1rem;
 }
 
-/* â”€â”€ Status indicator â”€â”€ */
+/* ── Status indicator ── */
 .status-dot {
   width: 8px;
   height: 8px;
@@ -3230,7 +3321,7 @@ body.ios-standalone {
   background: var(--text-muted);
 }
 
-/* â”€â”€ Page transitions â”€â”€ */
+/* ── Page transitions ── */
 .page-view {
   animation: pageIn 0.3s var(--ease);
 }
@@ -3247,7 +3338,7 @@ body.ios-standalone {
   }
 }
 
-/* â”€â”€ Select input â”€â”€ */
+/* ── Select input ── */
 select.form-input {
   appearance: none;
   color: var(--text-secondary);
@@ -3288,10 +3379,10 @@ select.form-input {
 }
 
 /* ============================================================
-   STUDENT SETTINGS â€” PROFILE & PASSWORD CHANGE
+   STUDENT SETTINGS — PROFILE & PASSWORD CHANGE
    ============================================================ */
 
-/* â”€â”€ Profile Card â”€â”€ */
+/* ── Profile Card ── */
 .profile-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -3306,7 +3397,7 @@ select.form-input {
   gap: 1.25rem;
   padding: 1.75rem 2rem;
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.08));
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-divider);
 }
 
 .profile-avatar {
@@ -3354,7 +3445,7 @@ select.form-input {
 
 .detail-label {
   font-size: 0.85rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 
@@ -3364,7 +3455,7 @@ select.form-input {
   color: var(--text-primary);
 }
 
-/* â”€â”€ Settings Sections â”€â”€ */
+/* ── Settings Sections ── */
 .settings-section {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -3388,7 +3479,7 @@ select.form-input {
   color: var(--text-secondary);
 }
 
-/* â”€â”€ Cooldown Warning â”€â”€ */
+/* ── Cooldown Warning ── */
 .cooldown-warning {
   display: flex;
   align-items: flex-start;
@@ -3419,7 +3510,7 @@ select.form-input {
   line-height: 1.5;
 }
 
-/* â”€â”€ Password Request Cards â”€â”€ */
+/* ── Password Request Cards ── */
 .request-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -3482,7 +3573,7 @@ select.form-input {
   font-style: italic;
 }
 
-/* â”€â”€ Status Badges â”€â”€ */
+/* ── Status Badges ── */
 .badge-pending {
   background: var(--status-warning-bg);
   color: var(--status-warning-fg);
@@ -3501,7 +3592,7 @@ select.form-input {
   border-color: var(--status-danger-border);
 }
 
-/* â”€â”€ Nav Badge (Pending Count) â”€â”€ */
+/* ── Nav Badge (Pending Count) ── */
 .nav-badge {
   display: inline-flex;
   align-items: center;
@@ -3519,7 +3610,7 @@ select.form-input {
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35);
 }
 
-/* â”€â”€ Disabled button style â”€â”€ */
+/* ── Disabled button style ── */
 #submit-password-request-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -3527,7 +3618,7 @@ select.form-input {
   box-shadow: none !important;
 }
 
-/* â”€â”€ Responsive Settings â”€â”€ */
+/* ── Responsive Settings ── */
 @media (max-width: 576px) {
   .profile-card-header {
     flex-direction: column;
@@ -3665,7 +3756,7 @@ select.form-input {
   color: var(--text-muted);
 }
 
-/* â”€â”€ Login Credentials Hint Box â”€â”€ */
+/* ── Login Credentials Hint Box ── */
 .login-hint-box {
   margin-bottom: 1.5rem;
   border: 1px solid var(--border);
@@ -3821,9 +3912,9 @@ select.form-input {
   font-style: italic;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ════════════════════════════════════════════════════════════════════════
    LEARNING ANALYTICS (REFERENCE DASHBOARD DESIGN)
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ════════════════════════════════════════════════════════════════════════ */
 .an-page-header {
   display: flex;
   align-items: center;
@@ -3883,7 +3974,7 @@ select.form-input {
   margin-top: 0.15rem;
 }
 
-/* â”€â”€ Filter Bar â”€â”€ */
+/* ── Filter Bar ── */
 .an-filter-bar {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -3963,7 +4054,7 @@ select.form-input {
   margin-left: auto;
 }
 
-/* â”€â”€ KPI Cards Grid â”€â”€ */
+/* ── KPI Cards Grid ── */
 .an-kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -4044,7 +4135,7 @@ select.form-input {
   color: var(--text-muted);
 }
 
-/* â”€â”€ Charts Grid / Row â”€â”€ */
+/* ── Charts Grid / Row ── */
 .an-charts-row {
   display: flex;
   flex-wrap: wrap;
@@ -4120,7 +4211,7 @@ select.form-input {
   height: 0.85rem;
 }
 
-/* â”€â”€ Bar Chart Specifics â”€â”€ */
+/* ── Bar Chart Specifics ── */
 .an-bar-chart-wrap {
   display: flex;
   height: 220px;
@@ -4214,7 +4305,7 @@ select.form-input {
   line-height: 1.35;
 }
 
-/* â”€â”€ Bar Tooltip (shadcn popover) â”€â”€ */
+/* ── Bar Tooltip (shadcn popover) ── */
 .an-bar-tooltip {
   position: absolute;
   z-index: 100;
@@ -4270,7 +4361,7 @@ select.form-input {
   font-size: 0.7rem;
 }
 
-/* â”€â”€ Donut Chart â”€â”€ */
+/* ── Donut Chart ── */
 .an-donut-wrap {
   display: flex;
   align-items: center;
@@ -4352,7 +4443,7 @@ select.form-input {
   color: var(--card-foreground);
 }
 
-/* â”€â”€ Submission Table & Pagination â”€â”€ */
+/* ── Submission Table & Pagination ── */
 .an-table-card {
   background: var(--card);
   border: 1px solid var(--input);
@@ -4483,7 +4574,7 @@ select.form-input {
   flex-shrink: 0;
 }
 
-/* â”€â”€ Table cell / row helpers (shadcn) â”€â”€ */
+/* ── Table cell / row helpers (shadcn) ── */
 .an-user-cell { display: flex; align-items: center; gap: 0.6rem; }
 .an-avatar-sm {
   width: 26px; height: 26px; border-radius: 9999px;
@@ -4498,7 +4589,7 @@ select.form-input {
 .an-cell-secondary { color: var(--secondary-foreground); font-size: 0.85rem; }
 .an-cell-score { font-weight: 600; font-size: 0.85rem; }
 
-/* â”€â”€ Result Badges â”€â”€ */
+/* ── Result Badges ── */
 .badge-result-success {
   background: rgba(16, 185, 129, 0.12);
   color: var(--success-tok);
@@ -4529,7 +4620,7 @@ select.form-input {
   border: 1px solid rgba(148, 163, 184, 0.28);
 }
 
-/* â”€â”€ Shared base for inline result/status/diff badges in analytics table â”€â”€ */
+/* ── Shared base for inline result/status/diff badges in analytics table ── */
 .badge-result,
 .badge-status,
 .badge-diff {
@@ -4545,7 +4636,7 @@ select.form-input {
   white-space: nowrap;
 }
 
-/* â”€â”€ Difficulty Badges â”€â”€ */
+/* ── Difficulty Badges ── */
 .badge-easy {
   background: rgba(16, 185, 129, 0.1);
   color: var(--success-tok);
@@ -4564,7 +4655,7 @@ select.form-input {
   border: 1px solid rgba(239, 68, 68, 0.22);
 }
 
-/* â”€â”€ Analytics Status Badges â”€â”€ */
+/* ── Analytics Status Badges ── */
 .badge-completed {
   background: rgba(16, 185, 129, 0.1);
   color: var(--success-tok);
@@ -4583,7 +4674,7 @@ select.form-input {
   border: 1px solid rgba(245, 158, 11, 0.22);
 }
 
-/* â”€â”€ Eye Action Button (shadcn ghost) â”€â”€ */
+/* ── Eye Action Button (shadcn ghost) ── */
 .an-eye-btn {
   display: inline-flex;
   align-items: center;
@@ -4612,10 +4703,10 @@ select.form-input {
 }
 
 /* ============================================================
-   RESPONSIVE DESIGN SYSTEM â€” BREAKPOINTS & MOBILE OPTIMIZATIONS
+   RESPONSIVE DESIGN SYSTEM — BREAKPOINTS & MOBILE OPTIMIZATIONS
    ============================================================ */
 
-/* â”€â”€ Hamburger Button (Hidden on Desktop) â”€â”€ */
+/* ── Hamburger Button (Hidden on Desktop) ── */
 .hamburger-btn {
   display: none;
   width: 44px;
@@ -4628,7 +4719,7 @@ select.form-input {
   flex-shrink: 0;
 }
 
-/* â”€â”€ Table Container Scoped Scroll â”€â”€ */
+/* ── Table Container Scoped Scroll ── */
 .data-table-container,
 .table-responsive,
 .analytics-table-wrap {
@@ -4642,14 +4733,14 @@ select.form-input {
   min-width: 600px;
 }
 
-/* â”€â”€ Responsive Grid Helpers â”€â”€ */
+/* ── Responsive Grid Helpers ── */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
 }
 
-/* â”€â”€ Media Query: Large Desktop (1440px+) â”€â”€ */
+/* ── Media Query: Large Desktop (1440px+) ── */
 @media (min-width: 1440px) {
   .main-content {
     max-width: 1600px;
@@ -4657,7 +4748,7 @@ select.form-input {
   }
 }
 
-/* â”€â”€ Media Query: Tablet & Mobile (< 1024px) â”€â”€ */
+/* ── Media Query: Tablet & Mobile (< 1024px) ── */
 @media (max-width: 1023px) {
 
   /* Layout Transformation */
@@ -4784,7 +4875,7 @@ select.form-input {
   }
 }
 
-/* â”€â”€ Media Query: Mobile Devices (< 768px) â”€â”€ */
+/* ── Media Query: Mobile Devices (< 768px) ── */
 @media (max-width: 767px) {
   h1 {
     font-size: 1.5rem;
@@ -4852,7 +4943,7 @@ select.form-input {
   }
 }
 
-/* â”€â”€ Media Query: Small Mobile (< 430px) â”€â”€ */
+/* ── Media Query: Small Mobile (< 430px) ── */
 @media (max-width: 429px) {
   .topbar-title {
     max-width: 130px;
@@ -4873,11 +4964,11 @@ select.form-input {
   }
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ══════════════════════════════════════════════════════════════
    PASSWORD RECOVERY & SECURITY STYLES
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ══════════════════════════════════════════════════════════════ */
 
-/* â”€â”€ Recovery Status Badges â”€â”€ */
+/* ── Recovery Status Badges ── */
 .badge-recovery-pending {
   background: var(--status-warning-bg);
   color: var(--status-warning-fg);
@@ -4908,7 +4999,7 @@ select.form-input {
   border-color: var(--status-neutral-border);
 }
 
-/* â”€â”€ Recovery Review Modal Grid â”€â”€ */
+/* ── Recovery Review Modal Grid ── */
 .recovery-info-grid {
   display: flex;
   flex-direction: column;
@@ -4947,7 +5038,7 @@ select.form-input {
   line-height: 1.5;
 }
 
-/* â”€â”€ Forgot Password Flow Cards â”€â”€ */
+/* ── Forgot Password Flow Cards ── */
 .fp-status-card {
   padding: 1.25rem;
   border-radius: var(--radius);
@@ -5007,9 +5098,9 @@ select.form-input {
   padding-left: 0.25rem;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ══════════════════════════════════════════════════════════════
    STUDENT NOTIFICATION SYSTEM STYLES
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ══════════════════════════════════════════════════════════════ */
 
 .topbar-notifications {
   position: relative;
@@ -5059,7 +5150,7 @@ select.form-input {
   line-height: 1;
 }
 
-/* â”€â”€ Notification Dropdown Panel â”€â”€ */
+/* ── Notification Dropdown Panel ── */
 .notif-dropdown {
   position: absolute;
   top: calc(100% + 10px);
@@ -5231,7 +5322,7 @@ select.form-input {
   text-align: center;
 }
 
-/* â”€â”€ Mobile adjustments for notification dropdown â”€â”€ */
+/* ── Mobile adjustments for notification dropdown ── */
 @media (max-width: 480px) {
   .notif-dropdown {
     position: fixed;
@@ -5243,7 +5334,7 @@ select.form-input {
   }
 }
 
-/* â”€â”€ Device Management & Authorization Styles â”€â”€ */
+/* ── Device Management & Authorization Styles ── */
 .device-action-btn {
   position: relative;
 }
@@ -5446,9 +5537,9 @@ select.form-input {
 }
 
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   DEVELOPER OPTIONS â€” Compiler Debugger (Admin Only)
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ══════════════════════════════════════════════════════════════
+   DEVELOPER OPTIONS — Compiler Debugger (Admin Only)
+   ══════════════════════════════════════════════════════════════ */
 
 /* Controls Bar */
 .devtools-controls {
@@ -6771,7 +6862,7 @@ select.form-input {
   overflow-x: auto;
 }
 
-/* â”€â”€ PWA Update Banner â”€â”€ */
+/* ── PWA Update Banner ── */
 .pwa-update-banner {
   position: fixed;
   bottom: 24px;

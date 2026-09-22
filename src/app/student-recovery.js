@@ -28,18 +28,18 @@ async function submitRecoveryRequest() {
     const rawInput = getValue('fp-username-input').trim();
     const usernameOrId = typeof normalizeUsername === 'function' ? normalizeUsername(rawInput) : rawInput;
     if (!usernameOrId) {
-        showToast('Please enter your username, email, or Student ID.', 'error');
+        showToast('Please enter your username, email, Student ID, or Student Number.', 'error');
         return;
     }
 
     await refreshUsers();
     const targetUser = cachedUsers.find(u =>
-        (u.username === usernameOrId || u.username === rawInput || u.studentId === rawInput || u.email === rawInput) &&
+        (u.username === usernameOrId || u.username === rawInput || u.studentId === rawInput || u.studentNumber === rawInput || u.email === rawInput) &&
         (u.role === 'student' || u.role === 'instructor')
     );
 
     if (!targetUser) {
-        showToast('Account not found. Check your username, email, or Student ID.', 'error');
+        showToast('Account not found. Check your username, email, Student ID, or Student Number.', 'error');
         return;
     }
 
@@ -123,13 +123,13 @@ async function checkRecoveryStatus() {
     const lookupVal = typeof normalizeUsername === 'function' ? normalizeUsername(rawLookup) : rawLookup;
 
     if (!lookupVal) {
-        showToast('Please enter your username, email, or Student ID.', 'error');
+        showToast('Please enter your username, email, Student ID, or Student Number.', 'error');
         return;
     }
 
     await refreshUsers();
     const targetUser = cachedUsers.find(u =>
-        (u.username === lookupVal || u.username === rawLookup || u.studentId === rawLookup || u.email === rawLookup) &&
+        (u.username === lookupVal || u.username === rawLookup || u.studentId === rawLookup || u.studentNumber === rawLookup || u.email === rawLookup) &&
         (u.role === 'student' || u.role === 'instructor')
     );
 
@@ -271,5 +271,6 @@ function backToLoginAfterReset() {
     setValue('fp-username-input', '');
     setValue('fp-check-username', '');
 }
+
 
 
