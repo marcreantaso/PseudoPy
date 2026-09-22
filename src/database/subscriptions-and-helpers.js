@@ -2,10 +2,6 @@
 //  APP-LEVEL HELPERS & INTERFACE
 // ══════════════════════════════════════════════════════════════
 
-async function initDB() {
-    return true;
-}
-
 async function refreshPasswordHistory() {
     return await dbGetAll(passwordRequestsRef);
 }

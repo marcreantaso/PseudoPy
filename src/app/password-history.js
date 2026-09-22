@@ -1,32 +1,11 @@
 /* ============================================================
    ADMIN: PASSWORD CHANGE HISTORY (Read-Only)
+   The read-only history table is rendered by the live
+   loadPasswordRequests() in admin-security.js; this module only
+   owns the pending recovery-request badge.
    ============================================================ */
 
-async function loadPasswordRequests() {
-    const history = await refreshPasswordHistory();
-
-    // Sort by date descending (most recent first)
-    const sorted = history.sort((a, b) => (b.changedAt || '').localeCompare(a.changedAt || ''));
-
-    // Update stats
-    setText('stat-total-changes', sorted.length);
-
-    const tbody = $id('password-requests-body');
-
-    if (sorted.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">No password changes recorded yet.</td></tr>';
-        return;
-    }
-
-    tbody.innerHTML = sorted.map(r => `
-    <tr>
-      <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div><div style="font-weight:600;color:var(--text-primary)">${r.fullName || 'Unknown'}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${r.username || 'unknown'}</div></div></div></td>
-      <td>${r.changedAt || '\u2014'}</td>
-      <td><span class="badge badge-approved">{{ui:CircleCheck}} Changed</span></td>
-    </tr>`).join('');
-}
-
-// No pending badge needed — admin just views history
+// Update pending recovery requests badge on instructor nav
 async function updatePendingRequestsBadge() {
     // Update pending recovery requests badge on instructor nav
     try {

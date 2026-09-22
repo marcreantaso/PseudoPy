@@ -30,7 +30,6 @@ let cachedDevices = [];
 let activeDeviceInstructorId = null;
 let pendingDeviceAuthData = null;
 let instructorExOffset = 0;
-let studentExOffset = 0;
 const EX_PAGE_LIMIT = 20;
 
 // ── Instructor Management State ──

@@ -520,8 +520,6 @@ function renderErrorDistributionChart(filteredActivity) {
     legend.innerHTML = legendItemsHtml.join('');
 }
 
-async function renderActivityTable() { await updateAnalyticsUI(); }
-
 function analyticsPageNav(dir) {
     analyticsCurrentPage += dir;
     renderFilteredActivityTable(currentFilteredActivity);

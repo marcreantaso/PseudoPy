@@ -61,8 +61,7 @@
     "src/database/local-storage.js",
     "src/database/collections.js",
     "src/database/seeding.js",
-    "src/database/subscriptions-and-helpers.js",
-    "src/database/facade.js"
+    "src/database/subscriptions-and-helpers.js"
   ],
   "devtools.js": [
     "src/devtools/pipeline-controls.js",

@@ -109,7 +109,6 @@ let cachedDevices = [];
 let activeDeviceInstructorId = null;
 let pendingDeviceAuthData = null;
 let instructorExOffset = 0;
-let studentExOffset = 0;
 const EX_PAGE_LIMIT = 20;
 
 // ── Instructor Management State ──
@@ -220,12 +219,6 @@ function $qs(selector) {
 
 function $qsa(selector) {
     return Array.from(document.querySelectorAll(selector));
-}
-
-function toggleHidden(id, hidden) {
-    const el = $id(id);
-    if (!el) return;
-    el.classList.toggle('hidden', hidden);
 }
 
 /* ============================================================
@@ -1961,6 +1954,16 @@ function renderFeedback(feedback) {
    EXERCISES MANAGEMENT — Offline Database CRUD
    ============================================================ */
 
+// ── Difficulty normalization (single source of truth) ────────
+function normDiff(d) {
+    const v = (d || 'moderate').toLowerCase();
+    return v === 'medium' ? 'moderate' : v;
+}
+function dispDiff(d) {
+    const v = normDiff(d);
+    return v.charAt(0).toUpperCase() + v.slice(1);
+}
+
 async function loadExercises(append = false) {
     if (!append) instructorExOffset = 0;
     const allExercises = await refreshExercises();
@@ -1973,9 +1976,9 @@ async function loadExercises(append = false) {
         (isDefaultInst && (e._docId || '').startsWith('algo_'))
     );
     const totalCount = instructorExercises.length;
-    const easyCount = instructorExercises.filter(e => (e.difficulty || '').toLowerCase() === 'easy').length;
-    const modCount = instructorExercises.filter(e => ['moderate', 'medium'].includes((e.difficulty || '').toLowerCase())).length;
-    const hardCount = instructorExercises.filter(e => (e.difficulty || '').toLowerCase() === 'hard').length;
+    const easyCount = instructorExercises.filter(e => normDiff(e.difficulty) === 'easy').length;
+    const modCount = instructorExercises.filter(e => normDiff(e.difficulty) === 'moderate').length;
+    const hardCount = instructorExercises.filter(e => normDiff(e.difficulty) === 'hard').length;
 
     setText('stat-exercise-total', String(totalCount));
     setText('stat-exercise-easy', String(easyCount));
@@ -1996,20 +1999,10 @@ async function loadExercises(append = false) {
         return;
     }
 
-    const diffLabel = d => {
-        const norm = (d || 'moderate').toLowerCase();
-        if (norm === 'medium') return 'moderate';
-        return norm;
-    };
-    const diffDisplay = d => {
-        const l = diffLabel(d);
-        return l.charAt(0).toUpperCase() + l.slice(1);
-    };
-
     const rows = exercises.map(ex => {
         const title = ex.title || ex.concept || 'Untitled Exercise';
         const desc = ex.description || 'No description.';
-        const diff = diffLabel(ex.difficulty);
+        const diff = normDiff(ex.difficulty);
         const date = ex.createdAt || '—';
         return `
         <tr>
@@ -2017,7 +2010,7 @@ async function loadExercises(append = false) {
           <td style="color:var(--text-secondary);max-width:280px">
             <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px" title="${desc}">${desc}</div>
           </td>
-          <td><span class="ex-difficulty ${diff}">${diffDisplay(ex.difficulty)}</span></td>
+          <td><span class="ex-difficulty ${diff}">${dispDiff(ex.difficulty)}</span></td>
           <td style="color:var(--text-muted);font-size:0.83rem">${date}</td>
           <td>
             <div style="display:flex;gap:0.5rem">
@@ -2257,12 +2250,6 @@ async function loadStudentExercises(page = 1) {
             .filter(a => (a.student === studentName || a.studentId === studentIdVal) && a.status === 'Completed')
             .map(a => a.exercise)
     );
-
-    const normDiff = d => {
-        const v = (d || 'moderate').toLowerCase();
-        return v === 'medium' ? 'moderate' : v;
-    };
-    const dispDiff = d => { const v = normDiff(d); return v.charAt(0).toUpperCase() + v.slice(1); };
 
     const html = exercises.map(ex => {
         const exTitle = ex.title || ex.concept || 'Untitled Exercise';
@@ -4211,8 +4198,6 @@ function renderErrorDistributionChart(filteredActivity) {
     legend.innerHTML = legendItemsHtml.join('');
 }
 
-async function renderActivityTable() { await updateAnalyticsUI(); }
-
 function analyticsPageNav(dir) {
     analyticsCurrentPage += dir;
     renderFilteredActivityTable(currentFilteredActivity);
@@ -4691,33 +4676,12 @@ async function submitPasswordChangeRequest() {
 
 /* ============================================================
    ADMIN: PASSWORD CHANGE HISTORY (Read-Only)
+   The read-only history table is rendered by the live
+   loadPasswordRequests() in admin-security.js; this module only
+   owns the pending recovery-request badge.
    ============================================================ */
 
-async function loadPasswordRequests() {
-    const history = await refreshPasswordHistory();
-
-    // Sort by date descending (most recent first)
-    const sorted = history.sort((a, b) => (b.changedAt || '').localeCompare(a.changedAt || ''));
-
-    // Update stats
-    setText('stat-total-changes', sorted.length);
-
-    const tbody = $id('password-requests-body');
-
-    if (sorted.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">No password changes recorded yet.</td></tr>';
-        return;
-    }
-
-    tbody.innerHTML = sorted.map(r => `
-    <tr>
-      <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div><div style="font-weight:600;color:var(--text-primary)">${r.fullName || 'Unknown'}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${r.username || 'unknown'}</div></div></div></td>
-      <td>${r.changedAt || '\u2014'}</td>
-      <td><span class="badge badge-approved">{{ui:CircleCheck}} Changed</span></td>
-    </tr>`).join('');
-}
-
-// No pending badge needed — admin just views history
+// Update pending recovery requests badge on instructor nav
 async function updatePendingRequestsBadge() {
     // Update pending recovery requests badge on instructor nav
     try {
@@ -6059,77 +6023,6 @@ function downloadPython() {
    PSEUDOCODE SYNTAX VALIDATION ENGINE
    Stack-based strict validation with educational error messages
    ============================================================ */
-
-/**
- * Known pseudocode keywords whitelist.
- * Used to detect typos / unknown keywords.
- */
-const KNOWN_KEYWORDS = [
-    'BEGIN', 'END', 'SET', 'TO', 'DISPLAY', 'PRINT', 'OUTPUT',
-    'IF', 'THEN', 'ELSE', 'END IF', 'ENDIF',
-    'FOR', 'EACH', 'IN', 'DO', 'FROM', 'TO', 'END FOR', 'ENDFOR',
-    'WHILE', 'END WHILE', 'ENDWHILE',
-    'FUNCTION', 'PROCEDURE', 'RETURN', 'CALL', 'END FUNCTION', 'END PROCEDURE',
-    'INPUT', 'READ', 'WITH', 'PROMPT',
-    'INCREMENT', 'DECREMENT', 'APPEND',
-    'AND', 'OR', 'NOT', 'MOD', 'TRUE', 'FALSE', 'NULL',
-    'NUMERIC', 'INTEGER', 'FLOAT', 'REAL', 'STRING', 'CHAR', 'CHARACTER', 'BOOLEAN', 'BOOL', 'DECLARE', 'AS'
-];
-
-/**
- * Simple Levenshtein distance for typo suggestions
- */
-function levenshtein(a, b) {
-    const matrix = [];
-    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
-    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-    for (let i = 1; i <= b.length; i++) {
-        for (let j = 1; j <= a.length; j++) {
-            if (b[i - 1] === a[j - 1]) {
-                matrix[i][j] = matrix[i - 1][j - 1];
-            } else {
-                matrix[i][j] = Math.min(
-                    matrix[i - 1][j - 1] + 1,
-                    matrix[i][j - 1] + 1,
-                    matrix[i - 1][j] + 1
-                );
-            }
-        }
-    }
-    return matrix[b.length][a.length];
-}
-
-/**
- * Suggest a keyword if a typo is detected
- */
-function suggestKeyword(word) {
-    const upper = word.toUpperCase();
-    const displayKeywords = ['DISPLAY', 'PRINT', 'OUTPUT', 'SET', 'IF', 'ELSE', 'FOR', 'WHILE',
-        'BEGIN', 'END', 'THEN', 'DO', 'EACH', 'FROM', 'RETURN', 'CALL',
-        'FUNCTION', 'PROCEDURE', 'INPUT', 'READ', 'INCREMENT', 'DECREMENT', 'APPEND', 'DECLARE',
-        'ENDIF', 'ENDFOR', 'ENDWHILE'];
-
-    let bestMatch = null;
-    let bestDist = Infinity;
-
-    for (const kw of displayKeywords) {
-        const dist = levenshtein(upper, kw);
-        if (dist < bestDist && dist <= 2 && dist > 0) {
-            bestDist = dist;
-            bestMatch = kw;
-        }
-    }
-    return bestMatch;
-}
-
-// ── Preprocessing: Strip Leading Line Numbers ─────────────────
-function preprocessPseudocode(code) {
-    if (!code) return '';
-    return code.split('\n').map(line => {
-        // Strip leading line numbers: e.g. "1 BEGIN" -> "BEGIN", "2  PRINT" -> " PRINT"
-        return line.replace(/^\s*\d+(?:[.:)]\s*|[ \t]+)(?=[A-Za-z_])/, '');
-    }).join('\n');
-}
 
 /**
  * Core validation function — strict compiler-like approach.

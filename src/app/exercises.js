@@ -2,6 +2,16 @@
    EXERCISES MANAGEMENT — Offline Database CRUD
    ============================================================ */
 
+// ── Difficulty normalization (single source of truth) ────────
+function normDiff(d) {
+    const v = (d || 'moderate').toLowerCase();
+    return v === 'medium' ? 'moderate' : v;
+}
+function dispDiff(d) {
+    const v = normDiff(d);
+    return v.charAt(0).toUpperCase() + v.slice(1);
+}
+
 async function loadExercises(append = false) {
     if (!append) instructorExOffset = 0;
     const allExercises = await refreshExercises();
@@ -14,9 +24,9 @@ async function loadExercises(append = false) {
         (isDefaultInst && (e._docId || '').startsWith('algo_'))
     );
     const totalCount = instructorExercises.length;
-    const easyCount = instructorExercises.filter(e => (e.difficulty || '').toLowerCase() === 'easy').length;
-    const modCount = instructorExercises.filter(e => ['moderate', 'medium'].includes((e.difficulty || '').toLowerCase())).length;
-    const hardCount = instructorExercises.filter(e => (e.difficulty || '').toLowerCase() === 'hard').length;
+    const easyCount = instructorExercises.filter(e => normDiff(e.difficulty) === 'easy').length;
+    const modCount = instructorExercises.filter(e => normDiff(e.difficulty) === 'moderate').length;
+    const hardCount = instructorExercises.filter(e => normDiff(e.difficulty) === 'hard').length;
 
     setText('stat-exercise-total', String(totalCount));
     setText('stat-exercise-easy', String(easyCount));
@@ -37,20 +47,10 @@ async function loadExercises(append = false) {
         return;
     }
 
-    const diffLabel = d => {
-        const norm = (d || 'moderate').toLowerCase();
-        if (norm === 'medium') return 'moderate';
-        return norm;
-    };
-    const diffDisplay = d => {
-        const l = diffLabel(d);
-        return l.charAt(0).toUpperCase() + l.slice(1);
-    };
-
     const rows = exercises.map(ex => {
         const title = ex.title || ex.concept || 'Untitled Exercise';
         const desc = ex.description || 'No description.';
-        const diff = diffLabel(ex.difficulty);
+        const diff = normDiff(ex.difficulty);
         const date = ex.createdAt || '—';
         return `
         <tr>
@@ -58,7 +58,7 @@ async function loadExercises(append = false) {
           <td style="color:var(--text-secondary);max-width:280px">
             <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px" title="${desc}">${desc}</div>
           </td>
-          <td><span class="ex-difficulty ${diff}">${diffDisplay(ex.difficulty)}</span></td>
+          <td><span class="ex-difficulty ${diff}">${dispDiff(ex.difficulty)}</span></td>
           <td style="color:var(--text-muted);font-size:0.83rem">${date}</td>
           <td>
             <div style="display:flex;gap:0.5rem">
@@ -298,12 +298,6 @@ async function loadStudentExercises(page = 1) {
             .filter(a => (a.student === studentName || a.studentId === studentIdVal) && a.status === 'Completed')
             .map(a => a.exercise)
     );
-
-    const normDiff = d => {
-        const v = (d || 'moderate').toLowerCase();
-        return v === 'medium' ? 'moderate' : v;
-    };
-    const dispDiff = d => { const v = normDiff(d); return v.charAt(0).toUpperCase() + v.slice(1); };
 
     const html = exercises.map(ex => {
         const exTitle = ex.title || ex.concept || 'Untitled Exercise';

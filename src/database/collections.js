@@ -224,16 +224,3 @@ async function dbClearCollection(ref) {
     if (batchSize > 0) await withFirestoreTimeout(batch.commit());
 }
 
-/**
- * Count documents.
- */
-async function dbCount(ref) {
-    if (firestoreReady()) {
-        try {
-            const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
-            if (snapshot) return snapshot.size;
-        } catch (err) { }
-    }
-    return getLocalCollection(ref).length;
-}
-

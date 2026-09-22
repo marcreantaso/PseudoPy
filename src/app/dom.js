@@ -80,9 +80,3 @@ function $qsa(selector) {
     return Array.from(document.querySelectorAll(selector));
 }
 
-function toggleHidden(id, hidden) {
-    const el = $id(id);
-    if (!el) return;
-    el.classList.toggle('hidden', hidden);
-}
-
