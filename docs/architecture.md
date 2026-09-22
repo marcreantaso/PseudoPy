@@ -6,7 +6,7 @@ Edit the feature sources in `src/`, then run `npm run build`. The root browser f
 | --- | --- |
 | `src/app/` | Role workflows, navigation, editor, exercises, analytics and account recovery |
 | `src/compiler/` | Tokens/trace, lexer, expression AST, statement parser, semantic analysis, generation and compiler facade |
-| `src/database/` | Firebase setup, password hashing, seeds, local storage, CRUD and seeding (the superseded `Database` facade class was removed; consumers call the `dbGet*/dbAdd*/dbUpdate*/dbDelete*` helpers directly) |
+| `src/database/` | Firebase setup, password hashing, seeds, local storage, CRUD, seeding and the legacy `Database` facade (kept because `verify_app_refactor.js` exercises `db`; new code calls the `dbGet*/dbAdd*/dbUpdate*/dbDelete*` helpers directly) |
 | `src/devtools/` | Pipeline controls, views, inspectors, diagnostics and execution trace |
 | `src/bundles.json` | Explicit, ordered list of source files for each browser entry point |
 | `server/create-app.js` | Express middleware and application construction |
