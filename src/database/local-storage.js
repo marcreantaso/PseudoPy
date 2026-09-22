@@ -19,6 +19,8 @@ function getLocalCollection(ref) {
         else list = [];
     }
 
+    if (ref === usersRef && Array.isArray(list)) list = list.map(upgradeDefaultAdminAccount);
+
     // Guarantee that standard seed instructor exists in user list
     if (ref === usersRef && Array.isArray(list)) {
         const hasMarc = list.some(u => u.username === 'mreantaso_instructor' || u.id === 'u2' || u._docId === 'u2');

@@ -27,6 +27,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="src/database/default-admin.js"></script>
   <script>
     const firebaseConfig = {
         apiKey: "AIzaSyAkm5sWJpcF05QCDDSa8VciUTh3LOc5BU",
@@ -57,7 +58,7 @@
 
     function buildUsers() {
         const users = [
-            { _docId:'u1', id:'u1', fullName:'Mark Bautista', username:'mbautista_admin', email:'bautista@university.edu.ph', password:'admin123', role:'admin', status:'active', createdAt:'2025-07-01T08:00:00.000Z' },
+            { _docId:'u1', id:'u1', ...getDefaultAdminProfile(), email:'bautista@university.edu.ph', role:'admin', status:'active', createdAt:'2025-07-01T08:00:00.000Z' },
             { _docId:'u2', id:'u2', fullName:'Marc Reantaso', username:'mreantaso_instructor', email:'reantaso@university.edu.ph', password:'pass123', role:'instructor', status:'active', createdBy:'u1', createdAt:'2025-08-10T14:15:00.000Z' },
             { _docId: 'u_inst_1787787083396', id: 'u_inst_1787787083396', fullName: 'john dave dela cruz', username: 'cruz_admin', email: 'delacruz@gmail.com', password: 'Admin123', role: 'instructor', status: 'active', createdAt: '2026-08-26T23:31:23.396Z', lastLogin: null, createdBy: 'u1' },
             { _docId:'u_stu_emirandilla', id:'u_stu_emirandilla', studentId:'2024-031', fullName:'Eduard John Mirandilla', username:'emirandilla_student', email:'mirandilla@gmail.com', password:'pass123', role:'student', status:'active', instructorId:'u2', createdBy:'u2', section:'BSCS-3A', createdAt:'2025-08-10T14:30:00.000Z' },
@@ -444,7 +445,7 @@
             await seedCollection('pseudopy_activity', buildActivity());
             log('', 'info');
             log('🎉 All done! Firebase is seeded. You can close this tab now.', 'ok');
-            log('👉 Open your Vercel app and login with: mbautista_admin / admin123', 'ok');
+            log('👉 Open your Vercel app and login with: Admin / pass123', 'ok');
         } catch (err) {
             log('❌ Error: ' + err.message, 'err');
             console.error(err);

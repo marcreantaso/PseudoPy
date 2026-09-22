@@ -54,6 +54,7 @@
     "src/compiler/compiler.js"
   ],
   "database.js": [
+    "src/database/default-admin.js",
     "src/database/firebase.js",
     "src/database/passwords.js",
     "src/database/seed-data.js",
