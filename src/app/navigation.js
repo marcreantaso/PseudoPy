@@ -58,7 +58,15 @@ function navigateTo(pageId) {
     }
     if (pageId === 'password-recovery') loadPasswordRecovery();
     if (pageId === 'compiler-metrics') loadCompilerMetrics();
-    if (pageId === 'developer-options' && typeof initDevTools === 'function') initDevTools();
+    if (pageId === 'developer-options') {
+        // DevTools is a dev-only surface; its bundle (devtools.js) is fetched
+        // lazily on first entry instead of paying for it on every page load.
+        if (typeof initDevTools === 'function') {
+            initDevTools();
+        } else {
+            loadScripts(['devtools.js'], function () { if (typeof initDevTools === 'function') initDevTools(); });
+        }
+    }
     // Refresh student progress pill whenever the Write Pseudocode page is shown
     if (pageId === 'write-pseudocode' && currentUser && currentUser.role === 'student') {
         loadStudentProgress();

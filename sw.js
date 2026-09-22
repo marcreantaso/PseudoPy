@@ -12,7 +12,6 @@ const LOCAL_ASSETS = [
     './mapper.js',
     './app.js',
     './app.js?v=icons-2',
-    './devtools.js?v=20260909',
     './ui-icons.js?v=2',
     './ui-icons.css?v=1',
     './compiler.js',
