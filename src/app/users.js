@@ -565,13 +565,16 @@ async function saveInstructor() {
 
             const newId = 'u_inst_' + Date.now();
             const creatorId = currentUser ? (currentUser.id || currentUser._docId || 'u1') : 'u1';
+            const salt = generateSalt();
+            const passwordHash = await hashPassword(password, salt);
             await dbSet(usersRef, newId, {
                 _docId: newId,
                 id: newId,
                 fullName,
                 username,
                 email,
-                password,
+                passwordHash,
+                passwordSalt: salt,
                 role: 'instructor',
                 status,
                 createdAt: new Date().toISOString(),
@@ -769,9 +772,9 @@ async function loadStudents() {
       <td>${u.studentId || '—'}</td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">
-        <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit">{{ui:Pencil}}</button>
-        <button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}">${u.status === 'active' ? '{{ui:LockKeyhole}}' : '{{ui:LockKeyholeOpen}}'}</button>
-        <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" title="Delete">{{ui:Trash2}}</button>
+        <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit" aria-label="Edit user">{{ui:Pencil}}</button>
+<button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" aria-label="${u.status === 'active' ? 'Deactivate user' : 'Activate user'}">${u.status === 'active' ? '{{ui:LockKeyhole}}' : '{{ui:LockKeyholeOpen}}'}</button>
+      <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" title="Delete" aria-label="Delete user">{{ui:Trash2}}</button>
       </div></td>
     </tr>`).join('');
 }
@@ -824,7 +827,7 @@ async function openUserModal(id = null) {
             setValue('user-fullname', user.fullName);
             setValue('user-username', user.username);
             setValue('user-email', user.email);
-            setValue('user-password', user.password);
+            setValue('user-password', '');
             setValue('user-role-select', user.role);
             const pwGroup = $id('user-password-group');
             if (pwGroup) pwGroup.classList.add('hidden');
@@ -883,12 +886,15 @@ async function saveUser() {
             showToast('User updated successfully!', 'success');
         } else {
             const newId = 'u' + Date.now();
+            const salt = generateSalt();
+            const userHash = await hashPassword(password, salt);
             const userData = {
                 id: newId,
                 fullName,
                 username,
                 email,
-                password,
+                passwordHash: userHash,
+                passwordSalt: salt,
                 role,
                 status: 'active',
                 createdBy: currentUser.id

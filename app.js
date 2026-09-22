@@ -139,6 +139,82 @@ function renderAppVersion() {
     if (loginEl) loginEl.textContent = 'PseudoPy v' + window.APP_VERSION;
     const settingsEl = $id('settings-version');
     if (settingsEl) settingsEl.textContent = 'Version ' + window.APP_VERSION;
+}
+
+/**
+ * Renders APP_INFO-driven system details (copyright, organization, contact)
+ * into the login footer and Settings About section. Called on boot and when
+ * the Settings page is shown.
+ */
+function renderSystemInfo() {
+    const copyright = $id('login-copyright');
+    if (copyright) {
+        const year = new Date().getFullYear();
+        copyright.textContent = window.APP_INFO.name + ' \u00a9 ' + year;
+    }
+    const org = $id('settings-org');
+    if (org) org.textContent = window.APP_INFO.organization;
+    const contact = $id('settings-contact');
+    if (contact) contact.textContent = appInfoField(window.APP_INFO.contactEmail);
+}/* ============================================================
+   APP / SYSTEM IDENTITY — single source of truth
+   Used by the Privacy, Terms and About surfaces. Do not put
+   secrets or confidential material here; it ships to browsers.
+
+   Version is substituted at build time from package.json.
+   Organization and team were prefilled from the project's
+   thesis manuscript (see PSEUDO_MANUSCRIPT (1).md). Fields that
+   the system owner must still provide are empty and render as
+   clearly marked placeholders in the UI:
+   - contactEmail
+   - privacyEffectiveDate
+   - termsEffectiveDate
+   ============================================================ */
+
+const APP_INFO = {
+    name: 'PseudoPy',
+    shortName: 'PseudoPy',
+    version: '1.0.0',
+    description: 'An educational pseudocode-to-Python translator with role-based '
+        + 'dashboards, exercises, learning analytics and authorized-device security.',
+    organization: 'Pamantasan ng Cabuyao - College of Computing Studies',
+    developmentTeam: [
+        'Bautista, Mark Andrew S.',
+        'Daet, Mikaella C.',
+        'Mirandilla, Eduard John',
+        'Reantaso, Marc Gian R.'
+    ],
+    contactEmail: '',
+    privacyEffectiveDate: '',
+    termsEffectiveDate: '',
+    // Grow this list as data practices change so Privacy shows real behavior.
+    collections: [
+        'pseudopy_users',
+        'pseudopy_exercises',
+        'pseudopy_activity',
+        'pseudopy_passwordRequests',
+        'pseudopy_auditLog',
+        'pseudopy_notifications',
+        'pseudopy_devices',
+        'pseudopy_evidence',
+        'pseudopy_tutorialProgress'
+    ]
+};
+
+window.APP_INFO = APP_INFO;
+
+/** Renders a value or a clearly marked placeholder when the owner has not
+ *  supplied the real configuration item yet. */
+function appInfoField(value) {
+    if (value && String(value).trim() !== '') return String(value);
+    return '[pending owner configuration]';
+}
+
+/** True while any owner-facing configuration is still missing. */
+function appInfoPending() {
+    return !APP_INFO.contactEmail
+        || !APP_INFO.privacyEffectiveDate
+        || !APP_INFO.termsEffectiveDate;
 }/* ============================================================
    PYTHON OUTPUT — LINE NUMBER RENDERER
    Renders Python code with a styled line-number gutter.
@@ -283,6 +359,7 @@ async function init() {
 
         // Show the app version (login footer / settings About).
         renderAppVersion();
+        if (typeof renderSystemInfo === 'function') renderSystemInfo();
     } catch (err) {
         console.error('[App] Init error:', err);
         showToast('Database initialization failed. Check local storage availability.', 'error');
@@ -599,7 +676,6 @@ async function handleLogin() {
                     browser: currentDevice.browser,
                     deviceType: currentDevice.deviceType,
                     screen: currentDevice.screen,
-                    userAgent: currentDevice.userAgent,
                     status: 'approved',
                     requestedAt: new Date().toISOString(),
                     approvedAt: new Date().toISOString(),
@@ -624,7 +700,6 @@ async function handleLogin() {
                     browser: currentDevice.browser,
                     deviceType: currentDevice.deviceType,
                     screen: currentDevice.screen,
-                    userAgent: currentDevice.userAgent,
                     status: 'pending',
                     requestedAt: new Date().toISOString(),
                     lastSeenAt: new Date().toISOString()
@@ -3317,13 +3392,16 @@ async function saveInstructor() {
 
             const newId = 'u_inst_' + Date.now();
             const creatorId = currentUser ? (currentUser.id || currentUser._docId || 'u1') : 'u1';
+            const salt = generateSalt();
+            const passwordHash = await hashPassword(password, salt);
             await dbSet(usersRef, newId, {
                 _docId: newId,
                 id: newId,
                 fullName,
                 username,
                 email,
-                password,
+                passwordHash,
+                passwordSalt: salt,
                 role: 'instructor',
                 status,
                 createdAt: new Date().toISOString(),
@@ -3521,9 +3599,9 @@ async function loadStudents() {
       <td>${u.studentId || '—'}</td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">
-        <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit">{{ui:Pencil}}</button>
-        <button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}">${u.status === 'active' ? '{{ui:LockKeyhole}}' : '{{ui:LockKeyholeOpen}}'}</button>
-        <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" title="Delete">{{ui:Trash2}}</button>
+        <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit" aria-label="Edit user">{{ui:Pencil}}</button>
+<button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" aria-label="${u.status === 'active' ? 'Deactivate user' : 'Activate user'}">${u.status === 'active' ? '{{ui:LockKeyhole}}' : '{{ui:LockKeyholeOpen}}'}</button>
+      <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" title="Delete" aria-label="Delete user">{{ui:Trash2}}</button>
       </div></td>
     </tr>`).join('');
 }
@@ -3576,7 +3654,7 @@ async function openUserModal(id = null) {
             setValue('user-fullname', user.fullName);
             setValue('user-username', user.username);
             setValue('user-email', user.email);
-            setValue('user-password', user.password);
+            setValue('user-password', '');
             setValue('user-role-select', user.role);
             const pwGroup = $id('user-password-group');
             if (pwGroup) pwGroup.classList.add('hidden');
@@ -3635,12 +3713,15 @@ async function saveUser() {
             showToast('User updated successfully!', 'success');
         } else {
             const newId = 'u' + Date.now();
+            const salt = generateSalt();
+            const userHash = await hashPassword(password, salt);
             const userData = {
                 id: newId,
                 fullName,
                 username,
                 email,
-                password,
+                passwordHash: userHash,
+                passwordSalt: salt,
                 role,
                 status: 'active',
                 createdBy: currentUser.id
@@ -4077,6 +4158,22 @@ function renderSubmissionActivityChart(filteredActivity) {
         `;
     }).join('');
 
+    // Accessible text equivalent for the color/shape-only bar chart.
+    const chartSummary = weekDays.map(w => `${w.label} (${w.sub}): ${w.count !== undefined ? w.count : (dateMap[w.dateKey] || []).length}`).join('; ');
+    container.setAttribute('role', 'img');
+    container.setAttribute('aria-label', 'Bar chart of exercise submissions per period: ' + chartSummary);
+
+    // Debounced mouse hover so screen-reader users are not flooded; hover
+    // tooltips remain a progressive enhancement, not the only channel.
+    const descEl = $id('an-chart-text-summary');
+    if (descEl) descEl.remove();
+    const desc = document.createElement('p');
+    desc.className = 'sr-only';
+    desc.id = 'an-chart-text-summary';
+    desc.textContent = 'Submissions this period: ' + weekDays.reduce((sum, w) => sum + (w.count !== undefined ? w.count : (dateMap[w.dateKey] || []).length), 0);
+    container.setAttribute('aria-describedby', 'an-chart-text-summary');
+    container.closest('.an-chart-card')?.appendChild(desc);
+
     animateAnalyticsCharts();
 
     // Attach Hover and Click Handlers
@@ -4161,7 +4258,9 @@ function renderErrorDistributionChart(filteredActivity) {
     if (totalErrors === 0) {
         if (totalEl) totalEl.textContent = '0';
         chart.style.background = '#1e1e2e';
-        legend.innerHTML = `<div style="color:var(--text-muted);font-size:0.82rem;padding:0.5rem">No errors in selected period.</div>`;
+        chart.setAttribute('role', 'img');
+        chart.setAttribute('aria-label', 'Error distribution: no errors in the selected period');
+        legend.innerHTML = `<div style="color:var(--text-secondary);font-size:0.82rem;padding:0.5rem">No errors in selected period.</div>`;
         return;
     }
 
@@ -4204,6 +4303,12 @@ function renderErrorDistributionChart(filteredActivity) {
 
     chart.style.background = `conic-gradient(${gradientStops.join(', ')})`;
     legend.innerHTML = legendItemsHtml.join('');
+
+    // Accessible text equivalent: percentages + counts are announced for
+    // users who cannot perceive the color-only donut.
+    chart.setAttribute('role', 'img');
+    chart.setAttribute('aria-label',
+        'Error distribution: ' + categories.map(c => `${c.name} ${c.pct}% (${c.count})`).join(', '));
 }
 
 function analyticsPageNav(dir) {
@@ -4312,7 +4417,7 @@ function renderFilteredActivityTable(activityList) {
           <td class="an-cell-muted">${a.processingTime || '—'}</td>
           <td>${resultBadge(a)}</td>
           <td>
-                        <button class="an-eye-btn" title="View Details" onclick="viewSubmissionDetail('${docId}')">
+                        <button class="an-eye-btn" title="View Details" aria-label="View details for ${docId}" onclick="viewSubmissionDetail('${docId}')">
                             <i data-lucide="eye" aria-hidden="true"></i>
             </button>
           </td>
@@ -4529,6 +4634,7 @@ async function refreshPasswordHistory() {
  * Load student settings page: profile info, cooldown check, change history
  */
 async function loadStudentSettings() {
+    if (typeof renderSystemInfo === 'function') renderSystemInfo();
     if (!currentUser) return;
 
     // Populate profile info
@@ -8625,16 +8731,16 @@ function renderBenchmarkResults(results) {
         } else {
             masteryBody.innerHTML = conceptData.map(c => {
                 let masteryLabel, masteryColor;
-                if (c.accuracy >= 80) { masteryLabel = '{{ui:Circle}} Expert'; masteryColor = '#22c55e'; }
-                else if (c.accuracy >= 60) { masteryLabel = '{{ui:Circle}} Proficient'; masteryColor = '#3b82f6'; }
-                else if (c.accuracy >= 40) { masteryLabel = '{{ui:Circle}} Developing'; masteryColor = '#f59e0b'; }
-                else { masteryLabel = '{{ui:Circle}} Beginner'; masteryColor = '#ef4444'; }
+                if (c.accuracy >= 80) { masteryLabel = '{{ui:Circle}} Expert'; masteryColor = 'var(--icon-success)'; }
+                else if (c.accuracy >= 60) { masteryLabel = '{{ui:Circle}} Proficient'; masteryColor = 'var(--text-accent)'; }
+                else if (c.accuracy >= 40) { masteryLabel = '{{ui:Circle}} Developing'; masteryColor = 'var(--icon-warning)'; }
+                else { masteryLabel = '{{ui:Circle}} Beginner'; masteryColor = 'var(--icon-danger)'; }
 
                 return `<tr>
                   <td style="font-weight:600;color:var(--text-primary)">${c.concept}</td>
-                  <td style="color:var(--text-muted)">${c.total}</td>
-                  <td><span style="font-weight:600;color:${c.successRate >= 80 ? '#22c55e' : '#f59e0b'}">${c.successRate}%</span></td>
-                  <td><span style="font-weight:600;color:${c.accuracy >= 60 ? '#22c55e' : '#ef4444'}">${c.accuracy}%</span></td>
+                  <td style="color:var(--text-secondary)">${c.total}</td>
+                  <td><span style="font-weight:600;color:${c.successRate >= 80 ? 'var(--icon-success)' : 'var(--icon-warning)'}">${c.successRate}%</span></td>
+                  <td><span style="font-weight:600;color:${c.accuracy >= 60 ? 'var(--icon-success)' : 'var(--icon-danger)'}">${c.accuracy}%</span></td>
                   <td>${c.precision}%</td>
                   <td><span style="color:${masteryColor};font-weight:700">${masteryLabel}</span></td>
                 </tr>`;
@@ -8669,6 +8775,19 @@ function renderPipelineTimingChart(timing) {
         '<span class="bar-label">' + s.name + '</span>' +
         '</div>'
     ).join('');
+
+    // Accessible text equivalent for the bar chart.
+    container.setAttribute('role', 'img');
+    container.setAttribute('aria-label',
+        'Pipeline timing: ' + stages.map(s => `${s.name} ${s.value}ms`).join(', '));
+    const descEl = $id('pipeline-chart-text-summary');
+    if (descEl) descEl.remove();
+    const desc = document.createElement('p');
+    desc.className = 'sr-only';
+    desc.id = 'pipeline-chart-text-summary';
+    desc.textContent = 'Average stage timings: ' + stages.map(s => `${s.name} ${s.value}ms`).join(', ');
+    container.setAttribute('aria-describedby', 'pipeline-chart-text-summary');
+    container.appendChild(desc);
 }
 
 
@@ -8869,3 +8988,233 @@ function autoFormatPseudocode() {
     updateGutter(); // Refresh line numbers
     showToast('Pseudocode formatted!', 'success');
 }
+/* ============================================================
+   ACCESSIBILITY — shared a11y behaviors
+   - togglePasswordVisibility (L1 fix: was referenced but never defined)
+   - Global focus trap + initial-focus lift for modal/drawer overlays
+   - Keyboard-driven skip link handling
+   ============================================================ */
+
+/**
+ * Toggles the visibility of a password field between hidden and plain text.
+ * Keeps the toggle button labelled and swaps the eye icon so the state is
+ * announced independently of the (non-aria) text.
+ */
+function togglePasswordVisibility(inputId, btn) {
+    const input = $id(inputId);
+    if (!input) return;
+
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+
+    const icon = btn.querySelector('[data-lucide]');
+    if (icon) {
+        icon.setAttribute('data-lucide', show ? 'eye-off' : 'eye');
+        refreshIcons(btn);
+    }
+}
+
+const A11Y_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const A11Y_OVERLAYS = '.modal-overlay, .drawer-overlay';
+
+function a11yVisible(el) {
+    return el && !el.classList.contains('hidden') && el.getClientRects().length > 0;
+}
+
+function a11yFocusables(container) {
+    return Array.from(container.querySelectorAll(A11Y_FOCUSABLE))
+        .filter(el => el.getClientRects().length > 0);
+}
+
+/**
+ * Traps Tab/Shift+Tab within the currently visible overlay. Handles every
+ * modal and drawer uniformly instead of per-modal wiring.
+ */
+function a11yTrapKeydown(e) {
+    if (e.key !== 'Tab') return;
+    const overlay = Array.from(document.querySelectorAll(A11Y_OVERLAYS))
+        .find(o => a11yVisible(o) && o.contains(document.activeElement));
+    if (!overlay) return;
+
+    const focusables = a11yFocusables(overlay);
+    if (!focusables.length) { e.preventDefault(); return; }
+
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+    }
+}
+
+let a11yLastFocus = null;
+
+/**
+ * Observes overlay visibility so that when a modal/drawer opens, focus moves
+ * into it, and when it closes, focus returns to the triggering element.
+ * resubmission-request-modal already manages its own focus lifecycle and is
+ * excluded to avoid fighting its internal logic.
+ */
+function a11yWatchOverlays() {
+    const overlays = Array.from(document.querySelectorAll(A11Y_OVERLAYS));
+    const prevVisible = new WeakMap(overlays.map(o => [o, a11yVisible(o)]));
+
+    const observer = new MutationObserver((muts) => {
+        const touched = new Set(muts.map(m => m.target));
+        touched.forEach((overlay) => {
+            if (!overlay.matches(A11Y_OVERLAYS)) return;
+            const nowVisible = a11yVisible(overlay);
+            const wasVisible = prevVisible.get(overlay) || false;
+            prevVisible.set(overlay, nowVisible);
+
+            if (nowVisible && !wasVisible && overlay.id !== 'resubmission-request-modal') {
+                a11yLastFocus = document.activeElement;
+                const target = a11yFocusables(overlay)[0];
+                if (target) setTimeout(() => target.focus(), 0);
+            } else if (!nowVisible && wasVisible) {
+                if (a11yLastFocus && a11yLastFocus.isConnected) {
+                    setTimeout(() => a11yLastFocus.focus(), 0);
+                }
+                a11yLastFocus = null;
+            }
+        });
+    });
+
+    overlays.forEach((overlay) => observer.observe(overlay, { attributes: true, attributeFilter: ['class'] }));
+}
+
+/**
+ * Adds scope="col" to header cells of any table (static or JS-rendered) so
+ * screen readers can announce column headers reliably.
+ */
+function a11yUpgradeTableHeaders(root) {
+    if (!root || root.nodeType !== 1) return;
+    if (root.matches('thead th')) {
+        if (!root.hasAttribute('scope')) root.setAttribute('scope', 'col');
+        return;
+    }
+    root.querySelectorAll('thead th').forEach(th => {
+        if (!th.hasAttribute('scope')) th.setAttribute('scope', 'col');
+    });
+}
+
+function initA11y() {
+    document.addEventListener('keydown', a11yTrapKeydown);
+    a11yWatchOverlays();
+
+    const main = $id('main-content') || document.body;
+    a11yUpgradeTableHeaders(main);
+    const observer = new MutationObserver((muts) => {
+        muts.forEach((m) => {
+            if (!m.addedNodes) return;
+            m.addedNodes.forEach((node) => {
+                if (node.nodeType !== 1) return;
+                if (node.matches && node.matches('thead, thead th')) a11yUpgradeTableHeaders(node);
+                else if (node.querySelector) a11yUpgradeTableHeaders(node);
+            });
+        });
+    });
+    observer.observe(main, { childList: true, subtree: true });
+}
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initA11y);
+    } else {
+        initA11y();
+    }
+}/* ============================================================
+   LEGAL / ABOUT PAGES (Privacy Policy, Terms of Use)
+   In-app document views reachable before and after sign-in.
+   Content lives in the index.html #legal-pages sections and
+   reflects the application's actual data practices. Owner-
+   provided organization / contact / effective-date values come
+   from APP_INFO; missing values render as marked placeholders.
+   ============================================================ */
+
+let legalReturnState = null;
+let legalReturnFocus = null;
+
+function showLegalPage(kind) {
+    const inApp = !!currentUser;
+    legalReturnState = { inApp: inApp, page: currentUser ? currentPage : null };
+    legalReturnFocus = document.activeElement;
+
+    hide('app-layout');
+    hide('login-page');
+    show('legal-pages');
+    hide('legal-section-privacy');
+    hide('legal-section-terms');
+    hide('legal-section-about');
+
+    const sectionId = kind === 'terms' ? 'legal-section-terms'
+        : kind === 'about' ? 'legal-section-about'
+        : 'legal-section-privacy';
+    const shown = $id(sectionId);
+    if (shown) {
+        shown.classList.remove('hidden');
+        shown.setAttribute('tabindex', '-1');
+        shown.focus();
+    }
+    renderLegalPlaceholders();
+}
+
+function closeLegalPage() {
+    hide('legal-pages');
+    if (legalReturnState && legalReturnState.inApp) {
+        show('app-layout');
+        navigateTo(legalReturnState.page || 'write-pseudocode');
+    } else {
+        show('login-page');
+    }
+    if (legalReturnFocus && legalReturnFocus.isConnected) {
+        try { legalReturnFocus.focus(); } catch (e) { /* best effort focus restore */ }
+    }
+}
+
+/** Fill APP_INFO-driven values and surface pending-owner markers. */
+function renderLegalPlaceholders() {
+    const set = (id, value) => {
+        const el = $id(id);
+        if (el) el.textContent = appInfoField(value);
+    };
+    set('legal-app-name', APP_INFO.name);
+    set('legal-app-name-2', APP_INFO.name);
+    set('legal-org', APP_INFO.organization);
+    set('legal-org-2', APP_INFO.organization);
+    set('legal-team', (APP_INFO.developmentTeam || []).join(', '));
+    set('legal-version', APP_INFO.version ? 'v' + APP_INFO.version : '');
+    set('legal-collections', (APP_INFO.collections || []).join(', '));
+    set('legal-contact', APP_INFO.contactEmail);
+    set('legal-contact-2', APP_INFO.contactEmail);
+    set('legal-contact-3', APP_INFO.contactEmail);
+    set('legal-contact-4', APP_INFO.contactEmail);
+    set('legal-privacy-date', APP_INFO.privacyEffectiveDate);
+    set('legal-terms-date', APP_INFO.termsEffectiveDate);
+
+    set('about-app-name', APP_INFO.name);
+    set('about-app-version', APP_INFO.version ? 'v' + APP_INFO.version : '');
+    set('about-app-description', APP_INFO.description);
+    set('about-org', APP_INFO.organization);
+    set('about-team', (APP_INFO.developmentTeam || []).join(', '));
+    set('about-contact', APP_INFO.contactEmail);
+
+    const pending = $id('legal-pending-notice');
+    if (pending) {
+        pending.classList.toggle('hidden', !appInfoPending());
+        const intro = $id('legal-pending-text');
+        if (intro) {
+            intro.textContent = 'This document is a development preview: '
+                + 'the system owner must confirm the organization, contact details and '
+                + 'effective dates below before public launch. Fields marked '
+                + '\u201c[pending owner configuration]\u201d are not yet finalized.';
+        }
+    }
+}
+
+/** Renders the login-footer legal link bar (used by inline HTML handlers). */
+function openLegalFromFooter(kind) { showLegalPage(kind); }

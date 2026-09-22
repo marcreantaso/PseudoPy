@@ -28,6 +28,7 @@ async function init() {
 
         // Show the app version (login footer / settings About).
         renderAppVersion();
+        if (typeof renderSystemInfo === 'function') renderSystemInfo();
     } catch (err) {
         console.error('[App] Init error:', err);
         showToast('Database initialization failed. Check local storage availability.', 'error');

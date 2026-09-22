@@ -391,6 +391,22 @@ function renderSubmissionActivityChart(filteredActivity) {
         `;
     }).join('');
 
+    // Accessible text equivalent for the color/shape-only bar chart.
+    const chartSummary = weekDays.map(w => `${w.label} (${w.sub}): ${w.count !== undefined ? w.count : (dateMap[w.dateKey] || []).length}`).join('; ');
+    container.setAttribute('role', 'img');
+    container.setAttribute('aria-label', 'Bar chart of exercise submissions per period: ' + chartSummary);
+
+    // Debounced mouse hover so screen-reader users are not flooded; hover
+    // tooltips remain a progressive enhancement, not the only channel.
+    const descEl = $id('an-chart-text-summary');
+    if (descEl) descEl.remove();
+    const desc = document.createElement('p');
+    desc.className = 'sr-only';
+    desc.id = 'an-chart-text-summary';
+    desc.textContent = 'Submissions this period: ' + weekDays.reduce((sum, w) => sum + (w.count !== undefined ? w.count : (dateMap[w.dateKey] || []).length), 0);
+    container.setAttribute('aria-describedby', 'an-chart-text-summary');
+    container.closest('.an-chart-card')?.appendChild(desc);
+
     animateAnalyticsCharts();
 
     // Attach Hover and Click Handlers
@@ -475,7 +491,9 @@ function renderErrorDistributionChart(filteredActivity) {
     if (totalErrors === 0) {
         if (totalEl) totalEl.textContent = '0';
         chart.style.background = '#1e1e2e';
-        legend.innerHTML = `<div style="color:var(--text-muted);font-size:0.82rem;padding:0.5rem">No errors in selected period.</div>`;
+        chart.setAttribute('role', 'img');
+        chart.setAttribute('aria-label', 'Error distribution: no errors in the selected period');
+        legend.innerHTML = `<div style="color:var(--text-secondary);font-size:0.82rem;padding:0.5rem">No errors in selected period.</div>`;
         return;
     }
 
@@ -518,6 +536,12 @@ function renderErrorDistributionChart(filteredActivity) {
 
     chart.style.background = `conic-gradient(${gradientStops.join(', ')})`;
     legend.innerHTML = legendItemsHtml.join('');
+
+    // Accessible text equivalent: percentages + counts are announced for
+    // users who cannot perceive the color-only donut.
+    chart.setAttribute('role', 'img');
+    chart.setAttribute('aria-label',
+        'Error distribution: ' + categories.map(c => `${c.name} ${c.pct}% (${c.count})`).join(', '));
 }
 
 function analyticsPageNav(dir) {
@@ -626,7 +650,7 @@ function renderFilteredActivityTable(activityList) {
           <td class="an-cell-muted">${a.processingTime || '—'}</td>
           <td>${resultBadge(a)}</td>
           <td>
-                        <button class="an-eye-btn" title="View Details" onclick="viewSubmissionDetail('${docId}')">
+                        <button class="an-eye-btn" title="View Details" aria-label="View details for ${docId}" onclick="viewSubmissionDetail('${docId}')">
                             <i data-lucide="eye" aria-hidden="true"></i>
             </button>
           </td>

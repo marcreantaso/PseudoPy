@@ -30,12 +30,12 @@
   <script src="src/database/default-admin.js"></script>
   <script>
     const firebaseConfig = {
-        apiKey: "AIzaSyAkm5sWJpcF05QCDDSa8VciUTh3LOc5BU",
+        apiKey: "AIzaSyAkm5sWvJpcF05QCDDSa8VcUIhh3L0c58U",
         authDomain: "pseudopy-e7e74.firebaseapp.com",
         projectId: "pseudopy-e7e74",
         storageBucket: "pseudopy-e7e74.firebasestorage.app",
-        messagingSenderId: "442671972919",
-        appId: "1:442671972919:web:53fc4b941b37c484247ab2"
+        messagingSenderId: "442571972919",
+        appId: "1:442571972919:web:53fc4b941b37c484247ab2"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
@@ -56,17 +56,26 @@
         "Gabriel Santiago","Abigail Ramos","Ryan Ocampo","Megan Custodio","Kyle Dela Rosa"
     ];
 
+    // Shared deterministic seed credentials (development tool only).
+    // Passwords are never stored in plaintext: seeded users use a fixed
+    // salt + SHA-256 records for the documented development passwords.
+    const SEED_SALT = 'pseudopy-seed-salt-v1';
+    // SHA-256 of 'pass123' + SEED_SALT
+    const SEED_PASS_HASH = 'a46465888d358e52347e7b419be31cc0d53c2ae49584a9bbee49ad9691b2debf';
+    // SHA-256 of 'Admin123' + SEED_SALT
+    const SEED_ADMIN_PASS_HASH = '851c4d37177db14853689595dd03a29f2fa16993c82a52765e0cf50329279dfd';
+
     function buildUsers() {
         const users = [
             { _docId:'u1', id:'u1', ...getDefaultAdminProfile(), email:'bautista@university.edu.ph', role:'admin', status:'active', createdAt:'2025-07-01T08:00:00.000Z' },
-            { _docId:'u2', id:'u2', fullName:'Marc Reantaso', username:'mreantaso_instructor', email:'reantaso@university.edu.ph', password:'pass123', role:'instructor', status:'active', createdBy:'u1', createdAt:'2025-08-10T14:15:00.000Z' },
-            { _docId: 'u_inst_1787787083396', id: 'u_inst_1787787083396', fullName: 'john dave dela cruz', username: 'cruz_admin', email: 'delacruz@gmail.com', password: 'Admin123', role: 'instructor', status: 'active', createdAt: '2026-08-26T23:31:23.396Z', lastLogin: null, createdBy: 'u1' },
-            { _docId:'u_stu_emirandilla', id:'u_stu_emirandilla', studentId:'2024-031', fullName:'Eduard John Mirandilla', username:'emirandilla_student', email:'mirandilla@gmail.com', password:'pass123', role:'student', status:'active', instructorId:'u2', createdBy:'u2', section:'BSCS-3A', createdAt:'2025-08-10T14:30:00.000Z' },
-            { _docId:'u_stu_mdaet', id:'u_stu_mdaet', studentId:'2024-032', fullName:'Mikaella Daet', username:'mdaet_student', email:'daet@gmail.com', password:'pass123', role:'student', status:'active', instructorId:'u2', createdBy:'u2', section:'BSCS-3A', createdAt:'2025-08-10T14:35:00.000Z' },
+            { _docId:'u2', id:'u2', fullName:'Marc Reantaso', username:'mreantaso_instructor', email:'reantaso@university.edu.ph', passwordHash:SEED_PASS_HASH, passwordSalt:SEED_SALT, role:'instructor', status:'active', createdBy:'u1', createdAt:'2025-08-10T14:15:00.000Z' },
+            { _docId: 'u_inst_1787787083396', id: 'u_inst_1787787083396', fullName: 'john dave dela cruz', username: 'cruz_admin', email: 'delacruz@gmail.com', passwordHash:SEED_ADMIN_PASS_HASH, passwordSalt:SEED_SALT, role: 'instructor', status: 'active', createdAt: '2026-08-26T23:31:23.396Z', lastLogin: null, createdBy: 'u1' },
+            { _docId:'u_stu_emirandilla', id:'u_stu_emirandilla', studentId:'2024-031', fullName:'Eduard John Mirandilla', username:'emirandilla_student', email:'mirandilla@gmail.com', passwordHash:SEED_PASS_HASH, passwordSalt:SEED_SALT, role:'student', status:'active', instructorId:'u2', createdBy:'u2', section:'BSCS-3A', createdAt:'2025-08-10T14:30:00.000Z' },
+            { _docId:'u_stu_mdaet', id:'u_stu_mdaet', studentId:'2024-032', fullName:'Mikaella Daet', username:'mdaet_student', email:'daet@gmail.com', passwordHash:SEED_PASS_HASH, passwordSalt:SEED_SALT, role:'student', status:'active', instructorId:'u2', createdBy:'u2', section:'BSCS-3A', createdAt:'2025-08-10T14:35:00.000Z' },
         ];
         FILIPINO_NAMES.forEach((name, i) => {
             const clean = name.toLowerCase().replace(/\s+/g,'');
-            users.push({ _docId:`u_stu_${i+3}`, id:`u_stu_${i+3}`, studentId:`2024-${String(i+1).padStart(3,'0')}`, fullName:name, username:`${clean}_student`, email:`${clean.split(' ')[0]}@student.edu.ph`, password:'pass123', role:'student', status:'active', instructorId:'u2', createdBy:'u2', section:['BSCS-3A','BSCS-3B','BSIT-3A','BSIT-3B'][i%4] });
+            users.push({ _docId:`u_stu_${i+3}`, id:`u_stu_${i+3}`, studentId:`2024-${String(i+1).padStart(3,'0')}`, fullName:name, username:`${clean}_student`, email:`${clean.split(' ')[0]}@student.edu.ph`, passwordHash:SEED_PASS_HASH, passwordSalt:SEED_SALT, role:'student', status:'active', instructorId:'u2', createdBy:'u2', section:['BSCS-3A','BSCS-3B','BSIT-3A','BSIT-3B'][i%4] });
         });
         return users;
     }

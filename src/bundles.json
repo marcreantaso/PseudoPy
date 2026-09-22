@@ -3,6 +3,7 @@
     "src/app/constants.js",
     "src/app/state.js",
     "src/app/app-version.js",
+    "src/config/app-info.js",
     "src/app/dom.js",
     "src/app/on-demand.js",
     "src/app/initialization.js",
@@ -42,7 +43,9 @@
     "src/learning/evidence-store.js",
     "src/app/compiler-dashboard.js",
     "src/app/password-management.js",
-    "src/app/appearance.js"
+    "src/app/appearance.js",
+    "src/app/a11y.js",
+    "src/app/legal-pages.js"
   ],
   "compiler.js": [
     "src/compiler/tokens-and-trace.js",

@@ -14,6 +14,7 @@ async function refreshPasswordHistory() {
  * Load student settings page: profile info, cooldown check, change history
  */
 async function loadStudentSettings() {
+    if (typeof renderSystemInfo === 'function') renderSystemInfo();
     if (!currentUser) return;
 
     // Populate profile info

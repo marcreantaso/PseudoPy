@@ -13,8 +13,7 @@ function resolveFirebaseConfig() {
         projectId: "pseudopy-e7e74",
         storageBucket: "pseudopy-e7e74.firebasestorage.app",
         messagingSenderId: "442571972919",
-        appId: "1:442571972919:web:53fc4b941b37c484247ab2",
-        measurementId: "G-K0HKBVFEKD"
+        appId: "1:442571972919:web:53fc4b941b37c484247ab2"
     };
 
     return browserConfig && browserConfig.projectId ? browserConfig : defaultConfig;

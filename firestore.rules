@@ -1,0 +1,87 @@
+rules_version = '2';
+
+/* ═══════════════════════════════════════════════════════════════════
+   PseudoPy — PROPOSED Cloud Firestore Security Rules
+
+   STATUS:         PROPOSED — requires owner review. Not yet deployed.
+   DEPLOYMENT:     Only the project owner may deploy these via
+                   `firebase deploy --only firestore:rules`.
+
+   ⚠️  **READ BEFORE DEPLOYING ANY RULESET**
+
+   1. PseudoPy's frontend currently authenticates users IN-APP (from the
+      `pseudopy_users` collection) and does NOT use Firebase Auth.
+      `request.auth` is therefore always null in the browser today.
+
+   2. The rules below are deliberately written to MATCH the app's current
+      client behavior (i.e., equivalent to Firestore's "test" default).
+      They are a *baseline artifact*, not a security boundary.
+
+   3. To actually secure the data you MUST complete the migration first:
+      a. Enable Firebase Authentication → Email/Password in the Firebase
+         console (project `pseudopy-e7e74`).
+      b. Sign users in with `firebase.auth().signInWithEmailAndPassword(...)`
+         (credentials are already stored hashed in `pseudopy_users`).
+      c. THEN replace the `allow ... if true` blocks below with:
+            request.auth != null
+         and add role checks (admin/instructor/student) per collection.
+      d. Deploy only after the app is verified end-to-end in a staging env.
+
+   4. Until then: anyone who can reach this Firestore dataset can read and
+      write the collections listed below. This is the known HIGH-severity
+      risk (H1 in the trust audit) and it is being tracked as an owner
+      action item — see docs/COMPLIANCE-CHECKLIST.md.
+
+   ═══════════════════════════════════════════════════════════════════ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── User accounts (admin, instructors, students) ──────────────
+    // baseline: full client access (matches current app behavior)
+    match /pseudopy_users/{doc} {
+      allow read, write: if true;
+    }
+
+    // ── Exercise catalog (public learning content) ────────────────
+    match /pseudopy_exercises/{doc} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // ── Student activity / submissions ────────────────────────────
+    match /pseudopy_activity/{doc} {
+      allow read, write: if true;
+    }
+
+    // ── Password recovery requests (H2: currently readable/overwritable) ──
+    match /pseudopy_passwordRequests/{doc} {
+      allow read, write: if true;
+    }
+
+    // ── Audit log (append-only target after hardening) ────────────
+    match /pseudopy_auditLog/{doc} {
+      allow read, write: if true;
+    }
+
+    // ── Notifications ─────────────────────────────────────────────
+    match /pseudopy_notifications/{doc} {
+      allow read, write: if true;
+    }
+
+    // ── Instructor device authorization records ───────────────────
+    match /pseudopy_devices/{doc} {
+      allow read, write: if true;
+    }
+
+    // ── Learning evidence snapshots ───────────────────────────────
+    match /pseudopy_evidence/{doc} {
+      allow read, write: if true;
+    }
+
+    // ── Tutorial progress ─────────────────────────────────────────
+    match /pseudopy_tutorialProgress/{doc} {
+      allow read, write: if true;
+    }
+  }
+}

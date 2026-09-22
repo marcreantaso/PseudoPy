@@ -58,7 +58,7 @@ test('app shell uses dvh and resolves 100vw width traps', () => {
 
 test('main landmark replaces the main-content div', () => {
     const html = read('index.html');
-    assert.match(html, /<main class="main-content" id="main-content">/);
+    assert.match(html, /<main class="main-content" id="main-content" tabindex="-1">/);
     assert.match(html, /<\/main><!-- \/main-content -->/);
 });
 

@@ -177,16 +177,16 @@ function renderBenchmarkResults(results) {
         } else {
             masteryBody.innerHTML = conceptData.map(c => {
                 let masteryLabel, masteryColor;
-                if (c.accuracy >= 80) { masteryLabel = '{{ui:Circle}} Expert'; masteryColor = '#22c55e'; }
-                else if (c.accuracy >= 60) { masteryLabel = '{{ui:Circle}} Proficient'; masteryColor = '#3b82f6'; }
-                else if (c.accuracy >= 40) { masteryLabel = '{{ui:Circle}} Developing'; masteryColor = '#f59e0b'; }
-                else { masteryLabel = '{{ui:Circle}} Beginner'; masteryColor = '#ef4444'; }
+                if (c.accuracy >= 80) { masteryLabel = '{{ui:Circle}} Expert'; masteryColor = 'var(--icon-success)'; }
+                else if (c.accuracy >= 60) { masteryLabel = '{{ui:Circle}} Proficient'; masteryColor = 'var(--text-accent)'; }
+                else if (c.accuracy >= 40) { masteryLabel = '{{ui:Circle}} Developing'; masteryColor = 'var(--icon-warning)'; }
+                else { masteryLabel = '{{ui:Circle}} Beginner'; masteryColor = 'var(--icon-danger)'; }
 
                 return `<tr>
                   <td style="font-weight:600;color:var(--text-primary)">${c.concept}</td>
-                  <td style="color:var(--text-muted)">${c.total}</td>
-                  <td><span style="font-weight:600;color:${c.successRate >= 80 ? '#22c55e' : '#f59e0b'}">${c.successRate}%</span></td>
-                  <td><span style="font-weight:600;color:${c.accuracy >= 60 ? '#22c55e' : '#ef4444'}">${c.accuracy}%</span></td>
+                  <td style="color:var(--text-secondary)">${c.total}</td>
+                  <td><span style="font-weight:600;color:${c.successRate >= 80 ? 'var(--icon-success)' : 'var(--icon-warning)'}">${c.successRate}%</span></td>
+                  <td><span style="font-weight:600;color:${c.accuracy >= 60 ? 'var(--icon-success)' : 'var(--icon-danger)'}">${c.accuracy}%</span></td>
                   <td>${c.precision}%</td>
                   <td><span style="color:${masteryColor};font-weight:700">${masteryLabel}</span></td>
                 </tr>`;
@@ -221,6 +221,19 @@ function renderPipelineTimingChart(timing) {
         '<span class="bar-label">' + s.name + '</span>' +
         '</div>'
     ).join('');
+
+    // Accessible text equivalent for the bar chart.
+    container.setAttribute('role', 'img');
+    container.setAttribute('aria-label',
+        'Pipeline timing: ' + stages.map(s => `${s.name} ${s.value}ms`).join(', '));
+    const descEl = $id('pipeline-chart-text-summary');
+    if (descEl) descEl.remove();
+    const desc = document.createElement('p');
+    desc.className = 'sr-only';
+    desc.id = 'pipeline-chart-text-summary';
+    desc.textContent = 'Average stage timings: ' + stages.map(s => `${s.name} ${s.value}ms`).join(', ');
+    container.setAttribute('aria-describedby', 'pipeline-chart-text-summary');
+    container.appendChild(desc);
 }
 
 

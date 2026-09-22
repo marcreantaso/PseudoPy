@@ -90,7 +90,6 @@ async function handleLogin() {
                     browser: currentDevice.browser,
                     deviceType: currentDevice.deviceType,
                     screen: currentDevice.screen,
-                    userAgent: currentDevice.userAgent,
                     status: 'approved',
                     requestedAt: new Date().toISOString(),
                     approvedAt: new Date().toISOString(),
@@ -115,7 +114,6 @@ async function handleLogin() {
                     browser: currentDevice.browser,
                     deviceType: currentDevice.deviceType,
                     screen: currentDevice.screen,
-                    userAgent: currentDevice.userAgent,
                     status: 'pending',
                     requestedAt: new Date().toISOString(),
                     lastSeenAt: new Date().toISOString()

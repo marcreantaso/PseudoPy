@@ -17,3 +17,20 @@ function renderAppVersion() {
     const settingsEl = $id('settings-version');
     if (settingsEl) settingsEl.textContent = 'Version ' + window.APP_VERSION;
 }
+
+/**
+ * Renders APP_INFO-driven system details (copyright, organization, contact)
+ * into the login footer and Settings About section. Called on boot and when
+ * the Settings page is shown.
+ */
+function renderSystemInfo() {
+    const copyright = $id('login-copyright');
+    if (copyright) {
+        const year = new Date().getFullYear();
+        copyright.textContent = window.APP_INFO.name + ' \u00a9 ' + year;
+    }
+    const org = $id('settings-org');
+    if (org) org.textContent = window.APP_INFO.organization;
+    const contact = $id('settings-contact');
+    if (contact) contact.textContent = appInfoField(window.APP_INFO.contactEmail);
+}
