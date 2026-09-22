@@ -5,8 +5,8 @@
    PWA update must never behave like an implicit logout.
    ============================================================ */
 
-const SESSION_KEY = 'pseudopy_session_user';
-const ROUTE_KEY = 'pseudopy_route';
+const SESSION_KEY = STORAGE_KEYS.SESSION_USER;
+const ROUTE_KEY = STORAGE_KEYS.ROUTE;
 
 const BOOT_LOADING = 'AUTH_LOADING';
 const BOOT_AUTHENTICATED = 'AUTHENTICATED';
@@ -45,8 +45,8 @@ function saveSession(user) {
  */
 function clearSession() {
     try { localStorage.removeItem(SESSION_KEY); } catch (e) { }
-    try { sessionStorage.removeItem('pseudopy_session_user'); } catch (e) { }
-    try { sessionStorage.removeItem('pseudopy_update_dismissed'); } catch (e) { }
+    try { sessionStorage.removeItem(STORAGE_KEYS.SESSION_USER); } catch (e) { }
+    try { sessionStorage.removeItem(STORAGE_KEYS.UPDATE_DISMISSED); } catch (e) { }
 }
 
 /**

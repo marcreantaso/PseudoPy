@@ -285,7 +285,7 @@ async function init() {
         console.log(`[App] Loaded users, max ${EX_PAGE_LIMIT} exercises, and activity records from IndexedDB.`);
 
         // Initialize Theme from Storage
-        const savedTheme = localStorage.getItem('pseudopy_theme') || 'dark';
+        const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) || 'dark';
         document.documentElement.setAttribute('data-theme', savedTheme);
 
         // Show the app version (login footer / settings About).
@@ -367,7 +367,7 @@ async function init() {
     });
 
     // Restore active exercise if any
-    const activeExId = localStorage.getItem('pseudopy_active_exercise');
+    const activeExId = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXERCISE);
     if (activeExId) {
         if (typeof dbGet === 'function' && typeof exercisesRef !== 'undefined') {
             dbGet(exercisesRef, activeExId).then(ex => {
@@ -438,10 +438,10 @@ function showToast(message, type = 'info') {
  * Generates and retrieves device details for the current client.
  */
 function getDeviceFingerprint() {
-    let devId = localStorage.getItem('pseudopy_device_id');
+let devId = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
     if (!devId) {
-        devId = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 8);
-        localStorage.setItem('pseudopy_device_id', devId);
+        devId = 'dev_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem(STORAGE_KEYS.DEVICE_ID, devId);
     }
 
     const ua = navigator.userAgent || '';
@@ -703,7 +703,7 @@ function handleLogout() {
     clearSession();
     clearPersistedRoute();
     if (typeof clearEditorDraft === 'function') clearEditorDraft();
-    try { localStorage.removeItem('pseudopy_active_exercise'); } catch (e) { }
+    try { localStorage.removeItem(STORAGE_KEYS.ACTIVE_EXERCISE); } catch (e) { }
     bootState = BOOT_UNAUTHENTICATED;
 
     hide('app-layout');
@@ -772,8 +772,8 @@ function showApp(restorePage) {
    PWA update must never behave like an implicit logout.
    ============================================================ */
 
-const SESSION_KEY = 'pseudopy_session_user';
-const ROUTE_KEY = 'pseudopy_route';
+const SESSION_KEY = STORAGE_KEYS.SESSION_USER;
+const ROUTE_KEY = STORAGE_KEYS.ROUTE;
 
 const BOOT_LOADING = 'AUTH_LOADING';
 const BOOT_AUTHENTICATED = 'AUTHENTICATED';
@@ -812,8 +812,8 @@ function saveSession(user) {
  */
 function clearSession() {
     try { localStorage.removeItem(SESSION_KEY); } catch (e) { }
-    try { sessionStorage.removeItem('pseudopy_session_user'); } catch (e) { }
-    try { sessionStorage.removeItem('pseudopy_update_dismissed'); } catch (e) { }
+    try { sessionStorage.removeItem(STORAGE_KEYS.SESSION_USER); } catch (e) { }
+    try { sessionStorage.removeItem(STORAGE_KEYS.UPDATE_DISMISSED); } catch (e) { }
 }
 
 /**
@@ -2384,7 +2384,7 @@ async function attemptExercise(id, resubmissionOf = null) {
         pyOut.dispatchEvent(new Event('input'));
     }
 
-    localStorage.setItem('pseudopy_active_exercise', id);
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_EXERCISE, id);
     exerciseState.resubmissionOf = resubmissionOf || null;
     if (pseudoEditor) pseudoEditor.readOnly = false;
     if (pyOut) pyOut.readOnly = false;
@@ -2559,7 +2559,7 @@ async function submitExercise() {
 }
 
 function changeExercise() {
-    localStorage.removeItem('pseudopy_active_exercise');
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_EXERCISE);
     const panel = $id('active-exercise-panel');
     if (panel) panel.classList.add('hidden');
 
@@ -5990,7 +5990,7 @@ function copyText(text) {
    UNSAVED EDITOR DRAFT — preserved across refresh / PWA update
    ============================================================ */
 
-const EDITOR_DRAFT_KEY = 'pseudopy_editor_draft';
+const EDITOR_DRAFT_KEY = STORAGE_KEYS.EDITOR_DRAFT;
 
 /**
  * Persist unsaved pseudocode editor content to browser-local draft storage.
@@ -7905,13 +7905,13 @@ PseudoPyLearning.register.learningUi = {
    PSEUDOPY LEARNING LAYER — Beginner Tutorial (Onboarding)
    ------------------------------------------------------------
    A step-by-step guided tour of the Write Pseudocode page for
-   students. State is stored under 'pseudopy_tutorial_completed'
-   behind a small adapter so Phase 6 can back it with the
-   pseudopy_tutorialProgress DB ref without changing the UI code.
+   students. State is stored under STORAGE_KEYS.TUTORIAL_COMPLETED
+   behind a small adapter so a future upgrade can back it with a
+   DB ref without changing the UI code.
    ============================================================ */
 
 const ONBOARDING = {
-    storageKey: 'pseudopy_tutorial_completed',
+    storageKey: STORAGE_KEYS.TUTORIAL_COMPLETED,
     steps: [
         {
             targetId: 'pseudocode-editor',
@@ -8967,7 +8967,7 @@ function toggleTheme() {
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
 
     document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('pseudopy_theme', newTheme);
+    localStorage.setItem(STORAGE_KEYS.THEME, newTheme);
 
     const themeButton = $id('theme-toggle-btn');
     if (themeButton) {

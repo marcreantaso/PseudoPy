@@ -70,3 +70,33 @@ test('role labels and badges referenced by consumers resolve to constants', () =
     const settings = read('src/app/student-settings.js');
     assert.match(settings, /ROLE_BADGES\[currentUser\.role\]/, 'badge class no longer resolved via ROLE_BADGES');
 });
+
+test('storage keys are centralized and never re-literalized in src', () => {
+    const constants = read('src/app/constants.js');
+    assert.match(constants, /SESSION_USER: 'pseudopy_session_user'/, 'SESSION_USER key missing');
+    assert.match(constants, /THEME: 'pseudopy_theme'/, 'THEME key missing');
+    assert.match(constants, /ACTIVE_EXERCISE: 'pseudopy_active_exercise'/, 'ACTIVE_EXERCISE key missing');
+    assert.match(constants, /DEVICE_ID: 'pseudopy_device_id'/, 'DEVICE_ID key missing');
+    assert.match(constants, /EDITOR_DRAFT: 'pseudopy_editor_draft'/, 'EDITOR_DRAFT key missing');
+    assert.match(constants, /TUTORIAL_COMPLETED: 'pseudopy_tutorial_completed'/, 'TUTORIAL_COMPLETED key missing');
+    assert.match(constants, /UPDATE_DISMISSED: 'pseudopy_update_dismissed'/, 'UPDATE_DISMISSED key missing');
+
+    const srcFiles = {};
+    for (const dir of ['src/app', 'src/learning']) {
+        for (const file of fs.readdirSync(dir)) {
+            srcFiles[`${dir}/${file}`] = read(`${dir}/${file}`);
+        }
+    }
+    const offenders = [];
+    for (const [file, content] of Object.entries(srcFiles)) {
+        if (file.endsWith('/constants.js')) continue;
+        const lines = content.split('\n');
+        lines.forEach((line, i) => {
+            if (/^\s*(\/\/|\/\*|\*)/.test(line)) return;
+            if (/(['"])pseudopy_(theme|route|session_user|active_exercise|device_id|editor_draft|tutorial_completed|update_dismissed)(['"])/.test(line)) {
+                offenders.push(`${file}:${i + 1}`);
+            }
+        });
+    }
+    assert.deepEqual(offenders, [], `storage-key literals still exist outside constants.js:\n${offenders.join('\n')}`);
+});

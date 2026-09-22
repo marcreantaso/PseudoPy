@@ -6,10 +6,10 @@
  * Generates and retrieves device details for the current client.
  */
 function getDeviceFingerprint() {
-    let devId = localStorage.getItem('pseudopy_device_id');
+let devId = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
     if (!devId) {
-        devId = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 8);
-        localStorage.setItem('pseudopy_device_id', devId);
+        devId = 'dev_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem(STORAGE_KEYS.DEVICE_ID, devId);
     }
 
     const ua = navigator.userAgent || '';

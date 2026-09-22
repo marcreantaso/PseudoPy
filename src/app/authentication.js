@@ -187,7 +187,7 @@ function handleLogout() {
     clearSession();
     clearPersistedRoute();
     if (typeof clearEditorDraft === 'function') clearEditorDraft();
-    try { localStorage.removeItem('pseudopy_active_exercise'); } catch (e) { }
+    try { localStorage.removeItem(STORAGE_KEYS.ACTIVE_EXERCISE); } catch (e) { }
     bootState = BOOT_UNAUTHENTICATED;
 
     hide('app-layout');

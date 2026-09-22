@@ -10,8 +10,9 @@ test('session persistence module is bundled and boot-gated', () => {
     assert.match(app, /function sanitizeUser/, 'sanitizeUser missing from bundle');
     assert.match(app, /function saveSession/, 'saveSession missing from bundle');
     assert.match(app, /function clearSession/, 'clearSession missing from bundle');
-    assert.match(app, /const SESSION_KEY = 'pseudopy_session_user'/, 'session key missing');
-    assert.match(app, /const ROUTE_KEY = 'pseudopy_route'/, 'route key missing');
+    assert.match(app, /const SESSION_KEY = STORAGE_KEYS\.SESSION_USER;/, 'session key no longer centralized');
+    assert.match(app, /const ROUTE_KEY = STORAGE_KEYS\.ROUTE;/, 'route key no longer centralized');
+    assert.match(app, /pseudopy_session_user/, 'session key string value missing from constants');
     assert.match(app, /BOOT_LOADING = 'AUTH_LOADING'/, 'AUTH_LOADING state missing');
     assert.match(app, /BOOT_AUTHENTICATED = 'AUTHENTICATED'/, 'AUTHENTICATED state missing');
     assert.match(app, /BOOT_UNAUTHENTICATED = 'UNAUTHENTICATED'/, 'UNAUTHENTICATED state missing');
@@ -37,7 +38,7 @@ test('login persists the session and explicit logout clears it', () => {
     assert.match(auth, /bootState = BOOT_UNAUTHENTICATED;/, 'logout does not mark state unauthenticated');
     assert.ok(!auth.includes("currentUser.fullName.charAt(0)"), 'sidebar avatar initials logic remained');
     assert.match(auth, /clearEditorDraft\(\);/, 'logout does not clear the previous user editor draft');
-    assert.match(auth, /pseudopy_active_exercise/, 'logout does not clear the active exercise key');
+    assert.match(auth, /STORAGE_KEYS\.ACTIVE_EXERCISE/, 'logout does not clear the active exercise key');
 });
 
 test('current route is persisted and the boot restore re-fetches from Firestore', () => {

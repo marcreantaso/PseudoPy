@@ -23,7 +23,7 @@ async function init() {
         console.log(`[App] Loaded users, max ${EX_PAGE_LIMIT} exercises, and activity records from IndexedDB.`);
 
         // Initialize Theme from Storage
-        const savedTheme = localStorage.getItem('pseudopy_theme') || 'dark';
+        const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) || 'dark';
         document.documentElement.setAttribute('data-theme', savedTheme);
 
         // Show the app version (login footer / settings About).
@@ -105,7 +105,7 @@ async function init() {
     });
 
     // Restore active exercise if any
-    const activeExId = localStorage.getItem('pseudopy_active_exercise');
+    const activeExId = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXERCISE);
     if (activeExId) {
         if (typeof dbGet === 'function' && typeof exercisesRef !== 'undefined') {
             dbGet(exercisesRef, activeExId).then(ex => {

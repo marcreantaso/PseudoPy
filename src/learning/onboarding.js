@@ -2,13 +2,13 @@
    PSEUDOPY LEARNING LAYER — Beginner Tutorial (Onboarding)
    ------------------------------------------------------------
    A step-by-step guided tour of the Write Pseudocode page for
-   students. State is stored under 'pseudopy_tutorial_completed'
-   behind a small adapter so Phase 6 can back it with the
-   pseudopy_tutorialProgress DB ref without changing the UI code.
+   students. State is stored under STORAGE_KEYS.TUTORIAL_COMPLETED
+   behind a small adapter so a future upgrade can back it with a
+   DB ref without changing the UI code.
    ============================================================ */
 
 const ONBOARDING = {
-    storageKey: 'pseudopy_tutorial_completed',
+    storageKey: STORAGE_KEYS.TUTORIAL_COMPLETED,
     steps: [
         {
             targetId: 'pseudocode-editor',

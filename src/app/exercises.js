@@ -425,7 +425,7 @@ async function attemptExercise(id, resubmissionOf = null) {
         pyOut.dispatchEvent(new Event('input'));
     }
 
-    localStorage.setItem('pseudopy_active_exercise', id);
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_EXERCISE, id);
     exerciseState.resubmissionOf = resubmissionOf || null;
     if (pseudoEditor) pseudoEditor.readOnly = false;
     if (pyOut) pyOut.readOnly = false;
@@ -600,7 +600,7 @@ async function submitExercise() {
 }
 
 function changeExercise() {
-    localStorage.removeItem('pseudopy_active_exercise');
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_EXERCISE);
     const panel = $id('active-exercise-panel');
     if (panel) panel.classList.add('hidden');
 

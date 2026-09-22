@@ -52,7 +52,7 @@ function copyText(text) {
    UNSAVED EDITOR DRAFT — preserved across refresh / PWA update
    ============================================================ */
 
-const EDITOR_DRAFT_KEY = 'pseudopy_editor_draft';
+const EDITOR_DRAFT_KEY = STORAGE_KEYS.EDITOR_DRAFT;
 
 /**
  * Persist unsaved pseudocode editor content to browser-local draft storage.

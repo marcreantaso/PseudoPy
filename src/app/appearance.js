@@ -10,7 +10,7 @@ function toggleTheme() {
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
 
     document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('pseudopy_theme', newTheme);
+    localStorage.setItem(STORAGE_KEYS.THEME, newTheme);
 
     const themeButton = $id('theme-toggle-btn');
     if (themeButton) {
