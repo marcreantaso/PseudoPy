@@ -1,3 +1,25 @@
+// Shared default profile for the existing administrator account (u1).
+// Credentials use the same salted hash format as the current password flow.
+function getDefaultAdminProfile() {
+    return {
+        "fullName": "Admin",
+        "username": "Admin",
+        "password": null,
+        "passwordHash": "804f4cba316ed81a095847efadc18b169d745f54ada7b651c85c4913439fbfe7",
+        "passwordSalt": "9d9ad9d3642056bbff2c80d102f97610"
+    };
+}
+
+// Only migrate the known legacy account. Renamed accounts (including later
+// password changes) and all other roles/accounts are left untouched.
+function upgradeDefaultAdminAccount(user) {
+    if (!user || (user._docId || user.id) !== 'u1' || user.role !== 'admin' || user.username !== 'mbautista_admin') return user;
+    return { ...user, ...getDefaultAdminProfile() };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { getDefaultAdminProfile, upgradeDefaultAdminAccount };
+}
 // ============================================================
 // CENTRAL DATABASE CLIENT — PseudoPy
 // Firebase Firestore + Resilient Local Fallback
@@ -102,7 +124,7 @@ const FILIPINO_NAMES = [
 
 function getInitialSeedUsers() {
     const users = [
-        { _docId: 'u1', id: 'u1', fullName: 'Mark Bautista', username: 'mbautista_admin', email: 'bautista@university.edu.ph', password: 'admin123', role: 'admin', status: 'active', createdAt: '2025-07-01T08:00:00.000Z' },
+        { _docId: 'u1', id: 'u1', ...getDefaultAdminProfile(), email: 'bautista@university.edu.ph', role: 'admin', status: 'active', createdAt: '2025-07-01T08:00:00.000Z' },
         { _docId: 'u2', id: 'u2', fullName: 'Marc Reantaso', username: 'mreantaso_instructor', email: 'reantaso@university.edu.ph', password: 'pass123', role: 'instructor', status: 'active', createdBy: 'u1', createdAt: '2025-08-10T14:15:00.000Z' },
         { _docId: 'u_inst_1787787083396', id: 'u_inst_1787787083396', fullName: 'john dave dela cruz', username: 'cruz_admin', email: 'delacruz@gmail.com', password: 'Admin123', role: 'instructor', status: 'active', createdAt: '2026-08-26T23:31:23.396Z', lastLogin: null, createdBy: 'u1' },
         { _docId: 'u_stu_emirandilla', id: 'u_stu_emirandilla', studentId: '2024-031', fullName: 'Eduard John Mirandilla', username: 'emirandilla_student', email: 'mirandilla@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:30:00.000Z' },
@@ -541,6 +563,8 @@ function getLocalCollection(ref) {
         else list = [];
     }
 
+    if (ref === usersRef && Array.isArray(list)) list = list.map(upgradeDefaultAdminAccount);
+
     // Guarantee that standard seed instructor exists in user list
     if (ref === usersRef && Array.isArray(list)) {
         const hasMarc = list.some(u => u.username === 'mreantaso_instructor' || u.id === 'u2' || u._docId === 'u2');
@@ -916,7 +940,7 @@ function subscribeCollection(ref, onChange, onError) {
 function normalizeUsername(username) {
     if (!username) return '';
     const u = username.trim();
-    if (u === 'admin') return 'mbautista_admin';
+    if (u.toLowerCase() === 'admin') return 'Admin';
     if (u === 'emirandila_student') return 'emirandilla_student';
     if (u === 'mdaet_stude') return 'mdaet_student';
     return u;

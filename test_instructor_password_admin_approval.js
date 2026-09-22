@@ -121,7 +121,7 @@ async function runTests() {
 
     // Test 2: Admin views Instructor Requests
     console.log('\n--- 2. Testing Admin Visibility of Requests ---');
-    await vm.runInContext("currentUser = { id: 'u1', _docId: 'u1', username: 'mbautista_admin', role: 'admin', fullName: 'Mark Bautista' }", context);
+    await vm.runInContext("currentUser = { id: 'u1', _docId: 'u1', username: 'Admin', role: 'admin', fullName: 'Admin' }", context);
     await vm.runInContext('loadPasswordRequests()', context);
 
     const adminPendingCount = parseInt(getMockEl('stat-admin-recovery-pending').innerText || '0', 10);
@@ -176,7 +176,7 @@ async function runTests() {
     const cruzReq = allReqs.find(r => r.studentUsername === 'cruz_admin' && r.status === 'pending');
     assert(cruzReq !== undefined, 'Second instructor recovery request created');
 
-    await vm.runInContext("currentUser = { id: 'u1', _docId: 'u1', username: 'mbautista_admin', role: 'admin', fullName: 'Mark Bautista' }", context);
+    await vm.runInContext("currentUser = { id: 'u1', _docId: 'u1', username: 'Admin', role: 'admin', fullName: 'Admin' }", context);
     await vm.runInContext(`openAdminRecoveryReview('${cruzReq._docId}')`, context);
     await vm.runInContext('rejectAdminRecoveryRequest()', context);
 

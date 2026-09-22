@@ -32,7 +32,7 @@ Then open [http://localhost:8080](http://localhost:8080)
 |------|----------|----------|
 | Student | `mdaet` | `pass123` |
 | Instructor | `mreantaso` | `pass123` |
-| Admin | `mbautista` | `admin123` |
+| Admin | `Admin` | `pass123` |
 
 ## 📱 Mobile / PWA
 

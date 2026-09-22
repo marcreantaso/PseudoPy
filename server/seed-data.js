@@ -1,3 +1,4 @@
+const { getDefaultAdminProfile } = require('../src/database/default-admin');
 ﻿// ============================================================
 // VERCEL SERVERLESS — Shared In-Memory Store
 // PseudoPy API Data Layer
@@ -13,7 +14,7 @@ const FILIPINO_NAMES = [
 ];
 
 const SEED_USERS_BASE = [
-    { _docId: 'u1', id: 'u1', fullName: 'Mark Bautista', username: 'mbautista_admin', email: 'bautista@university.edu.ph', password: 'admin123', role: 'admin', status: 'active', createdAt: '2025-07-01T08:00:00.000Z' },
+    { _docId: 'u1', id: 'u1', ...getDefaultAdminProfile(), email: 'bautista@university.edu.ph', role: 'admin', status: 'active', createdAt: '2025-07-01T08:00:00.000Z' },
     { _docId: 'u2', id: 'u2', fullName: 'Marc Reantaso', username: 'mreantaso_instructor', email: 'reantaso@university.edu.ph', password: 'pass123', role: 'instructor', status: 'active', createdBy: 'u1', createdAt: '2025-08-10T14:15:00.000Z' },
     { _docId: 'u_stu_emirandilla', id: 'u_stu_emirandilla', studentId: '2024-031', fullName: 'Eduard John Mirandilla', username: 'emirandilla_student', email: 'mirandilla@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:30:00.000Z' },
     { _docId: 'u_stu_mdaet', id: 'u_stu_mdaet', studentId: '2024-032', fullName: 'Mikaella Daet', username: 'mdaet_student', email: 'daet@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:35:00.000Z' },

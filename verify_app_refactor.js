@@ -59,12 +59,12 @@ try {
     const dbModule = dbFunc(window, localStorage, console);
 
     assert(typeof dbModule.normalizeUsername === 'function', 'normalizeUsername function is exported/defined in database.js');
-    assert(dbModule.normalizeUsername('admin') === 'mbautista_admin', 'normalizeUsername("admin") maps to "mbautista_admin"');
+    assert(dbModule.normalizeUsername('admin') === 'Admin', 'normalizeUsername("admin") maps to "Admin"');
     assert(dbModule.normalizeUsername('emirandila_student') === 'emirandilla_student', 'normalizeUsername("emirandila_student") maps to "emirandilla_student"');
     assert(dbModule.normalizeUsername('mdaet_stude') === 'mdaet_student', 'normalizeUsername("mdaet_stude") maps to "mdaet_student"');
 
     const seedUsers = dbModule.getInitialSeedUsers();
-    assert(seedUsers.some(u => u.username === 'mbautista_admin' && u.role === 'admin'), 'Admin user mbautista_admin exists in seed users');
+    assert(seedUsers.some(u => u.username === 'Admin' && u.role === 'admin'), 'Admin user Admin exists in seed users');
     assert(seedUsers.some(u => u.username === 'mreantaso_instructor' && u.role === 'instructor'), 'Instructor user mreantaso_instructor exists in seed users');
     assert(seedUsers.some(u => u.username === 'emirandilla_student' && u.role === 'student'), 'Student user emirandilla_student exists in seed users');
     assert(seedUsers.some(u => u.username === 'mdaet_student' && u.role === 'student'), 'Student user mdaet_student exists in seed users');
