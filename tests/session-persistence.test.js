@@ -97,16 +97,18 @@ test('service worker only runtime-caches same-origin GET responses', () => {
 
 test('PWA update banner is driven by the real service worker lifecycle', () => {
     const html = read('index.html');
-    assert.match(html, /function applyPWAUpdate/, 'Update Now handler missing');
-    assert.match(html, /SKIP_WAITING/, 'waiting worker activation missing');
-    assert.match(html, /window\.applyPWAUpdate = applyPWAUpdate/, 'Update Now not exposed to the banner button');
-    assert.match(html, /window\.dismissPWAUpdate = dismissPWAUpdate/, 'Later not exposed to the banner button');
-    assert.match(html, /pseudopy_update_dismissed/, 'Later dismissal persistence missing');
-    assert.match(html, /},\s*8000\)/, 'update failure watchdog missing');
-    assert.match(html, /reg\.waiting/, 'banner does not key off a real waiting worker');
-    assert.match(html, /navigator\.serviceWorker\.controller\)/, 'banner does not require an existing controller');
-    assert.match(html, /maybeSaveEditorDraft/, 'update flow does not preserve unsaved editor content');
-    assert.match(html, /refreshing = false/, 'reload-loop guard missing');
+    const app = read('app.js');
+    assert.match(app, /function applyPWAUpdate/, 'Update Now handler missing');
+    assert.match(app, /SKIP_WAITING/, 'waiting worker activation missing');
+    assert.match(app, /window\.applyPWAUpdate = applyPWAUpdate/, 'Update Now not exposed to the banner button');
+    assert.match(app, /window\.dismissPWAUpdate = dismissPWAUpdate/, 'Later not exposed to the banner button');
+    assert.match(app, /pseudopy_update_dismissed/, 'Later dismissal persistence missing');
+    assert.match(app, /},\s*8000\)/, 'update failure watchdog missing');
+    assert.match(app, /reg\.waiting/, 'banner does not key off a real waiting worker');
+    assert.match(app, /navigator\.serviceWorker\.controller\)/, 'banner does not require an existing controller');
+    assert.match(app, /maybeSaveEditorDraft/, 'update flow does not preserve unsaved editor content');
+    assert.match(app, /refreshing = false/, 'reload-loop guard missing');
+    assert.ok(!html.includes('registerPWAUpdate'), 'SW registration logic still inlined in index.html instead of app.js');
     assert.match(html, /id="pwa-update-btn"/, 'Update Now button missing');
     assert.match(html, /id="pwa-later-btn"/, 'Later button missing');
     assert.match(html, /data-update-label>Update Now</, 'default Update Now label missing');

@@ -3,7 +3,7 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-shell-20260921-v4';
+const CACHE_NAME = 'pseudopy-shell-20260922-v5';
 const LOCAL_ASSETS = [
     './',
     './index.html',
@@ -17,14 +17,12 @@ const LOCAL_ASSETS = [
     './ui-icons.css?v=1',
     './compiler.js',
     './compiler.js?v=20260903',
-    './dataset.json',
     './metrics.js',
     './metrics.js?v=20260903',
     './manifest.json',
     './database.js',
     './robots.txt',
     './icons/icon.svg',
-    './icons/pseudopy-logo.png?v=2',
     './icons/pseudopy-192.png?v=2',
     './icons/pseudopy-apple.png?v=2',
     './icons/pseudopy-favicon.png?v=2',
