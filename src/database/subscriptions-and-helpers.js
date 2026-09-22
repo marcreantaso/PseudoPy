@@ -43,7 +43,7 @@ function subscribeCollection(ref, onChange, onError) {
 function normalizeUsername(username) {
     if (!username) return '';
     const u = username.trim();
-    if (u === 'admin') return 'mbautista_admin';
+    if (u.toLowerCase() === 'admin') return 'Admin';
     if (u === 'emirandila_student') return 'emirandilla_student';
     if (u === 'mdaet_stude') return 'mdaet_student';
     return u;

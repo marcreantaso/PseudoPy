@@ -41,7 +41,6 @@
     "src/learning/tour-positioning.js",
     "src/learning/evidence-store.js",
     "src/app/compiler-dashboard.js",
-    "src/app/pwa.js",
     "src/app/password-management.js",
     "src/app/appearance.js"
   ],
@@ -55,6 +54,7 @@
     "src/compiler/compiler.js"
   ],
   "database.js": [
+    "src/database/default-admin.js",
     "src/database/firebase.js",
     "src/database/passwords.js",
     "src/database/seed-data.js",

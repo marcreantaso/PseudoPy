@@ -1,5 +1,4 @@
-# PseudoPy — Automated Code Generation System
-
+# PseudoPy 
 > **Translating Pseudocode and Python: An Algorithmic Approach to Automated Code Generation**
 
 A web-based system that translates pseudocode into executable Python code, built as a Progressive Web App (PWA) with full mobile responsiveness.
@@ -33,7 +32,7 @@ Then open [http://localhost:8080](http://localhost:8080)
 |------|----------|----------|
 | Student | `mdaet` | `pass123` |
 | Instructor | `mreantaso` | `pass123` |
-| Admin | `mbautista` | `admin123` |
+| Admin | `Admin` | `pass123` |
 
 ## 📱 Mobile / PWA
 

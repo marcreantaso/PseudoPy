@@ -1,44 +1,77 @@
-const { getDefaultAdminProfile } = require('../src/database/default-admin');
-﻿// ============================================================
-// VERCEL SERVERLESS — Shared In-Memory Store
-// PseudoPy API Data Layer
-// ============================================================
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PseudoPy — Firebase Seed Tool</title>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.js"></script>
+  <style>
+    body { font-family: monospace; background: #0f172a; color: #e2e8f0; padding: 2rem; }
+    h1 { color: #3b82f6; }
+    button { background: #3b82f6; color: white; border: none; padding: 0.75rem 2rem; font-size: 1rem; border-radius: 8px; cursor: pointer; margin: 1rem 0; }
+    button:hover { background: #2563eb; }
+    button:disabled { background: #475569; cursor: not-allowed; }
+    #log { background: #1e293b; padding: 1rem; border-radius: 8px; max-height: 500px; overflow-y: auto; font-size: 0.85rem; line-height: 1.6; }
+    .ok { color: #22c55e; }
+    .err { color: #ef4444; }
+    .info { color: #93c5fd; }
+    .warn { color: #fbbf24; }
+  </style>
+</head>
+<body>
+  <h1>🔥 PseudoPy Firebase Seed Tool</h1>
+  <p>This page seeds initial data (users, exercises, activity) into Firebase Firestore.<br>
+  Run this <strong>once</strong> after setting up your Firebase project.</p>
+  <button id="seedBtn" onclick="runSeed()">▶ Seed Firebase Database</button>
+  <button onclick="clearLog()" style="background:#475569;margin-left:1rem">Clear Log</button>
+  <div id="log"></div>
 
-const FILIPINO_NAMES = [
-    "John Cruz", "Maria Santos", "Kevin Ramos", "Anna Reyes", "Joshua Garcia",
-    "Carlo Mendoza", "Patricia Flores", "Mark Bautista", "Nicole Dela Cruz", "Michael Reyes",
-    "Christian Alde", "Jessica Pascual", "Aldrin Castro", "Kenneth Santos", "Jasmine Aquino",
-    "Justin Ferrer", "Bianca De Leon", "Aaron Dizon", "Camille Valenzuela", "Dominic Ramos",
-    "Ella Salvador", "Adrian Tolentino", "Sofia Corpuz", "Patrick Hernandez", "Hazel Gonzales",
-    "Gabriel Santiago", "Abigail Ramos", "Ryan Ocampo", "Megan Custodio", "Kyle Dela Rosa"
-];
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="src/database/default-admin.js"></script>
+  <script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyAkm5sWJpcF05QCDDSa8VciUTh3LOc5BU",
+        authDomain: "pseudopy-e7e74.firebaseapp.com",
+        projectId: "pseudopy-e7e74",
+        storageBucket: "pseudopy-e7e74.firebasestorage.app",
+        messagingSenderId: "442671972919",
+        appId: "1:442671972919:web:53fc4b941b37c484247ab2"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-const SEED_USERS_BASE = [
-    { _docId: 'u1', id: 'u1', ...getDefaultAdminProfile(), email: 'bautista@university.edu.ph', role: 'admin', status: 'active', createdAt: '2025-07-01T08:00:00.000Z' },
-    { _docId: 'u2', id: 'u2', fullName: 'Marc Reantaso', username: 'mreantaso_instructor', email: 'reantaso@university.edu.ph', password: 'pass123', role: 'instructor', status: 'active', createdBy: 'u1', createdAt: '2025-08-10T14:15:00.000Z' },
-    { _docId: 'u_stu_emirandilla', id: 'u_stu_emirandilla', studentId: '2024-031', fullName: 'Eduard John Mirandilla', username: 'emirandilla_student', email: 'mirandilla@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:30:00.000Z' },
-    { _docId: 'u_stu_mdaet', id: 'u_stu_mdaet', studentId: '2024-032', fullName: 'Mikaella Daet', username: 'mdaet_student', email: 'daet@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:35:00.000Z' },
-];
+    function log(msg, type = 'info') {
+        const div = document.getElementById('log');
+        div.innerHTML += `<div class="${type}">${new Date().toLocaleTimeString()} — ${msg}</div>`;
+        div.scrollTop = div.scrollHeight;
+    }
+    function clearLog() { document.getElementById('log').innerHTML = ''; }
 
-function buildSeedUsers() {
-    const users = [...SEED_USERS_BASE];
-    FILIPINO_NAMES.forEach((name, index) => {
-        const idNum = String(index + 1).padStart(3, '0');
-        const cleanName = name.toLowerCase().replace(/\s+/g, '');
-        users.push({
-            _docId: `u_stu_${index + 3}`, id: `u_stu_${index + 3}`,
-            studentId: `2024-${idNum}`, fullName: name,
-            username: `${cleanName}_student`,
-            email: `${cleanName.split(' ')[0]}@student.edu.ph`,
-            password: 'pass123', role: 'student', status: 'active',
-            instructorId: 'u2', createdBy: 'u2',
-            section: ['BSCS-3A', 'BSCS-3B', 'BSIT-3A', 'BSIT-3B'][index % 4]
+    const FILIPINO_NAMES = [
+        "John Cruz","Maria Santos","Kevin Ramos","Anna Reyes","Joshua Garcia",
+        "Carlo Mendoza","Patricia Flores","Mark Bautista","Nicole Dela Cruz","Michael Reyes",
+        "Christian Alde","Jessica Pascual","Aldrin Castro","Kenneth Santos","Jasmine Aquino",
+        "Justin Ferrer","Bianca De Leon","Aaron Dizon","Camille Valenzuela","Dominic Ramos",
+        "Ella Salvador","Adrian Tolentino","Sofia Corpuz","Patrick Hernandez","Hazel Gonzales",
+        "Gabriel Santiago","Abigail Ramos","Ryan Ocampo","Megan Custodio","Kyle Dela Rosa"
+    ];
+
+    function buildUsers() {
+        const users = [
+            { _docId:'u1', id:'u1', ...getDefaultAdminProfile(), email:'bautista@university.edu.ph', role:'admin', status:'active', createdAt:'2025-07-01T08:00:00.000Z' },
+            { _docId:'u2', id:'u2', fullName:'Marc Reantaso', username:'mreantaso_instructor', email:'reantaso@university.edu.ph', password:'pass123', role:'instructor', status:'active', createdBy:'u1', createdAt:'2025-08-10T14:15:00.000Z' },
+            { _docId: 'u_inst_1787787083396', id: 'u_inst_1787787083396', fullName: 'john dave dela cruz', username: 'cruz_admin', email: 'delacruz@gmail.com', password: 'Admin123', role: 'instructor', status: 'active', createdAt: '2026-08-26T23:31:23.396Z', lastLogin: null, createdBy: 'u1' },
+            { _docId:'u_stu_emirandilla', id:'u_stu_emirandilla', studentId:'2024-031', fullName:'Eduard John Mirandilla', username:'emirandilla_student', email:'mirandilla@gmail.com', password:'pass123', role:'student', status:'active', instructorId:'u2', createdBy:'u2', section:'BSCS-3A', createdAt:'2025-08-10T14:30:00.000Z' },
+            { _docId:'u_stu_mdaet', id:'u_stu_mdaet', studentId:'2024-032', fullName:'Mikaella Daet', username:'mdaet_student', email:'daet@gmail.com', password:'pass123', role:'student', status:'active', instructorId:'u2', createdBy:'u2', section:'BSCS-3A', createdAt:'2025-08-10T14:35:00.000Z' },
+        ];
+        FILIPINO_NAMES.forEach((name, i) => {
+            const clean = name.toLowerCase().replace(/\s+/g,'');
+            users.push({ _docId:`u_stu_${i+3}`, id:`u_stu_${i+3}`, studentId:`2024-${String(i+1).padStart(3,'0')}`, fullName:name, username:`${clean}_student`, email:`${clean.split(' ')[0]}@student.edu.ph`, password:'pass123', role:'student', status:'active', instructorId:'u2', createdBy:'u2', section:['BSCS-3A','BSCS-3B','BSIT-3A','BSIT-3B'][i%4] });
         });
-    });
-    return users;
-}
+        return users;
+    }
 
-const SEED_EXERCISES = [
+    const EXERCISES = [
     {
         "_docId": "algo_1",
         "id": "algo_1",
@@ -371,80 +404,89 @@ const SEED_EXERCISES = [
     }
 ];
 
-function makeAct(id, student, studentId, exercise, difficulty, status, score, dateStr, errorType, processingTime, submittedCode, result) {
-    const ts = new Date(dateStr).getTime();
-    return {
-        _docId: id, student, studentId, exercise,
-        difficulty: difficulty || 'moderate', status, score,
-        time: dateStr, timestamp: ts,
-        errorType: errorType || null,
-        processingTime: processingTime || '0.0s',
-        submittedCode: submittedCode || 'BEGIN\n  PRINT "Hello World"\nEND',
-        pseudocode: submittedCode || 'BEGIN\n  PRINT "Hello World"\nEND',
-        pythonCode: 'print("Hello World")',
-        python_code: 'print("Hello World")',
-        result: result || (status === 'Completed' ? 'Pass' : status === 'Failed' ? 'Fail' : 'Pending'),
-        output: status === 'Failed' ? `Error: ${errorType} during compilation` : 'Execution successful.\n'
-    };
-}
-
-const EXERCISES_POOL = [
-    { title: "Sum of Even Numbers", difficulty: "moderate" },
-    { title: "Factorial Calculation", difficulty: "hard" },
-    { title: "Array Sum", difficulty: "easy" },
-    { title: "Prime Number Checker", difficulty: "moderate" },
-    { title: "String Reversal", difficulty: "easy" },
-    { title: "Odd or Even Checker", difficulty: "easy" },
-    { title: "Fibonacci Sequence", difficulty: "moderate" },
-    { title: "GCD Calculator", difficulty: "moderate" },
-    { title: "Bubble Sort", difficulty: "hard" },
-    { title: "Binary Search", difficulty: "hard" }
-];
-const ERROR_TYPES = ["Syntax Error", "Logic Error", "Missing END", "Indentation Error", "Type Error", "Other"];
-
-function buildSeedActivity() {
-    const acts = [
-        makeAct('act_sp_1', 'John Cruz', '2024-001', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T10:15:00', null, '0.85s', 'BEGIN\n  PRINT "Hello"\nEND', 'Success'),
-        makeAct('act_sp_2', 'Maria Santos', '2024-002', 'Factorial Calculation', 'hard', 'Completed', '85%', '2025-08-08T10:32:00', null, '1.21s', 'BEGIN\n  PRINT "Hello"\nEND', 'Success'),
-        makeAct('act_sp_3', 'Kevin Ramos', '2024-003', 'Array Sum', 'easy', 'Failed', '0%', '2025-08-08T11:05:00', 'Syntax Error', '0.65s', 'BEGIN\n  PRINT "Hello"\nEND', 'Syntax Error'),
-        makeAct('act_sp_4', 'Anna Reyes', '2024-004', 'Prime Number Checker', 'moderate', 'Pending', '-', '2025-08-08T11:20:00', null, '-', 'BEGIN\n  PRINT "Hello"\nEND', 'Pending'),
-        makeAct('act_sp_5', 'Joshua Garcia', '2024-005', 'String Reversal', 'easy', 'Completed', '90%', '2025-08-08T11:45:00', null, '0.42s', 'BEGIN\n  PRINT "Hello"\nEND', 'Success'),
-        makeAct('act_sp_em1', 'Eduard John Mirandilla', '2024-031', 'Sum of Even Numbers', 'moderate', 'Completed', '100%', '2025-08-08T14:20:00', null, '0.78s', 'BEGIN\n  PRINT "Hello"\nEND', 'Success'),
-        makeAct('act_sp_em2', 'Eduard John Mirandilla', '2024-031', 'Factorial Calculation', 'hard', 'Completed', '95%', '2025-08-07T16:10:00', null, '1.10s', 'BEGIN\n  PRINT "Hello"\nEND', 'Success'),
-        makeAct('act_sp_md1', 'Mikaella Daet', '2024-032', 'Array Sum', 'easy', 'Completed', '90%', '2025-08-08T15:00:00', null, '0.52s', 'BEGIN\n  PRINT "Hello"\nEND', 'Success'),
-        makeAct('act_sp_md2', 'Mikaella Daet', '2024-032', 'Prime Number Checker', 'moderate', 'Completed', '100%', '2025-08-06T11:30:00', null, '0.89s', 'BEGIN\n  PRINT "Hello"\nEND', 'Success'),
-    ];
-    let s = 12345;
-    const r = () => { s = (s * 9301 + 49297) % 233280; return s / 233280.0; };
-    const week2 = [{day:4,count:4},{day:5,count:6},{day:6,count:8},{day:7,count:5},{day:8,count:5},{day:9,count:2},{day:10,count:3}];
-    let idx = 6;
-    week2.forEach(w => {
-        for (let c = 0; c < w.count; c++) {
-            const si = Math.floor(r() * 10);
-            const ex = EXERCISES_POOL[Math.floor(r() * EXERCISES_POOL.length)];
-            const h = 8 + Math.floor(r() * 9), m = Math.floor(r() * 60);
-            const dateStr = `2025-08-${String(w.day).padStart(2,'0')}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`;
-            const sr = r(); let status='Completed', score='85%', et=null, res='Success';
-            if (sr < 0.65) { score = `${Math.floor(r()*21)+80}%`; }
-            else if (sr < 0.85) { status='Failed'; score='0%'; et=ERROR_TYPES[Math.floor(r()*ERROR_TYPES.length)]; res=et; }
-            else { status='Pending'; score='-'; res='Pending'; }
-            acts.push(makeAct(`act_gen_${idx++}`, FILIPINO_NAMES[si], `2024-${String(si+1).padStart(3,'0')}`, ex.title, ex.difficulty, status, score, dateStr, et, status==='Pending'?'-':`${(r()*1.5+0.3).toFixed(2)}s`, `BEGIN\n  PRINT "Hello"\nEND`, res));
-        }
-    });
-    while (acts.length < 100) {
-        const si = Math.floor(r() * 30);
-        const ex = EXERCISES_POOL[Math.floor(r() * EXERCISES_POOL.length)];
-        const mo = [6,7,8][Math.floor(r()*3)], dy = Math.floor(r()*28)+1;
-        const h = 8 + Math.floor(r()*10), m = Math.floor(r()*60);
-        const dateStr = `2025-${String(mo).padStart(2,'0')}-${String(dy).padStart(2,'0')}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`;
-        const sr = r(); let status='Completed', score='90%', et=null, res='Success';
-        if (sr < 0.7) { score = `${Math.floor(r()*21)+80}%`; }
-        else if (sr < 0.88) { status='Failed'; score='0%'; et=ERROR_TYPES[Math.floor(r()*ERROR_TYPES.length)]; res=et; }
-        else { status='Pending'; score='-'; res='Pending'; }
-        acts.push(makeAct(`act_gen_${idx++}`, FILIPINO_NAMES[si], `2024-${String(si+1).padStart(3,'0')}`, ex.title, ex.difficulty, status, score, dateStr, et, status==='Pending'?'-':`${(r()*1.5+0.3).toFixed(2)}s`, `BEGIN\n  PRINT "Hello"\nEND`, res));
+    function makeAct(id, student, studentId, exercise, difficulty, status, score, dateStr, errorType, procTime) {
+        return { _docId:id, student, studentId, exercise, difficulty:difficulty||'moderate', status, score, time:dateStr, timestamp:new Date(dateStr).getTime(), errorType:errorType||null, processingTime:procTime||'0.0s', submittedCode:'BEGIN\n  PRINT "Hello World"\nEND', pseudocode:'BEGIN\n  PRINT "Hello World"\nEND', pythonCode:'print("Hello World")', python_code:'print("Hello World")', result:status==='Completed'?'Success':status==='Failed'?errorType:'Pending', output:status==='Failed'?`Error: ${errorType} during compilation`:'Execution successful.\n' };
     }
-    return acts;
-}
 
+    function buildActivity() {
+        const acts = [
+            makeAct('act_sp_1','John Cruz','2024-001','Sum of Even Numbers','moderate','Completed','100%','2025-08-08T10:15:00',null,'0.85s'),
+            makeAct('act_sp_2','Maria Santos','2024-002','Factorial Calculation','hard','Completed','85%','2025-08-08T10:32:00',null,'1.21s'),
+            makeAct('act_sp_3','Kevin Ramos','2024-003','Array Sum','easy','Failed','0%','2025-08-08T11:05:00','Syntax Error','0.65s'),
+            makeAct('act_sp_4','Anna Reyes','2024-004','Prime Number Checker','moderate','Pending','-','2025-08-08T11:20:00',null,'-'),
+            makeAct('act_sp_5','Joshua Garcia','2024-005','String Reversal','easy','Completed','90%','2025-08-08T11:45:00',null,'0.42s'),
+            makeAct('act_sp_em1','Eduard John Mirandilla','2024-031','Sum of Even Numbers','moderate','Completed','100%','2025-08-08T14:20:00',null,'0.78s'),
+            makeAct('act_sp_em2','Eduard John Mirandilla','2024-031','Factorial Calculation','hard','Completed','95%','2025-08-07T16:10:00',null,'1.10s'),
+            makeAct('act_sp_md1','Mikaella Daet','2024-032','Array Sum','easy','Completed','90%','2025-08-08T15:00:00',null,'0.52s'),
+            makeAct('act_sp_md2','Mikaella Daet','2024-032','Prime Number Checker','moderate','Completed','100%','2025-08-06T11:30:00',null,'0.89s'),
+        ];
+        return acts;
+    }
 
-module.exports = { buildSeedUsers, SEED_EXERCISES, buildSeedActivity };
+    async function seedCollection(collectionName, items) {
+        log(`Seeding ${items.length} records into <b>${collectionName}</b>...`, 'info');
+        const batch = db.batch();
+        items.forEach(item => {
+            const ref = db.collection(collectionName).doc(item._docId);
+            batch.set(ref, item);
+        });
+        await batch.commit();
+        log(`✅ ${items.length} records seeded into ${collectionName}`, 'ok');
+    }
+
+    async function runSeed() {
+        const btn = document.getElementById('seedBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Seeding...';
+        try {
+            log('🔥 Connecting to Firebase...', 'info');
+            await seedCollection('pseudopy_users', buildUsers());
+            await seedCollection('pseudopy_exercises', EXERCISES);
+            await seedCollection('pseudopy_activity', buildActivity());
+            log('', 'info');
+            log('🎉 All done! Firebase is seeded. You can close this tab now.', 'ok');
+            log('👉 Open your Vercel app and login with: Admin / pass123', 'ok');
+        } catch (err) {
+            log('❌ Error: ' + err.message, 'err');
+            console.error(err);
+        }
+        btn.disabled = false;
+        btn.textContent = '▶ Seed Again';
+    }
+  </script>
+    <script>
+        const seedIconMap = {
+            '🔥': 'flame', '▶': 'play', '✅': 'circle-check', '⏳': 'hourglass',
+            '🎉': 'party-popper', '👉': 'arrow-right', '❌': 'circle-x'
+        };
+        function hydrateSeedIcons(root) {
+            const walker = document.createTreeWalker(root || document.body, NodeFilter.SHOW_TEXT);
+            const nodes = [];
+            let node;
+            while ((node = walker.nextNode())) {
+                if (node.parentElement && !['SCRIPT', 'STYLE', 'TEXTAREA', 'PRE', 'CODE'].includes(node.parentElement.tagName) &&
+                        Object.keys(seedIconMap).some(glyph => node.nodeValue.includes(glyph))) nodes.push(node);
+            }
+            nodes.forEach(textNode => {
+                const fragment = document.createDocumentFragment();
+                let text = textNode.nodeValue;
+                while (text) {
+                    const matches = Object.keys(seedIconMap).map(glyph => ({ glyph, index: text.indexOf(glyph) }))
+                        .filter(match => match.index >= 0).sort((a, b) => a.index - b.index || b.glyph.length - a.glyph.length);
+                    if (!matches.length) { fragment.appendChild(document.createTextNode(text)); break; }
+                    const match = matches[0];
+                    if (match.index) fragment.appendChild(document.createTextNode(text.slice(0, match.index)));
+                    const icon = document.createElement('i');
+                    icon.dataset.lucide = seedIconMap[match.glyph];
+                    icon.setAttribute('aria-hidden', 'true');
+                    fragment.appendChild(icon);
+                    text = text.slice(match.index + match.glyph.length);
+                }
+                textNode.replaceWith(fragment);
+            });
+            if (window.lucide) lucide.createIcons({ root: root || document });
+        }
+        window.addEventListener('DOMContentLoaded', () => hydrateSeedIcons(document.body));
+    </script>
+</body>
+</html>

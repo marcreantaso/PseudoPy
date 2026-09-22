@@ -3,10 +3,11 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-shell-20260922-v5';
+const CACHE_NAME = 'pseudopy-shell-20260922-v6';
 const LOCAL_ASSETS = [
     './',
     './index.html',
+    './pwa-updates.js?v=20260921-1',
     './style.css',
     './style.css?v=pseudopy-logo-1',
     './mapper.js',
@@ -40,16 +41,15 @@ const EXTERNAL_ASSETS = [
 // Install — cache core assets
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            console.log('[SW] Caching core local assets');
-            // Cache local assets atomically
-            cache.addAll(LOCAL_ASSETS).catch(err => console.warn('[SW] Some local assets failed:', err));
-            
-            // Cache external assets individually (to prevent single-failure halting everything)
-            EXTERNAL_ASSETS.forEach(url => {
+        caches.open(CACHE_NAME).then(async (cache) => {
+            // Installation is not complete until the entire local shell is ready.
+            // A failed core request must leave the previous worker in control.
+            await cache.addAll(LOCAL_ASSETS);
+            await Promise.allSettled(EXTERNAL_ASSETS.map(async url => {
                 const req = new Request(url, { mode: 'no-cors' });
-                fetch(req).then(response => cache.put(req, response)).catch(err => console.warn('[SW] External asset failed:', url, err));
-            });
+                const response = await fetch(req);
+                await cache.put(req, response);
+            }));
         })
     );
     // Controlled updates: a freshly deployed worker waits in "waiting" until
@@ -72,12 +72,11 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
-                cacheNames.filter((name) => name !== CACHE_NAME)
+                cacheNames.filter((name) => name.startsWith('pseudopy-') && name !== CACHE_NAME)
                     .map((name) => caches.delete(name))
             );
-        })
+        }).then(() => self.clients.claim())
     );
-    self.clients.claim();
 });
 
 // Fetch — cache-first, fallback to network
@@ -85,8 +84,11 @@ self.addEventListener('fetch', (event) => {
     const requestUrl = new URL(event.request.url);
     const isSameOrigin = requestUrl.origin === self.location.origin;
 
+    // Collection API responses and writes are never static app-shell assets.
+    if (event.request.method !== 'GET' || (isSameOrigin && requestUrl.pathname.startsWith('/api/'))) return;
+
     event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
+        caches.open(CACHE_NAME).then(cache => cache.match(event.request)).then((cachedResponse) => {
             if (cachedResponse) {
                 return cachedResponse;
             }
@@ -104,7 +106,7 @@ self.addEventListener('fetch', (event) => {
             }).catch(() => {
                 // Offline fallback for same-origin navigations only
                 if (event.request.mode === 'navigate' && isSameOrigin) {
-                    return caches.match('/index.html');
+                    return caches.open(CACHE_NAME).then(cache => cache.match('./index.html'));
                 }
             });
         })
@@ -114,6 +116,6 @@ self.addEventListener('fetch', (event) => {
 // Listen for the skipWaiting message from the UI
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING') {
-        self.skipWaiting();
+        event.waitUntil(self.skipWaiting());
     }
 });

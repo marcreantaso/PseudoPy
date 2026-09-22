@@ -105,8 +105,8 @@
             </div>
             <div class="login-hint-body">
               <p class="login-hint-note">
-                Your username follows the format: <strong>name_role</strong><br>
-                The system will automatically detect your role based on your username.
+                Students and instructors use <strong>name_role</strong>; the administrator uses <strong>Admin</strong>.<br>
+                Your account determines which workspace you can access.
               </p>
               <div class="login-hint-table">
                 <div class="login-hint-row login-hint-head">
@@ -114,7 +114,7 @@
                   <span>Logs in as</span>
                 </div>
                 <div class="login-hint-row hint-row-2col">
-                  <span class="hint-username" onclick="fillLoginUser('mbautista_admin')">mbautista_admin</span>
+                  <span class="hint-username" onclick="fillLoginUser('Admin')">Admin</span>
                   <span class="hint-badge hint-admin"><i data-lucide="wrench" aria-hidden="true"></i> Admin</span>
                 </div>
                 <div class="login-hint-row hint-row-2col">
@@ -1987,7 +1987,7 @@
         <!-- Profile Card -->
         <div class="profile-card">
           <div class="profile-card-header">
-            <div class="profile-avatar" id="settings-avatar">S</div>
+            <div class="profile-avatar" id="settings-avatar" aria-hidden="true">{{ui:UserRound}}</div>
             <div class="profile-info">
               <h3 id="settings-fullname">Student Name</h3>
               <span class="badge badge-student" id="settings-role-badge">Student</span>
@@ -2713,8 +2713,10 @@
     })();
   </script>
 
-  <!-- Service Worker registration + controlled PWA update flow now lives in
-       src/app/pwa.js (bundled into app.js above). -->
+<!-- Controlled PWA update flow lives in this standalone script, loaded
+       independently of the app bundle (defer) so update banners also work
+       on the sign-in screen. -->
+  <script src="pwa-updates.js?v=20260921-1" defer></script>
 
   <!-- Boot Splash (only shown while a persisted session is being restored) -->
   <div id="boot-splash" class="boot-splash hidden" role="status" aria-live="polite">
@@ -2725,14 +2727,14 @@
   </div>
 
   <!-- PWA Update Banner -->
-  <div id="pwa-update-banner" class="pwa-update-banner" role="status" aria-live="polite">
+  <div id="pwa-update-banner" class="pwa-update-banner" hidden role="status" aria-live="polite">
     <div class="pwa-update-content">
       <i data-lucide="download-cloud" aria-hidden="true"></i>
       <span id="pwa-update-msg">A new version of PseudoPy is available.</span>
     </div>
     <div class="pwa-update-actions">
-      <button id="pwa-later-btn" class="btn btn-ghost btn-sm" type="button" onclick="dismissPWAUpdate()" style="color: var(--text-muted);">Later</button>
-      <button id="pwa-update-btn" class="btn btn-primary btn-sm" type="button" onclick="applyPWAUpdate()">
+      <button id="pwa-later-btn" class="btn btn-ghost btn-sm" type="button">Later</button>
+      <button id="pwa-update-btn" class="btn btn-primary btn-sm" type="button">
         <span class="pwa-spinner" aria-hidden="true"></span>
         <span data-update-label>Update Now</span>
       </button>

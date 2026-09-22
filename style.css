@@ -3294,17 +3294,20 @@ select.form-input {
 .profile-avatar {
   width: 64px;
   height: 64px;
-  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  background: var(--avatar-bg);
+  border: 1px solid var(--avatar-border);
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
   font-size: 1.5rem;
-  color: #fff;
+  color: var(--avatar-fg);
   flex-shrink: 0;
-  box-shadow: 0 4px 15px var(--accent-glow);
+  box-shadow: none;
 }
+
+.profile-avatar .ui-symbol { width: 28px; height: 28px; }
 
 .profile-info h3 {
   font-size: 1.25rem;
@@ -6751,7 +6754,7 @@ select.form-input {
 /* â”€â”€ PWA Update Banner â”€â”€ */
 .pwa-update-banner {
   position: fixed;
-  bottom: -100px;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
   background: var(--bg-secondary);
@@ -6768,6 +6771,8 @@ select.form-input {
   width: max-content;
   max-width: 90vw;
 }
+
+.pwa-update-banner[hidden] { display: none !important; }
 
 .pwa-update-banner.show {
   bottom: 24px;
@@ -6808,7 +6813,7 @@ select.form-input {
   vertical-align: middle;
 }
 
-.pwa-update-btn.updating .pwa-spinner {
+#pwa-update-btn.updating .pwa-spinner {
   display: inline-block;
 }
 
@@ -7044,3 +7049,7 @@ select.form-input {
     }
   }
 }
+
+/* Update actions remain readable and touchable in both themes. */
+#pwa-later-btn { color: var(--text-primary); min-height: 44px; }
+#pwa-update-btn { min-height: 44px; }

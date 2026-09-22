@@ -96,18 +96,17 @@ test('service worker only runtime-caches same-origin GET responses', () => {
 });
 
 test('PWA update banner is driven by the real service worker lifecycle', () => {
-    const html = read('index.html');
-    const app = read('app.js');
-    assert.match(app, /function applyPWAUpdate/, 'Update Now handler missing');
-    assert.match(app, /SKIP_WAITING/, 'waiting worker activation missing');
-    assert.match(app, /window\.applyPWAUpdate = applyPWAUpdate/, 'Update Now not exposed to the banner button');
-    assert.match(app, /window\.dismissPWAUpdate = dismissPWAUpdate/, 'Later not exposed to the banner button');
-    assert.match(app, /pseudopy_update_dismissed/, 'Later dismissal persistence missing');
-    assert.match(app, /},\s*8000\)/, 'update failure watchdog missing');
-    assert.match(app, /reg\.waiting/, 'banner does not key off a real waiting worker');
-    assert.match(app, /navigator\.serviceWorker\.controller\)/, 'banner does not require an existing controller');
-    assert.match(app, /maybeSaveEditorDraft/, 'update flow does not preserve unsaved editor content');
-    assert.match(app, /refreshing = false/, 'reload-loop guard missing');
+const html = read('index.html') + read('pwa-updates.js');
+    assert.match(html, /function applyPWAUpdate/, 'Update Now handler missing');
+    assert.match(html, /SKIP_WAITING/, 'waiting worker activation missing');
+    assert.match(html, /window\.applyPWAUpdate = applyPWAUpdate/, 'Update Now not exposed to the banner button');
+    assert.match(html, /window\.dismissPWAUpdate = dismissPWAUpdate/, 'Later not exposed to the banner button');
+    assert.match(html, /pseudopy_update_dismissed/, 'Later dismissal persistence missing');
+    assert.match(html, /setTimeout\(failUpdate, 8000\)/, 'update failure watchdog missing');
+    assert.match(html, /registration\.waiting/, 'banner does not key off a real waiting worker');
+    assert.match(html, /navigator\.serviceWorker\.controller\)/, 'banner does not require an existing controller');
+    assert.match(html, /maybeSaveEditorDraft/, 'update flow does not preserve unsaved editor content');
+    assert.match(html, /refreshing = false/, 'reload-loop guard missing');
     assert.ok(!html.includes('registerPWAUpdate'), 'SW registration logic still inlined in index.html instead of app.js');
     assert.match(html, /id="pwa-update-btn"/, 'Update Now button missing');
     assert.match(html, /id="pwa-later-btn"/, 'Later button missing');
@@ -142,4 +141,27 @@ test('build registers new source modules in the app bundle', () => {
     const bundles = JSON.parse(read('src/bundles.json'));
     assert.ok(bundles['app.js'].includes('src/app/session.js'), 'session.js not in the app bundle');
     assert.ok(bundles['app.js'].includes('src/app/app-version.js'), 'app-version.js not in the app bundle');
+});
+test('refresh restores student, instructor and admin sessions with their saved page', async () => {
+    const vm = require('node:vm');
+    for (const [role, route] of [['student', 'student-settings'], ['instructor', 'analytics'], ['admin', 'manage-users']]) {
+        const saved = { _docId: 'account', role, username: 'test', status: 'active' };
+        const storage = new Map([['pseudopy_session_user', JSON.stringify(saved)], ['pseudopy_route', route]]);
+        let opened;
+        const context = vm.createContext({
+            STORAGE_KEYS: { SESSION_USER: 'pseudopy_session_user', ROUTE: 'pseudopy_route' },
+            currentUser: null, usersRef: 'users',
+            localStorage: { getItem: key => storage.get(key), removeItem: key => storage.delete(key) },
+            sessionStorage: { removeItem() {} },
+            dbGet: async (collection, id) => { assert.equal(id, 'account'); return saved; },
+            checkAccess: (actualRole, page) => actualRole === role && page === route,
+            showApp: page => { opened = page; }, $id: () => null,
+            showToast() { assert.fail('Valid refresh should not show a sign-out message'); }, console: { log() {}, warn() {} }
+        });
+        vm.runInContext(read('src/app/session.js'), context);
+        assert.equal(await context.restoreSession(), true);
+        assert.equal(context.currentUser.role, role);
+        assert.equal(opened, route);
+        assert.ok(storage.has('pseudopy_session_user'));
+    }
 });
