@@ -13,7 +13,7 @@ window.APP_VERSION = APP_VERSION;
 function renderAppVersion() {
     if (!window.APP_VERSION) return;
     const loginEl = $id('login-version');
-    if (loginEl) loginEl.textContent = 'PseudoPy v' + window.APP_VERSION;
+    if (loginEl) loginEl.textContent = 'Version ' + window.APP_VERSION;
     const settingsEl = $id('settings-version');
     if (settingsEl) settingsEl.textContent = 'Version ' + window.APP_VERSION;
 }
@@ -32,5 +32,8 @@ function renderSystemInfo() {
     const org = $id('settings-org');
     if (org) org.textContent = window.APP_INFO.organization;
     const contact = $id('settings-contact');
-    if (contact) contact.textContent = appInfoField(window.APP_INFO.contactEmail);
+    if (contact) {
+        const value = appInfoField(window.APP_INFO.contactEmail, 'contactEmail');
+        contact.textContent = value || '—';
+    }
 }

@@ -1,0 +1,73 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+
+const geo = require(path.join(__dirname, '..', 'src', 'analytics', 'geometry.js'));
+
+test('linearScale maps domain onto range linearly', () => {
+    const f = geo.linearScale([0, 10], [20, 40]);
+    assert.equal(f(0), 20);
+    assert.equal(f(10), 40);
+    assert.equal(f(5), 30);
+});
+
+test('linearScale guards zero-width domains', () => {
+    const f = geo.linearScale([5, 5], [0, 100]);
+    assert.equal(f(5), 0, 'collapsed domain maps the point to the range start');
+});
+
+test('niceCeil follows the tidy-axis rule', () => {
+    assert.equal(geo.niceCeil(0), 0);
+    assert.equal(geo.niceCeil(3), 6);
+    assert.equal(geo.niceCeil(8), 12);
+    assert.equal(geo.niceCeil(23), Math.ceil(23 * 1.2));
+});
+
+test('smoothPath handles 0, 1 and 2+ points', () => {
+    const x = v => v * 10, y = v => 100 - v;
+    assert.equal(geo.smoothPath([], x, y), '');
+    assert.match(geo.smoothPath([{ x: 1, y: 1 }], x, y), /^M \d+(\.\d+)? \d+(\.\d+)?$/);
+    const two = geo.smoothPath([{ x: 0, y: 0 }, { x: 1, y: 1 }], x, y);
+    assert.ok(two.startsWith('M '), 'starts with a moveto');
+    assert.match(two, / C /, 'emits a cubic Bézier segment');
+});
+
+test('areaPath closes down to the baseline and back to the first point', () => {
+    const x = v => v * 10, y = v => 100 - v;
+    const p = geo.areaPath([{ x: 0, y: 40 }, { x: 1, y: 30 }, { x: 2, y: 60 }], x, y, 200);
+    assert.ok(p.startsWith('M '), 'starts with moveto');
+    assert.ok(p.includes(' L '), 'has at least one line command');
+    assert.ok(p.endsWith(' Z'), 'closed path');
+    const lineCount = (p.match(/ L /g) || []).length;
+    assert.equal(lineCount, 2, 'down to baseline then back to first x');
+});
+
+test('arcPath draws a full circle from four quadrants (donut sectors)', () => {
+    // Two half-circle slices must tile a complete ring.
+    const slices = [
+        geo.arcPath(100, 100, 80, 40, -Math.PI / 2, Math.PI / 2),
+        geo.arcPath(100, 100, 80, 40, Math.PI / 2, (3 * Math.PI) / 2)
+    ];
+    slices.forEach(slice => {
+        assert.ok(slice.startsWith('M '));
+        assert.ok(slice.includes(' A '), 'outer arc present');
+        assert.ok(slice.includes(' L '), 'connects outer to inner');
+        assert.ok(slice.endsWith('Z'), 'renders a closed slice');
+    });
+    // A 220° slice must use the large-arc flag.
+    const big = geo.arcPath(100, 100, 80, 40, -Math.PI / 2, -Math.PI / 2 + (220 * Math.PI) / 180);
+    const outerArc = big.match(/ A ([\d.]+) ([\d.]+) 0 (\d) 1 /);
+    assert.equal(outerArc[3], '1', 'slice >180° uses large-arc flag');
+});
+
+test('sliceCentroid stays within the donut ring at the mid angle', () => {
+    const c = geo.sliceCentroid(100, 100, 80, 40, -Math.PI / 2, 0);
+    const dist = Math.hypot(c.x - 100, c.y - 100);
+    assert.ok(dist >= 40 && dist <= 80, `mid angle keeps ${dist} inside the ring`);
+});
+
+test('polarPoint places a point at the given angle/radius', () => {
+    const p = geo.polarPoint(100, 100, 50, 0);
+    assert.ok(Math.abs(p.x - 150) < 1e-9, 'angle 0 → +x');
+    assert.ok(Math.abs(p.y - 100) < 1e-9, 'angle 0 → same y');
+});

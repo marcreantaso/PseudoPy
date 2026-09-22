@@ -148,6 +148,12 @@
   --warning-tok: #b45309;
   --ring-tok: #93c5fd;
   --chart-line: #e2e8f0;
+  /* Recharts-style categorical palette (light) */
+  --chart-1: #3b82f6;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #8b5cf6;
 }
 
 [data-theme='dark'] {
@@ -169,6 +175,12 @@
   --warning-tok: #f59e0b;
   --ring-tok: #3b82f6;
   --chart-line: #1e1e2e;
+  /* Recharts-style categorical palette (dark) */
+  --chart-1: #60a5fa;
+  --chart-2: #34d399;
+  --chart-3: #fbbf24;
+  --chart-4: #f87171;
+  --chart-5: #a78bfa;
 }
 
 /* ============================================================
@@ -785,6 +797,23 @@ h4 {
   text-align: center;
   margin-top: 1.75rem;
   font-size: 0.75rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.login-footer-text .legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+#login-version {
+  font-size: 0.7rem;
   color: var(--text-secondary);
 }
 
@@ -4211,6 +4240,257 @@ select.form-input {
   height: 0.85rem;
 }
 
+/* ── Recharts-style SVG charts ── */
+.about-team-group { padding: 1rem 0; }
+.about-team-details { margin-top: 0.5rem; padding-left: 1rem; border-left: 2px solid var(--border-divider); }
+.an-chart-header { flex-wrap: wrap; }
+#an-error-select { width: auto; max-width: 100%; min-height: 44px; }
+.an-chart-skeleton { min-height: 240px; border-radius: var(--radius-shadcn); background: var(--muted); }
+.an-chart-card .an-svg :focus-visible { outline: 2px solid var(--text-primary); outline-offset: 3px; }
+.an-chart-plot {
+  position: relative;
+}
+
+.an-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.an-svg text {
+  font-family: inherit;
+}
+
+.an-trajectory-plot .an-svg,
+.an-area-plot .an-svg {
+  min-height: clamp(220px, 46vw, 300px);
+}
+
+.an-grid-line {
+  stroke: var(--chart-line);
+  stroke-width: 1;
+}
+
+.an-axis-label {
+  fill: var(--muted-foreground);
+  font-size: 10px;
+}
+
+.an-axis-label-x {
+  text-anchor: middle;
+}
+
+.an-trajectory-line {
+  transition: stroke-width var(--duration) var(--ease), opacity var(--duration) var(--ease);
+}
+
+.an-series.dimmed .an-trajectory-line,
+.an-series.dimmed .an-series-dot {
+  opacity: 0.25;
+}
+
+.an-series.highlighted .an-trajectory-line {
+  stroke-width: 3.5;
+}
+
+.an-series-dot {
+  stroke: var(--card);
+  stroke-width: 1.5;
+}
+
+.an-class-line {
+  stroke: var(--muted-foreground);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  opacity: 0.85;
+}
+
+.an-class-dot {
+  fill: var(--muted-foreground);
+}
+
+.an-area-line {
+  stroke: var(--chart-1);
+  stroke-width: 2;
+}
+
+.an-area-dot {
+  stroke: var(--card);
+  stroke-width: 1.5;
+  cursor: pointer;
+  transition: opacity var(--duration) var(--ease);
+}
+
+.an-svg-total {
+  font-size: 0.72rem;
+  color: var(--muted-foreground);
+  margin-top: 0.35rem;
+  text-align: right;
+}
+
+/* ── Chart tooltip (positioned inside the chart card) ── */
+.an-svg-tooltip {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+  background: var(--popover);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-shadcn);
+  box-shadow: var(--shadow-md);
+  padding: 0.5rem 0.65rem;
+  font-size: 0.72rem;
+  color: var(--popover-foreground);
+  min-width: 140px;
+  max-width: 230px;
+}
+
+.an-svg-tooltip.hidden {
+  display: none;
+}
+
+.an-tt-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+
+.an-tt-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.an-tt-row {
+  line-height: 1.5;
+}
+
+.an-tt-muted {
+  color: var(--muted-foreground);
+}
+
+/* ── Chart legend chips ── */
+.an-svg-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.an-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-shadcn-pill);
+  color: var(--accent-foreground);
+  font-size: 0.7rem;
+  padding: 0.28rem 0.6rem;
+  cursor: pointer;
+  transition: border-color var(--duration) var(--ease), background var(--duration) var(--ease);
+}
+
+.an-legend-chip:hover,
+.an-legend-chip.active {
+  border-color: var(--ring-tok);
+  background: var(--muted);
+}
+
+.an-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.an-legend-name {
+  font-weight: 600;
+}
+
+.an-legend-val {
+  color: var(--muted-foreground);
+}
+
+.an-legend-trend.an-trend-up {
+  color: var(--text-success);
+}
+
+.an-legend-trend.an-trend-down {
+  color: var(--danger);
+}
+
+.an-legend-note {
+  font-size: 0.68rem;
+  color: var(--muted-foreground);
+  width: 100%;
+}
+
+/* ── Inline-pie (donut) ── */
+.an-pie-wrap {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.an-pie-plot {
+  flex: 0 0 auto;
+  width: min(100%, 240px);
+  margin: 0 auto;
+  position: relative;
+}
+
+.an-pie-slice {
+  fill: var(--slice-color);
+  stroke: var(--card);
+  stroke-width: 2;
+  cursor: pointer;
+  transition: opacity var(--duration) var(--ease), fill-opacity var(--duration) var(--ease);
+}
+
+.an-pie-slice:hover,
+.an-pie-slice:focus-visible {
+  fill-opacity: 0.85;
+  outline: none;
+}
+
+.an-pie-slice.dimmed {
+  opacity: 0.3;
+}
+
+.an-pie-center-num {
+  fill: var(--popover-foreground);
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.an-pie-center-label {
+  fill: var(--muted-foreground);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── Chart empty / error states ── */
+.an-chart-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+
+.an-chart-empty-title {
+  font-weight: 600;
+  color: var(--card-foreground);
+  margin-bottom: 0.25rem;
+}
+
+.an-chart-empty-hint {
+  font-size: 0.72rem;
+}
+
 /* ── Bar Chart Specifics ── */
 .an-bar-chart-wrap {
   display: flex;
@@ -6990,7 +7270,10 @@ select.form-input {
 /* Analytics: use the actual markup classes and override inline flex/widths. */
 .an-charts-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.an-chart-card.an-trajectory-card {
+  grid-column: 1 / -1;
 }
 .an-filter-bar {
   display: grid;

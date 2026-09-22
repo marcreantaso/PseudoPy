@@ -13,11 +13,16 @@ const FILIPINO_NAMES = [
     "Gabriel Santiago", "Abigail Ramos", "Ryan Ocampo", "Megan Custodio", "Kyle Dela Rosa"
 ];
 
+/** Deterministic canonical student number for demo seeds: 230 + 4-digit sequence. */
+function seedStudentNumber(seq) {
+    return '230' + String(seq).padStart(4, '0');
+}
+
 const SEED_USERS_BASE = [
     { _docId: 'u1', id: 'u1', ...getDefaultAdminProfile(), email: 'bautista@university.edu.ph', role: 'admin', status: 'active', createdAt: '2025-07-01T08:00:00.000Z' },
     { _docId: 'u2', id: 'u2', fullName: 'Marc Reantaso', username: 'mreantaso_instructor', email: 'reantaso@university.edu.ph', password: 'pass123', role: 'instructor', status: 'active', createdBy: 'u1', createdAt: '2025-08-10T14:15:00.000Z' },
-    { _docId: 'u_stu_emirandilla', id: 'u_stu_emirandilla', studentId: '2024-031', fullName: 'Eduard John Mirandilla', username: 'emirandilla_student', email: 'mirandilla@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:30:00.000Z' },
-    { _docId: 'u_stu_mdaet', id: 'u_stu_mdaet', studentId: '2024-032', fullName: 'Mikaella Daet', username: 'mdaet_student', email: 'daet@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:35:00.000Z' },
+    { _docId: 'u_stu_emirandilla', id: 'u_stu_emirandilla', studentId: '2024-031', studentNumber: seedStudentNumber(1), fullName: 'Eduard John Mirandilla', username: 'emirandilla_student', email: 'mirandilla@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:30:00.000Z' },
+    { _docId: 'u_stu_mdaet', id: 'u_stu_mdaet', studentId: '2024-032', studentNumber: seedStudentNumber(2), fullName: 'Mikaella Daet', username: 'mdaet_student', email: 'daet@gmail.com', password: 'pass123', role: 'student', status: 'active', instructorId: 'u2', createdBy: 'u2', section: 'BSCS-3A', createdAt: '2025-08-10T14:35:00.000Z' },
 ];
 
 function buildSeedUsers() {
@@ -27,7 +32,7 @@ function buildSeedUsers() {
         const cleanName = name.toLowerCase().replace(/\s+/g, '');
         users.push({
             _docId: `u_stu_${index + 3}`, id: `u_stu_${index + 3}`,
-            studentId: `2024-${idNum}`, fullName: name,
+            studentId: `2024-${idNum}`, studentNumber: seedStudentNumber(index + 3), fullName: name,
             username: `${cleanName}_student`,
             email: `${cleanName.split(' ')[0]}@student.edu.ph`,
             password: 'pass123', role: 'student', status: 'active',

@@ -78,6 +78,27 @@ test('login footer text uses a contrast-safe secondary color', () => {
     assert.match(css, /\.login-footer-text\s*\{[\s\S]*?color:\s*var\(--text-secondary\);/);
 });
 
+test('login footer is a semantic footer with no inline version styling', () => {
+    const html = read('index.html');
+    assert.match(html, /<footer class="login-footer-text">/);
+    assert.match(html, /<\/footer>/s);
+    assert.ok(!/style="display:block; margin-top:0\.25rem; font-size:0\.8rem;"/.test(html), 'version styling moved out of markup');
+    assert.match(html, /<span id="login-version"><\/span>/);
+});
+
+test('footer version text is centralized and matches the Settings row wording', () => {
+    const src = read('src/app/app-version.js');
+    assert.match(src, /loginEl\.textContent\s*=\s*'Version '\s*\+\s*window\.APP_VERSION;/);
+    assert.ok(!src.includes("'PseudoPy v'"), 'stale PseudoPy v prefix removed');
+});
+
+test('footer legal links wrap and stay centered on small screens', () => {
+    const css = read('style.css');
+    assert.match(css, /\.login-footer-text\s*\{[\s\S]*?display:\s*flex;/);
+    assert.match(css, /\.legal-links\s*\{[\s\S]*?flex-wrap:\s*wrap;/);
+    assert.match(css, /#login-version\s*\{[\s\S]*?font-size:\s*0\.7rem;/);
+});
+
 test('mobile touch targets meet the 44px guideline', () => {
     const css = read('style.css');
     assert.match(css, /min-height:\s*44px;/);

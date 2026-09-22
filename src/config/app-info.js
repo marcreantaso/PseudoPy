@@ -6,11 +6,14 @@
    Version is substituted at build time from package.json.
    Organization and team were prefilled from the project's
    thesis manuscript (see PSEUDO_MANUSCRIPT (1).md). Fields that
-   the system owner must still provide are empty and render as
-   clearly marked placeholders in the UI:
+   the system owner still must provide are empty:
    - contactEmail
    - privacyEffectiveDate
    - termsEffectiveDate
+
+   Missing fields are surfaced only in development (localhost /
+   explicit window.APP_CONFIG.development); production never
+   exposes "[pending owner configuration]" to ordinary users.
    ============================================================ */
 
 const APP_INFO = {
@@ -53,16 +56,39 @@ const APP_INFO = {
 
 window.APP_INFO = APP_INFO;
 
-/** Renders a value or a clearly marked placeholder when the owner has not
- *  supplied the real configuration item yet. */
-function appInfoField(value) {
+/** Machine + human labels for the fields the owner may leave empty. */
+const APP_INFO_FIELD_LABELS = {
+    contactEmail: 'official contact address',
+    privacyEffectiveDate: 'privacy policy effective date',
+    termsEffectiveDate: 'terms of use effective date'
+};
+
+/** True on local/preview hosts. Tests may pass an explicit hostname, or flip
+ *  window.APP_CONFIG.development to force dev mode without host sniffing. */
+function appIsDevelopment(hostname) {
+    if (typeof window !== 'undefined' && window.APP_CONFIG && window.APP_CONFIG.development === true) return true;
+    const h = String(hostname || (typeof window !== 'undefined' && window.location ? window.location.hostname : '')).toLowerCase();
+    return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.local');
+}
+
+/** Lists only the owner configuration keys that are genuinely missing. */
+function appInfoMissingFields() {
+    return Object.keys(APP_INFO_FIELD_LABELS).filter(key => {
+        const v = APP_INFO[key];
+        return !(v && String(v).trim() !== '');
+    }).map(key => ({ key, label: APP_INFO_FIELD_LABELS[key] }));
+}
+
+/** Renders a configured value, or, when missing, a development-only marker.
+ *  Production callers treat an empty string as "omit this row entirely". */
+function appInfoField(value, key) {
     if (value && String(value).trim() !== '') return String(value);
-    return '[pending owner configuration]';
+    if (!appIsDevelopment()) return '';
+    const label = (key && APP_INFO_FIELD_LABELS[key]) || 'configuration';
+    return '[development: ' + label + ' not yet configured]';
 }
 
 /** True while any owner-facing configuration is still missing. */
 function appInfoPending() {
-    return !APP_INFO.contactEmail
-        || !APP_INFO.privacyEffectiveDate
-        || !APP_INFO.termsEffectiveDate;
+    return appInfoMissingFields().length > 0;
 }

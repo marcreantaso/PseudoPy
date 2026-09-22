@@ -136,7 +136,7 @@ window.APP_VERSION = APP_VERSION;
 function renderAppVersion() {
     if (!window.APP_VERSION) return;
     const loginEl = $id('login-version');
-    if (loginEl) loginEl.textContent = 'PseudoPy v' + window.APP_VERSION;
+    if (loginEl) loginEl.textContent = 'Version ' + window.APP_VERSION;
     const settingsEl = $id('settings-version');
     if (settingsEl) settingsEl.textContent = 'Version ' + window.APP_VERSION;
 }
@@ -155,7 +155,10 @@ function renderSystemInfo() {
     const org = $id('settings-org');
     if (org) org.textContent = window.APP_INFO.organization;
     const contact = $id('settings-contact');
-    if (contact) contact.textContent = appInfoField(window.APP_INFO.contactEmail);
+    if (contact) {
+        const value = appInfoField(window.APP_INFO.contactEmail, 'contactEmail');
+        contact.textContent = value || '—';
+    }
 }/* ============================================================
    APP / SYSTEM IDENTITY — single source of truth
    Used by the Privacy, Terms and About surfaces. Do not put
@@ -164,11 +167,14 @@ function renderSystemInfo() {
    Version is substituted at build time from package.json.
    Organization and team were prefilled from the project's
    thesis manuscript (see PSEUDO_MANUSCRIPT (1).md). Fields that
-   the system owner must still provide are empty and render as
-   clearly marked placeholders in the UI:
+   the system owner still must provide are empty:
    - contactEmail
    - privacyEffectiveDate
    - termsEffectiveDate
+
+   Missing fields are surfaced only in development (localhost /
+   explicit window.APP_CONFIG.development); production never
+   exposes "[pending owner configuration]" to ordinary users.
    ============================================================ */
 
 const APP_INFO = {
@@ -211,18 +217,41 @@ const APP_INFO = {
 
 window.APP_INFO = APP_INFO;
 
-/** Renders a value or a clearly marked placeholder when the owner has not
- *  supplied the real configuration item yet. */
-function appInfoField(value) {
+/** Machine + human labels for the fields the owner may leave empty. */
+const APP_INFO_FIELD_LABELS = {
+    contactEmail: 'official contact address',
+    privacyEffectiveDate: 'privacy policy effective date',
+    termsEffectiveDate: 'terms of use effective date'
+};
+
+/** True on local/preview hosts. Tests may pass an explicit hostname, or flip
+ *  window.APP_CONFIG.development to force dev mode without host sniffing. */
+function appIsDevelopment(hostname) {
+    if (typeof window !== 'undefined' && window.APP_CONFIG && window.APP_CONFIG.development === true) return true;
+    const h = String(hostname || (typeof window !== 'undefined' && window.location ? window.location.hostname : '')).toLowerCase();
+    return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.local');
+}
+
+/** Lists only the owner configuration keys that are genuinely missing. */
+function appInfoMissingFields() {
+    return Object.keys(APP_INFO_FIELD_LABELS).filter(key => {
+        const v = APP_INFO[key];
+        return !(v && String(v).trim() !== '');
+    }).map(key => ({ key, label: APP_INFO_FIELD_LABELS[key] }));
+}
+
+/** Renders a configured value, or, when missing, a development-only marker.
+ *  Production callers treat an empty string as "omit this row entirely". */
+function appInfoField(value, key) {
     if (value && String(value).trim() !== '') return String(value);
-    return '[pending owner configuration]';
+    if (!appIsDevelopment()) return '';
+    const label = (key && APP_INFO_FIELD_LABELS[key]) || 'configuration';
+    return '[development: ' + label + ' not yet configured]';
 }
 
 /** True while any owner-facing configuration is still missing. */
 function appInfoPending() {
-    return !APP_INFO.contactEmail
-        || !APP_INFO.privacyEffectiveDate
-        || !APP_INFO.termsEffectiveDate;
+    return appInfoMissingFields().length > 0;
 }/* ============================================================
    PYTHON OUTPUT — LINE NUMBER RENDERER
    Renders Python code with a styled line-number gutter.
@@ -768,6 +797,7 @@ async function handleLogin() {
 }
 
 function handleLogout() {
+    if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     // Invalidate session state
     currentUser = null;
     currentPage = '';
@@ -1034,7 +1064,9 @@ function navigateTo(pageId) {
     setText('topbar-title', PAGE_TITLES[pageId] || 'Dashboard');
 
     // Load page-specific data (async)
-    if (pageId === 'analytics') loadAnalytics();
+    if (pageId === 'analytics') {
+        loadAnalytics();
+    }
     if (pageId === 'manage-exercises') loadExercises();
     if (pageId === 'manage-users') loadUsers();
     if (pageId === 'manage-students') loadStudents();
@@ -1043,8 +1075,11 @@ function navigateTo(pageId) {
     if (pageId === 'password-requests') {
         startAuditLogRealtime();
         loadPasswordRequests();
-    } else if (auditLogUnsubscribe) {
+    } else if (typeof auditLogUnsubscribe !== 'undefined' && auditLogUnsubscribe) {
         stopAuditLogRealtime();
+    }
+    if (pageId !== 'analytics') {
+        if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     }
     if (pageId === 'password-recovery') loadPasswordRecovery();
     if (pageId === 'compiler-metrics') loadCompilerMetrics();
@@ -3987,6 +4022,429 @@ async function runStudentNumberMigration() {
         }
     }
 }/* ============================================================
+   ANALYTICS AGGREGATION — pure data builders
+   No DOM access. Suite-testable in Node and shared by the
+   browser chart renderer (analytics-charts.js).
+   ============================================================ */
+
+const AN_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const AN_DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const KNOWN_ERROR_TYPES = ['Syntax Error', 'Logic Error', 'Missing END', 'Indentation Error', 'Type Error'];
+
+function recordDate(record) {
+    const raw = record && (record.timestamp || record.time);
+    if (raw == null || raw === '') return null;
+    const d = typeof raw.toDate === 'function' ? raw.toDate()
+        : typeof raw.seconds === 'number' ? new Date(raw.seconds * 1000)
+        : new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+function maxRecordDate(records) {
+    let max = null;
+    (records || []).forEach(record => {
+        const d = recordDate(record);
+        if (d && (!max || d.getTime() > max.getTime())) max = d;
+    });
+    return max;
+}
+
+function dayKey(date) {
+    if (!date || isNaN(date.getTime())) return '';
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function scoreAsNumber(record) {
+    const raw = String(record && record.score != null ? record.score : '').replace(/\s+/g, '');
+    if (raw === '' || raw === '—' || raw === '-' || raw === 'Pending') return null;
+    const value = parseFloat(raw);
+    if (isNaN(value)) return null;
+    return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function monthWeekForDay(dayNum) {
+    if (dayNum <= 3) return 1;
+    if (dayNum <= 10) return 2;
+    if (dayNum <= 17) return 3;
+    if (dayNum <= 24) return 4;
+    return 5;
+}
+
+const WEEK_RANGES = [
+    { w: 1, start: 1, end: 3 },
+    { w: 2, start: 4, end: 10 },
+    { w: 3, start: 11, end: 17 },
+    { w: 4, start: 18, end: 24 },
+    { w: 5, start: 25, end: 31 }
+];
+
+/**
+ * Builds the per-period submission counts backing the Submission Activity
+ * area chart. Mirrors the analytics filter semantics:
+ *   - month view (or month selected without a week) → 5 weekly buckets
+ *   - week selected               → 7 daily buckets for that week
+ *   - date selected               → 7 daily buckets for that date's week
+ *   - otherwise                   → last 7 days ending at the newest record
+ * Returns an array of { label, sub, dateKey, count, active }.
+ */
+function buildSubmissionSeries(records, filters = {}, opts = {}) {
+    const monthVal = filters.monthVal ?? '';
+    const weekVal = filters.weekVal || '';
+    const dateVal = filters.dateVal || '';
+    const viewMode = filters.viewMode || 'day';
+    const counts = countByDayKey(records);
+
+    const latest = opts.latestDate && !isNaN(new Date(opts.latestDate).getTime())
+        ? new Date(opts.latestDate)
+        : maxRecordDate(records);
+    const fallbackYear = new Date().getFullYear();
+    let year = latest ? latest.getFullYear() : fallbackYear;
+
+    // Mirror the legacy rule: month buckets unless the user narrowed to a week.
+    const useMonthly = viewMode === 'month' || (monthVal !== '' && !weekVal);
+
+    if (useMonthly) {
+        const mIdx = monthVal !== '' ? parseInt(monthVal, 10) : (latest ? latest.getMonth() : new Date().getMonth());
+        const mName = AN_MONTHS_SHORT[mIdx] || 'Jan';
+        return WEEK_RANGES.map(r => {
+            let count = 0;
+            for (let day = r.start; day <= r.end; day++) {
+                const key = `${year}-${String(mIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                count += counts[key] || 0;
+            }
+            return {
+                label: 'Wk ' + r.w,
+                sub: `${mName} ${r.start}–${r.end}`,
+                dateKey: null,
+                weekRange: r,
+                count,
+                active: weekVal === String(r.w)
+            };
+        });
+    }
+
+    let startDay = 4;
+    let mIdx = latest ? latest.getMonth() : new Date().getMonth();
+    const dayNames = AN_DAYS_SHORT;
+    const monNames = AN_MONTHS_SHORT;
+
+    if (weekVal) {
+        const range = WEEK_RANGES.find(r => String(r.w) === weekVal);
+        if (range) startDay = range.start;
+        if (monthVal !== '') mIdx = parseInt(monthVal, 10);
+    } else if (dateVal) {
+        const dateRef = new Date(dateVal + 'T00:00:00');
+        if (!isNaN(dateRef.getTime())) {
+            const week = monthWeekForDay(dateRef.getDate());
+            const range = WEEK_RANGES.find(r => r.w === week);
+            startDay = range ? range.start : 1;
+            mIdx = dateRef.getMonth();
+            year = dateRef.getFullYear();
+        }
+    } else if (latest) {
+        // Last 7 contiguous days ending at the newest record.
+        const buckets = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(latest.getTime());
+            d.setDate(latest.getDate() - i);
+            const key = dayKey(d);
+            buckets.push({
+                label: dayNames[d.getDay()],
+                sub: `${monNames[d.getMonth()]} ${d.getDate()}`,
+                dateKey: key,
+                count: counts[key] || 0,
+                active: false
+            });
+        }
+        return buckets;
+    }
+
+    // Daily buckets for a selected week (explicit or date-derived).
+    const buckets = [];
+    const lastDay = new Date(year, mIdx + 1, 0).getDate();
+    const rangeEnd = startDay === 1 ? 3 : Math.min(startDay + 6, lastDay);
+    for (let i = 0; startDay + i <= rangeEnd; i++) {
+        const day = startDay + i;
+        const d = new Date(year, mIdx, day);
+        if (isNaN(d.getTime())) continue;
+        const key = dayKey(d);
+        buckets.push({
+            label: dayNames[d.getDay()],
+            sub: `${monNames[mIdx]} ${day}`,
+            dateKey: key,
+            count: counts[key] || 0,
+            active: dateVal === key
+        });
+    }
+    return buckets;
+}
+
+function countByDayKey(records) {
+    const counts = {};
+    (records || []).forEach(record => {
+        const d = recordDate(record);
+        if (!d) return;
+        const key = dayKey(d);
+        counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+}
+
+/**
+ * Builds the Student Improvement Trajectory series: one line per top
+ * student (by volume) plus a dashed class-average line. Points carry
+ * { x: attempt index, y: score|null, date, name }.
+ */
+function buildTrajectorySeries(records, opts = {}) {
+    const studentKey = opts.studentKey || 'student';
+    const maxStudents = opts.maxStudents || 6;
+    const maxSessions = opts.maxSessions || 8;
+
+    const grouped = Object.create(null);
+    (records || []).forEach(record => {
+        const name = String(record[studentKey] || '')
+            || String(record.username || '')
+            || String(record.studentId || '');
+        if (!name.trim()) return;
+        if (!grouped[name]) grouped[name] = [];
+        grouped[name].push(record);
+    });
+
+    const byAttempt = Object.create(null);
+    const classPoints = [];
+    let maxAttempts = 0;
+
+    Object.keys(grouped).forEach(name => {
+        const attempts = grouped[name]
+            .map(record => ({ record, date: recordDate(record) }))
+            .filter(a => a.date)
+            .sort((a, b) => a.date.getTime() - b.date.getTime())
+            .slice(-maxSessions);
+        if (attempts.length === 0) return;
+        byAttempt[name] = attempts;
+        maxAttempts = Math.max(maxAttempts, attempts.length);
+    });
+
+    for (let x = 0; x < maxAttempts; x++) {
+        let sum = 0, n = 0;
+        Object.keys(byAttempt).forEach(name => {
+            const attempt = byAttempt[name][x];
+            if (!attempt) return;
+            const score = scoreAsNumber(attempt.record);
+            if (score == null) return;
+            sum += score;
+            n++;
+        });
+        classPoints.push({ x, y: n > 0 ? Math.round(sum / n) : null });
+    }
+
+    const ranked = Object.keys(byAttempt)
+        .map(name => ({ name, n: byAttempt[name].length }))
+        .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))
+        .slice(0, maxStudents);
+
+    const series = ranked.map(({ name }, rank) => ({
+        name,
+        rank,
+        points: byAttempt[name].map((attempt, x) => ({
+            x,
+            y: scoreAsNumber(attempt.record),
+            date: dayKey(attempt.date),
+            score: attempt.record.score != null ? String(attempt.record.score) : null
+        }))
+    }));
+
+    return { series, classAverage: classPoints, maxAttempts };
+}
+
+/**
+ * Counts error types from real records. Unknown types fold into 'Other'.
+ * Percentages are rounded so they sum to 100.
+ */
+function buildErrorDistribution(records) {
+    const counts = {};
+    KNOWN_ERROR_TYPES.concat(['Other']).forEach(t => (counts[t] = 0));
+
+    (records || []).forEach(record => {
+        const type = String(record.errorType || '').trim();
+        if (!type) return;
+        if (counts[type] !== undefined) counts[type]++;
+        else counts['Other']++;
+    });
+
+    const total = KNOWN_ERROR_TYPES.concat(['Other']).reduce((sum, t) => sum + counts[t], 0);
+    if (total === 0) return { total: 0, categories: [] };
+
+    const categories = KNOWN_ERROR_TYPES.concat(['Other'])
+        .filter(t => counts[t] > 0)
+        .map((name, i) => ({
+            name,
+            count: counts[name],
+            pct: Math.round((counts[name] / total) * 100)
+        }));
+
+    const pctSum = categories.reduce((s, c) => s + c.pct, 0);
+    if (pctSum !== 100 && categories.length > 0) {
+        const largest = categories.reduce((a, b) => (a.count >= b.count ? a : b));
+        largest.pct += 100 - pctSum;
+    }
+    return { total, categories };
+}
+
+/* ============================================================
+   CommonJS export guard — allows the Node suite to require()
+   the same source the browser bundles.
+   ============================================================ */
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        recordDate,
+        maxRecordDate,
+        dayKey,
+        scoreAsNumber,
+        monthWeekForDay,
+        buildSubmissionSeries,
+        countByDayKey,
+        buildTrajectorySeries,
+        buildErrorDistribution,
+        KNOWN_ERROR_TYPES,
+        AN_MONTHS_SHORT,
+        AN_DAYS_SHORT
+    };
+}
+/* ============================================================
+   ANALYTICS GEOMETRY — pure SVG math
+   Scales, smooth paths, area paths and donut-slice arcs used by
+   the hand-rolled Recharts-style SVG renderers. No DOM access.
+   ============================================================ */
+
+function linearScale(domain, range) {
+    const [d0, d1] = domain;
+    const [r0, r1] = range;
+    const span = d1 - d0 || 1;
+    return value => r0 + ((value - d0) / span) * (r1 - r0);
+}
+
+/**
+ * Rounds a data max up to a tidy axis ceiling using the legacy
+ * bar-chart rule so area charts keep friendly gridlines.
+ */
+function niceCeil(max, factor = 1.2) {
+    if (max <= 0) return 0;
+    if (max <= 5) return 6;
+    if (max <= 10) return 12;
+    return Math.ceil(max * factor);
+}
+
+/**
+ * Monotone-ish smooth path from Catmull-Rom control points.
+ * Handles 0, 1 and 2+ points without emitting invalid commands.
+ */
+function smoothPath(points, xFor, yFor) {
+    if (!points || points.length === 0) return '';
+    if (points.length === 1) {
+        return `M ${round(xFor(points[0].x))} ${round(yFor(points[0].y))}`;
+    }
+    let d = `M ${round(xFor(points[0].x))} ${round(yFor(points[0].y))}`;
+    for (let i = 0; i < points.length - 1; i++) {
+        const p0 = points[i - 1] || points[i];
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const p3 = points[i + 2] || p2;
+        const c1x = xFor(p1.x) + (xFor(p2.x) - xFor(p0.x)) / 6;
+        const c2x = xFor(p2.x) - (xFor(p3.x) - xFor(p1.x)) / 6;
+        const c1y = yFor(p1.y) + (yFor(p2.y) - yFor(p0.y)) / 6;
+        const c2y = yFor(p2.y) - (yFor(p3.y) - yFor(p1.y)) / 6;
+        d += ` C ${round(c1x)} ${round(c1y)} ${round(c2x)} ${round(c2y)} ${round(xFor(p2.x))} ${round(yFor(p2.y))}`;
+    }
+    return d;
+}
+
+/**
+ * Area chart fill: smooth top edge closed down to a baseline.
+ * Numbers are plain X values (indices); y values are pixels.
+ */
+function areaPath(points, xFor, yFor, baselineY) {
+    if (!points || points.length === 0) return '';
+    const line = smoothPath(points, xFor, yFor);
+    if (!line) return '';
+    const last = points[points.length - 1];
+    const first = points[0];
+    return `${line} L ${round(xFor(last.x))} ${round(baselineY)} L ${round(xFor(first.x))} ${round(baselineY)} Z`;
+}
+
+const TAU = Math.PI * 2;
+const START_ANGLE = -Math.PI / 2; // 12 o'clock, like Recharts pies
+
+function polarPoint(cx, cy, radius, angle) {
+    return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
+}
+
+/**
+ * Donut-slice path (outer arc → inner arc) for an angular span.
+ * Angles are radians, 0 = 12 o'clock, sweeping clockwise.
+ */
+function arcPath(cx, cy, outerR, innerR, startAngle, endAngle) {
+    const sweep = endAngle - startAngle;
+    // A single SVG arc cannot draw a complete circle (identical endpoints).
+    if (sweep >= TAU - 1e-9) {
+        const o = polarPoint(cx, cy, outerR, startAngle);
+        const opposite = polarPoint(cx, cy, outerR, startAngle + Math.PI);
+        const i = polarPoint(cx, cy, innerR, startAngle);
+        const innerOpposite = polarPoint(cx, cy, innerR, startAngle + Math.PI);
+        return `M ${round(o.x)} ${round(o.y)} A ${outerR} ${outerR} 0 1 1 ${round(opposite.x)} ${round(opposite.y)} A ${outerR} ${outerR} 0 1 1 ${round(o.x)} ${round(o.y)} L ${round(i.x)} ${round(i.y)} A ${innerR} ${innerR} 0 1 0 ${round(innerOpposite.x)} ${round(innerOpposite.y)} A ${innerR} ${innerR} 0 1 0 ${round(i.x)} ${round(i.y)} Z`;
+    }
+    const largeArc = sweep > Math.PI ? 1 : 0;
+    const outer0 = polarPoint(cx, cy, outerR, startAngle);
+    const outer1 = polarPoint(cx, cy, outerR, endAngle);
+    const inner1 = polarPoint(cx, cy, innerR, endAngle);
+    const inner0 = polarPoint(cx, cy, innerR, startAngle);
+    return [
+        `M ${round(outer0.x)} ${round(outer0.y)}`,
+        `A ${round(outerR)} ${round(outerR)} 0 ${largeArc} 1 ${round(outer1.x)} ${round(outer1.y)}`,
+        `L ${round(inner1.x)} ${round(inner1.y)}`,
+        `A ${round(innerR)} ${round(innerR)} 0 ${largeArc} 0 ${round(inner0.x)} ${round(inner0.y)}`,
+        'Z'
+    ].join(' ');
+}
+
+/** Label/pointer centroid mid-way between inner and outer radii. */
+function sliceCentroid(cx, cy, outerR, innerR, startAngle, endAngle) {
+    const mid = startAngle + (endAngle - startAngle) / 2;
+    const midR = (outerR + innerR) / 2;
+    return {
+        x: cx + midR * Math.cos(mid),
+        y: cy + midR * Math.sin(mid),
+        midAngle: mid
+    };
+}
+
+function round(value, precision) {
+    const p = precision == null ? 1 : precision;
+    return Math.round(value * Math.pow(10, p)) / Math.pow(10, p);
+}
+
+/* ============================================================
+   CommonJS export guard — allows the Node suite to require()
+   the same source the browser bundles.
+   ============================================================ */
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        linearScale,
+        niceCeil,
+        smoothPath,
+        areaPath,
+        arcPath,
+        sliceCentroid,
+        polarPoint,
+        START_ANGLE,
+        TAU,
+        round
+    };
+}
+/* ============================================================
    ANALYTICS (Instructor)
    ============================================================ */
 
@@ -3995,54 +4453,85 @@ let currentFilteredActivity = [];
 let analyticsCurrentPage = 1;
 const analyticsPageSize = 5;
 
-async function loadAnalytics() {
-    cachedActivity = await refreshActivity();
-    cachedUsers = await refreshUsers();
-    cachedExercises = await refreshExercises();
+var analyticsUnsubscribe = null; // realtime subscription handle, also read by navigation.js
+let analyticsLoadGeneration = 0;
 
-    const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
+function startAnalyticsRealtime() {
+    if (analyticsUnsubscribe || currentUser?.role !== 'instructor') return;
+    const owner = currentUser;
+    const subscriptions = [];
+    analyticsUnsubscribe = () => subscriptions.forEach(unsubscribe => unsubscribe());
+    const changed = () => {
+        if (currentUser !== owner || currentPage !== 'analytics') return;
+        rebuildAnalyticsScope();
+        applyAnalyticsFilters();
+    };
+    const failed = error => {
+        console.error('[Analytics] Realtime subscription error:', error);
+        setText('an-live-status', 'Live updates unavailable. Reopen Analytics to retry.');
+    };
+    subscriptions.push(subscribeCollection(activityRef, records => {
+        if (currentUser !== owner || currentPage !== 'analytics') return;
+        cachedActivity = records;
+        changed();
+    }, failed));
+    subscriptions.push(subscribeCollection(usersRef, records => {
+        if (currentUser !== owner || currentPage !== 'analytics') return;
+        cachedUsers = records;
+        changed();
+    }, failed));
+}
+
+function stopAnalyticsRealtime() {
+    analyticsLoadGeneration++;
+    if (analyticsUnsubscribe) {
+        analyticsUnsubscribe();
+        analyticsUnsubscribe = null;
+    }
+}
+
+function rebuildAnalyticsScope() {
+    if (!currentUser || currentUser.role !== 'instructor') {
+        cachedInstructorActivity = [];
+        currentFilteredActivity = [];
+        return;
+    }
+    const ownerIds = new Set([currentUser.id, currentUser._docId].filter(Boolean));
+    const isDefaultInst = ownerIds.has('u2');
     const myStudents = cachedUsers.filter(u => u.role === 'student' && (
-        u.instructorId === currentUser?.id ||
-        u.instructorId === currentUser?._docId ||
+        ownerIds.has(u.instructorId) ||
         (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
     ));
-    const myExercises = cachedExercises.filter(e =>
-        e.createdBy === currentUser?.id ||
-        e.createdBy === currentUser?._docId ||
-        e.instructorId === currentUser?.id ||
-        e.instructorId === currentUser?._docId ||
-        (isDefaultInst && (e._docId || '').startsWith('algo_'))
-    );
-
-    const myStudentIds = new Set(myStudents.map(s => s.id || s._docId));
-    const myStudentEnrolledIds = new Set(myStudents.map(s => s.studentId).filter(Boolean));
+    const myStudentIds = new Set(myStudents.flatMap(s => [s.id, s._docId]).filter(Boolean));
+    const myStudentEnrolledIds = new Set(myStudents.flatMap(s => [s.studentNumber, s.studentId]).filter(Boolean));
     const myStudentUsernames = new Set(myStudents.map(s => s.username).filter(Boolean));
     const myStudentNames = new Set(myStudents.map(s => s.fullName).filter(Boolean));
-    const myExerciseTitles = new Set(myExercises.map(e => e.title).filter(Boolean));
 
     cachedInstructorActivity = cachedActivity.filter(a => {
-        if (a.instructorId && (a.instructorId === currentUser?.id || a.instructorId === currentUser?._docId)) return true;
-        if (a.studentId && (myStudentIds.has(a.studentId) || myStudentEnrolledIds.has(a.studentId))) return true;
+        if (a.instructorId) return ownerIds.has(a.instructorId);
+        if (a.studentAccountId) return myStudentIds.has(a.studentAccountId);
+        if (a.studentId) return myStudentIds.has(a.studentId) || myStudentEnrolledIds.has(a.studentId);
         if (a.username && myStudentUsernames.has(a.username)) return true;
         if (a.student && myStudentNames.has(a.student)) return true;
-        if (a.exercise && myExerciseTitles.has(a.exercise)) return true;
-        if (isDefaultInst && (a._docId || '').startsWith('act_sp_')) return true;
         return false;
     });
 
-    if (!cachedInstructorActivity || cachedInstructorActivity.length === 0) {
-        cachedInstructorActivity = typeof getInitialSeedActivity === 'function' ? getInitialSeedActivity() : [...cachedActivity];
-    } else if (isDefaultInst && typeof getInitialSeedActivity === 'function') {
-        // Always ensure the full rich demo activity is included for the default instructor
-        const seedRecords = getInitialSeedActivity();
-        const existingIds = new Set(cachedInstructorActivity.map(a => a._docId));
-        const missingSeeds = seedRecords.filter(s => !existingIds.has(s._docId));
-        if (missingSeeds.length > 0) {
-            cachedInstructorActivity = [...cachedInstructorActivity, ...missingSeeds];
-        }
-    }
-
     currentFilteredActivity = [...cachedInstructorActivity];
+}
+
+async function loadAnalytics() {
+    stopAnalyticsRealtime();
+    const generation = analyticsLoadGeneration;
+    const owner = currentUser;
+    if (!owner || owner.role !== 'instructor') return;
+    showAnalyticsLoading();
+    try {
+    const [activity, users] = await Promise.all([dbGetAll(activityRef), dbGetAll(usersRef)]);
+    if (generation !== analyticsLoadGeneration || currentUser !== owner || currentPage !== 'analytics') return;
+    cachedActivity = activity;
+    cachedUsers = users;
+
+    rebuildAnalyticsScope();
 
     // Set default filter values
     const searchEl = $id('filter-search');
@@ -4060,6 +4549,16 @@ async function loadAnalytics() {
     analyticsCurrentPage = 1;
     updateWeekDropdownLabels();
     applyAnalyticsFilters();
+    startAnalyticsRealtime();
+    } catch (error) {
+        if (generation !== analyticsLoadGeneration || currentUser !== owner) return;
+        console.error('[Analytics] Loading failed:', error);
+        cachedInstructorActivity = [];
+        currentFilteredActivity = [];
+        updateAnalyticsUI();
+        ['an-trajectory-svg', 'an-submissions-svg', 'an-error-svg'].forEach(id =>
+            showChartError(id, 'Unable to load analytics. Reopen this page to retry.'));
+    }
 }
 
 function analyticsGoToPage(pageNum) {
@@ -4097,10 +4596,10 @@ function applyAnalyticsFilters() {
 
     updateWeekDropdownLabels();
 
-    const sourceActivity = cachedInstructorActivity && cachedInstructorActivity.length ? cachedInstructorActivity : cachedActivity;
+    const sourceActivity = cachedInstructorActivity;
 
     currentFilteredActivity = sourceActivity.filter(a => {
-        const recordDate = new Date(a.timestamp || a.time);
+        const submissionDate = recordDate(a) || new Date(NaN);
 
         // 1. Search — student name, exercise title, student ID, submission ID, username, email
         if (searchVal) {
@@ -4117,24 +4616,24 @@ function applyAnalyticsFilters() {
 
         // 2. Specific date (YYYY-MM-DD from input[type=date])
         if (dateVal) {
-            if (isNaN(recordDate.getTime())) return false;
-            const y = recordDate.getFullYear();
-            const m = String(recordDate.getMonth() + 1).padStart(2, '0');
-            const d = String(recordDate.getDate()).padStart(2, '0');
+            if (isNaN(submissionDate.getTime())) return false;
+            const y = submissionDate.getFullYear();
+            const m = String(submissionDate.getMonth() + 1).padStart(2, '0');
+            const d = String(submissionDate.getDate()).padStart(2, '0');
             const localDateStr = `${y}-${m}-${d}`;
             if (localDateStr !== dateVal) return false;
         }
 
         // 3. Month (0-indexed)
         if (monthVal !== '') {
-            if (isNaN(recordDate.getTime())) return false;
-            if (recordDate.getMonth() !== parseInt(monthVal)) return false;
+            if (isNaN(submissionDate.getTime())) return false;
+            if (submissionDate.getMonth() !== parseInt(monthVal)) return false;
         }
 
         // 4. Week within month
         if (weekVal !== '') {
-            if (isNaN(recordDate.getTime())) return false;
-            const dayNum = recordDate.getDate();
+            if (isNaN(submissionDate.getTime())) return false;
+            const dayNum = submissionDate.getDate();
             let week = 1;
             if (dayNum >= 4 && dayNum <= 10) week = 2;
             else if (dayNum >= 11 && dayNum <= 17) week = 3;
@@ -4196,10 +4695,10 @@ function updateAnalyticsUI() {
     const total = currentFilteredActivity.length;
 
     // Stat Cards
-    const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
+    const ownerIds = new Set([currentUser?.id, currentUser?._docId].filter(Boolean));
+    const isDefaultInst = ownerIds.has('u2');
     const myStudents = (cachedUsers || []).filter(u => u.role === 'student' && (
-        u.instructorId === currentUser?.id ||
-        u.instructorId === currentUser?._docId ||
+        ownerIds.has(u.instructorId) ||
         (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
     ));
     const activeStudents = myStudents.filter(u => u.status === 'active');
@@ -4245,296 +4744,25 @@ function updateAnalyticsUI() {
     if (countLabel) countLabel.textContent = total === 0 ? 'No records' : `${total} record${total !== 1 ? 's' : ''}`;
 
     // Render Charts
-    renderSubmissionActivityChart(currentFilteredActivity);
-    renderErrorDistributionChart(currentFilteredActivity);
+    if (typeof renderAnalyticsCharts === 'function') renderAnalyticsCharts(currentFilteredActivity);
 
     // Render Paginated Table
     renderFilteredActivityTable(currentFilteredActivity);
     animateAnalyticsCards();
 }
 
-function renderSubmissionActivityChart(filteredActivity) {
-    const container = $id('chart-submissions');
-    const yAxisContainer = $id('an-bar-y-axis');
-    const tooltip = $id('an-bar-tooltip');
-    if (!container) return;
-
-    // --- Determine chart period dynamically from filters ---
-    const monthVal = $id('filter-month')?.value ?? '';
-    const weekVal = $id('filter-week')?.value || '';
-    const dateVal = $id('filter-date')?.value || '';
-    const viewMode = $id('chart-view-mode')?.value || 'day';
-
-    // Group all filtered activity by date
-    const dateMap = {};
-    filteredActivity.forEach(a => {
-        const d = new Date(a.timestamp || a.time);
-        if (isNaN(d.getTime())) return;
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        if (!dateMap[key]) dateMap[key] = [];
-        dateMap[key].push(a);
-    });
-
-    // Derive the chart year from the actual data so bar date keys always
-    // line up with the stamped submission dates (not a hardcoded year).
-    let chartYear = new Date().getFullYear();
-    const chartYears = Object.keys(dateMap).map(k => parseInt(k.split('-')[0], 10)).filter(y => !isNaN(y));
-    if (chartYears.length > 0) chartYear = Math.max(...chartYears);
-
-    // Build chart columns based on selected filter context
-    let weekDays = [];
-
-    if (viewMode === 'month' || (monthVal !== '' && !weekVal)) {
-        // Monthly view: show each week as a bar
-        const mIdx = monthVal !== '' ? parseInt(monthVal) : new Date().getMonth();
-        const year = chartYear;
-        const mName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mIdx];
-        const weekRanges = [
-            { label: 'Wk 1', start: 1, end: 3, w: 1 },
-            { label: 'Wk 2', start: 4, end: 10, w: 2 },
-            { label: 'Wk 3', start: 11, end: 17, w: 3 },
-            { label: 'Wk 4', start: 18, end: 24, w: 4 },
-            { label: 'Wk 5', start: 25, end: 31, w: 5 }
-        ];
-        weekDays = weekRanges.map(r => {
-            let count = 0;
-            for (let d = r.start; d <= r.end; d++) {
-                const key = `${year}-${String(mIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                count += (dateMap[key] || []).length;
-            }
-            return { label: r.label, sub: `${mName} ${r.start}–${r.end}`, dateKey: null, weekRange: r, count, active: weekVal === String(r.w) };
-        });
-    } else {
-        // Default: daily view for selected week (or show last 7 unique days if no week)
-        let startDay = 4, year = chartYear, mIdx = 7; // default Aug Week 2
-        if (monthVal !== '') mIdx = parseInt(monthVal);
-        if (weekVal === '1') startDay = 1;
-        else if (weekVal === '2') startDay = 4;
-        else if (weekVal === '3') startDay = 11;
-        else if (weekVal === '4') startDay = 18;
-        else if (weekVal === '5') startDay = 25;
-        else if (!weekVal && monthVal === '') {
-            // No filter: show the 7 contiguous days ending at the most recent date with data
-            const allDates = Object.keys(dateMap).sort();
-            if (allDates.length > 0) {
-                // Find the most recent date, then show 7 days ending there
-                const latestDate = new Date(allDates[allDates.length - 1]);
-                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                const monNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                for (let i = 6; i >= 0; i--) {
-                    const d = new Date(latestDate);
-                    d.setDate(latestDate.getDate() - i);
-                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                    weekDays.push({
-                        label: dayNames[d.getDay()],
-                        sub: `${monNames[d.getMonth()]} ${d.getDate()}`,
-                        dateKey: key,
-                        count: (dateMap[key] || []).length,
-                        active: false
-                    });
-                }
-            }
-        }
-
-        if (weekDays.length === 0) {
-            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            const mName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mIdx];
-            for (let i = 0; i < 7; i++) {
-                const day = startDay + i;
-                const key = `${year}-${String(mIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const d = new Date(key);
-                weekDays.push({
-                    label: dayNames[d.getDay()],
-                    sub: `${mName} ${day}`,
-                    dateKey: key,
-                    count: (dateMap[key] || []).length,
-                    active: dateVal === key
-                });
-            }
-        }
-    }
-
-    const dayCounts = weekDays.map(w => w.count !== undefined ? w.count : (dateMap[w.dateKey] || []).length);
-    const maxVal = Math.max(...dayCounts, 1);
-    const yMax = maxVal <= 5 ? 6 : maxVal <= 10 ? 12 : Math.ceil(maxVal * 1.2);
-    const yStep = yMax <= 6 ? 2 : yMax <= 12 ? 2 : Math.ceil(yMax / 6);
-    const yLabels = [];
-    for (let v = yMax; v >= 0; v -= yStep) yLabels.push(v);
-    if (yLabels[yLabels.length - 1] !== 0) yLabels.push(0);
-
-    if (yAxisContainer) {
-        yAxisContainer.innerHTML = yLabels.map(v => `<span>${v}</span>`).join('');
-    }
-
-    container.innerHTML = weekDays.map((w, idx) => {
-        const count = w.count !== undefined ? w.count : (dateMap[w.dateKey] || []).length;
-        const heightPct = Math.max((count / yMax) * 100, 3);
-        const isHighlighted = w.active;
-        return `
-            <div class="an-bar-col ${isHighlighted ? 'highlighted' : ''}" data-key="${w.dateKey || ''}" data-idx="${idx}">
-                <span class="an-bar-val">${count}</span>
-                <div class="an-bar-inner" style="height:${heightPct}%"></div>
-                <span class="an-bar-lbl">${w.label}<br><span style="font-size:0.62rem;opacity:0.75">${w.sub}</span></span>
-            </div>
-        `;
-    }).join('');
-
-    // Accessible text equivalent for the color/shape-only bar chart.
-    const chartSummary = weekDays.map(w => `${w.label} (${w.sub}): ${w.count !== undefined ? w.count : (dateMap[w.dateKey] || []).length}`).join('; ');
-    container.setAttribute('role', 'img');
-    container.setAttribute('aria-label', 'Bar chart of exercise submissions per period: ' + chartSummary);
-
-    // Debounced mouse hover so screen-reader users are not flooded; hover
-    // tooltips remain a progressive enhancement, not the only channel.
-    const descEl = $id('an-chart-text-summary');
-    if (descEl) descEl.remove();
-    const desc = document.createElement('p');
-    desc.className = 'sr-only';
-    desc.id = 'an-chart-text-summary';
-    desc.textContent = 'Submissions this period: ' + weekDays.reduce((sum, w) => sum + (w.count !== undefined ? w.count : (dateMap[w.dateKey] || []).length), 0);
-    container.setAttribute('aria-describedby', 'an-chart-text-summary');
-    container.closest('.an-chart-card')?.appendChild(desc);
-
-    animateAnalyticsCharts();
-
-    // Attach Hover and Click Handlers
-    container.querySelectorAll('.an-bar-col').forEach((col, idx) => {
-        const key = col.getAttribute('data-key');
-        const w = weekDays[idx];
-        const items = key ? (dateMap[key] || []) : [];
-
-        col.addEventListener('mouseenter', () => {
-            if (!tooltip) return;
-            const completedCount = items.filter(i => i.status === 'Completed').length;
-            const pendingCount = items.filter(i => i.status === 'Pending').length;
-            const failedCount = items.filter(i => i.status === 'Failed').length;
-            const totalCount = w.count !== undefined ? w.count : items.length;
-            const studentNames = Array.from(new Set(items.map(i => i.student))).slice(0, 3);
-
-            const headerText = key
-                ? new Date(key + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
-                : (w.sub || w.label);
-
-            tooltip.innerHTML = `
-                <div class="an-tt-header">${headerText}</div>
-                <div class="an-tt-row"><span style="color:#60a5fa;font-weight:700">${totalCount} Submission${totalCount !== 1 ? 's' : ''}</span></div>
-                <div class="an-tt-row"><span>Completed:</span> <strong style="color:#34d399">${completedCount}</strong></div>
-                <div class="an-tt-row"><span>Pending:</span> <strong style="color:#fbbf24">${pendingCount}</strong></div>
-                <div class="an-tt-row"><span>Failed:</span> <strong style="color:#f87171">${failedCount}</strong></div>
-                ${studentNames.length > 0 ? `<div class="an-tt-students"><div class="an-tt-st-head">Top Students:</div><div class="an-tt-st-list">• ${studentNames.join('<br>• ')}</div></div>` : ''}
-                <div style="font-size:0.68rem;color:#94a3b8;margin-top:0.4rem;font-style:italic">Click to filter table by this period</div>
-            `;
-            tooltip.classList.remove('hidden');
-        });
-
-        col.addEventListener('mousemove', (e) => {
-            if (!tooltip) return;
-            const cardRect = container.closest('.an-chart-card').getBoundingClientRect();
-            tooltip.style.left = `${Math.max(8, Math.min(e.clientX - cardRect.left + 10, cardRect.width - tooltip.offsetWidth - 8))}px`;
-            tooltip.style.top = `${Math.max(e.clientY - cardRect.top - 130, 10)}px`;
-        });
-
-        col.addEventListener('mouseleave', () => { if (tooltip) tooltip.classList.add('hidden'); });
-
-        col.addEventListener('click', () => {
-            if (tooltip) tooltip.classList.add('hidden');
-            if (key) {
-                const dateInput = $id('filter-date');
-                if (dateInput) { dateInput.value = key; applyAnalyticsFilters(); }
-                $qs('.an-table-card')?.scrollIntoView({ behavior: 'smooth' });
-            }
-        });
-    });
-}
-
-function renderErrorDistributionChart(filteredActivity) {
-    const chart = $id('an-donut-chart');
-    const legend = $id('an-donut-legend');
-    const totalEl = $id('an-donut-total');
-    if (!chart || !legend) return;
-
-    // Count actual error types from real filtered data
-    const errorColorMap = {
-        'Syntax Error': '#ef4444',
-        'Logic Error': '#f59e0b',
-        'Missing END': '#f97316',
-        'Indentation Error': '#10b981',
-        'Type Error': '#3b82f6',
-        'Other': '#8b5cf6'
-    };
-    const knownTypes = Object.keys(errorColorMap);
-    const counts = {};
-    knownTypes.forEach(t => counts[t] = 0);
-
-    filteredActivity.forEach(a => {
-        if (!a.errorType || a.errorType.trim() === '') return;
-        const t = a.errorType.trim();
-        if (counts[t] !== undefined) counts[t]++;
-        else counts['Other']++;
-    });
-
-    const totalErrors = Object.values(counts).reduce((s, v) => s + v, 0);
-
-    // If no errors in filtered set, show a neutral grey ring
-    if (totalErrors === 0) {
-        if (totalEl) totalEl.textContent = '0';
-        chart.style.background = '#1e1e2e';
-        chart.setAttribute('role', 'img');
-        chart.setAttribute('aria-label', 'Error distribution: no errors in the selected period');
-        legend.innerHTML = `<div style="color:var(--text-secondary);font-size:0.82rem;padding:0.5rem">No errors in selected period.</div>`;
-        return;
-    }
-
-    if (totalEl) totalEl.textContent = totalErrors;
-
-    const categories = knownTypes
-        .filter(t => counts[t] > 0)
-        .map(t => ({
-            name: t,
-            color: errorColorMap[t],
-            count: counts[t],
-            pct: Math.round((counts[t] / totalErrors) * 100)
-        }));
-
-    // Adjust rounding so percentages sum to 100
-    const pctSum = categories.reduce((s, c) => s + c.pct, 0);
-    if (pctSum !== 100 && categories.length > 0) {
-        categories[0].pct += (100 - pctSum);
-    }
-
-    let currentDeg = 0;
-    const gradientStops = [];
-    const legendItemsHtml = [];
-
-    categories.forEach(cat => {
-        const deg = (cat.pct / 100) * 360;
-        const nextDeg = currentDeg + deg;
-        gradientStops.push(`${cat.color} ${currentDeg.toFixed(1)}deg ${nextDeg.toFixed(1)}deg`);
-        currentDeg = nextDeg;
-        legendItemsHtml.push(`
-            <div class="an-donut-item">
-                <div class="an-donut-dot-wrap">
-                    <span class="an-donut-dot" style="background:${cat.color}"></span>
-                    <span style="font-size:0.8rem;color:var(--text-secondary)">${cat.name}</span>
-                </div>
-                <span class="an-donut-val" style="font-size:0.8rem;font-weight:700;color:var(--text-primary)">${cat.pct}% <span style="font-weight:400;color:var(--text-muted)">(${cat.count})</span></span>
-            </div>
-        `);
-    });
-
-    chart.style.background = `conic-gradient(${gradientStops.join(', ')})`;
-    legend.innerHTML = legendItemsHtml.join('');
-
-    // Accessible text equivalent: percentages + counts are announced for
-    // users who cannot perceive the color-only donut.
-    chart.setAttribute('role', 'img');
-    chart.setAttribute('aria-label',
-        'Error distribution: ' + categories.map(c => `${c.name} ${c.pct}% (${c.count})`).join(', '));
-}
-
 function analyticsPageNav(dir) {
     analyticsCurrentPage += dir;
     renderFilteredActivityTable(currentFilteredActivity);
+}
+
+function analyticsStudentNumber(record) {
+    const student = (cachedUsers || []).find(user => user.role === 'student' && (
+        [user.id, user._docId].filter(Boolean).includes(record.studentAccountId || record.studentId) ||
+        (record.studentId && [user.studentNumber, user.studentId].includes(record.studentId)) ||
+        (record.username && user.username === record.username)
+    ));
+    return student ? readStudentNumber(student) : readStudentNumber(record);
 }
 
 function renderFilteredActivityTable(activityList) {
@@ -4629,7 +4857,7 @@ function renderFilteredActivityTable(activityList) {
               <span class="an-user-name">${a.student || '—'}</span>
             </div>
           </td>
-          <td class="an-cell-muted an-cell-mono">${a.studentId || '—'}</td>
+          <td class="an-cell-muted an-cell-mono">${anEsc(analyticsStudentNumber(a))}</td>
           <td class="an-cell-secondary">${a.exercise || '—'}</td>
           <td>${diffBadge(a.difficulty)}</td>
           <td>${anStatusBadge(a.status)}</td>
@@ -4663,7 +4891,7 @@ function viewSubmissionDetail(docId) {
 
     // Info fields
     setText('sdm-student', a.student || '—');
-    setText('sdm-student-id', a.studentId || '—');
+    setText('sdm-student-id', analyticsStudentNumber(a));
     setText('sdm-exercise', a.exercise || '—');
     setText('sdm-date', dateStr);
     setText('sdm-proc-time', a.processingTime || '—');
@@ -4839,6 +5067,552 @@ document.addEventListener('keydown', event => {
 });
 
 
+/* ============================================================
+   ANALYTICS CHARTS — hand-rolled Recharts-style SVG renderers
+   No React, no recharts, no external deps. Pure geometry from
+   src/analytics/aggregation.js + src/analytics/geometry.js is
+   applied to real (instructor-scoped) activity records.
+   ============================================================ */
+
+var analyticsPieActiveName = null;
+
+function anChartPalette() {
+    return ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
+}
+
+function renderAnalyticsCharts(filteredActivity) {
+    ['an-trajectory-svg', 'an-submissions-svg', 'an-error-svg'].forEach(id => {
+        const plot = $id(id);
+        if (plot) {
+            plot.setAttribute('aria-busy', 'false');
+            plot.removeAttribute('aria-describedby');
+            anHideTooltip(plot.closest('.an-chart-card')?.querySelector('.an-svg-tooltip'));
+        }
+    });
+    setText('an-live-status', 'Showing recorded submissions for the selected filters.');
+    try {
+        renderTrajectoryChart(filteredActivity);
+    } catch (e) {
+        console.error('[Analytics] trajectory render failed:', e);
+        showChartError('an-trajectory-svg', anErrMessage(e));
+    }
+    try {
+        renderSubmissionActivityChart(filteredActivity);
+    } catch (e) {
+        console.error('[Analytics] submission activity render failed:', e);
+        showChartError('an-submissions-svg', anErrMessage(e));
+    }
+    try {
+        renderErrorDistributionChart(filteredActivity);
+    } catch (e) {
+        console.error('[Analytics] error distribution render failed:', e);
+        showChartError('an-error-svg', anErrMessage(e));
+    }
+}
+
+function anErrMessage(e) {
+    return (e && e.message) ? String(e.message) : 'Unable to render chart data.';
+}
+
+function showChartError(plotId, message) {
+    const plot = $id(plotId);
+    if (plot) {
+        plot.setAttribute('aria-busy', 'false');
+        plot.innerHTML = `<p class="an-chart-empty" role="status">${anEsc(message)}</p>`;
+    }
+}
+
+function showAnalyticsLoading() {
+    setText('an-live-status', 'Loading analytics…');
+    ['an-trajectory-svg', 'an-submissions-svg', 'an-error-svg'].forEach(id => {
+        const plot = $id(id);
+        if (!plot) return;
+        plot.setAttribute('aria-busy', 'true');
+        plot.innerHTML = '<div class="an-chart-skeleton" role="status"><span class="sr-only">Loading chart data</span></div>';
+    });
+}
+
+function anEmptyHtml(message, hint) {
+    return `<div class="an-chart-empty"><p class="an-chart-empty-title">${message}</p>` +
+        (hint ? `<p class="an-chart-empty-hint">${hint}</p>` : '') + '</div>';
+}
+
+function anEnsureTooltip(card) {
+    if (!card) return null;
+    let tip = card.querySelector('.an-svg-tooltip');
+    if (!tip) {
+        tip = document.createElement('div');
+        tip.className = 'an-svg-tooltip hidden';
+        card.appendChild(tip);
+    }
+    return tip;
+}
+
+function anShowTooltip(tip, event, html, card) {
+    if (!tip) return;
+    tip.innerHTML = html;
+    tip.classList.remove('hidden');
+    const cardRect = card.getBoundingClientRect();
+    const targetRect = event.target?.getBoundingClientRect();
+    const left = (event.clientX ?? targetRect?.left ?? cardRect.left) - cardRect.left + 12;
+    const top = (event.clientY ?? targetRect?.top ?? cardRect.top) - cardRect.top - 12;
+    tip.style.left = Math.max(8, Math.min(left, cardRect.width - tip.offsetWidth - 8)) + 'px';
+    tip.style.top = Math.max(8, Math.min(top, cardRect.height - tip.offsetHeight - 8)) + 'px';
+}
+
+function anHideTooltip(tip) {
+    if (tip) tip.classList.add('hidden');
+}
+
+/* ── Student Improvement Trajectory ───────────────────────── */
+
+function renderTrajectoryChart(records) {
+    const plot = $id('an-trajectory-svg');
+    if (!plot) return;
+    const card = plot.closest('.an-chart-card');
+
+    const result = buildTrajectorySeries(records || [], { maxStudents: 5, maxSessions: 8 });
+    const maxAttempts = result.maxAttempts;
+    if (maxAttempts === 0 || !result.series.some(s => s.points.some(p => p.y != null))) {
+        plot.innerHTML = anEmptyHtml('Not enough completed submissions yet.',
+            'The improvement trajectory appears once students have graded attempts.');
+        if (card) {
+            const legend = card.querySelector('#an-trajectory-legend');
+            if (legend) legend.innerHTML = '';
+        }
+        return;
+    }
+
+    const viewW = 560, viewH = 260;
+    const margin = { left: 40, right: 18, top: 18, bottom: 30 };
+    const plotW = viewW - margin.left - margin.right;
+    const plotH = viewH - margin.top - margin.bottom;
+    const xMax = Math.max(maxAttempts - 1, 1);
+    const xFor = linearScale([0, xMax], [margin.left, margin.left + plotW]);
+    const yFor = linearScale([0, 100], [margin.top + plotH, margin.top]);
+    const baseline = margin.top + plotH;
+
+    const gridStops = [0, 25, 50, 75, 100];
+    const grid = gridStops.map(v =>
+        `<line x1="${margin.left}" y1="${yFor(v)}" x2="${margin.left + plotW}" y2="${yFor(v)}" class="an-grid-line"/>` +
+        `<text x="${margin.left - 6}" y="${yFor(v) + 3}" text-anchor="end" class="an-axis-label">${v}</text>`
+    ).join('');
+
+    const palette = anChartPalette();
+    const seriesHtml = result.series.map((s, i) => {
+        const color = palette[i % palette.length];
+        const segments = anSplitSegments(s.points);
+        const linePaths = segments.map(seg => smoothPath(seg, xFor, yFor)).filter(Boolean).join('');
+        const dots = s.points.map(p => p.y == null ? '' :
+            `<circle tabindex="0" aria-label="${anAttr(s.name + ', attempt ' + (p.x + 1) + ', score ' + p.y + ', ' + p.date)}" data-name="${anAttr(s.name)}" data-x="${p.x}" data-y="${p.y}" data-date="${p.date}" data-score="${anAttr(p.score || '')}" cx="${xFor(p.x)}" cy="${yFor(p.y)}" r="4" class="an-series-dot" fill="${color}"/>`).join('');
+        return `<g class="an-series" data-name="${anAttr(s.name)}">
+            <path d="${linePaths}" class="an-trajectory-line" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/>
+            ${dots}
+        </g>`;
+    }).join('');
+
+    const classLine = result.classAverage.filter(p => p.y != null);
+    const classPath = anSplitSegments(result.classAverage).map(segment => smoothPath(segment, xFor, yFor)).join(' ');
+    const classDots = classLine.map(p => p.y == null ? '' :
+        `<circle cx="${xFor(p.x)}" cy="${yFor(p.y)}" r="3" class="an-class-dot"/>`).join('');
+
+    const xLabels = [];
+    for (let x = 0; x < Math.min(maxAttempts, 8); x++) {
+        xLabels.push(`<text x="${xFor(x)}" y="${baseline + 16}" text-anchor="middle" class="an-axis-label">#${x + 1}</text>`);
+    }
+
+    plot.innerHTML = `
+        <svg class="an-svg an-trajectory-svg" viewBox="0 0 ${viewW} ${viewH}" role="img"
+             aria-label="${anAttr(anTrajectoryAriaLabel(result, gridStops))}"
+             preserveAspectRatio="xMidYMid meet">
+            ${grid}
+            ${classPath ? `<g class="an-class-series">
+                <path d="${classPath}" fill="none" class="an-class-line" vector-effect="non-scaling-stroke"/>
+                ${classDots}
+            </g>` : ''}
+            ${seriesHtml}
+            ${xLabels}
+        </svg>`;
+
+    const legend = card ? card.querySelector('#an-trajectory-legend') : null;
+    if (legend) {
+        legend.innerHTML = result.series.map((s, i) => {
+            const color = palette[i % palette.length];
+            const first = s.points.find(p => p.y != null);
+            const last = s.points.reduce((acc, p) => (p.y != null ? p : acc), null);
+            const delta = (first && last) ? (last.y - first.y) : 0;
+            const trend = delta > 0 ? '↑' : delta < 0 ? '↓' : '→';
+            return `<button type="button" class="an-legend-chip" data-name="${anAttr(s.name)}" onfocus="setTrajectoryHighlight(this)" onblur="setTrajectoryHighlight(null)" onmouseenter="setTrajectoryHighlight(this)" onmouseleave="setTrajectoryHighlight(null)">
+                <span class="an-legend-dot" style="background:${color}"></span>
+                <span class="an-legend-name">${anEsc(s.name)}</span>
+                <span class="an-legend-trend an-trend-${delta >= 0 ? 'up' : 'down'}">${trend}${delta != null ? Math.abs(delta) : 0}</span>
+            </button>`;
+        }).join('') +
+        '<div class="an-legend-note">Dashed grey line = class average.</div>';
+    }
+
+    anTrajectoryAriaDescribe(result, card, gridStops);
+    anBindTrajectoryInteractions(plot, card, result);
+}
+
+function anSplitSegments(points) {
+    const segments = [];
+    let current = [];
+    points.forEach(p => {
+        if (p.y == null) {
+            if (current.length) { segments.push(current); current = []; }
+        } else {
+            current.push(p);
+        }
+    });
+    if (current.length) segments.push(current);
+    return segments;
+}
+
+function anTrajectoryAriaLabel(result, gridStops) {
+    const desc = result.series.map(s => {
+        const values = s.points.filter(p => p.y != null).map(p => p.y);
+        const last = values.length ? values[values.length - 1] : '—';
+        return `${s.name}: latest ${last}`;
+    }).join('; ');
+    return `Student improvement trajectory. ${desc}. Scores from 0 to ${gridStops[gridStops.length - 1]}.`;
+}
+
+function anTrajectoryAriaDescribe(result, card, gridStops) {
+    if (!card) return;
+    let desc = card.querySelector('#an-trajectory-summary');
+    if (!desc) {
+        desc = document.createElement('p');
+        desc.className = 'sr-only';
+        desc.id = 'an-trajectory-summary';
+        card.appendChild(desc);
+    }
+    const attemptCounts = Object.create(null);
+    result.series.forEach(s => s.points.forEach(p => {
+        if (p.y == null) return;
+        const key = '# ' + (p.x + 1);
+        attemptCounts[key] = (attemptCounts[key] || []).concat(`${s.name} ${p.y}`);
+    }));
+    desc.textContent = 'Trajectory: ' + result.series.length + ' students, up to attempt ' + result.maxAttempts + '. ' +
+        Object.keys(attemptCounts).sort().map(k => `${k}: ${attemptCounts[k].join(', ')}`).join('; ');
+    const plot = card.querySelector('#an-trajectory-svg');
+    if (plot) plot.setAttribute('aria-describedby', 'an-trajectory-summary');
+}
+
+function anBindTrajectoryInteractions(plot, card, result) {
+    const tip = anEnsureTooltip(card);
+    const dots = plot.querySelectorAll('.an-series-dot');
+    const seriesByName = Object.create(null);
+    result.series.forEach(s => (seriesByName[s.name] = s));
+    dots.forEach(dot => {
+        dot.addEventListener('mouseenter', (evt) => {
+            const name = dot.getAttribute('data-name');
+            const attempt = parseInt(dot.getAttribute('data-x'), 10) + 1;
+            const score = dot.getAttribute('data-score') || dot.getAttribute('data-y') + '%';
+            const date = dot.getAttribute('data-date');
+            const s = seriesByName[name];
+            const color = anChartPalette()[s.rank % anChartPalette().length];
+            anShowTooltip(tip, evt, `
+                <div class="an-tt-header"><span class="an-tt-dot" style="background:${color}"></span>${anEsc(name)}</div>
+                <div class="an-tt-row">Attempt #${attempt}</div>
+                <div class="an-tt-row"><strong>Score ${anEsc(score)}</strong></div>
+                <div class="an-tt-row an-tt-muted">${anEsc(date || '')}</div>
+            `, card);
+        });
+        dot.addEventListener('mousemove', e => anShowTooltip(tip, e, tip.innerHTML, card));
+        dot.addEventListener('mouseleave', () => anHideTooltip(tip));
+        dot.addEventListener('focus', () => dot.dispatchEvent(new MouseEvent('mouseenter', { clientX: dot.getBoundingClientRect().left, clientY: dot.getBoundingClientRect().top })));
+        dot.addEventListener('blur', () => anHideTooltip(tip));
+    });
+}
+
+function setTrajectoryHighlight(trigger) {
+    const plot = $id('an-trajectory-svg');
+    if (!plot) return;
+    const name = trigger ? trigger.getAttribute('data-name') : null;
+    plot.querySelectorAll('.an-series').forEach(group => {
+        const matches = name && group.getAttribute('data-name') === name;
+        group.classList.toggle('highlighted', !!matches);
+        group.classList.toggle('dimmed', !!name && !matches);
+    });
+}
+
+/* ── Submission Activity (area chart) ──────────────────────── */
+
+function renderSubmissionActivityChart(records) {
+    const plot = $id('an-submissions-svg');
+    if (!plot) return;
+    const card = plot.closest('.an-chart-card');
+
+    const series = buildSubmissionSeries(records || [], {
+        monthVal: $id('filter-month')?.value ?? '',
+        weekVal: $id('filter-week')?.value || '',
+        dateVal: $id('filter-date')?.value || '',
+        viewMode: $id('chart-view-mode')?.value || 'day'
+    });
+
+    const total = series.reduce((sum, b) => sum + b.count, 0);
+    const totalEl = card ? card.querySelector('#an-submissions-total') : null;
+    if (totalEl) totalEl.textContent = total + ' submissions in the charted period';
+
+    if (series.length === 0 || total === 0) {
+        plot.innerHTML = anEmptyHtml('No submissions match the selected period.',
+            'Adjust the filters or check back after students submit.');
+        if (card) {
+            const legend = card.querySelector('#an-submissions-total');
+            if (legend) legend.textContent = '0 submissions in the charted period';
+        }
+        return;
+    }
+
+    const viewW = 560, viewH = 260;
+    const margin = { left: 40, right: 18, top: 18, bottom: 34 };
+    const plotW = viewW - margin.left - margin.right;
+    const plotH = viewH - margin.top - margin.bottom;
+    const baseline = margin.top + plotH;
+
+    const maxCount = series.reduce((m, b) => Math.max(m, b.count), 0);
+    const yMax = niceCeil(maxCount);
+    const yStep = yMax <= 6 ? 2 : yMax <= 12 ? 2 : Math.ceil(yMax / 6);
+    const yTicks = [];
+    for (let v = yMax; v >= 0; v -= yStep) yTicks.push(v);
+    if (yTicks[yTicks.length - 1] !== 0) yTicks.push(0);
+
+    const yFor = linearScale([0, yMax], [baseline, margin.top]);
+    const xMax = Math.max(series.length - 1, 1);
+    const xFor = linearScale([0, xMax], [margin.left, margin.left + plotW]);
+
+    const grid = yTicks.map(v =>
+        `<line x1="${margin.left}" y1="${yFor(v)}" x2="${margin.left + plotW}" y2="${yFor(v)}" class="an-grid-line"/>` +
+        `<text x="${margin.left - 6}" y="${yFor(v) + 3}" text-anchor="end" class="an-axis-label">${v}</text>`
+    ).join('');
+
+    const points = series.map((b, i) => ({ x: i, y: b.count }));
+    const linePath = smoothPath(points, xFor, yFor);
+    const fillPath = areaPath(points, xFor, yFor, baseline);
+
+    const barsForAria = series.map(b => `${b.sub} (${b.label}): ${b.count}`).join('; ');
+    const xLabels = series.map((b, i) =>
+        `<text x="${xFor(i)}" y="${baseline + 16}" text-anchor="middle" class="an-axis-label an-axis-label-x">${anEsc(b.sub)}</text>`
+    ).join('');
+
+    const dots = series.map((b, i) =>
+        `<circle tabindex="0" role="button" aria-label="${anAttr(b.sub + ': ' + b.count + ' submissions; filter this period')}" data-label="${anAttr(b.label)}" data-sub="${anAttr(b.sub)}" data-count="${b.count}" data-key="${b.dateKey || ''}"`
+        + ` cx="${xFor(i)}" cy="${yFor(b.count)}" r="4" class="an-area-dot" fill="var(--chart-1)"/>`).join('');
+
+    plot.innerHTML = `
+        <svg class="an-svg an-area-svg" viewBox="0 0 ${viewW} ${viewH}" role="img"
+             aria-label="${anAttr('Area chart of submissions per period: ' + barsForAria)}"
+             preserveAspectRatio="xMidYMid meet">
+            <defs>
+                <linearGradient id="an-area-grad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="var(--chart-1)" stop-opacity="0.28"/>
+                    <stop offset="100%" stop-color="var(--chart-1)" stop-opacity="0.02"/>
+                </linearGradient>
+            </defs>
+            ${grid}
+            <path d="${fillPath}" fill="url(#an-area-grad)"/>
+            <path d="${linePath}" fill="none" class="an-area-line" vector-effect="non-scaling-stroke"/>
+            ${dots}
+            ${xLabels}
+        </svg>`;
+
+    anAreaAriaDescribe(card, total);
+    anBindAreaInteractions(plot, card, series, points, xFor, yFor);
+}
+
+function anAreaAriaDescribe(card, total) {
+    if (!card) return;
+    const plot = card.querySelector('#an-submissions-svg');
+    if (!plot) return;
+    let desc = card.querySelector('#an-area-summary');
+    if (!desc) {
+        desc = document.createElement('p');
+        desc.className = 'sr-only';
+        desc.id = 'an-area-summary';
+        card.appendChild(desc);
+    }
+    desc.textContent = 'Total submissions this period: ' + total + '.';
+    plot.setAttribute('aria-describedby', 'an-area-summary');
+}
+
+function anBindAreaInteractions(plot, card, series, points, xFor, yFor) {
+    const tip = anEnsureTooltip(card);
+    const dots = plot.querySelectorAll('.an-area-dot');
+    dots.forEach((dot, i) => {
+        const b = series[i];
+        dot.addEventListener('mouseenter', (evt) => {
+            anShowTooltip(tip, evt, `
+                <div class="an-tt-header">${anEsc(b.label)} — ${anEsc(b.sub)}</div>
+                <div class="an-tt-row"><strong>${b.count} submission${b.count !== 1 ? 's' : ''}</strong></div>
+                ${b.dateKey ? '<div class="an-tt-row an-tt-muted">Click to filter table</div>' : ''}
+            `, card);
+        });
+        dot.addEventListener('mousemove', e => anShowTooltip(tip, e, tip.innerHTML, card));
+        dot.addEventListener('mouseleave', () => anHideTooltip(tip));
+        dot.addEventListener('focus', () => dot.dispatchEvent(new MouseEvent('mouseenter', { clientX: dot.getBoundingClientRect().left, clientY: dot.getBoundingClientRect().top })));
+        dot.addEventListener('blur', () => anHideTooltip(tip));
+        dot.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dot.dispatchEvent(new MouseEvent('click')); }
+        });
+        dot.addEventListener('click', () => {
+            if (!b.dateKey) {
+                if (b.weekRange && $id('filter-week')) {
+                    $id('filter-week').value = String(b.weekRange.w);
+                    applyAnalyticsFilters();
+                }
+                return;
+            }
+            const dateInput = $id('filter-date');
+            if (dateInput) {
+                dateInput.value = b.dateKey;
+                applyAnalyticsFilters();
+                $qs('.an-table-card')?.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+    });
+}
+
+/* ── Error Distribution (inline-pie / donut) ───────────────── */
+
+function renderErrorDistributionChart(records) {
+    const plot = $id('an-error-svg');
+    if (!plot) return;
+    const card = plot.closest('.an-chart-card');
+    const dist = buildErrorDistribution(records || []);
+    if (!dist.categories.some(cat => cat.name === analyticsPieActiveName)) analyticsPieActiveName = null;
+    const selector = $id('an-error-select');
+    if (selector) {
+        selector.innerHTML = '<option value="">All error types</option>' + dist.categories.map(cat => `<option value="${anAttr(cat.name)}">${anEsc(cat.name)}</option>`).join('');
+        selector.value = analyticsPieActiveName || '';
+        selector.disabled = dist.total === 0;
+    }
+    const totalEl = card ? card.querySelector('#an-error-total') : null;
+
+    if (totalEl) totalEl.textContent = String(dist.total);
+
+    if (dist.total === 0) {
+        plot.innerHTML = anEmptyHtml('No errors in the selected period.',
+            'Error distribution appears once failing submissions are recorded.');
+        const legend = card ? card.querySelector('#an-error-legend') : null;
+        if (legend) legend.innerHTML = '<div class="an-legend-note">Clean code — no errors recorded.</div>';
+        return;
+    }
+
+    const size = 240;
+    const cx = size / 2, cy = size / 2;
+    const outerR = 96, innerR = 58;
+    const palette = anChartPalette();
+
+    let cursor = 0;
+    const slices = dist.categories.map((cat, i) => {
+        const sweep = (cat.count / dist.total) * Math.PI * 2;
+        const start = -Math.PI / 2 + cursor;
+        const end = start + sweep;
+        cursor += sweep;
+        const color = palette[i % palette.length];
+        const path = arcPath(cx, cy, outerR, innerR, start, end);
+        const active = analyticsPieActiveName === cat.name;
+        const dimmed = analyticsPieActiveName && !active;
+        const explode = active ? 6 : 0;
+        const tx = explode * Math.cos(start + sweep / 2);
+        const ty = explode * Math.sin(start + sweep / 2);
+        const c = sliceCentroid(cx, cy, outerR, innerR, start, end);
+        return {
+            cat,
+            path,
+            start,
+            end,
+            color,
+            active,
+            dimmed,
+            tx,
+            ty,
+            c,
+            labelX: c.x + (c.x > cx ? 12 : -12),
+            labelAnchor: c.x >= cx ? 'start' : 'end'
+        };
+    });
+
+    const sliceHtml = slices.map(s =>
+        `<path data-name="${anAttr(s.cat.name)}" data-count="${s.cat.count}" data-pct="${s.cat.pct}"
+               d="${s.path}" class="an-pie-slice ${s.active ? 'active' : ''} ${s.dimmed ? 'dimmed' : ''}"
+               transform="translate(${s.tx} ${s.ty})" tabindex="0" role="button"
+               aria-label="${anAttr(s.cat.name + ', ' + s.cat.pct + ' percent')}"
+               style="--slice-color:${s.color}"/>`).join('');
+
+    plot.innerHTML = `
+        <svg class="an-svg an-pie-svg" viewBox="0 0 ${size} ${size}" role="img"
+             aria-label="${anAttr('Error distribution: ' + dist.categories.map(c => c.name + ' ' + c.pct + '% (' + c.count + ')').join(', '))}"
+             preserveAspectRatio="xMidYMid meet">
+            ${sliceHtml}
+            <text x="${cx}" y="${cy - 4}" text-anchor="middle" class="an-pie-center-num">${dist.total}</text>
+            <text x="${cx}" y="${cy + 14}" text-anchor="middle" class="an-pie-center-label">errors</text>
+        </svg>`;
+
+    const legend = card ? card.querySelector('#an-error-legend') : null;
+    if (legend) {
+        legend.innerHTML = dist.categories.map((cat, i) => {
+            const color = palette[i % palette.length];
+            return `<button type="button" class="an-legend-chip" data-name="${anAttr(cat.name)}" onclick="toggleErrorSlice('${anAttr(cat.name)}')">
+                <span class="an-legend-dot" style="background:${color}"></span>
+                <span class="an-legend-name">${anEsc(cat.name)}</span>
+                <span class="an-legend-val">${cat.pct}% (${cat.count})</span>
+            </button>`;
+        }).join('');
+    }
+
+    anBindPieInteractions(plot, card, slices);
+}
+
+function toggleErrorSlice(name) {
+    analyticsPieActiveName = analyticsPieActiveName === name ? null : name;
+    const records = typeof currentFilteredActivity !== 'undefined' ? currentFilteredActivity : [];
+    renderErrorDistributionChart(records);
+    const legend = $id('an-error-legend');
+    if (legend) legend.querySelectorAll('.an-legend-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.getAttribute('data-name') === analyticsPieActiveName);
+    });
+}
+
+function anBindPieInteractions(plot, card, slices) {
+    const tip = anEnsureTooltip(card);
+    const byName = {};
+    slices.forEach(s => (byName[s.cat.name] = s));
+    plot.querySelectorAll('.an-pie-slice').forEach(path => {
+        path.addEventListener('click', () => toggleErrorSlice(path.getAttribute('data-name')));
+        path.addEventListener('mouseenter', (evt) => {
+            const name = path.getAttribute('data-name');
+            const count = path.getAttribute('data-count');
+            const pct = path.getAttribute('data-pct');
+            anShowTooltip(tip, evt, `
+                <div class="an-tt-header">${anEsc(name)}</div>
+                <div class="an-tt-row"><strong>${count} error${count !== '1' ? 's' : ''}</strong></div>
+                <div class="an-tt-row an-tt-muted">${pct}% of recorded errors</div>
+            `, card);
+        });
+        path.addEventListener('mousemove', e => anShowTooltip(tip, e, tip.innerHTML, card));
+        path.addEventListener('mouseleave', () => anHideTooltip(tip));
+        path.addEventListener('focus', () => path.dispatchEvent(new MouseEvent('mouseenter', { clientX: path.getBoundingClientRect().left, clientY: path.getBoundingClientRect().top })));
+        path.addEventListener('blur', () => anHideTooltip(tip));
+        path.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleErrorSlice(path.getAttribute('data-name'));
+            }
+        });
+    });
+}
+
+/* ── Shared SVG string helpers ────────────────────────────── */
+
+function anAttr(value) {
+    return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function anEsc(value) {
+    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 /* ============================================================
    STUDENT SETTINGS & PASSWORD CHANGE
    ============================================================ */
@@ -9583,9 +10357,9 @@ if (typeof document !== 'undefined') {
    LEGAL / ABOUT PAGES (Privacy Policy, Terms of Use)
    In-app document views reachable before and after sign-in.
    Content lives in the index.html #legal-pages sections and
-   reflects the application's actual data practices. Owner-
-   provided organization / contact / effective-date values come
-   from APP_INFO; missing values render as marked placeholders.
+   reflects the application's actual data practices. Values come
+   from APP_INFO (single source). Missing owner values are shown
+   to developers only; production omits unfinished rows.
    ============================================================ */
 
 let legalReturnState = null;
@@ -9628,11 +10402,13 @@ function closeLegalPage() {
     }
 }
 
-/** Fill APP_INFO-driven values and surface pending-owner markers. */
+/** Fill APP_INFO-driven values. Configured fields always render; missing
+ *  fields render a development marker on localhost and are hidden in
+ *  production so the public never sees "[pending owner configuration]". */
 function renderLegalPlaceholders() {
-    const set = (id, value) => {
+    const set = (id, value, key) => {
         const el = $id(id);
-        if (el) el.textContent = appInfoField(value);
+        if (el) el.textContent = appInfoField(value, key);
     };
     set('legal-app-name', APP_INFO.name);
     set('legal-app-name-2', APP_INFO.name);
@@ -9642,32 +10418,55 @@ function renderLegalPlaceholders() {
     set('legal-team', team);
     set('legal-version', APP_INFO.version ? 'v' + APP_INFO.version : '');
     set('legal-collections', (APP_INFO.collections || []).join(', '));
-    set('legal-contact', APP_INFO.contactEmail);
-    set('legal-contact-2', APP_INFO.contactEmail);
-    set('legal-contact-3', APP_INFO.contactEmail);
-    set('legal-contact-4', APP_INFO.contactEmail);
-    set('legal-privacy-date', APP_INFO.privacyEffectiveDate);
-    set('legal-terms-date', APP_INFO.termsEffectiveDate);
+    set('legal-contact', APP_INFO.contactEmail, 'contactEmail');
+    set('legal-contact-2', APP_INFO.contactEmail, 'contactEmail');
+    set('legal-contact-3', APP_INFO.contactEmail, 'contactEmail');
+    set('legal-contact-4', APP_INFO.contactEmail, 'contactEmail');
+    set('legal-privacy-date', APP_INFO.privacyEffectiveDate, 'privacyEffectiveDate');
+    set('legal-terms-date', APP_INFO.termsEffectiveDate, 'termsEffectiveDate');
+
+    // Hide the whole wrapping line when a required owner value is missing in
+    // production (appInfoField returned an empty string).
+    const rowPairs = [
+        ['legal-privacy-date-row', 'legal-privacy-date'],
+        ['legal-terms-date-row', 'legal-terms-date'],
+        ['legal-contact-row-1', 'legal-contact'],
+        ['legal-contact-row-2', 'legal-contact-2'],
+        ['legal-contact-row-3', 'legal-contact-3'],
+        ['legal-contact-row-4', 'legal-contact-4']
+    ];
+    rowPairs.forEach(pair => {
+        const row = $id(pair[0]);
+        const span = $id(pair[1]);
+        if (row && span) {
+            row.classList.toggle('hidden', String(span.textContent).trim() === '');
+        }
+    });
 
     set('about-app-name', APP_INFO.name);
     set('about-app-version', APP_INFO.version ? 'v' + APP_INFO.version : '');
     set('about-app-description', APP_INFO.description);
     set('about-org', APP_INFO.organization);
-    const founder = APP_INFO.founder || '';
-    const coFounder = APP_INFO.coFounder || '';
-    const tech = (APP_INFO.technicalTeam || []).join(', ');
-    set('about-team', 'Founder: ' + founder + (coFounder ? ' \u00b7 Co-Founder: ' + coFounder : '') + (tech ? ' \u00b7 Technical Team: ' + tech : ''));
-    set('about-contact', APP_INFO.contactEmail);
+    set('about-founder', APP_INFO.founder || '—');
+    set('about-cofounder', APP_INFO.coFounder || '—');
+    set('about-tech', (APP_INFO.technicalTeam || []).map(n => n || '').filter(Boolean).join(', ') || '—');
+    set('about-contact', APP_INFO.contactEmail, 'contactEmail');
+    const aboutContactRow = $id('about-contact-row');
+    if (aboutContactRow) {
+        aboutContactRow.classList.toggle('hidden', !appInfoField(APP_INFO.contactEmail, 'contactEmail'));
+    }
 
+    // Development-only warning: list the exact fields still missing. Hidden in
+    // production and hidden entirely once configuration is complete.
+    const missing = appInfoMissingFields();
     const pending = $id('legal-pending-notice');
     if (pending) {
-        pending.classList.toggle('hidden', !appInfoPending());
+        pending.classList.toggle('hidden', !(missing.length > 0 && appIsDevelopment()));
         const intro = $id('legal-pending-text');
         if (intro) {
-            intro.textContent = 'Project ownership is confirmed. Organization details, '
-                + 'official contact information, and effective dates must still be '
-                + 'reviewed before public launch. Fields marked '
-                + '\u201c[pending owner configuration]\u201d are not yet finalized.';
+            intro.textContent = missing.length > 0
+                ? 'Before public launch, complete: ' + missing.map(m => m.label).join(', ') + '. Hidden from public visitors until provided.'
+                : '';
         }
     }
 }

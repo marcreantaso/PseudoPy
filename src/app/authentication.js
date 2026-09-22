@@ -174,6 +174,7 @@ async function handleLogin() {
 }
 
 function handleLogout() {
+    if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     // Invalidate session state
     currentUser = null;
     currentPage = '';

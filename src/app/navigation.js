@@ -44,7 +44,9 @@ function navigateTo(pageId) {
     setText('topbar-title', PAGE_TITLES[pageId] || 'Dashboard');
 
     // Load page-specific data (async)
-    if (pageId === 'analytics') loadAnalytics();
+    if (pageId === 'analytics') {
+        loadAnalytics();
+    }
     if (pageId === 'manage-exercises') loadExercises();
     if (pageId === 'manage-users') loadUsers();
     if (pageId === 'manage-students') loadStudents();
@@ -53,8 +55,11 @@ function navigateTo(pageId) {
     if (pageId === 'password-requests') {
         startAuditLogRealtime();
         loadPasswordRequests();
-    } else if (auditLogUnsubscribe) {
+    } else if (typeof auditLogUnsubscribe !== 'undefined' && auditLogUnsubscribe) {
         stopAuditLogRealtime();
+    }
+    if (pageId !== 'analytics') {
+        if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     }
     if (pageId === 'password-recovery') loadPasswordRecovery();
     if (pageId === 'compiler-metrics') loadCompilerMetrics();

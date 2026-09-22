@@ -161,7 +161,7 @@
             </button>
           </div>
 
-          <div class="login-footer-text">
+          <footer class="login-footer-text">
             <span id="login-copyright">PseudoPy &copy; 2026</span>
             <span class="legal-links">
               <button type="button" onclick="showLegalPage('privacy')">Privacy</button>
@@ -170,8 +170,8 @@
               <span class="legal-links-sep" aria-hidden="true">&middot;</span>
               <button type="button" onclick="showLegalPage('about')">About</button>
             </span>
-            <span id="login-version" style="display:block; margin-top:0.25rem; font-size:0.8rem;"></span>
-          </div>
+            <span id="login-version"></span>
+          </footer>
         </div>
 
         <!-- ── Forgot Password Panel (hidden by default) ── -->
@@ -943,58 +943,68 @@
         </div>
 
         <!-- Charts Row -->
+        <p id="an-live-status" class="an-chart-subtitle" role="status"></p>
         <div class="an-charts-row">
-          <!-- Bar Chart -->
-          <div class="an-chart-card an-grow-wide">
+          <!-- Student Improvement Trajectory -->
+          <div class="an-chart-card an-trajectory-card">
             <div class="an-chart-header">
               <div>
-<div class="an-chart-title">Student Submission
-                  Activity
-                  <span class="an-info-badge" title="Shows the number of student submissions per day"><i data-lucide="info" aria-hidden="true"></i></span>
+                <div class="an-chart-title">Student Improvement Trajectory
+                  <span class="an-info-badge" title="Score trend per student across their most recent attempts"><i data-lucide="trending-up" aria-hidden="true"></i></span>
+                </div>
+                <div class="an-chart-subtitle">Each line tracks one student&rsquo;s score across their
+                  latest eight attempts (up to five most active students). Unscored attempts are gaps;
+                  the dashed line averages available scores across all students.</div>
+              </div>
+            </div>
+            <div class="an-chart-plot an-trajectory-plot" id="an-trajectory-svg"></div>
+            <div class="an-svg-legend" id="an-trajectory-legend"></div>
+            <div class="an-chart-footer"><i data-lucide="info" aria-hidden="true"></i> Hover any point to see the exact score and date for that attempt.</div>
+          </div>
+
+          <!-- Submission Activity (area) -->
+          <div class="an-chart-card an-area-card">
+            <div class="an-chart-header">
+              <div>
+                <div class="an-chart-title">Student Submission Activity
+                  <span class="an-info-badge" title="Shows the number of student submissions per period"><i data-lucide="bar-chart-3" aria-hidden="true"></i></span>
                 </div>
                 <div class="an-chart-subtitle" id="an-chart-sub-label">Shows
-                  the number of student submissions based on the selected week.</div>
+                  the number of student submissions based on the selected filters.</div>
               </div>
               <div class="an-view-toggle">
                 <span style="font-size:0.8rem;color:var(--text-muted)">View by:</span>
                 <select id="chart-view-mode" class="an-input" style="width:auto;padding:0.25rem 0.5rem;font-size:0.8rem"
                   onchange="applyAnalyticsFilters()">
                   <option value="day" selected>Day</option>
-                  <option value="week">Week</option>
                   <option value="month">Month</option>
                 </select>
               </div>
             </div>
-            <div class="an-bar-chart-wrap">
-              <div class="an-bar-y-axis" id="an-bar-y-axis"></div>
-              <div class="an-bar-chart-area" id="chart-submissions"></div>
-            </div>
-            <div class="an-chart-footer"><i data-lucide="info" aria-hidden="true"></i> Click on any bar to view detailed submissions for that day.</div>
-            <div id="an-bar-tooltip" class="an-bar-tooltip hidden"></div>
+            <div class="an-chart-plot an-area-plot" id="an-submissions-svg"></div>
+            <div class="an-svg-total" id="an-submissions-total">0</div>
+            <div class="an-chart-footer"><i data-lucide="info" aria-hidden="true"></i> Click any point to view detailed submissions for that date.</div>
           </div>
 
-          <!-- Doughnut Chart -->
-          <div class="an-chart-card an-grow">
+          <!-- Error Distribution (inline-pie) -->
+          <div class="an-chart-card an-area-card">
             <div class="an-chart-header">
               <div>
                 <div class="an-chart-title">Error Distribution
-                  <span class="an-info-badge" title="Shows the percentage distribution of error types"><i data-lucide="info" aria-hidden="true"></i></span>
+                  <span class="an-info-badge" title="Shows the percentage distribution of error types"><i data-lucide="pie-chart" aria-hidden="true"></i></span>
                 </div>
-                <div class="an-chart-subtitle">Shows the percentage
-                  distribution of error types.</div>
+                <div class="an-chart-subtitle">Share of recorded compiler
+                  errors by type.</div>
               </div>
+              <select id="an-error-select" class="an-input" aria-label="Highlight error type" onchange="toggleErrorSlice(this.value)">
+                <option value="">All error types</option>
+              </select>
             </div>
-            <div class="an-donut-wrap">
-              <div class="an-donut-chart" id="an-donut-chart">
-                <div class="an-donut-center" id="an-donut-center">
-                  <div class="an-donut-total-label">Total</div>
-                  <div class="an-donut-total-num" id="an-donut-total">0</div>
-                  <div class="an-donut-total-label">Errors</div>
-                </div>
-              </div>
-              <div class="an-donut-legend" id="an-donut-legend"></div>
+            <div class="an-pie-wrap">
+              <div class="an-pie-plot" id="an-error-svg"></div>
+              <div class="an-svg-legend" id="an-error-legend"></div>
             </div>
-            <div class="an-chart-footer"><i data-lucide="info" aria-hidden="true"></i> Percentages may not total 100% due to rounding.</div>
+            <div class="an-chart-footer"><i data-lucide="info" aria-hidden="true"></i> Click any slice or legend row to isolate that error type.</div>
           </div>
         </div>
 
@@ -1013,7 +1023,7 @@
               <thead>
                 <tr>
                   <th scope="col">Student Name</th>
-                  <th scope="col">Student ID</th>
+                  <th scope="col">Student Number</th>
                   <th scope="col">Exercise <i data-lucide="arrow-down-up" aria-hidden="true"></i></th>
                   <th scope="col">Difficulty</th>
                   <th scope="col">Status</th>
@@ -1245,7 +1255,7 @@
             <thead>
               <tr>
                 <th scope="col">Student</th>
-                <th scope="col">Student ID</th>
+                <th scope="col">Student Number</th>
                 <th scope="col">Status</th>
                 <th scope="col">Actions</th>
               </tr>
@@ -2882,14 +2892,14 @@
       <!-- ── Privacy Policy ── -->
       <section id="legal-section-privacy" aria-labelledby="privacy-h1">
         <h1 id="privacy-h1">Privacy Policy</h1>
-        <p class="legal-lead">Effective date: <span id="legal-privacy-date"></span></p>
+        <p class="legal-lead" id="legal-privacy-date-row">Effective date: <span id="legal-privacy-date"></span></p>
 
         <h2>1. Who we are</h2>
         <p>This policy applies to <strong id="legal-app-name">PseudoPy</strong>, an educational
           pseudocode-to-Python translation platform developed by
-          <strong id="legal-org"></strong>. This is a development preview; the organization and
-          contact details below must be confirmed by the system owner before public launch.</p>
-        <p>Privacy questions: <span id="legal-contact"></span></p>
+          <strong id="legal-org"></strong>. The organization and contact details below are
+          confirmed by the system owner.</p>
+        <p id="legal-contact-row-1">Privacy questions: <span id="legal-contact"></span></p>
 
         <h2>2. What information we collect</h2>
         <p>PseudoPy stores information only as needed to operate its educational features. Data is
@@ -2962,8 +2972,7 @@
           can be cleared by an administrator from the Password Requests page. Devices can be
           revoked by you or an administrator. If you want your account and its data removed,
           or have any privacy question or request, contact:
-          <span id="legal-contact-2"></span>. If no contact is configured yet, ask the project
-          owner (see the About section) before launch.</p>
+          <span id="legal-contact-2"></span>.</p>
 
         <h2>9. Your choices</h2>
         <p>You can change your password, manage authorized devices, and choose a light or dark
@@ -2975,7 +2984,7 @@
           applicable policy with your school.</p>
 
         <h2>11. Changes and contact</h2>
-        <p>We will update this policy from time to time and note the new effective date. For
+        <p id="legal-contact-row-3">We will update this policy from time to time and note the new effective date. For
           questions, contact <span id="legal-contact-3"></span>.</p>
         <p class="legal-lead">Version: <span id="legal-version"></span></p>
       </section>
@@ -2983,7 +2992,7 @@
       <!-- ── Terms of Use ── -->
       <section id="legal-section-terms" class="hidden" aria-labelledby="terms-h1">
         <h1 id="terms-h1">Terms of Use</h1>
-        <p class="legal-lead">Effective date: <span id="legal-terms-date"></span></p>
+        <p class="legal-lead" id="legal-terms-date-row">Effective date: <span id="legal-terms-date"></span></p>
 
         <h2>1. What PseudoPy is</h2>
         <p><strong id="legal-app-name-2">PseudoPy</strong> is an educational web application that
@@ -3040,7 +3049,7 @@
           academic project, not a commercial product.</p>
 
         <h2>11. Contact</h2>
-        <p>Terms questions: <span id="legal-contact-4"></span>.</p>
+        <p id="legal-contact-row-4">Terms questions: <span id="legal-contact-4"></span>.</p>
         <p class="legal-lead">Developed by <span id="legal-team"></span>, for
           <span id="legal-org-2"></span>.</p>
       </section>
@@ -3065,18 +3074,28 @@
             <span class="detail-label">Organization</span>
             <span class="detail-value" id="about-org">—</span>
           </div>
-          <div class="profile-detail-row">
-            <span class="detail-label">Development team</span>
-            <span class="detail-value" id="about-team">—</span>
+          <div class="about-team-group">
+            <span class="detail-label">Project Team</span>
+            <div class="about-team-details">
+              <div class="profile-detail-row">
+                <span class="detail-label">Founder</span>
+                <span class="detail-value" id="about-founder">—</span>
+              </div>
+              <div class="profile-detail-row">
+                <span class="detail-label">Co-Founder</span>
+                <span class="detail-value" id="about-cofounder">—</span>
+              </div>
+              <div class="profile-detail-row">
+                <span class="detail-label">Technical Team</span>
+                <span class="detail-value" id="about-tech">—</span>
+              </div>
+            </div>
           </div>
-          <div class="profile-detail-row">
+          <div class="profile-detail-row" id="about-contact-row">
             <span class="detail-label">Contact</span>
             <span class="detail-value" id="about-contact">—</span>
           </div>
         </div>
-        <p class="legal-lead">If the contact value above reads &ldquo;[pending owner
-          configuration]&rdquo;, the system owner has not yet published a contact address for
-          this application.</p>
       </section>
     </div>
   </div>
