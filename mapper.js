@@ -128,5 +128,4 @@ class NaturalLanguageMapper {
 
 // Global instance
 const nlpMapper = new NaturalLanguageMapper();
-console.log('[Mapper] NaturalLanguageMapper initialized.');
 

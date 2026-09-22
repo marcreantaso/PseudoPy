@@ -517,7 +517,6 @@ class MetricsEngine {
 
 // ── Global Instance ──
 const metricsEngine = new MetricsEngine();
-console.log('[Metrics] MetricsEngine v2 initialized. Session:', metricsEngine.sessionId);
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { MetricsEngine, metricsEngine };
