@@ -52,4 +52,4 @@ The suite checks operator results against CPython, malformed input rejection, ne
 
 Navigation behavior is tested using a DOM test harness for each role at 320, 768, 1023, 1024 and 1440 pixels, including Escape, focus trapping and resize cleanup. These are behavioral tests, not rendered browser screenshots. Browser layout, actual Skulpt execution, live authentication/database operations and PWA cache migration still require an integrated browser check before merging.
 
-The existing `node verify_app_refactor.js` suite passes 32 instructor-isolation and data checks. The existing `test_instructor_password_admin_approval.js` fails during setup with `ReferenceError: Node is not defined`, reproduced against the unchanged base `app.js`; its DOM harness needs a separate repair.
+The existing `node verify_app_refactor.js` suite passes 32 instructor-isolation and data checks. The legacy `test_instructor_password_admin_approval.js` DOM harness was removed during the dead-code cleanup (it failed at setup with `ReferenceError: Node is not defined` and its checks are superseded by the verify suite).

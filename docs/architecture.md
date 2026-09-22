@@ -6,7 +6,7 @@ Edit the feature sources in `src/`, then run `npm run build`. The root browser f
 | --- | --- |
 | `src/app/` | Role workflows, navigation, editor, exercises, analytics and account recovery |
 | `src/compiler/` | Tokens/trace, lexer, expression AST, statement parser, semantic analysis, generation and compiler facade |
-| `src/database/` | Firebase setup, password hashing, seeds, local storage, CRUD, seeding, subscriptions and facade |
+| `src/database/` | Firebase setup, password hashing, seeds, local storage, CRUD and seeding (the superseded `Database` facade class was removed; consumers call the `dbGet*/dbAdd*/dbUpdate*/dbDelete*` helpers directly) |
 | `src/devtools/` | Pipeline controls, views, inspectors, diagnostics and execution trace |
 | `src/bundles.json` | Explicit, ordered list of source files for each browser entry point |
 | `server/create-app.js` | Express middleware and application construction |
@@ -35,7 +35,7 @@ The existing storage fallback and demo-data behavior are retained. This refactor
 
 `npm start` and `npm run dev` build first. Static hosting uses the committed outputs directly. `npm run build:check` fails when outputs drift from their sources; `npm test` runs that check automatically. CI also rejects stale outputs.
 
-No extra network requests or runtime loader are introduced. Because this extraction produces identical browser bytes, the existing service-worker asset list and cache version remain valid. For future behavior changes, update service-worker cache/versioned assets as appropriate.
+The only network request introduced for the browser is the lazy `devtools.js` fetch on first entry to the DevTools surface; it is excluded from the service-worker precache so non-devtool users never download it. Browser bundles are otherwise eager with no runtime loader. The service-worker cache is versioned (`pseudopy-shell-20260922-v5`); bump `CACHE_NAME` in `sw.js` whenever the precached asset list changes.
 
 ## Verification limits
 
