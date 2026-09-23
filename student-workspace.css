@@ -1,0 +1,41 @@
+/* Student learning surfaces use the application's shared theme tokens. */
+.student-workspace { display: grid; gap: 1rem; margin-block: 1rem; min-width: 0; }
+.student-workspace > details { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); min-width: 0; }
+.student-workspace summary, .operator-guide summary { cursor: pointer; font-weight: 600; }
+.student-workspace p, .operator-guide p { line-height: 1.6; }
+.sg-tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: .75rem; }
+.sg-tabs button, .sw-stages button, .sg-content button, .sw-issue button { border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text-primary); padding: .6rem .75rem; cursor: pointer; min-height: 44px; }
+.sg-tabs button[aria-pressed="true"], .sw-stages button[aria-pressed="true"] { outline: 2px solid var(--primary); outline-offset: 1px; }
+.sg-content { max-height: 22rem; overflow: auto; overscroll-behavior: contain; padding: .5rem; }
+.sg-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.student-workspace pre, .operator-guide pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: .75rem; background: var(--bg-input); border-radius: 8px; max-height: 24rem; overflow: auto; color: var(--text-primary); }
+.sg-operators { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .5rem; }
+.sg-operators code { display: block; padding-top: .5rem; }
+.sg-tip:not(:empty), .sw-issue { border-inline-start: 3px solid var(--primary); padding: .75rem; margin-block: .5rem; }
+.sg-context:not([hidden]) { display: flex; align-items: center; gap: .75rem; padding: .75rem; border-inline-start: 3px solid var(--primary); overflow-wrap: anywhere; }
+.sg-context button { background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; min-height: 44px; padding: .5rem; }
+.sw-stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .5rem; margin-block: 1rem; }
+.sw-stages button { display: grid; gap: .4rem; text-align: start; }
+.sw-stages small { color: var(--text-secondary); }
+.sw-tokens { display: flex; flex-wrap: wrap; gap: .5rem; max-height: 20rem; overflow: auto; }
+.sw-tokens span { padding: .5rem; border: 1px solid var(--border); border-radius: 6px; }
+.sw-tree { overflow: auto; padding: 1rem; max-height: 24rem; }
+.sw-tree li { padding: .3rem; border-inline-start: 1px solid var(--border); overflow-wrap: anywhere; }
+.sw-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-block: 1rem; }
+.sw-kpis > div { display: grid; gap: .5rem; border: 1px solid var(--border); padding: 1rem; border-radius: 8px; overflow-wrap: anywhere; }
+.sw-kpis strong { font-size: 1.35rem; }
+.sw-kpis span { font-weight: 600; }
+.sw-chart { margin-top: 1rem; min-width: 0; }
+.sw-chart .an-svg { width: 100%; height: auto; min-height: 180px; }
+.sw-table { overflow-x: auto; }
+.sw-table table { width: 100%; border-collapse: collapse; }
+.sw-table td, .sw-table th { padding: .5rem; text-align: start; border-bottom: 1px solid var(--border); }
+.student-workspace button:disabled { opacity: .7; cursor: default; }
+@media (max-width: 767px) {
+    .sw-stages { grid-template-columns: 1fr; }
+    .sw-stages button { grid-template-columns: 1fr; }
+    .sw-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sg-comparison { grid-template-columns: 1fr; }
+    .student-workspace > details { padding: .75rem; }
+}
+@media (max-width: 359px) { .sw-kpis { grid-template-columns: 1fr; } }

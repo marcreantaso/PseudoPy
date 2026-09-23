@@ -54,6 +54,7 @@ function runPythonCode(code, outputElementId) {
     // The compiler now handles str() wrapping correctly in smartPrintExpr(),
     // so no runtime code fixup is needed. Use code as-is.
     const cleanCode = code;
+    const studentRun = typeof StudentWorkspace !== 'undefined' ? StudentWorkspace.beginRun(outputElementId, code) : null;
 
     // Helper: append text to the console output (HTML-safe)
     function appendOutput(text) {
@@ -138,6 +139,7 @@ function runPythonCode(code, outputElementId) {
     }).then(function () {
         if (!outputEl.textContent.trim()) outputEl.textContent = 'Code executed successfully (no output).';
         showToast('Code executed successfully!', 'success');
+        if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.endRun(studentRun, true, outputEl.textContent);
 
         // ── Panel 1: Record successful execution ──
         if (typeof metricsEngine !== 'undefined') {
@@ -163,6 +165,7 @@ function runPythonCode(code, outputElementId) {
         appendOutput('\nError: ' + err.toString());
         outputEl.className = 'output-content error';
         showToast('Runtime error occurred.', 'error');
+        if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.endRun(studentRun, false, outputEl.textContent);
 
         // ── Panel 1: Record failed execution ──
         if (typeof metricsEngine !== 'undefined') {

@@ -119,6 +119,10 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
                 /* learning layer must never break translation */
             }
         }
+        if (typeof StudentWorkspace !== 'undefined') {
+            try { StudentWorkspace.translated(inputId, input, result, PseudoPyLearning.lastTranslation && PseudoPyLearning.lastTranslation.compile === result ? PseudoPyLearning.lastTranslation : null); }
+            catch (e) { console.error('Student workspace update failed:', e); }
+        }
         const consoleEl = consoleId ? $id(consoleId) : null;
         const runBtn = runBtnSelector ? $qs(runBtnSelector) : null;
 

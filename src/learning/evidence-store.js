@@ -27,7 +27,7 @@ function evUserName() {
 }
 
 function evInstructorId() {
-    try { return currentUser ? (currentUser.instructorId || 'u2') : 'u2'; } catch (e) { return 'u2'; }
+    try { return currentUser ? (currentUser.instructorId || null) : null; } catch (e) { return null; }
 }
 
 /**
@@ -46,6 +46,9 @@ function buildEvidenceRecord(pipelineResult) {
         studentName: evUserName(),
         instructorId: evInstructorId(),
         valid: !!pipelineResult.valid,
+        evidenceOrigin: 'student-translation',
+        validationIndicator: Math.max(0, 100 - 15 * (t.error || 0) - 5 * (t.warning || 0) - 2 * (t.suggestion || 0)),
+        indicatorVersion: 1,
         tallies: {
             error: t.error || 0,
             warning: t.warning || 0,
@@ -66,6 +69,7 @@ function buildEvidenceRecord(pipelineResult) {
 
 /** Persist one evidence record for the current logged-in student. */
 async function captureEvidence(pipelineResult) {
+    if (typeof currentUser === 'undefined' || !currentUser || currentUser.role !== 'student') return null;
     const userId = evUserId();
     if (!userId) return null;
     const record = buildEvidenceRecord(pipelineResult, { studentId: userId });

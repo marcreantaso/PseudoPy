@@ -20,6 +20,7 @@ function navigateTo(pageId) {
     }
 
     currentPage = pageId;
+    if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.activate(pageId);
 
     // Remember the route so a refresh/boot can restore the same page.
     if (currentUser) persistRoute(pageId);
