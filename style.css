@@ -2241,7 +2241,21 @@ svg.lucide {
   cursor: pointer;
 }
 
+.chart-bars-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
 .chart-bar:hover {
+  opacity: 0.8;
+}
+
+.chart-bar:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
   opacity: 0.8;
 }
 
@@ -4241,8 +4255,37 @@ select.form-input {
 }
 
 /* ── Recharts-style SVG charts ── */
-.about-team-group { padding: 1rem 0; }
-.about-team-details { margin-top: 0.5rem; padding-left: 1rem; border-left: 2px solid var(--border-divider); }
+/* ── About PseudoPy: consistent label/value grid (About page only) ── */
+#legal-section-about .about-details { display: grid; gap: 0; padding: 1.25rem 2rem; }
+#legal-section-about .about-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 200px) minmax(0, 1fr);
+  gap: 0.4rem 1.5rem;
+  align-items: start;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+#legal-section-about .about-row:last-child { border-bottom: none; }
+#legal-section-about .about-row .detail-label { line-height: 1.55; }
+#legal-section-about .about-row .detail-value { min-width: 0; line-height: 1.55; overflow-wrap: break-word; }
+#legal-section-about .about-team-subgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 0.45rem 1.5rem;
+}
+#legal-section-about .about-sub-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 150px) minmax(0, 1fr);
+  gap: 0.4rem 1rem;
+  align-items: start;
+}
+#legal-section-about .about-sub-row .detail-label,
+#legal-section-about .about-sub-row .detail-value { line-height: 1.55; overflow-wrap: break-word; }
+@media (max-width: 640px) {
+  #legal-section-about .about-details { padding: 1rem; }
+  #legal-section-about .about-row,
+  #legal-section-about .about-sub-row { grid-template-columns: minmax(0, 1fr); gap: 0.3rem; }
+}
 .an-chart-header { flex-wrap: wrap; }
 #an-error-select { width: auto; max-width: 100%; min-height: 44px; }
 .an-chart-skeleton { min-height: 240px; border-radius: var(--radius-shadcn); background: var(--muted); }
@@ -4394,9 +4437,25 @@ select.form-input {
 }
 
 .an-legend-chip:hover,
-.an-legend-chip.active {
+.an-legend-chip.active,
+.an-legend-chip.hovered {
   border-color: var(--ring-tok);
   background: var(--muted);
+}
+
+.an-legend-chip.hovered:not(.active) {
+  background: var(--accent-subtle);
+  border-color: var(--border-accent);
+}
+
+.an-pie-slice {
+  transition: opacity var(--duration) var(--ease), filter var(--duration) var(--ease);
+  cursor: pointer;
+}
+
+.an-pie-slice:hover,
+.an-pie-slice:focus-visible {
+  filter: brightness(1.08);
 }
 
 .an-legend-dot {

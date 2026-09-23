@@ -3,14 +3,50 @@
 .student-workspace > details { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); min-width: 0; }
 .student-workspace summary, .operator-guide summary { cursor: pointer; font-weight: 600; }
 .student-workspace p, .operator-guide p { line-height: 1.6; }
+
+/* Generic chip row (flow stages, step-through) — not the guide category rail. */
 .sg-tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: .75rem; }
 .sg-tabs button, .sw-stages button, .sg-content button, .sw-issue button { border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text-primary); padding: .6rem .75rem; cursor: pointer; min-height: 44px; }
 .sg-tabs button[aria-pressed="true"], .sw-stages button[aria-pressed="true"] { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+/* ── Segmented control (presentation mode, chart series, view source) ── */
+.seg { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 3px; }
+.seg button { border: 0; background: transparent; color: var(--text-secondary); border-radius: 8px; padding: .45rem .85rem; min-height: 40px; cursor: pointer; font-weight: 600; font-size: .82rem; line-height: 1.2; }
+.seg button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); }
+.seg.sg-series { margin: -.4rem 0 .75rem; }
+.seg.sg-series button { white-space: nowrap; }
+
+/* ── Pseudocode Quick Guide header + category rail ── */
+.sg-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-block: .75rem; }
+.sg-intro { margin: 0; color: var(--text-secondary); font-size: .85rem; }
+.sg-cats { display: flex; gap: .5rem; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; padding-block: .25rem; touch-action: pan-x; margin-block: .5rem .75rem; }
+.sg-cats::-webkit-scrollbar { display: none; }
+.sg-chip { flex: 0 0 auto; border: 1px solid var(--border); border-radius: 999px; padding: .45rem .85rem; min-height: 40px; background: var(--bg-card); color: var(--text-secondary); cursor: pointer; font-weight: 600; font-size: .82rem; transition: border-color var(--duration) var(--ease), background var(--duration) var(--ease), color var(--duration) var(--ease); }
+.sg-chip[aria-pressed="true"] { border-color: var(--border-accent); background: var(--accent-subtle); color: var(--primary); }
+
 .sg-content { max-height: 22rem; overflow: auto; overscroll-behavior: contain; padding: .5rem; }
+.sg-content > h3 { margin: .5rem 0; }
+.sg-expl { color: var(--text-secondary); font-size: .85rem; }
+.sg-advanced { margin-block: .75rem .25rem; border: 1px solid var(--border); border-radius: 8px; padding: .5rem .75rem; background: var(--bg-input); }
+.sg-advanced summary { font-size: .82rem; color: var(--text-secondary); }
+.sg-advanced .sg-expl { margin-block: .4rem 0; }
+
+/* ── Code surfaces ── */
+.student-workspace pre, .operator-guide pre { white-space: pre; overflow: auto; padding: .75rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; max-height: 24rem; color: var(--text-primary); font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, "Liberation Mono", monospace; font-size: .83rem; line-height: 1.55; margin: 0; }
 .sg-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-.student-workspace pre, .operator-guide pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: .75rem; background: var(--bg-input); border-radius: 8px; max-height: 24rem; overflow: auto; color: var(--text-primary); }
+.sg-code { margin: 0 0 .75rem; }
+.sg-code figcaption { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .4rem; }
+.sg-code h4 { margin: 0; font-size: .8rem; font-weight: 600; color: var(--text-secondary); }
+.sg-insert { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); padding: .35rem .7rem; min-height: 36px; cursor: pointer; font-size: .8rem; font-weight: 600; }
+.sg-insert svg.lucide { width: .85rem; height: .85rem; }
+.sg-op-example { margin-top: .75rem; }
+.sg-op-example .sg-insert { margin-top: .25rem; }
+
 .sg-operators { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .5rem; }
-.sg-operators code { display: block; padding-top: .5rem; }
+.sg-operators button { text-align: start; transition: border-color var(--duration) var(--ease), background var(--duration) var(--ease); }
+.sg-operators button:hover, .sg-operators button:focus-visible { border-color: var(--border-accent); background: var(--accent-subtle); }
+.sg-operators code { display: block; padding-top: .5rem; color: var(--text-secondary); }
+
 .sg-tip:not(:empty), .sw-issue { border-inline-start: 3px solid var(--primary); padding: .75rem; margin-block: .5rem; }
 .sg-context:not([hidden]) { display: flex; align-items: center; gap: .75rem; padding: .75rem; border-inline-start: 3px solid var(--primary); overflow-wrap: anywhere; }
 .sg-context button { background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; min-height: 44px; padding: .5rem; }
@@ -25,17 +61,37 @@
 .sw-kpis > div { display: grid; gap: .5rem; border: 1px solid var(--border); padding: 1rem; border-radius: 8px; overflow-wrap: anywhere; }
 .sw-kpis strong { font-size: 1.35rem; }
 .sw-kpis span { font-weight: 600; }
+
+/* ── Learning Progress card ── */
 .sw-chart { margin-top: 1rem; min-width: 0; }
-.sw-chart .an-svg { width: 100%; height: auto; min-height: 180px; }
+.sw-chart .an-svg { width: 100%; height: auto; display: block; }
+.sw-chart .an-chart-title { font-size: .95rem; }
+.sw-chart .an-info-badge { appearance: none; background: transparent; border: 0; padding: .2rem; margin: 0; cursor: help; display: inline-flex; }
+.sw-chart .an-info-badge svg.lucide { width: .95rem; height: .95rem; }
+.sg-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .85rem; margin-top: .75rem; }
+.sg-legend-chip { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-card); color: var(--text-secondary); padding: .35rem .7rem; min-height: 36px; cursor: pointer; font-weight: 600; font-size: .78rem; transition: border-color var(--duration) var(--ease), background var(--duration) var(--ease), color var(--duration) var(--ease); }
+.sg-legend-chip[aria-pressed="true"] { border-color: var(--border-accent); background: var(--accent-subtle); color: var(--text-primary); }
+.sg-legend-dot { width: .65rem; height: .65rem; border-radius: 50%; flex: 0 0 auto; }
+.sg-mastery-note { font-size: .75rem; color: var(--muted-foreground); font-style: italic; }
+.an-chart-empty { color: var(--text-secondary); font-size: .85rem; padding: .5rem 0; }
+.sw-glossary { margin-block: .5rem 0; border: 1px solid var(--border); border-radius: 8px; padding: .5rem .75rem; font-size: .85rem; }
+.sw-glossary summary { font-size: .82rem; color: var(--text-secondary); }
+.sw-glossary p { margin-block: .4rem 0; }
+.sw-data-table { margin-top: .5rem; }
+.sw-data-table summary { font-size: .82rem; color: var(--text-secondary); }
 .sw-table { overflow-x: auto; }
 .sw-table table { width: 100%; border-collapse: collapse; }
 .sw-table td, .sw-table th { padding: .5rem; text-align: start; border-bottom: 1px solid var(--border); }
 .student-workspace button:disabled { opacity: .7; cursor: default; }
+
 @media (max-width: 767px) {
     .sw-stages { grid-template-columns: 1fr; }
     .sw-stages button { grid-template-columns: 1fr; }
     .sw-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .sg-comparison { grid-template-columns: 1fr; }
+    .sg-toolbar { flex-direction: column; align-items: flex-start; }
+    .seg.sg-series button { padding: .4rem .6rem; font-size: .78rem; }
     .student-workspace > details { padding: .75rem; }
+    .sw-chart { padding: .9rem; }
 }
 @media (max-width: 359px) { .sw-kpis { grid-template-columns: 1fr; } }

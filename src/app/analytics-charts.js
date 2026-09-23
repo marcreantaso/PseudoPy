@@ -506,6 +506,14 @@ function toggleErrorSlice(name) {
     });
 }
 
+function setPieHover(name) {
+    const legend = $id('an-error-legend');
+    if (!legend) return;
+    legend.querySelectorAll('.an-legend-chip').forEach(chip => {
+        chip.classList.toggle('hovered', chip.getAttribute('data-name') === name);
+    });
+}
+
 function anBindPieInteractions(plot, card, slices) {
     const tip = anEnsureTooltip(card);
     const byName = {};
@@ -516,6 +524,7 @@ function anBindPieInteractions(plot, card, slices) {
             const name = path.getAttribute('data-name');
             const count = path.getAttribute('data-count');
             const pct = path.getAttribute('data-pct');
+            setPieHover(name);
             anShowTooltip(tip, evt, `
                 <div class="an-tt-header">${anEsc(name)}</div>
                 <div class="an-tt-row"><strong>${count} error${count !== '1' ? 's' : ''}</strong></div>
@@ -523,9 +532,9 @@ function anBindPieInteractions(plot, card, slices) {
             `, card);
         });
         path.addEventListener('mousemove', e => anShowTooltip(tip, e, tip.innerHTML, card));
-        path.addEventListener('mouseleave', () => anHideTooltip(tip));
+        path.addEventListener('mouseleave', () => { anHideTooltip(tip); setPieHover(null); });
         path.addEventListener('focus', () => path.dispatchEvent(new MouseEvent('mouseenter', { clientX: path.getBoundingClientRect().left, clientY: path.getBoundingClientRect().top })));
-        path.addEventListener('blur', () => anHideTooltip(tip));
+        path.addEventListener('blur', () => { anHideTooltip(tip); setPieHover(null); });
         path.addEventListener('keydown', e => {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();

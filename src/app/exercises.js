@@ -396,6 +396,16 @@ async function loadStudentProgress() {
         if (topbarFill) {
             topbarFill.style.width = pct + '%';
         }
+        const topbarTrack = $id('topbar-progress-track');
+        if (topbarTrack) {
+            topbarTrack.setAttribute('aria-valuenow', pct);
+            topbarTrack.setAttribute('aria-valuetext', completedCount + ' of ' + totalExercises + ' exercises completed');
+        }
+        const studentTrack = $id('student-progress-track');
+        if (studentTrack) {
+            studentTrack.setAttribute('aria-valuenow', pct);
+            studentTrack.setAttribute('aria-valuetext', completedCount + ' of ' + totalExercises + ' exercises completed');
+        }
 
         console.log(`[Progress] ${completedCount} / ${totalExercises} exercises completed (${pct}%)`);
     } catch (err) {

@@ -88,6 +88,19 @@ const StudentLearningModel = (() => {
         let successes = 0;
         return records.map((r, index) => { if (r.compilation === 100) successes++; return { ...r, cumulative: 100 * successes / (index + 1) }; });
     }
-    return { scores, attempt, feedback, flow, kpis, history, trajectory };
+    /* Real-data trend over the most recent few validation scores. Never
+       fabricated: fewer than three points reports insufficient history. */
+    function trend(points) {
+        const values = (points || []).map(p => Number(p.validation)).filter(Number.isFinite);
+        if (values.length < 3) return { tone: 'insufficient', attempts: values.length };
+        const window = values.slice(-5);
+        const mid = Math.floor(window.length / 2);
+        const earlier = window.slice(0, mid).reduce((a, b) => a + b, 0) / mid;
+        const later = window.slice(mid).reduce((a, b) => a + b, 0) / (window.length - mid);
+        const diff = later - earlier;
+        return { tone: diff > 4 ? 'improved' : diff < -4 ? 'dipped' : 'stable', attempts: window.length,
+            earlier: Math.round(earlier), later: Math.round(later) };
+    }
+    return { scores, attempt, feedback, flow, kpis, history, trajectory, trend };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = StudentLearningModel;

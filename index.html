@@ -442,7 +442,7 @@
             style="font-size: 0.8rem; font-weight: 600; color: var(--success); background: var(--success-glow); border: 1px solid var(--success); border-radius: var(--radius-full); padding: 0.3rem 0.85rem; white-space: nowrap; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.3s ease;">
             <i data-lucide="circle-check" aria-hidden="true"></i> 0 / 0 Completed
           </span>
-          <div
+          <div id="topbar-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0 of 0 exercises completed"
             style="width: 160px; height: 6px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; overflow: hidden;">
             <div id="topbar-progress-fill"
               style="width: 0%; height: 100%; background: var(--success); transition: width 0.5s ease; border-radius: 4px;">
@@ -762,7 +762,7 @@
               Completed Exercises: <span id="student-completed-count" style="color: var(--text-primary); font-weight: 700;">0</span> / <span id="student-total-count" style="color: var(--text-primary); font-weight: 700;">0</span>
             </div>
             <div class="progress-bar-wrap" style="display: flex; align-items: center; gap: 0.75rem;">
-              <div class="progress-bar-bg" style="width: 240px; height: 10px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 999px; overflow: hidden;">
+              <div id="student-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0 of 0 exercises completed" class="progress-bar-bg" style="width: 240px; height: 10px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 999px; overflow: hidden;">
                 <div id="student-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #6366f1); border-radius: 999px; transition: width 0.4s ease;"></div>
               </div>
               <span id="student-progress-pct" style="font-size: 0.9rem; font-weight: 800; color: #3b82f6;">0%</span>
@@ -3058,41 +3058,41 @@
       <!-- ── About / System Information ── -->
       <section id="legal-section-about" class="hidden" aria-labelledby="about-h1">
         <h1 id="about-h1">About PseudoPy</h1>
-        <div class="profile-details">
-          <div class="profile-detail-row">
+        <div class="profile-details about-details">
+          <div class="about-row">
             <span class="detail-label">Name</span>
             <span class="detail-value" id="about-app-name">—</span>
           </div>
-          <div class="profile-detail-row">
+          <div class="about-row">
             <span class="detail-label">Version</span>
             <span class="detail-value" id="about-app-version">—</span>
           </div>
-          <div class="profile-detail-row">
+          <div class="about-row">
             <span class="detail-label">Purpose</span>
             <span class="detail-value" id="about-app-description">—</span>
           </div>
-          <div class="profile-detail-row">
+          <div class="about-row">
             <span class="detail-label">Organization</span>
             <span class="detail-value" id="about-org">—</span>
           </div>
-          <div class="about-team-group">
+          <div class="about-row">
             <span class="detail-label">Project Team</span>
-            <div class="about-team-details">
-              <div class="profile-detail-row">
+            <div class="about-team-subgrid">
+              <div class="about-sub-row">
                 <span class="detail-label">Founder</span>
                 <span class="detail-value" id="about-founder">—</span>
               </div>
-              <div class="profile-detail-row">
+              <div class="about-sub-row">
                 <span class="detail-label">Co-Founder</span>
                 <span class="detail-value" id="about-cofounder">—</span>
               </div>
-              <div class="profile-detail-row">
+              <div class="about-sub-row">
                 <span class="detail-label">Technical Team</span>
                 <span class="detail-value" id="about-tech">—</span>
               </div>
             </div>
           </div>
-          <div class="profile-detail-row" id="about-contact-row">
+          <div class="about-row" id="about-contact-row">
             <span class="detail-label">Contact</span>
             <span class="detail-value" id="about-contact">—</span>
           </div>

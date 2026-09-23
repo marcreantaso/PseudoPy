@@ -44,28 +44,6 @@ function animateAnalyticsCards() {
     });
 }
 
-function animateAnalyticsCharts() {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const analyticsPage = $id('page-analytics');
-    if (!analyticsPage || analyticsPage.classList.contains('hidden')) return;
-    runWithAnime(function () {
-        const bars = document.querySelectorAll('#chart-submissions .an-bar-inner');
-        if (bars.length) {
-            anime.animate(bars, {
-                scaleY: [0, 1],
-                opacity: [0, 1],
-                delay: anime.stagger(55),
-                duration: 550,
-                ease: 'outCubic'
-            });
-        }
-        const donut = $id('an-donut-chart');
-        const legend = $id('an-donut-legend');
-        if (donut) anime.animate(donut, { scale: [0.8, 1], opacity: [0, 1], duration: 600, ease: 'outBack' });
-        if (legend) anime.animate(legend, { opacity: [0, 1], translateX: [12, 0], duration: 450, delay: 180, ease: 'outCubic' });
-    });
-}
-
 function initializeLucideIcons() {
     refreshIcons();
 }

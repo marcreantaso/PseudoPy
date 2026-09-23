@@ -1201,28 +1201,6 @@ function animateAnalyticsCards() {
     });
 }
 
-function animateAnalyticsCharts() {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const analyticsPage = $id('page-analytics');
-    if (!analyticsPage || analyticsPage.classList.contains('hidden')) return;
-    runWithAnime(function () {
-        const bars = document.querySelectorAll('#chart-submissions .an-bar-inner');
-        if (bars.length) {
-            anime.animate(bars, {
-                scaleY: [0, 1],
-                opacity: [0, 1],
-                delay: anime.stagger(55),
-                duration: 550,
-                ease: 'outCubic'
-            });
-        }
-        const donut = $id('an-donut-chart');
-        const legend = $id('an-donut-legend');
-        if (donut) anime.animate(donut, { scale: [0.8, 1], opacity: [0, 1], duration: 600, ease: 'outBack' });
-        if (legend) anime.animate(legend, { opacity: [0, 1], translateX: [12, 0], duration: 450, delay: 180, ease: 'outCubic' });
-    });
-}
-
 function initializeLucideIcons() {
     refreshIcons();
 }
@@ -2483,6 +2461,16 @@ async function loadStudentProgress() {
         const topbarFill = $id('topbar-progress-fill');
         if (topbarFill) {
             topbarFill.style.width = pct + '%';
+        }
+        const topbarTrack = $id('topbar-progress-track');
+        if (topbarTrack) {
+            topbarTrack.setAttribute('aria-valuenow', pct);
+            topbarTrack.setAttribute('aria-valuetext', completedCount + ' of ' + totalExercises + ' exercises completed');
+        }
+        const studentTrack = $id('student-progress-track');
+        if (studentTrack) {
+            studentTrack.setAttribute('aria-valuenow', pct);
+            studentTrack.setAttribute('aria-valuetext', completedCount + ' of ' + totalExercises + ' exercises completed');
         }
 
         console.log(`[Progress] ${completedCount} / ${totalExercises} exercises completed (${pct}%)`);
@@ -5584,6 +5572,14 @@ function toggleErrorSlice(name) {
     });
 }
 
+function setPieHover(name) {
+    const legend = $id('an-error-legend');
+    if (!legend) return;
+    legend.querySelectorAll('.an-legend-chip').forEach(chip => {
+        chip.classList.toggle('hovered', chip.getAttribute('data-name') === name);
+    });
+}
+
 function anBindPieInteractions(plot, card, slices) {
     const tip = anEnsureTooltip(card);
     const byName = {};
@@ -5594,6 +5590,7 @@ function anBindPieInteractions(plot, card, slices) {
             const name = path.getAttribute('data-name');
             const count = path.getAttribute('data-count');
             const pct = path.getAttribute('data-pct');
+            setPieHover(name);
             anShowTooltip(tip, evt, `
                 <div class="an-tt-header">${anEsc(name)}</div>
                 <div class="an-tt-row"><strong>${count} error${count !== '1' ? 's' : ''}</strong></div>
@@ -5601,9 +5598,9 @@ function anBindPieInteractions(plot, card, slices) {
             `, card);
         });
         path.addEventListener('mousemove', e => anShowTooltip(tip, e, tip.innerHTML, card));
-        path.addEventListener('mouseleave', () => anHideTooltip(tip));
+        path.addEventListener('mouseleave', () => { anHideTooltip(tip); setPieHover(null); });
         path.addEventListener('focus', () => path.dispatchEvent(new MouseEvent('mouseenter', { clientX: path.getBoundingClientRect().left, clientY: path.getBoundingClientRect().top })));
-        path.addEventListener('blur', () => anHideTooltip(tip));
+        path.addEventListener('blur', () => { anHideTooltip(tip); setPieHover(null); });
         path.addEventListener('keydown', e => {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
@@ -9750,7 +9747,20 @@ const StudentLearningModel = (() => {
         let successes = 0;
         return records.map((r, index) => { if (r.compilation === 100) successes++; return { ...r, cumulative: 100 * successes / (index + 1) }; });
     }
-    return { scores, attempt, feedback, flow, kpis, history, trajectory };
+    /* Real-data trend over the most recent few validation scores. Never
+       fabricated: fewer than three points reports insufficient history. */
+    function trend(points) {
+        const values = (points || []).map(p => Number(p.validation)).filter(Number.isFinite);
+        if (values.length < 3) return { tone: 'insufficient', attempts: values.length };
+        const window = values.slice(-5);
+        const mid = Math.floor(window.length / 2);
+        const earlier = window.slice(0, mid).reduce((a, b) => a + b, 0) / mid;
+        const later = window.slice(mid).reduce((a, b) => a + b, 0) / (window.length - mid);
+        const diff = later - earlier;
+        return { tone: diff > 4 ? 'improved' : diff < -4 ? 'dipped' : 'stable', attempts: window.length,
+            earlier: Math.round(earlier), later: Math.round(later) };
+    }
+    return { scores, attempt, feedback, flow, kpis, history, trajectory, trend };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = StudentLearningModel;
 const StudentGuide = (() => {
@@ -9785,12 +9795,14 @@ const StudentWorkspace = (() => {
     let history = [], historyStatus = '', historyMode = false, selected = 'source', step = -1;
     let activePage = '', serial = 0, sessionEpoch = 0;
     const visible = new Set(['compilation', 'validation', 'cumulative']);
+    let chartResizeObserver = null, chartResizeRaf = 0;
     const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const userId = () => typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'student' ? String(currentUser._docId || currentUser.id || '') : '';
     const element = id => document.getElementById(id);
     function reset() {
         sessionEpoch++;
         generation++; if (unsubscribe) unsubscribe(); unsubscribe = null;
+        if (chartResizeObserver) chartResizeObserver.disconnect(); chartResizeObserver = null;
         owner = ''; attempts = []; executions = []; latest = null; history = []; historyStatus = ''; activePage = ''; step = -1; historyMode = false;
         document.querySelectorAll('.student-workspace').forEach(el => el.remove());
         document.querySelectorAll('[data-student-guide]').forEach(el => { el.dataset.owner = ''; });
@@ -9820,7 +9832,7 @@ const StudentWorkspace = (() => {
         let open = true, advanced = false;
         try { open = localStorage.getItem(key) !== 'closed'; } catch (_) { /* private browsing */ }
         guide.open = open;
-        guide.innerHTML = '<summary>Pseudocode Quick Guide</summary><p>Need help? Explore the syntax and examples while you write.</p><label>Presentation <select class="sg-mode"><option value="beginner">Beginner</option><option value="advanced">Advanced</option></select></label><div class="sg-tabs" aria-label="Guide categories"></div><div class="sg-content"></div><p class="sg-tip" aria-live="polite"></p>';
+        guide.innerHTML = '<summary>Pseudocode Quick Guide</summary><div class="sg-toolbar"><p class="sg-intro">Need help? Explore the syntax and examples while you write.</p><div class="seg" role="group" aria-label="Presentation mode"><button type="button" data-mode="beginner" aria-pressed="true">Beginner</button><button type="button" data-mode="advanced" aria-pressed="false">Advanced</button></div></div><div class="sg-cats" aria-label="Guide categories"></div><div class="sg-content"></div><p class="sg-tip" aria-live="polite"></p>';
         guide.ontoggle = () => { try { localStorage.setItem(key, guide.open ? 'open' : 'closed'); } catch (_) {} };
         const tabs = guide.querySelector('.sg-tabs'), content = guide.querySelector('.sg-content');
         let contextTip = root.querySelector('.sg-context');
@@ -9835,18 +9847,22 @@ const StudentWorkspace = (() => {
             category = name;
             tabs.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.textContent === name)));
             if (name === 'Operators') {
-                content.innerHTML = '<p>Select an operator for a working example. Python uses lowercase and, or, not.</p><div class="sg-operators">' + StudentGuide.operators.map((o, i) => '<button type="button" data-op="' + i + '"><strong>' + esc(o[0]) + '</strong> ' + esc(o[1]) + '<code>' + esc(o[2]) + '</code></button>').join('') + '</div><div class="sg-op-example"></div>';
+                content.innerHTML = '<p class="sg-expl">Select an operator for a working example. Python uses lowercase and, or, not.</p><div class="sg-operators">' + StudentGuide.operators.map((o, i) => '<button type="button" data-op="' + i + '"><strong>' + esc(o[0]) + '</strong> ' + esc(o[1]) + '<code>' + esc(o[2]) + '</code></button>').join('') + '</div><div class="sg-op-example"></div>';
                 content.querySelectorAll('[data-op]').forEach(b => b.onclick = () => {
                     const o = StudentGuide.operators[Number(b.dataset.op)];
                     const target = content.querySelector('.sg-op-example');
-                    target.innerHTML = '<pre>' + esc('DISPLAY ' + o[2]) + '</pre><p>Python</p><pre>' + esc('print(' + o[2].replace(/AND|OR|NOT/g, s => s.toLowerCase()) + ')') + '</pre><button type="button">Insert Example</button>';
-                    target.querySelector('button').onclick = () => insertExample('BEGIN\n    DISPLAY ' + o[2] + '\nEND');
+                    target.innerHTML = '<figure class="sg-code"><figcaption><h4>Pseudocode</h4></figcaption><pre>' + esc('DISPLAY ' + o[2]) + '</pre></figure><figure class="sg-code"><figcaption><h4>Python equivalent</h4></figcaption><pre>' + esc('print(' + o[2].replace(/AND|OR|NOT/g, s => s.toLowerCase()) + ')') + '</pre></figure><button type="button" class="sg-insert"><i data-lucide="code-2" aria-hidden="true"></i> Insert Example</button>';
+                    const insert = target.querySelector('.sg-insert');
+                    if (insert) insert.onclick = () => insertExample('BEGIN\n    DISPLAY ' + o[2] + '\nEND');
+                    refreshIcons(target);
                 });
                 return;
             }
             const item = StudentGuide.entries[name];
-            content.innerHTML = '<h3>' + esc(name) + '</h3><p>' + esc(item[0]) + '</p><div class="sg-comparison"><div><h4>Pseudocode</h4><pre>' + esc(item[1]) + '</pre></div><div><h4>Python equivalent (simplified)</h4><pre>' + esc(item[2]) + '</pre></div></div><button type="button" class="btn btn-secondary">Insert Example</button>' + (advanced ? '<p>Compiler interpretation: keywords identify statements; expressions use Python precedence. Blocks become indentation. Counted loops include the end value; the generated Python may include helper functions. ^ means bitwise XOR, not exponentiation.</p>' : '');
-            content.querySelector('button').onclick = () => insertExample(item[1]);
+            content.innerHTML = '<h3>' + esc(name) + '</h3><p class="sg-expl">' + esc(item[0]) + '</p><div class="sg-comparison"><figure class="sg-code"><figcaption><h4>Pseudocode</h4><button type="button" class="sg-insert"><i data-lucide="code-2" aria-hidden="true"></i> Insert Example</button></figcaption><pre>' + esc(item[1]) + '</pre></figure><figure class="sg-code"><figcaption><h4>Python equivalent (simplified)</h4></figcaption><pre>' + esc(item[2]) + '</pre></figure></div>' + (advanced ? '<details class="sg-advanced"><summary>Advanced: how the compiler interprets this</summary><p class="sg-expl">Compiler interpretation: keywords identify statements; expressions use Python precedence. Blocks become indentation. Counted loops include the end value; the generated Python may include helper functions. ^ means bitwise XOR, not exponentiation.</p></details>' : '');
+            const insert = content.querySelector('.sg-insert');
+            if (insert) insert.onclick = () => insertExample(item[1]);
+            refreshIcons(content);
         }
         function insertExample(example) {
             // Insert only; never replace the selection or the rest of the student's work.
@@ -9859,9 +9875,14 @@ const StudentWorkspace = (() => {
             editor.dispatchEvent(new Event('input', { bubbles: true }));
         }
         [...Object.keys(StudentGuide.entries), 'Operators'].forEach(name => {
-            const b = document.createElement('button'); b.type = 'button'; b.textContent = name; b.onclick = () => show(name); tabs.appendChild(b);
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'sg-chip'; b.textContent = name; b.onclick = () => show(name); tabs.appendChild(b);
         });
-        guide.querySelector('select').onchange = e => { advanced = e.target.value === 'advanced'; show(category); };
+        const modeButtons = guide.querySelectorAll('.seg [data-mode]');
+        modeButtons.forEach(b => b.onclick = () => {
+            advanced = b.dataset.mode === 'advanced';
+            modeButtons.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+            show(category);
+        });
         guide.showCategory = name => { guide.open = true; show(StudentGuide.entries[name] ? name : 'Basics'); guide.scrollIntoView({ block: 'nearest' }); };
         if (!editor.dataset.studentInputBound) {
             editor.dataset.studentInputBound = 'true';
@@ -9906,13 +9927,12 @@ const StudentWorkspace = (() => {
         const root = element('page-' + activePage), target = root && root.querySelector('.student-workspace'); if (!target) return;
         const flowOpen = target.querySelector('.sw-flow')?.open || false;
         const insightsOpen = target.querySelector('.sw-insights')?.open || false;
-        target.innerHTML = '<details class="sw-flow"' + (flowOpen ? ' open' : '') + '><summary>How Your Algorithm Works</summary><div class="sw-flow-body"></div></details><details class="sw-insights"' + (insightsOpen ? ' open' : '') + '><summary>Session Insights</summary><p>Live session: this signed-in browser session only. Metrics update after translating or running code.</p><div class="sw-kpis"></div><div class="sw-learning"></div><div class="sg-tabs"><button type="button" data-history="false" aria-pressed="' + !historyMode + '">Live Session</button><button type="button" data-history="true" aria-pressed="' + historyMode + '">Learning History</button></div><div class="sw-chart an-chart-card"></div></details>';
+        target.innerHTML = '<details class="sw-flow"' + (flowOpen ? ' open' : '') + '><summary>How Your Algorithm Works</summary><div class="sw-flow-body"></div></details><details class="sw-insights"' + (insightsOpen ? ' open' : '') + '><summary>Session Insights</summary><p>Live session: this signed-in browser session only. Metrics update after translating or running code.</p><div class="sw-kpis"></div><details class="sw-glossary"><summary>What do these numbers mean?</summary><p class="sw-learning"></p></details><div class="sw-chart an-chart-card"></div></details>';
         renderFlow(target.querySelector('.sw-flow-body'), root);
         const k = StudentLearningModel.kpis(attempts, executions);
         target.querySelector('.sw-kpis').innerHTML = [ ['Total Translations', k.translations], ['Compilation Success Rate', k.success.toFixed(1) + '%'], ['Runtime Error Rate', k.runtime.toFixed(1) + '%'], ['Average Generation Time', k.average.toFixed(2) + ' ms'], ['Total Errors', k.errors], ['Total Executions', k.executions] ].map(([label, value]) => '<div><strong>' + value + '</strong><span>' + label + '</span></div>').join('');
         const patterns = [...new Set(attempts.flatMap(a => a.patterns))];
         target.querySelector('.sw-learning').textContent = 'Successful attempts: ' + attempts.filter(a => a.valid).length + '. Attempts with syntax/structure issues: ' + attempts.filter(a => a.categories.some(c => /syntax|structure/i.test(c))).length + '. Attempts with detected logic issues: ' + attempts.filter(a => a.categories.some(c => /logic/i.test(c))).length + '. Distinct patterns practiced: ' + patterns.length + ' (' + (patterns.join(', ') || 'none yet') + '). Generation time includes the complete translation pipeline. Total Errors counts compilation issues; runtime failures are shown separately.';
-        target.querySelectorAll('[data-history]').forEach(b => b.onclick = () => { historyMode = b.dataset.history === 'true'; render(); target.querySelector('[data-history="' + historyMode + '"]')?.focus(); });
         renderChart(target.querySelector('.sw-chart'));
     }
     function renderFlow(container, root) {
@@ -9953,27 +9973,114 @@ const StudentWorkspace = (() => {
             }
         });
     }
+    function trendSummary(data) {
+        const t = StudentLearningModel.trend(data);
+        return t.tone === 'insufficient' ? 'Complete more translations to see your progress trend.'
+            : t.tone === 'improved' ? 'Your validation score improved across your last ' + t.attempts + ' attempts.'
+            : t.tone === 'dipped' ? 'Your validation score dipped across your last ' + t.attempts + ' attempts.'
+            : 'Your performance is currently stable.';
+    }
+    function bindHistoryMode(card) {
+        card.querySelectorAll('[data-history]').forEach(b => b.onclick = () => { historyMode = b.dataset.history === 'true'; render(); });
+    }
+    function watchChartSize(card) {
+        if (typeof ResizeObserver === 'undefined') return;
+        try {
+            if (chartResizeObserver) chartResizeObserver.disconnect();
+            chartResizeObserver = new ResizeObserver(() => {
+                cancelAnimationFrame(chartResizeRaf);
+                chartResizeRaf = requestAnimationFrame(() => { if (card.isConnected) renderChart(card); });
+            });
+            chartResizeObserver.observe(card);
+        } catch (_) { /* best effort responsive redraw */ }
+    }
     function renderChart(card) {
         const data = StudentLearningModel.trajectory(historyMode ? history : attempts);
-        card.innerHTML = '<h3>Session Learning Trajectory' + (historyMode ? ' — Learning History' : '') + '</h3><p>' + (historyMode ? 'Saved translation evidence from your account. ' + esc(historyStatus) : 'Each point is a real translation attempt. Running code updates the KPIs, not translation points.') + '</p><p>Validation indicator = max(0, 100 − 15 × errors − 5 × warnings − 2 × suggestions). This heuristic is not a grade. Construct mastery is unavailable: the compiler does not attribute errors to individual constructs.</p>';
-        if (!data.length) { card.innerHTML += '<p>' + (historyMode ? 'No saved translation evidence is available for this account.' : 'Complete your first translation to begin tracking this session.') + '</p>'; return; }
-        const series = [['compilation', 'Compilation Success', 'var(--chart-1)'], ['validation', 'Validation Indicator', 'var(--chart-5)'], ['cumulative', 'Cumulative Success Rate', 'var(--text-success)']];
-        card.innerHTML += '<div class="sg-tabs">' + series.map(([key, label]) => '<button type="button" data-series="' + key + '" aria-pressed="' + visible.has(key) + '">' + label + '</button>').join('') + '<button type="button" disabled>Construct Mastery: unavailable</button></div>';
-        const W = 600, H = 260, x = i => 48 + i * 525 / Math.max(1, data.length - 1), y = n => 220 - n * 1.9;
-        let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="group" aria-label="Learning trajectory, percentage by translation attempt" class="an-svg">';
-        [0, 25, 50, 75, 100].forEach(n => { svg += '<line class="an-grid-line" x1="48" x2="580" y1="' + y(n) + '" y2="' + y(n) + '"/><text x="4" y="' + y(n) + '" class="an-axis-label">' + n + '%</text>'; });
-        series.filter(([key]) => visible.has(key)).forEach(([key, label, color], index) => {
+        const series = [['compilation', 'Compilation Success', 'var(--chart-1)'], ['validation', 'Validation Indicator', 'var(--chart-5)'], ['cumulative', 'Cumulative Success Rate', 'var(--chart-2)']];
+        const title = historyMode ? 'Your Learning Progress — Learning History' : 'Your Learning Progress';
+        const subtitle = historyMode ? 'Saved translation evidence from your account. ' + esc(historyStatus) : 'Based on your latest translation attempts.';
+        card.innerHTML =
+            '<div class="an-chart-header">' +
+                '<div><div class="an-chart-title">' + esc(title) + '<button type="button" class="an-info-badge" data-info aria-label="How is this calculated?"></button></div>' +
+                '<div class="an-chart-subtitle">' + subtitle + '</div></div>' +
+                '<div class="seg" role="group" aria-label="Source of chart data">' +
+                    '<button type="button" data-history="false" aria-pressed="' + !historyMode + '">Live Session</button>' +
+                    '<button type="button" data-history="true" aria-pressed="' + historyMode + '">Learning History</button>' +
+                '</div>' +
+            '</div>' +
+            '<div class="seg sg-series" role="group" aria-label="Chart series">' +
+                series.map(([key, label]) => '<button type="button" data-series="' + key + '" aria-pressed="' + visible.has(key) + '">' + label + '</button>').join('') +
+            '</div>';
+        if (!data.length) {
+            card.innerHTML += '<p class="an-chart-empty">' + (historyMode ? 'No saved translation evidence is available for this account yet.' : 'Complete your first translation to begin tracking this session.') + '</p><div class="an-chart-footer">' + icon('info') + 'This chart fills in with your real translation attempts.</div>';
+            bindHistoryMode(card);
+            refreshIcons(card);
+            watchChartSize(card);
+            return;
+        }
+        const W = 600;
+        const cardWidth = card.clientWidth > 60 ? card.clientWidth : (typeof window !== 'undefined' ? Math.min(window.innerWidth, 600) : 600);
+        const H = cardWidth >= 480 ? 320 : 470;
+        const left = 52, right = 24, top = 18, bottom = 32;
+        const x = i => left + (data.length === 1 ? (W - left - right) / 2 : i * (W - left - right) / (data.length - 1));
+        const y = n => bottom + (1 - n / 100) * (H - top - bottom);
+        const units = m => Math.round(Number(m) * 10) / 10;
+        let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="aspect-ratio:' + W + '/' + H + '" role="group" aria-label="Learning progress, percentage by translation attempt" class="an-svg">';
+        [0, 25, 50, 75, 100].forEach(n => { svg += '<line class="an-grid-line" x1="' + left + '" x2="' + (W - right) + '" y1="' + y(n) + '" y2="' + y(n) + '"/><text x="' + (left - 8) + '" y="' + (y(n) + 3) + '" text-anchor="end" class="an-axis-label">' + n + '%</text>'; });
+        const ticks = new Set([0, data.length - 1]);
+        if (data.length > 8) { for (let k = 1; k <= 4; k++) ticks.add(Math.round((data.length - 1) * k / 5)); }
+        [...ticks].sort((a, b) => a - b).forEach(i => svg += '<text class="an-axis-label" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">Attempt ' + (i + 1) + '</text>');
+        series.forEach(([key, label, color], index) => {
+            if (!visible.has(key)) return;
             svg += '<path fill="none" stroke="' + color + '" stroke-width="2.5" stroke-dasharray="' + (index ? '6 3' : 'none') + '" d="' + data.map((p, i) => (i ? 'L' : 'M') + x(i) + ',' + y(p[key])).join(' ') + '"/>';
-            data.forEach((p, i) => { svg += '<circle tabindex="0" role="button" data-point="' + i + '" aria-label="Attempt ' + (i + 1) + ', ' + label + ': ' + p[key] + ' percent, errors: ' + p.errors + '" cx="' + x(i) + '" cy="' + y(p[key]) + '" r="4" fill="' + color + '"><title>Attempt ' + (i + 1) + ': ' + label + ' ' + p[key] + '%</title></circle>'; });
+            data.forEach((p, i) => { svg += '<circle tabindex="0" role="button" class="an-series-dot" data-point="' + i + '" aria-label="Attempt ' + (i + 1) + ', ' + label + ': ' + units(p[key]) + ' percent (errors ' + p.errors + ')" cx="' + x(i) + '" cy="' + y(p[key]) + '" r="4.5" fill="' + color + '"/>'; });
         });
-        svg += '<text class="an-axis-label" x="48" y="250">Attempt 1</text><text class="an-axis-label" text-anchor="end" x="575" y="250">Attempt ' + data.length + '</text></svg>';
-        card.innerHTML += svg + '<p class="sw-tooltip" role="status">Focus, tap or hover a point to inspect the attempt.</p><p>' + (data.length < 3 ? 'Complete more translations to see your improvement trend.' : 'Your validation indicator changed from ' + data[0].validation + '% to ' + data[data.length - 1].validation + '% across these attempts.') + '</p><details><summary>View chart data as a table</summary><div class="sw-table"><table><thead><tr><th scope="col">Attempt</th><th scope="col">Compilation %</th><th scope="col">Validation indicator %</th><th scope="col">Errors</th></tr></thead><tbody>' + data.map((p, i) => '<tr><td>' + (i + 1) + '</td><td>' + p.compilation + '</td><td>' + p.validation + '</td><td>' + p.errors + '</td></tr>').join('') + '</tbody></table></div></details>';
-        card.querySelectorAll('[data-series]').forEach(b => b.onclick = () => { const key = b.dataset.series; visible.has(key) ? visible.delete(key) : visible.add(key); renderChart(card); card.querySelector('[data-series="' + key + '"]')?.focus(); });
+        svg += '</svg>';
+        const legend = series.map(([key, label, color]) => '<button type="button" class="sg-legend-chip" data-legend="' + key + '" aria-pressed="' + visible.has(key) + '"><span class="sg-legend-dot" style="background:' + color + '"></span>' + label + '</button>').join('');
+        card.innerHTML +=
+            '<div class="an-chart-plot">' + svg + '</div>' +
+            '<div class="sg-legend">' + legend + '<span class="sg-mastery-note">Complete more exercises to unlock concept mastery insights.</span></div>' +
+            '<div class="an-chart-footer">' + icon('trending-up') + trendSummary(data) + '</div>' +
+            '<details class="sw-data-table"><summary>View chart data as a table</summary><div class="sw-table"><table><thead><tr><th scope="col">Attempt</th><th scope="col">Compilation %</th><th scope="col">Validation indicator %</th><th scope="col">Errors</th></tr></thead><tbody>' + data.map((p, i) => '<tr><td>' + (i + 1) + '</td><td>' + p.compilation + '</td><td>' + p.validation + '</td><td>' + p.errors + '</td></tr>').join('') + '</tbody></table></div></details>';
+        const tip = anEnsureTooltip(card);
+        const toggleSeries = key => {
+            if (visible.has(key) && visible.size === 1) return;
+            visible.has(key) ? visible.delete(key) : visible.add(key);
+            renderChart(card);
+            card.querySelector('[data-series="' + key + '"]')?.focus();
+        };
+        card.querySelectorAll('[data-series]').forEach(b => b.onclick = () => toggleSeries(b.dataset.series));
+        card.querySelectorAll('[data-legend]').forEach(b => b.onclick = () => toggleSeries(b.dataset.legend));
+        bindHistoryMode(card);
+        const infoBtn = card.querySelector('[data-info]');
+        if (infoBtn) {
+            infoBtn.innerHTML = icon('info');
+            const infoHtml = '<div class="an-tt-header">How is this calculated?</div>' +
+                '<div class="an-tt-row">Validation indicator = max(0, 100 − 15 × errors − 5 × warnings − 2 × suggestions).</div>' +
+                '<div class="an-tt-row an-tt-muted">A heuristic for feedback, not a grade.</div>' +
+                '<div class="an-tt-row">Complete more exercises to unlock concept mastery insights.</div>';
+            infoBtn.onclick = () => { const r = infoBtn.getBoundingClientRect(); anShowTooltip(tip, { clientX: r.left + 4, clientY: r.top + 4 }, infoHtml, card); };
+            infoBtn.onblur = () => anHideTooltip(tip);
+            infoBtn.onkeydown = e => { if (e.key === 'Escape') anHideTooltip(tip); };
+        }
+        const tooltipHtml = (i, p) =>
+            '<div class="an-tt-header">Attempt ' + (i + 1) + '</div>' +
+            series.map(([key, label, color]) => visible.has(key) ? '<div class="an-tt-row"><span class="an-tt-dot" style="background:' + color + '"></span>' + label + ': ' + units(p[key]) + '%</div>' : '').join('') +
+            '<div class="an-tt-row an-tt-muted">Errors: ' + p.errors + '</div>';
         card.querySelectorAll('[data-point]').forEach(dot => {
-            const show = () => { const i = Number(dot.dataset.point), p = data[i]; card.querySelector('.sw-tooltip').textContent = 'Attempt ' + (i + 1) + ': Compilation ' + p.compilation + '%, Validation indicator ' + p.validation + '%, Cumulative success ' + p.cumulative.toFixed(1) + '%, Errors ' + p.errors; };
-            dot.onfocus = show; dot.onmouseenter = show; dot.onclick = show;
-            dot.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(); } };
+            const i = Number(dot.dataset.point), p = data[i];
+            const show = e => anShowTooltip(tip, e, tooltipHtml(i, p), card);
+            const hide = () => anHideTooltip(tip);
+            dot.onmouseenter = show;
+            dot.onmousemove = show;
+            dot.onmouseleave = hide;
+            dot.onfocus = () => anShowTooltip(tip, { clientX: dot.getBoundingClientRect().left, clientY: dot.getBoundingClientRect().top }, tooltipHtml(i, p), card);
+            dot.onblur = hide;
+            dot.onclick = show;
+            dot.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(e); } };
         });
+        refreshIcons(card);
+        watchChartSize(card);
     }
     function loadHistory() {
         const id = owner, ticket = generation;
@@ -10330,19 +10437,19 @@ function renderPipelineTimingChart(timing) {
     }
 
     const stages = [
-        { name: 'Lexer', value: timing.avgLexTime, color: '#3b82f6' },
-        { name: 'Parser', value: timing.avgParseTime, color: '#6366f1' },
-        { name: 'Semantic', value: timing.avgSemanticTime, color: '#8b5cf6' },
-        { name: 'CodeGen', value: timing.avgCodeGenTime, color: '#22c55e' }
+        { name: 'Lexer', value: timing.avgLexTime, color: 'var(--chart-1)' },
+        { name: 'Parser', value: timing.avgParseTime, color: 'var(--chart-2)' },
+        { name: 'Semantic', value: timing.avgSemanticTime, color: 'var(--chart-3)' },
+        { name: 'CodeGen', value: timing.avgCodeGenTime, color: 'var(--chart-4)' }
     ];
 
     const max = Math.max(...stages.map(s => s.value), 0.001);
-    container.innerHTML = stages.map(s =>
-        '<div class="chart-bar" style="height:' + Math.max((s.value / max) * 180, 20) + 'px;background:' + s.color + '">' +
+    container.innerHTML = '<div class="chart-bars-wrap">' + stages.map(s =>
+        '<div class="chart-bar" tabindex="0" aria-label="' + s.name + ': ' + s.value + 'ms average" title="' + s.name + ' average: ' + s.value + 'ms" style="height:' + Math.max((s.value / max) * 180, 20) + 'px;background:' + s.color + '">' +
         '<span class="bar-value">' + s.value + 'ms</span>' +
         '<span class="bar-label">' + s.name + '</span>' +
         '</div>'
-    ).join('');
+    ).join('') + '</div>';
 
     // Accessible text equivalent for the bar chart.
     container.setAttribute('role', 'img');

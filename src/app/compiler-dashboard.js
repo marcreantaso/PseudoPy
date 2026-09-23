@@ -261,19 +261,19 @@ function renderPipelineTimingChart(timing) {
     }
 
     const stages = [
-        { name: 'Lexer', value: timing.avgLexTime, color: '#3b82f6' },
-        { name: 'Parser', value: timing.avgParseTime, color: '#6366f1' },
-        { name: 'Semantic', value: timing.avgSemanticTime, color: '#8b5cf6' },
-        { name: 'CodeGen', value: timing.avgCodeGenTime, color: '#22c55e' }
+        { name: 'Lexer', value: timing.avgLexTime, color: 'var(--chart-1)' },
+        { name: 'Parser', value: timing.avgParseTime, color: 'var(--chart-2)' },
+        { name: 'Semantic', value: timing.avgSemanticTime, color: 'var(--chart-3)' },
+        { name: 'CodeGen', value: timing.avgCodeGenTime, color: 'var(--chart-4)' }
     ];
 
     const max = Math.max(...stages.map(s => s.value), 0.001);
-    container.innerHTML = stages.map(s =>
-        '<div class="chart-bar" style="height:' + Math.max((s.value / max) * 180, 20) + 'px;background:' + s.color + '">' +
+    container.innerHTML = '<div class="chart-bars-wrap">' + stages.map(s =>
+        '<div class="chart-bar" tabindex="0" aria-label="' + s.name + ': ' + s.value + 'ms average" title="' + s.name + ' average: ' + s.value + 'ms" style="height:' + Math.max((s.value / max) * 180, 20) + 'px;background:' + s.color + '">' +
         '<span class="bar-value">' + s.value + 'ms</span>' +
         '<span class="bar-label">' + s.name + '</span>' +
         '</div>'
-    ).join('');
+    ).join('') + '</div>';
 
     // Accessible text equivalent for the bar chart.
     container.setAttribute('role', 'img');

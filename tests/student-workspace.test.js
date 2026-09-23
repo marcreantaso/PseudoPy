@@ -70,6 +70,33 @@ test('history excludes other students, seeded evidence and invalid timestamps', 
     assert.equal(data[0].id, 'real');
 });
 
+test('trend summary stays honest: insufficient, improved, dipped and stable tones', () => {
+    assert.equal(model.trend([]).tone, 'insufficient');
+    assert.equal(model.trend([{ validation: 100 }, { validation: 0 }]).tone, 'insufficient');
+    assert.equal(model.trend([{ validation: 40 }, { validation: 40 }, { validation: 90 }, { validation: 90 }, { validation: 90 }]).tone, 'improved');
+    assert.equal(model.trend([{ validation: 90 }, { validation: 90 }, { validation: 40 }, { validation: 40 }, { validation: 40 }]).tone, 'dipped');
+    assert.equal(model.trend([{ validation: 40 }, { validation: 42 }, { validation: 40 }, { validation: 41 }, { validation: 40 }]).tone, 'stable');
+});
+
+const workspaceSource = fs.readFileSync(path.join(root, 'src/student/workspace.js'), 'utf8');
+test('quick guide uses a segmented presentation control, not a native select', () => {
+    assert.ok(!/select class="sg-mode"/.test(workspaceSource), 'native select removed');
+    assert.match(workspaceSource, /class="seg"[^>]*aria-label="Presentation mode"/);
+    assert.match(workspaceSource, /data-mode="beginner"/);
+    assert.match(workspaceSource, /aria-pressed="true">Beginner<\/button>/);
+});
+test('learning progress hides formulas and mastery-unavailable jargon behind friendly copy', () => {
+    assert.ok(!/Construct Mastery: unavailable/.test(workspaceSource), 'raw unavailable text removed');
+    assert.match(workspaceSource, /Complete more exercises to unlock concept mastery insights/);
+    assert.match(workspaceSource, /Your Learning Progress/);
+    assert.match(workspaceSource, /Complete more translations to see your progress trend/);
+    assert.match(workspaceSource, /How is this calculated\?/);
+});
+test('chart data points expose keyboard and labelled tooltip hooks', () => {
+    assert.match(workspaceSource, /role="button" class="an-series-dot"/);
+    assert.match(workspaceSource, /dot\.onkeydown = e => \{ if \(e\.key === 'Enter' \|\| e\.key === ' '\) \{/);
+});
+
 function workspaceHarness() {
     const sandbox = vm.createContext({ console, StudentLearningModel: model, StudentGuide: guide,
         currentUser: { role: 'student', id: 's1' }, document: { querySelectorAll: () => [], getElementById: () => null } });
