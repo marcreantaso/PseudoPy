@@ -84,22 +84,30 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
 
 /**
  * Get a single document by ID.
+ * opts.strict (session/identity reads): when Firestore was reachable but the
+ * read failed after retries, throw a typed FirestoreUnavailableError instead of
+ * silently returning the local fallback, so callers can distinguish "account
+ * really gone" from "temporarily offline". Other callers keep the fallback.
  */
-async function dbGet(ref, docId) {
+async function dbGet(ref, docId, opts = {}) {
     if (firestoreReady()) {
         try {
-            const doc = await withFirestoreTimeout(firestore.collection(ref).doc(docId).get());
-            if (doc.exists) {
-                return { _docId: doc.id, ...doc.data() };
-            }
+            const doc = await firestoreRetry(() => firestore.collection(ref).doc(docId).get(), { attempts: opts.attempts || 2, timeoutMs: opts.timeoutMs, backoffMs: opts.backoffMs });
+            if (doc.exists) return { _docId: doc.id, ...doc.data() };
+            return null;
         } catch (err) {
+            if (opts.strict) {
+                console.warn(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
+                throw (err && err.name === 'FirestoreUnavailable') ? err : FirestoreUnavailableError(err.message);
+            }
             console.info(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
         }
     }
 
-    // Local fallback
+    // Local fallback / cache lookup (never used by strict identity reads)
     const local = getLocalCollection(ref);
-    return local.find(item => item._docId === docId || item.id === docId) || null;
+    const found = local.find(item => item._docId === docId || item.id === docId) || null;
+    return found;
 }
 
 /**

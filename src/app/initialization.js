@@ -2,6 +2,38 @@
    INITIALIZATION
    ============================================================ */
 
+const SEED_DONE_KEY = 'pseudopy_seeded';
+
+/**
+ * Seeding must not run on every normal boot. It runs once per browser (flag),
+ * only when Firestore is reachable, and only writes collections that are
+ * empty (seedDatabase's per-collection checks keep it duplicate-safe).
+ */
+async function ensureSeedDatabase() {
+    try {
+        if (localStorage.getItem(SEED_DONE_KEY) !== null) return;
+    } catch (e) { return; }
+    if (typeof firestoreReady !== 'function' || !firestoreReady()) return;
+    if (typeof seedDatabase !== 'function') return;
+    await seedDatabase();
+    try { localStorage.setItem(SEED_DONE_KEY, '1'); } catch (e) { /* private browsing */ }
+}
+
+/**
+ * Re-fetch authoritative collections from Firestore after a degraded boot so
+ * the IndexedDB cache is reconciled and Firestore stays the source of truth.
+ */
+async function refreshAuthoritativeCaches() {
+    try {
+        cachedUsers = await dbGetAll(usersRef);
+        cachedExercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, 0);
+        cachedActivity = await dbGetAll(activityRef);
+        console.log('[App] Re-fetched authoritative data from Firestore.');
+    } catch (e) {
+        console.info('[App] Re-sync fetch skipped:', e && e.message);
+    }
+}
+
 async function init() {
     console.log('[App] init() called');
     try {
@@ -10,12 +42,9 @@ async function init() {
         // login and never behaves like a logout.
         await restoreSession();
 
-        console.log('[App] Calling seedDatabase()...');
-        // Seed the database if collections are empty
-        await seedDatabase();
-        console.log('[App] seedDatabase() finished.');
-
-        // Pre-load data from Offline Database into cache
+        // Seed at most once per browser (never on every startup), then
+        // pre-load data from Offline Database into cache.
+        await ensureSeedDatabase();
         cachedUsers = await dbGetAll(usersRef);
         cachedExercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, 0);
         cachedActivity = await dbGetAll(activityRef);

@@ -5,6 +5,7 @@ const StudentWorkspace = (() => {
     let activePage = '', serial = 0, sessionEpoch = 0;
     const visible = new Set(['compilation', 'validation', 'cumulative']);
     let chartResizeObserver = null, chartResizeRaf = 0;
+    const guideState = { mode: 'beginner', category: 'Basics' };
     const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const userId = () => typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'student' ? String(currentUser._docId || currentUser.id || '') : '';
     const element = id => document.getElementById(id);
@@ -38,12 +39,16 @@ const StudentWorkspace = (() => {
         if (guide.dataset.owner === owner) return;
         guide.dataset.studentGuide = 'true'; guide.dataset.owner = owner;
         const key = 'pseudopy_quick_guide_' + owner;
-        let open = true, advanced = false;
+        const modeKey = (typeof STORAGE_KEYS !== 'undefined' && STORAGE_KEYS.GUIDE_MODE) || 'pseudopy_guide_mode';
+        let open = true;
         try { open = localStorage.getItem(key) !== 'closed'; } catch (_) { /* private browsing */ }
+        guideState.mode = 'beginner';
+        try { const m = localStorage.getItem(modeKey); if (m === 'beginner' || m === 'advanced') guideState.mode = m; } catch (_) { /* private browsing */ }
+        guideState.category = 'Basics';
         guide.open = open;
-        guide.innerHTML = '<summary>Pseudocode Quick Guide</summary><div class="sg-toolbar"><p class="sg-intro">Need help? Explore the syntax and examples while you write.</p><div class="seg" role="group" aria-label="Presentation mode"><button type="button" data-mode="beginner" aria-pressed="true">Beginner</button><button type="button" data-mode="advanced" aria-pressed="false">Advanced</button></div></div><div class="sg-cats" aria-label="Guide categories"></div><div class="sg-content"></div><p class="sg-tip" aria-live="polite"></p>';
+        guide.innerHTML = '<summary>Pseudocode Quick Guide</summary><div class="sg-toolbar"><p class="sg-intro">Need help? Explore the syntax and examples while you write.</p><div class="seg" role="group" aria-label="Presentation mode"><button type="button" data-mode="beginner" aria-pressed="' + (guideState.mode === 'beginner') + '">Beginner</button><button type="button" data-mode="advanced" aria-pressed="' + (guideState.mode === 'advanced') + '">Advanced</button></div></div><div class="sg-cats" aria-label="Guide categories"></div><div class="sg-content"></div><p class="sg-tip" aria-live="polite"></p>';
         guide.ontoggle = () => { try { localStorage.setItem(key, guide.open ? 'open' : 'closed'); } catch (_) {} };
-        const tabs = guide.querySelector('.sg-tabs'), content = guide.querySelector('.sg-content');
+        const cats = guide.querySelector('.sg-cats'), content = guide.querySelector('.sg-content');
         let contextTip = root.querySelector('.sg-context');
         if (!contextTip) {
             contextTip = document.createElement('div'); contextTip.className = 'sg-context'; contextTip.hidden = true;
@@ -51,12 +56,17 @@ const StudentWorkspace = (() => {
             editor.parentElement.insertAdjacentElement('afterend', contextTip);
             contextTip.querySelector('button').onclick = () => { contextTip.hidden = true; };
         }
-        let category = 'Basics';
+        function modeDetails(adv) {
+            if (!adv) return '';
+            return '<details class="sg-advanced" open><summary>Advanced: exact rules the compiler applies</summary><p class="sg-expl">' + esc(adv.intro) + '</p>' + (adv.bullets && adv.bullets.length ? '<ul class="sg-adv-list">' + adv.bullets.map(b => '<li>' + esc(b) + '</li>').join('') + '</ul>' : '') + '</details>';
+        }
         function show(name) {
-            category = name;
-            tabs.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.textContent === name)));
+            guideState.category = name;
+            cats.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.textContent === name)));
             if (name === 'Operators') {
-                content.innerHTML = '<p class="sg-expl">Select an operator for a working example. Python uses lowercase and, or, not.</p><div class="sg-operators">' + StudentGuide.operators.map((o, i) => '<button type="button" data-op="' + i + '"><strong>' + esc(o[0]) + '</strong> ' + esc(o[1]) + '<code>' + esc(o[2]) + '</code></button>').join('') + '</div><div class="sg-op-example"></div>';
+                let html = '<p class="sg-expl">Select an operator for a working example. Python uses lowercase and, or, not.</p><div class="sg-operators">' + StudentGuide.operators.map((o, i) => '<button type="button" data-op="' + i + '"><strong>' + esc(o[0]) + '</strong> ' + esc(o[1]) + '<code>' + esc(o[2]) + '</code></button>').join('') + '</div>';
+                if (guideState.mode === 'advanced') html += '<details class="sg-advanced" open><summary>Advanced: operator precedence and mapping</summary><p class="sg-expl">Precedence mirrors Python: ** first, then * / // %, then + -, then comparisons, then NOT, then AND, then OR.</p><ul class="sg-adv-list"><li>** binds tightest. ^ is bitwise XOR at + precedence, not exponentiation.</li><li>// is floor division (DIV) and % is remainder (MOD) on integers.</li><li>AND / OR short-circuit exactly like Python and, or.</li></ul></details>';
+                content.innerHTML = html + '<div class="sg-op-example"></div>';
                 content.querySelectorAll('[data-op]').forEach(b => b.onclick = () => {
                     const o = StudentGuide.operators[Number(b.dataset.op)];
                     const target = content.querySelector('.sg-op-example');
@@ -68,7 +78,8 @@ const StudentWorkspace = (() => {
                 return;
             }
             const item = StudentGuide.entries[name];
-            content.innerHTML = '<h3>' + esc(name) + '</h3><p class="sg-expl">' + esc(item[0]) + '</p><div class="sg-comparison"><figure class="sg-code"><figcaption><h4>Pseudocode</h4><button type="button" class="sg-insert"><i data-lucide="code-2" aria-hidden="true"></i> Insert Example</button></figcaption><pre>' + esc(item[1]) + '</pre></figure><figure class="sg-code"><figcaption><h4>Python equivalent (simplified)</h4></figcaption><pre>' + esc(item[2]) + '</pre></figure></div>' + (advanced ? '<details class="sg-advanced"><summary>Advanced: how the compiler interprets this</summary><p class="sg-expl">Compiler interpretation: keywords identify statements; expressions use Python precedence. Blocks become indentation. Counted loops include the end value; the generated Python may include helper functions. ^ means bitwise XOR, not exponentiation.</p></details>' : '');
+            const adv = item && item[3];
+            content.innerHTML = '<h3>' + esc(name) + '</h3><p class="sg-expl">' + esc(item[0]) + '</p><div class="sg-comparison"><figure class="sg-code"><figcaption><h4>Pseudocode</h4><button type="button" class="sg-insert"><i data-lucide="code-2" aria-hidden="true"></i> Insert Example</button></figcaption><pre>' + esc(item[1]) + '</pre></figure><figure class="sg-code"><figcaption><h4>Python equivalent (simplified)</h4></figcaption><pre>' + esc(item[2]) + '</pre></figure></div>' + (guideState.mode === 'advanced' ? modeDetails(adv) : '');
             const insert = content.querySelector('.sg-insert');
             if (insert) insert.onclick = () => insertExample(item[1]);
             refreshIcons(content);
@@ -84,13 +95,14 @@ const StudentWorkspace = (() => {
             editor.dispatchEvent(new Event('input', { bubbles: true }));
         }
         [...Object.keys(StudentGuide.entries), 'Operators'].forEach(name => {
-            const b = document.createElement('button'); b.type = 'button'; b.className = 'sg-chip'; b.textContent = name; b.onclick = () => show(name); tabs.appendChild(b);
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'sg-chip'; b.textContent = name; b.setAttribute('aria-pressed', String(name === guideState.category)); b.onclick = () => show(name); cats.appendChild(b);
         });
         const modeButtons = guide.querySelectorAll('.seg [data-mode]');
         modeButtons.forEach(b => b.onclick = () => {
-            advanced = b.dataset.mode === 'advanced';
+            guideState.mode = (b.dataset.mode === 'advanced') ? 'advanced' : 'beginner';
             modeButtons.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-            show(category);
+            try { localStorage.setItem(modeKey, guideState.mode); } catch (_) { /* private browsing */ }
+            show(guideState.category);
         });
         guide.showCategory = name => { guide.open = true; show(StudentGuide.entries[name] ? name : 'Basics'); guide.scrollIntoView({ block: 'nearest' }); };
         if (!editor.dataset.studentInputBound) {
@@ -105,7 +117,7 @@ const StudentWorkspace = (() => {
                 }, 450);
             });
         }
-        show(category);
+        show(guideState.category);
     }
     function translated(editorId, source, result, learning) {
         if (!userId() || !['pseudocode-editor', 'translate-input'].includes(editorId)) return;

@@ -52,6 +52,35 @@ function withFirestoreTimeout(promise, ms = 4000) {
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+/**
+ * Bounded retry for transient Firestore failures (timeouts/network blips).
+ * Runs `fetchFn` up to `attempts` times with `backoffMs` between tries, each
+ * protected by withFirestoreTimeout. Never retries an infinite loop, and
+ * throws a typed FirestoreUnavailableError once all attempts are exhausted so
+ * callers can decide (e.g. fall back to cached profile instead of logging out).
+ */
+function FirestoreUnavailableError(message) {
+    const err = new Error(message);
+    err.name = 'FirestoreUnavailable';
+    return err;
+}
+
+async function firestoreRetry(fetchFn, options = {}) {
+    const attempts = Math.max(1, options.attempts || 2);
+    const timeoutMs = options.timeoutMs || 4000;
+    const backoffMs = options.backoffMs === undefined ? 600 : Math.max(0, options.backoffMs || 0);
+    let lastErr = null;
+    for (let i = 0; i < attempts; i++) {
+        if (i > 0 && backoffMs > 0) await new Promise(r => setTimeout(r, backoffMs));
+        try {
+            return await withFirestoreTimeout(fetchFn(), timeoutMs);
+        } catch (err) {
+            lastErr = err;
+        }
+    }
+    throw FirestoreUnavailableError('Firestore operation failed after ' + attempts + ' attempt(s): ' + (lastErr && lastErr.message));
+}
+
 // ── Collection References ──────────────────────────────────
 const usersRef = "pseudopy_users";
 const exercisesRef = "pseudopy_exercises";

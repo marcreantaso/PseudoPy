@@ -106,6 +106,7 @@ function _updatePythonOutput(result) {
             ? '# Compilation failed — ' + result.errors.length + ' error(s)\n' + result.errors.map(e => '# Line ' + e.line + ': ' + e.message).join('\n')
             : '# No output';
     }
+    if (typeof devToolsSyncPythonExportButton === 'function') devToolsSyncPythonExportButton();
 }
 
 // ══════════════════════════════════════════════════════════════

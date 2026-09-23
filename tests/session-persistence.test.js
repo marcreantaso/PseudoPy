@@ -46,7 +46,7 @@ test('current route is persisted and the boot restore re-fetches from Firestore'
     assert.match(nav, /if \(currentUser\) persistRoute\(pageId\);/, 'navigateTo does not persist the route');
 
     const session = read('src/app/session.js');
-    assert.match(session, /await dbGet\(usersRef, docId\);/, 'restore does not use Firestore as the authoritative source');
+    assert.match(session, /await dbGet\(usersRef, docId, \{ strict: true \}\);/, 'restore does not use Firestore (strict) as the authoritative source');
     assert.match(session, /checkAccess\(fresh\.role, route\)/, 'restored route is not access-checked');
     assert.match(session, /showApp\(targetPage\)/, 'restored app does not navigate back to the saved page');
     assert.match(session, /status === 'archived'/, 'archived accounts not rejected on restore');
@@ -159,7 +159,8 @@ test('refresh restores student, instructor and admin sessions with their saved p
             showToast() { assert.fail('Valid refresh should not show a sign-out message'); }, console: { log() {}, warn() {} }
         });
         vm.runInContext(read('src/app/session.js'), context);
-        assert.equal(await context.restoreSession(), true);
+        const result = await context.restoreSession();
+        assert.equal(result.state, 'AUTHENTICATED');
         assert.equal(context.currentUser.role, role);
         assert.equal(opened, route);
         assert.ok(storage.has('pseudopy_session_user'));

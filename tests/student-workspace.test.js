@@ -83,7 +83,8 @@ test('quick guide uses a segmented presentation control, not a native select', (
     assert.ok(!/select class="sg-mode"/.test(workspaceSource), 'native select removed');
     assert.match(workspaceSource, /class="seg"[^>]*aria-label="Presentation mode"/);
     assert.match(workspaceSource, /data-mode="beginner"/);
-    assert.match(workspaceSource, /aria-pressed="true">Beginner<\/button>/);
+    assert.match(workspaceSource, /data-mode="advanced"/);
+    assert.match(workspaceSource, /aria-pressed="' \+ \(guideState\.mode === 'beginner'\) \+ '">Beginner<\/button>/, 'Beginner chip no longer pressed by default');
 });
 test('learning progress hides formulas and mastery-unavailable jargon behind friendly copy', () => {
     assert.ok(!/Construct Mastery: unavailable/.test(workspaceSource), 'raw unavailable text removed');
@@ -128,4 +129,76 @@ test('logout and account changes isolate session data and pending runtime callba
     assert.equal(s.workspace.sessionMetrics().executions, 0);
     s.currentUser = { role: 'admin', id: 'admin' }; s.workspace.activate('developer-options');
     assert.equal(s.workspace.beginRun('admin-console', 'print(1)'), null);
+});
+
+test('quick guide carries advanced-mode content for every category', () => {
+    for (const [name, item] of Object.entries(guide.entries)) {
+        assert.equal(item.length, 4, name + ': advanced payload missing');
+        assert.equal(typeof item[3].intro, 'string', name + ': advanced intro missing');
+        assert.ok(Array.isArray(item[3].bullets) && item[3].bullets.length >= 3, name + ': advanced bullets missing');
+    }
+    assert.ok(guide.entries.Conditions[3].bullets.some(b => /END IF/.test(b)), 'Conditions advanced copy missing block-close rule');
+});
+
+test('quick guide state machine persists mode, keeps the category, and never duplicates chips', () => {
+    const persisted = new Map();
+    function makeButton() {
+        const pressed = {};
+        return { dataset: {}, setAttribute(k, v) { pressed[k] = v; }, aria: pressed, onclick: null, textContent: '' };
+    }
+    function guideHarness(startMode) {
+        const chips = [];
+        const cats = { chips, appendChild(c) { chips.push(c); }, querySelectorAll() { return chips; }, setAttribute() {} };
+        const content = { innerHTML: '', querySelector() { return null; }, querySelectorAll() { return []; }, setAttribute() {} };
+        const guideEl = { dataset: {}, open: true, innerHTML: '', ontoggle: null,
+            querySelector(sel) { return sel === '.sg-cats' ? cats : sel === '.sg-content' ? content : null; },
+            querySelectorAll(sel) { return sel.includes('data-mode') ? modeButtons : []; },
+            scrollIntoView() {} };
+        const beginner = makeButton(), advanced = makeButton();
+        beginner.dataset.mode = 'beginner'; advanced.dataset.mode = 'advanced';
+        beginner.aria['aria-pressed'] = String(startMode !== 'advanced');
+        advanced.aria['aria-pressed'] = String(startMode === 'advanced');
+        const modeButtons = [beginner, advanced];
+        const editor = { value: '', dataset: {}, selectionStart: 0, selectionEnd: 0, parentElement: { insertAdjacentElement() {} },
+            setRangeText() {}, focus() {}, dispatchEvent() {}, addEventListener() {}, setSelectionRange() {}, scrollTop: 0 };
+        const pageRoot = { querySelector(sel) { return sel === '.operator-guide' ? guideEl : null; }, appendChild() {}, insertAdjacentElement() {} };
+        const byId = { 'page-write-pseudocode': pageRoot, 'pseudocode-editor': editor };
+        const sandbox = vm.createContext({
+            console, StudentLearningModel: model, StudentGuide: guide, StudentWorkspace: undefined,
+            currentUser: { role: 'student', id: 's1' },
+            STORAGE_KEYS: { GUIDE_MODE: 'pseudopy_guide_mode' },
+            localStorage: { getItem: k => (startMode && k === 'pseudopy_guide_mode') ? startMode : (persisted.get(k) || null), setItem: (k, v) => persisted.set(k, v), removeItem: k => persisted.delete(k) },
+            document: { getElementById: id => byId[id] || null, querySelectorAll: () => [], createElement: () => ({
+                dataset: {}, classList: { add() {}, remove() {} }, setAttribute() {}, innerHTML: '', textContent: '',
+                hidden: false, className: '', onclick: null, querySelector: () => ({ onclick: null }),
+                querySelectorAll: () => [], appendChild() {}, addEventListener() {}, focus() {}, scrollIntoView() {}
+            }),
+                getComputedStyle: () => ({ lineHeight: '22px' }) },
+            refreshIcons() {}, Event: class { constructor() {} }
+        });
+        vm.runInContext(fs.readFileSync(path.join(root, 'src/student/workspace.js'), 'utf8') + '\nthis.workspace = StudentWorkspace;', sandbox);
+        return { sandbox, guideEl, cats, content, beginner, advanced, editor };
+    }
+
+    const h = guideHarness(null);
+    h.sandbox.workspace.activate('write-pseudocode');
+    assert.equal(h.cats.chips.length, 9, 'one chip per guide category plus Operators');
+    assert.equal(h.beginner.aria['aria-pressed'], 'true', 'Beginner pressed by default');
+    assert.equal(h.advanced.aria['aria-pressed'], 'false', 'Advanced not pressed by default');
+
+    h.advanced.onclick();
+    assert.equal(h.beginner.aria['aria-pressed'], 'false', 'Beginner unpressed after switching');
+    assert.equal(h.advanced.aria['aria-pressed'], 'true', 'Advanced pressed after switching');
+    assert.equal(persisted.get('pseudopy_guide_mode'), 'advanced', 'mode not persisted');
+    assert.match(h.content.innerHTML, /Basic/, 'category was not preserved when re-rendering');
+    assert.match(h.content.innerHTML, /sg-advanced/, 'advanced block not rendered in advanced mode');
+
+    const chipCount = h.cats.chips.length;
+    h.sandbox.workspace.activate('write-pseudocode');
+    assert.equal(h.cats.chips.length, chipCount, 're-activation duplicated guide chips');
+
+    const h2 = guideHarness('advanced');
+    h2.sandbox.workspace.activate('write-pseudocode');
+    assert.equal(h2.beginner.aria['aria-pressed'], 'false', 'persisted Beginner state not restored');
+    assert.equal(h2.advanced.aria['aria-pressed'], 'true', 'persisted Advanced state not restored');
 });

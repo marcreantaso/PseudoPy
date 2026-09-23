@@ -17,6 +17,7 @@ const devToolsState = {
     stepIndex: -1,         // for step-through mode
     stepEvents: [],        // cached events for stepping
     allErrors: [],         // classified errors across all stages
+    importedSourceName: null, // uploaded pseudocode filename (for .py export)
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -30,6 +31,9 @@ function initDevTools() {
     // Refresh icons for the new page
     if (typeof refreshIcons === 'function') refreshIcons(document.getElementById('page-developer-options'));
     else if (window.lucide) lucide.createIcons();
+    // Wire file upload / drag & drop and the export button state.
+    if (typeof devToolsInitFileDrop === 'function') devToolsInitFileDrop();
+    if (typeof devToolsSyncPythonExportButton === 'function') devToolsSyncPythonExportButton();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -335,6 +339,8 @@ function devToolsReset() {
 
     const afp = document.getElementById('devtools-autofix-panel');
     if (afp) afp.classList.add('hidden');
+
+    if (typeof devToolsSyncPythonExportButton === 'function') devToolsSyncPythonExportButton();
 }
 
 function devToolsClearTrace() {
@@ -366,9 +372,12 @@ function devToolsViewRawJSON() {
 }
 
 function devToolsCopyPython() {
-    const el = document.getElementById('devtools-python-output');
-    if (!el) return;
-    navigator.clipboard.writeText(el.textContent).then(() => {
+    const code = typeof devToolsCurrentPython === 'function' ? devToolsCurrentPython() : '';
+    if (!code.trim()) {
+        if (typeof showToast === 'function') showToast('Nothing to copy yet. Run the pipeline first.', 'error');
+        return;
+    }
+    navigator.clipboard.writeText(code).then(() => {
         if (typeof showToast === 'function') showToast('Python code copied!', 'success');
     });
 }

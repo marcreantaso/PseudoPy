@@ -19,8 +19,9 @@ function navigateTo(pageId) {
         return;
     }
 
-    currentPage = pageId;
-    if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.activate(pageId);
+currentPage = pageId;
+    try { if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.activate(pageId); }
+    catch (err) { console.warn('[Nav] Student workspace render failed on', pageId, ':', err && err.message); }
 
     // Remember the route so a refresh/boot can restore the same page.
     if (currentUser) persistRoute(pageId);
@@ -44,26 +45,26 @@ function navigateTo(pageId) {
     // Update topbar title
     setText('topbar-title', PAGE_TITLES[pageId] || 'Dashboard');
 
-    // Load page-specific data (async)
-    if (pageId === 'analytics') {
-        loadAnalytics();
-    }
-    if (pageId === 'manage-exercises') loadExercises();
-    if (pageId === 'manage-users') loadUsers();
-    if (pageId === 'manage-students') loadStudents();
-    if (pageId === 'exercises-student') loadStudentExercises();
-    if (pageId === 'student-settings') loadStudentSettings();
+// Load page-specific data (async). A renderer failure on one page must never
+    // take the session or navigation down with it.
+    const guarded = fn => { try { fn(); } catch (err) { console.warn('[Nav] Page loader failed on', pageId, ':', err && err.message); } };
+    if (pageId === 'analytics') guarded(loadAnalytics);
+    if (pageId === 'manage-exercises') guarded(loadExercises);
+    if (pageId === 'manage-users') guarded(loadUsers);
+    if (pageId === 'manage-students') guarded(loadStudents);
+    if (pageId === 'exercises-student') guarded(loadStudentExercises);
+    if (pageId === 'student-settings') guarded(loadStudentSettings);
     if (pageId === 'password-requests') {
-        startAuditLogRealtime();
-        loadPasswordRequests();
+        guarded(startAuditLogRealtime);
+        guarded(loadPasswordRequests);
     } else if (typeof auditLogUnsubscribe !== 'undefined' && auditLogUnsubscribe) {
         stopAuditLogRealtime();
     }
     if (pageId !== 'analytics') {
         if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     }
-    if (pageId === 'password-recovery') loadPasswordRecovery();
-    if (pageId === 'compiler-metrics') loadCompilerMetrics();
+    if (pageId === 'password-recovery') guarded(loadPasswordRecovery);
+    if (pageId === 'compiler-metrics') guarded(loadCompilerMetrics);
     if (pageId === 'developer-options') {
         // DevTools is a dev-only surface; its bundle (devtools.js) is fetched
         // lazily on first entry instead of paying for it on every page load.

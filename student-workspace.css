@@ -30,6 +30,8 @@
 .sg-advanced { margin-block: .75rem .25rem; border: 1px solid var(--border); border-radius: 8px; padding: .5rem .75rem; background: var(--bg-input); }
 .sg-advanced summary { font-size: .82rem; color: var(--text-secondary); }
 .sg-advanced .sg-expl { margin-block: .4rem 0; }
+.sg-adv-list { margin: .4rem 0 0; padding-inline-start: 1.15rem; display: grid; gap: .35rem; }
+.sg-adv-list li { line-height: 1.55; font-size: .83rem; color: var(--text-primary); }
 
 /* ── Code surfaces ── */
 .student-workspace pre, .operator-guide pre { white-space: pre; overflow: auto; padding: .75rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; max-height: 24rem; color: var(--text-primary); font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, "Liberation Mono", monospace; font-size: .83rem; line-height: 1.55; margin: 0; }

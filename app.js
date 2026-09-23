@@ -76,6 +76,7 @@ const STORAGE_KEYS = {
     EDITOR_DRAFT: 'pseudopy_editor_draft',
     TUTORIAL_COMPLETED: 'pseudopy_tutorial_completed',
     UPDATE_DISMISSED: 'pseudopy_update_dismissed',
+    GUIDE_MODE: 'pseudopy_guide_mode',
     LOCAL_PREFIX: 'pseudopy_local_'
 };﻿/* ============================================================
    PSEUDOPY — APP.JS
@@ -370,6 +371,38 @@ function loadScripts(srcList, onSuccess, onError) {
    INITIALIZATION
    ============================================================ */
 
+const SEED_DONE_KEY = 'pseudopy_seeded';
+
+/**
+ * Seeding must not run on every normal boot. It runs once per browser (flag),
+ * only when Firestore is reachable, and only writes collections that are
+ * empty (seedDatabase's per-collection checks keep it duplicate-safe).
+ */
+async function ensureSeedDatabase() {
+    try {
+        if (localStorage.getItem(SEED_DONE_KEY) !== null) return;
+    } catch (e) { return; }
+    if (typeof firestoreReady !== 'function' || !firestoreReady()) return;
+    if (typeof seedDatabase !== 'function') return;
+    await seedDatabase();
+    try { localStorage.setItem(SEED_DONE_KEY, '1'); } catch (e) { /* private browsing */ }
+}
+
+/**
+ * Re-fetch authoritative collections from Firestore after a degraded boot so
+ * the IndexedDB cache is reconciled and Firestore stays the source of truth.
+ */
+async function refreshAuthoritativeCaches() {
+    try {
+        cachedUsers = await dbGetAll(usersRef);
+        cachedExercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, 0);
+        cachedActivity = await dbGetAll(activityRef);
+        console.log('[App] Re-fetched authoritative data from Firestore.');
+    } catch (e) {
+        console.info('[App] Re-sync fetch skipped:', e && e.message);
+    }
+}
+
 async function init() {
     console.log('[App] init() called');
     try {
@@ -378,12 +411,9 @@ async function init() {
         // login and never behaves like a logout.
         await restoreSession();
 
-        console.log('[App] Calling seedDatabase()...');
-        // Seed the database if collections are empty
-        await seedDatabase();
-        console.log('[App] seedDatabase() finished.');
-
-        // Pre-load data from Offline Database into cache
+        // Seed at most once per browser (never on every startup), then
+        // pre-load data from Offline Database into cache.
+        await ensureSeedDatabase();
         cachedUsers = await dbGetAll(usersRef);
         cachedExercises = await dbGetAll(exercisesRef, EX_PAGE_LIMIT, 0);
         cachedActivity = await dbGetAll(activityRef);
@@ -522,6 +552,7 @@ async function refreshActivity() {
 
 function showToast(message, type = 'info') {
     const container = $id('toast-container');
+    if (!container) return;
     const icons = { success: 'circle-check', error: 'circle-x', info: 'info' };
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
@@ -799,6 +830,7 @@ async function handleLogin() {
 function handleLogout() {
     if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.reset();
     if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
+    if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
     // Invalidate session state
     currentUser = null;
     currentPage = '';
@@ -883,10 +915,13 @@ const SESSION_KEY = STORAGE_KEYS.SESSION_USER;
 const ROUTE_KEY = STORAGE_KEYS.ROUTE;
 
 const BOOT_LOADING = 'AUTH_LOADING';
+const BOOT_PROFILE_LOADING = 'PROFILE_LOADING';
 const BOOT_AUTHENTICATED = 'AUTHENTICATED';
+const BOOT_AUTHENTICATED_DEGRADED = 'AUTHENTICATED_DEGRADED';
 const BOOT_UNAUTHENTICATED = 'UNAUTHENTICATED';
 
 let bootState = BOOT_LOADING;
+let profileRefreshAttempts = 0;
 
 /**
  * Returns a persistable copy of a user record with credential fields
@@ -948,14 +983,97 @@ function hideBootSplash() {
     if (splash) splash.classList.add('hidden');
 }
 
+function showConnectionBanner() {
+    const banner = $id('connection-status-banner');
+    if (banner) banner.hidden = false;
+}
+
+function hideConnectionBanner() {
+    const banner = $id('connection-status-banner');
+    if (banner) banner.hidden = true;
+}
+
+function makeGoneError() {
+    const gone = new Error('Session account no longer exists.');
+    gone.name = 'SessionAccountGone';
+    return gone;
+}
+
+/**
+ * Best-known cached profile for an account id (from the IndexedDB-backed local
+ * collection). Only accepts roles/status the app can boot; never credentials.
+ */
+function loadCachedProfileFor(snapshot) {
+    const id = snapshot && (snapshot._docId || snapshot.id);
+    if (!id || typeof getLocalCollection !== 'function' || typeof usersRef === 'undefined') return null;
+    try {
+        const rows = getLocalCollection(usersRef);
+        const found = (rows && rows.find ? rows.find(item => item._docId === id || item.id === id) : null);
+        if (!found) return null;
+        const role = String(found.role || '').toLowerCase();
+        const status = String(found.status || 'active').toLowerCase();
+        if (['student', 'instructor', 'admin'].includes(role) && status !== 'archived' && status !== 'inactive') return sanitizeUser(found);
+    } catch (e) { /* fall through to the persisted snapshot */ }
+    return null;
+}
+
+/**
+ * Bounded background re-sync after a degraded boot. Refetches the profile from
+ * Firestore (with a few attempts), then restores authority by refreshing the
+ * cached collections and re-rendering. Never loops forever (max 3 retries).
+ */
+function scheduleProfileRefresh(docId, fallbackRoute) {
+    if (typeof dbGet !== 'function' || typeof checkAccess !== 'function') return;
+    if (profileRefreshAttempts >= 3) return;
+    profileRefreshAttempts++;
+    const backoffMs = [1500, 3000, 6000][profileRefreshAttempts - 1] || 6000;
+    setTimeout(async () => {
+        try {
+            const fresh = await dbGet(usersRef, docId, { strict: true });
+            if (!fresh) { profileRefreshAttempts = 3; return; }
+            currentUser = fresh;
+            profileRefreshAttempts = 0;
+            hideConnectionBanner();
+            if (typeof refreshAuthoritativeCaches === 'function') refreshAuthoritativeCaches();
+            const route = getPersistedRoute();
+            const targetPage = (route && checkAccess(fresh.role, route)) ? route : (fallbackRoute || '');
+            renderSessionState({ state: BOOT_AUTHENTICATED, user: fresh, route: targetPage });
+            console.log('[Session] Background re-sync completed; Firestore is authoritative again.');
+        } catch (e) {
+            console.info('[Session] Background re-sync still unavailable:', e && e.message);
+        }
+    }, backoffMs);
+}
+
+/**
+ * UI-rendering half of the boot. Session state is computed separately; this
+ * only materializes the result once the DOM containers exist. A renderer
+ * failure here is logged and never flips the authentication state.
+ */
+function renderSessionState(result) {
+    if (!result || (result.state !== BOOT_AUTHENTICATED && result.state !== BOOT_AUTHENTICATED_DEGRADED)) {
+        hideBootSplash();
+        return;
+    }
+    const targetPage = result.route || '';
+    if (typeof showApp === 'function') {
+        try { showApp(targetPage); } catch (e) { console.warn('[Session] App render failed, session kept:', e && e.message); }
+    }
+    if (result.state === BOOT_AUTHENTICATED_DEGRADED) showConnectionBanner();
+    hideBootSplash();
+}
+
 /**
  * Boot-time auth restore. Runs once on startup:
  *   1. If no persisted session -> UNAUTHENTICATED (login screen).
  *   2. Otherwise show the boot splash, re-fetch the user record from
  *      Firestore as the authoritative source of profile/role/status, and
  *      restore the previously persisted route (access-checked).
+ *   3. Rendering is separated into renderSessionState() so a UI error can
+ *      never sign the user out.
  * A missing/invalid record clears the session; a temporary Firestore delay
- * must never sign anyone out.
+ * must never sign anyone out — it boots from the best-known cached profile in
+ * AUTHENTICATED_DEGRADED and re-syncs in the background.
  */
 async function restoreSession() {
     bootState = BOOT_LOADING;
@@ -969,19 +1087,20 @@ async function restoreSession() {
 
     if (!snapshot || !((snapshot._docId || snapshot.id))) {
         bootState = BOOT_UNAUTHENTICATED;
-        return false;
+        return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
     }
 
     showBootSplash();
+    bootState = BOOT_PROFILE_LOADING;
+
+    const docId = snapshot._docId || snapshot.id;
 
     try {
-        const docId = snapshot._docId || snapshot.id;
-        const fresh = await dbGet(usersRef, docId);
+        const fresh = await dbGet(usersRef, docId, { strict: true });
 
         if (!fresh) {
-            const gone = new Error('Session account no longer exists.');
-            gone.name = 'SessionAccountGone';
-            throw gone;
+            // Firestore is authoritative and confirms the account is gone.
+            throw makeGoneError();
         }
 
         const status = (fresh.status || 'active').toLowerCase();
@@ -990,34 +1109,45 @@ async function restoreSession() {
             bootState = BOOT_UNAUTHENTICATED;
             hideBootSplash();
             showToast('Your session ended. This account is no longer active.', 'info');
-            return false;
+            return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
         }
 
         currentUser = fresh;
 
         const route = getPersistedRoute();
         const targetPage = (route && checkAccess(fresh.role, route)) ? route : '';
-        showApp(targetPage);
 
         bootState = BOOT_AUTHENTICATED;
-        hideBootSplash();
+        renderSessionState({ state: BOOT_AUTHENTICATED, user: fresh, route: targetPage });
         console.log('[Session] Restored:', fresh.username, 'role:', fresh.role, 'page:', targetPage || '(default)');
-        return true;
+        return { state: BOOT_AUTHENTICATED, user: fresh, route: targetPage };
     } catch (err) {
         if (err && err.name === 'SessionAccountGone') {
             // The account was explicitly deleted: purge stored credentials-free
             // profile so stale sessions never resurrect.
             console.warn('[Session] Account no longer exists; clearing stored session.');
             clearSession();
-        } else {
-            // Transient Firestore/network failure: the persisted session is
-            // kept so a later boot can retry. A temporary outage must never
-            // behave like a (silent) logout.
-            console.warn('[Session] Restore temporarily unavailable; kept session for retry:', err && err.message);
+            bootState = BOOT_UNAUTHENTICATED;
+            hideBootSplash();
+            return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
+        }
+        // Transient Firestore/network failure: the persisted session is
+        // kept so a later boot can retry. A temporary outage must never
+        // behave like a (silent) logout.
+        console.warn('[Session] Restore temporarily unavailable; kept session for retry:', err && err.message);
+        const cached = loadCachedProfileFor(snapshot);
+        if (cached || (snapshot && (snapshot._docId || snapshot.id))) {
+            currentUser = cached || sanitizeUser(snapshot);
+            bootState = BOOT_AUTHENTICATED_DEGRADED;
+            const route = getPersistedRoute();
+            const targetPage = (route && checkAccess(currentUser.role, route)) ? route : '';
+            renderSessionState({ state: BOOT_AUTHENTICATED_DEGRADED, user: currentUser, route: targetPage });
+            scheduleProfileRefresh(docId, targetPage);
+            return { state: BOOT_AUTHENTICATED_DEGRADED, user: currentUser, route: targetPage };
         }
         bootState = BOOT_UNAUTHENTICATED;
         hideBootSplash();
-        return false;
+        return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
     }
 }/* ============================================================
    NAVIGATION
@@ -1040,8 +1170,9 @@ function navigateTo(pageId) {
         return;
     }
 
-    currentPage = pageId;
-    if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.activate(pageId);
+currentPage = pageId;
+    try { if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.activate(pageId); }
+    catch (err) { console.warn('[Nav] Student workspace render failed on', pageId, ':', err && err.message); }
 
     // Remember the route so a refresh/boot can restore the same page.
     if (currentUser) persistRoute(pageId);
@@ -1065,26 +1196,26 @@ function navigateTo(pageId) {
     // Update topbar title
     setText('topbar-title', PAGE_TITLES[pageId] || 'Dashboard');
 
-    // Load page-specific data (async)
-    if (pageId === 'analytics') {
-        loadAnalytics();
-    }
-    if (pageId === 'manage-exercises') loadExercises();
-    if (pageId === 'manage-users') loadUsers();
-    if (pageId === 'manage-students') loadStudents();
-    if (pageId === 'exercises-student') loadStudentExercises();
-    if (pageId === 'student-settings') loadStudentSettings();
+// Load page-specific data (async). A renderer failure on one page must never
+    // take the session or navigation down with it.
+    const guarded = fn => { try { fn(); } catch (err) { console.warn('[Nav] Page loader failed on', pageId, ':', err && err.message); } };
+    if (pageId === 'analytics') guarded(loadAnalytics);
+    if (pageId === 'manage-exercises') guarded(loadExercises);
+    if (pageId === 'manage-users') guarded(loadUsers);
+    if (pageId === 'manage-students') guarded(loadStudents);
+    if (pageId === 'exercises-student') guarded(loadStudentExercises);
+    if (pageId === 'student-settings') guarded(loadStudentSettings);
     if (pageId === 'password-requests') {
-        startAuditLogRealtime();
-        loadPasswordRequests();
+        guarded(startAuditLogRealtime);
+        guarded(loadPasswordRequests);
     } else if (typeof auditLogUnsubscribe !== 'undefined' && auditLogUnsubscribe) {
         stopAuditLogRealtime();
     }
     if (pageId !== 'analytics') {
         if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     }
-    if (pageId === 'password-recovery') loadPasswordRecovery();
-    if (pageId === 'compiler-metrics') loadCompilerMetrics();
+    if (pageId === 'password-recovery') guarded(loadPasswordRecovery);
+    if (pageId === 'compiler-metrics') guarded(loadCompilerMetrics);
     if (pageId === 'developer-options') {
         // DevTools is a dev-only surface; its bundle (devtools.js) is fetched
         // lazily on first entry instead of paying for it on every page load.
@@ -9765,14 +9896,54 @@ const StudentLearningModel = (() => {
 if (typeof module !== 'undefined' && module.exports) module.exports = StudentLearningModel;
 const StudentGuide = (() => {
     const entries = {
-        'Basics': ['Wrap your program in BEGIN and END. Instructions go between them.', 'BEGIN\n    DISPLAY "Hello!"\nEND', 'print("Hello!")'],
-        'Variables': ['A variable is a name for a value. DECLARE chooses its type; SET stores a value.', 'BEGIN\n    DECLARE total AS INTEGER\n    SET total TO 10\n    DISPLAY total\nEND', 'total = 0\ntotal = 10\nprint(total)'],
-        'Input & Output': ['INPUT asks for a value. DISPLAY shows a result. Declare numeric inputs before reading them.', 'BEGIN\n    DECLARE age AS INTEGER\n    INPUT age\n    DISPLAY "Age:", age\nEND', 'age = int(input())\nprint("Age:", age)'],
-        'Conditions': ['Start with IF condition THEN. Finish the block with END IF.', 'BEGIN\n    DECLARE grade AS INTEGER\n    SET grade TO 80\n    IF grade >= 75 THEN\n        DISPLAY "Passed"\n    END IF\nEND', 'grade = 80\nif grade >= 75:\n    print("Passed")'],
-        'Loops': ['FOR repeats for a range, including the end value. WHILE repeats while its condition is true. Both need DO and a matching END.', 'BEGIN\n    FOR i FROM 1 TO 5 DO\n        DISPLAY i\n    END FOR\nEND', 'for i in range(1, 6):\n    print(i)'],
-        'While Loops': ['Change the condition inside a WHILE loop so it can eventually stop.', 'BEGIN\n    DECLARE count AS INTEGER\n    SET count TO 1\n    WHILE count <= 3 DO\n        DISPLAY count\n        SET count TO count + 1\n    END WHILE\nEND', 'count = 1\nwhile count <= 3:\n    print(count)\n    count = count + 1'],
-        'Comments': ['Use # to leave a note. The translator ignores comments. // is a comment only at the beginning of a line.', 'BEGIN\n    # Explain your next instruction\n    DISPLAY "Hello" # A greeting\nEND', '# Explain your next instruction\nprint("Hello") # A greeting'],
-        'Common Mistakes': ['Match each opening block with its closing instruction. Use THEN after IF and DO after a loop condition.', 'BEGIN\n    IF 2 > 1 THEN\n        DISPLAY "True"\n    END IF\nEND', 'if 2 > 1:\n    print("True")']
+        'Basics': [
+            'Wrap your program in BEGIN and END. Instructions go between them.',
+            'BEGIN\n    DISPLAY "Hello!"\nEND',
+            'print("Hello!")',
+            { intro: 'Every program starts with BEGIN, has its instructions in the middle, and ends with END. The translator requires these markers and ignores blank lines.', bullets: ['Keywords are not case-sensitive, but DISPLAY expects a value or text after it.', 'There is no automatic END: blocks only close when you explicitly close them.', 'DECLARE must appear before you SET or use a variable.'] }
+        ],
+        'Variables': [
+            'A variable is a name for a value. DECLARE chooses its type; SET stores a value.',
+            'BEGIN\n    DECLARE total AS INTEGER\n    SET total TO 10\n    DISPLAY total\nEND',
+            'total = 0\ntotal = 10\nprint(total)',
+            { intro: 'Think of DECLARE as reserving a named slot of a fixed type, and SET as storing a value into that slot.', bullets: ['INTEGER fits whole numbers, REAL fits decimals, STRING fits text, BOOLEAN fits TRUE/FALSE.', 'Re-declaring a variable is an error; declare each variable once.', 'A variable must be declared before it is read.'] }
+        ],
+        'Input & Output': [
+            'INPUT asks for a value. DISPLAY shows a result. Declare numeric inputs before reading them.',
+            'BEGIN\n    DECLARE age AS INTEGER\n    INPUT age\n    DISPLAY "Age:", age\nEND',
+            'age = int(input())\nprint("Age:", age)',
+            { intro: 'INPUT reads one value and stores it in the named variable; DISPLAY prints text or a value to the screen.', bullets: ['Declare numeric variables AS INTEGER or AS REAL before INPUT — a later INPUT does not change the type.', 'Separate multiple DISPLAY items with a comma: DISPLAY "Score:", grade', 'Print any text first when combining text and a value: DISPLAY "Age:", age'] }
+        ],
+        'Conditions': [
+            'Start with IF condition THEN. Finish the block with END IF.',
+            'BEGIN\n    DECLARE grade AS INTEGER\n    SET grade TO 80\n    IF grade >= 75 THEN\n        DISPLAY "Passed"\n    END IF\nEND',
+            'grade = 80\nif grade >= 75:\n    print("Passed")',
+            { intro: 'An IF statement chooses between blocks based on a condition. Conditions compare values using comparison operators.', bullets: ['Write IF condition THEN ... END IF. ELSE IF and ELSE are optional but must belong to the matching block.', 'The condition must be a comparison or a boolean (TRUE/FALSE), never an assignment.', 'Nested IFs close innermost-first: each END IF closes the most recent open IF.'] }
+        ],
+        'Loops': [
+            'FOR repeats for a range, including the end value. WHILE repeats while its condition is true. Both need DO and a matching END.',
+            'BEGIN\n    FOR i FROM 1 TO 5 DO\n        DISPLAY i\n    END FOR\nEND',
+            'for i in range(1, 6):\n    print(i)',
+            { intro: 'FOR counts over a range and stops when the counter passes the end value; WHILE repeats while a condition stays true.', bullets: ['FOR i FROM 1 TO n DO ... END FOR includes both 1 and n.', 'Set the step with BY: FOR i FROM 2 TO 10 BY 2 DO', 'Do not rely on the loop variable after the loop; declare your own when you need the final value.'] }
+        ],
+        'While Loops': [
+            'Change the condition inside a WHILE loop so it can eventually stop.',
+            'BEGIN\n    DECLARE count AS INTEGER\n    SET count TO 1\n    WHILE count <= 3 DO\n        DISPLAY count\n        SET count TO count + 1\n    END WHILE\nEND',
+            'count = 1\nwhile count <= 3:\n    print(count)\n    count = count + 1',
+            { intro: 'A WHILE loop checks its condition before each iteration, so the body must change the condition to eventually reach false.', bullets: ['Write WHILE condition DO ... END WHILE.', 'If the condition never changes, the loop runs forever — update your counter inside the body.', 'Check the initial value too: the body may never run at all if the condition starts false.'] }
+        ],
+        'Comments': [
+            'Use # to leave a note. The translator ignores comments. // is a comment only at the beginning of a line.',
+            'BEGIN\n    # Explain your next instruction\n    DISPLAY "Hello" # A greeting\nEND',
+            '# Explain your next instruction\nprint("Hello") # A greeting',
+            { intro: 'Comments explain your code to people. The translator ignores them, so they never affect what runs.', bullets: ['# comments out the rest of the line.', '// is only a comment when the line starts with it (then it works the same as #).', 'Keep comments on their own line or after the instruction; do not split an instruction with a comment.'] }
+        ],
+        'Common Mistakes': [
+            'Match each opening block with its closing instruction. Use THEN after IF and DO after a loop condition.',
+            'BEGIN\n    IF 2 > 1 THEN\n        DISPLAY "True"\n    END IF\nEND',
+            'if 2 > 1:\n    print("True")',
+            { intro: 'Most beginners trip on block structure and ordering. Check these before asking for help.', bullets: ['Every IF needs THEN; every FOR/WHILE needs DO; every opened block needs its matching END.', 'Declare variables near the top, before they are used.', 'The first statement after BEGIN should be an instruction, not another BEGIN.'] }
+        ]
     };
     const operators = [ ['+', 'Addition', '2 + 3'], ['-', 'Subtraction', '5 - 2'], ['*', 'Multiplication', '3 * 4'], ['/', 'Division', '7 / 2'], ['//', 'Floor division (DIV)', '7 // 2'], ['%', 'Remainder (MOD)', '7 % 2'], ['**', 'Exponent', '2 ** 3'], ['==', 'Equal to', '2 == 2'], ['!=', 'Not equal to', '2 != 3'], ['<', 'Less than', '2 < 3'], ['<=', 'Less than or equal', '2 <= 3'], ['>', 'Greater than', '3 > 2'], ['>=', 'Greater than or equal', '3 >= 2'], ['AND', 'Both conditions', '2 < 3 AND 3 < 4'], ['OR', 'At least one condition', '2 > 3 OR 3 < 4'], ['NOT', 'Reverse a condition', 'NOT (2 > 3)'] ];
     function tip(text, cursor) {
@@ -9788,14 +9959,14 @@ const StudentGuide = (() => {
     }
     return { entries, operators, tip, insert };
 })();
-if (typeof module !== 'undefined' && module.exports) module.exports = StudentGuide;
-/* Student-only workspace. Consumes cached compiler results; never invokes devtools. */
+if (typeof module !== 'undefined' && module.exports) module.exports = StudentGuide;/* Student-only workspace. Consumes cached compiler results; never invokes devtools. */
 const StudentWorkspace = (() => {
     let owner = '', generation = 0, unsubscribe = null, attempts = [], executions = [], latest = null;
     let history = [], historyStatus = '', historyMode = false, selected = 'source', step = -1;
     let activePage = '', serial = 0, sessionEpoch = 0;
     const visible = new Set(['compilation', 'validation', 'cumulative']);
     let chartResizeObserver = null, chartResizeRaf = 0;
+    const guideState = { mode: 'beginner', category: 'Basics' };
     const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const userId = () => typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'student' ? String(currentUser._docId || currentUser.id || '') : '';
     const element = id => document.getElementById(id);
@@ -9829,12 +10000,16 @@ const StudentWorkspace = (() => {
         if (guide.dataset.owner === owner) return;
         guide.dataset.studentGuide = 'true'; guide.dataset.owner = owner;
         const key = 'pseudopy_quick_guide_' + owner;
-        let open = true, advanced = false;
+        const modeKey = (typeof STORAGE_KEYS !== 'undefined' && STORAGE_KEYS.GUIDE_MODE) || 'pseudopy_guide_mode';
+        let open = true;
         try { open = localStorage.getItem(key) !== 'closed'; } catch (_) { /* private browsing */ }
+        guideState.mode = 'beginner';
+        try { const m = localStorage.getItem(modeKey); if (m === 'beginner' || m === 'advanced') guideState.mode = m; } catch (_) { /* private browsing */ }
+        guideState.category = 'Basics';
         guide.open = open;
-        guide.innerHTML = '<summary>Pseudocode Quick Guide</summary><div class="sg-toolbar"><p class="sg-intro">Need help? Explore the syntax and examples while you write.</p><div class="seg" role="group" aria-label="Presentation mode"><button type="button" data-mode="beginner" aria-pressed="true">Beginner</button><button type="button" data-mode="advanced" aria-pressed="false">Advanced</button></div></div><div class="sg-cats" aria-label="Guide categories"></div><div class="sg-content"></div><p class="sg-tip" aria-live="polite"></p>';
+        guide.innerHTML = '<summary>Pseudocode Quick Guide</summary><div class="sg-toolbar"><p class="sg-intro">Need help? Explore the syntax and examples while you write.</p><div class="seg" role="group" aria-label="Presentation mode"><button type="button" data-mode="beginner" aria-pressed="' + (guideState.mode === 'beginner') + '">Beginner</button><button type="button" data-mode="advanced" aria-pressed="' + (guideState.mode === 'advanced') + '">Advanced</button></div></div><div class="sg-cats" aria-label="Guide categories"></div><div class="sg-content"></div><p class="sg-tip" aria-live="polite"></p>';
         guide.ontoggle = () => { try { localStorage.setItem(key, guide.open ? 'open' : 'closed'); } catch (_) {} };
-        const tabs = guide.querySelector('.sg-tabs'), content = guide.querySelector('.sg-content');
+        const cats = guide.querySelector('.sg-cats'), content = guide.querySelector('.sg-content');
         let contextTip = root.querySelector('.sg-context');
         if (!contextTip) {
             contextTip = document.createElement('div'); contextTip.className = 'sg-context'; contextTip.hidden = true;
@@ -9842,12 +10017,17 @@ const StudentWorkspace = (() => {
             editor.parentElement.insertAdjacentElement('afterend', contextTip);
             contextTip.querySelector('button').onclick = () => { contextTip.hidden = true; };
         }
-        let category = 'Basics';
+        function modeDetails(adv) {
+            if (!adv) return '';
+            return '<details class="sg-advanced" open><summary>Advanced: exact rules the compiler applies</summary><p class="sg-expl">' + esc(adv.intro) + '</p>' + (adv.bullets && adv.bullets.length ? '<ul class="sg-adv-list">' + adv.bullets.map(b => '<li>' + esc(b) + '</li>').join('') + '</ul>' : '') + '</details>';
+        }
         function show(name) {
-            category = name;
-            tabs.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.textContent === name)));
+            guideState.category = name;
+            cats.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.textContent === name)));
             if (name === 'Operators') {
-                content.innerHTML = '<p class="sg-expl">Select an operator for a working example. Python uses lowercase and, or, not.</p><div class="sg-operators">' + StudentGuide.operators.map((o, i) => '<button type="button" data-op="' + i + '"><strong>' + esc(o[0]) + '</strong> ' + esc(o[1]) + '<code>' + esc(o[2]) + '</code></button>').join('') + '</div><div class="sg-op-example"></div>';
+                let html = '<p class="sg-expl">Select an operator for a working example. Python uses lowercase and, or, not.</p><div class="sg-operators">' + StudentGuide.operators.map((o, i) => '<button type="button" data-op="' + i + '"><strong>' + esc(o[0]) + '</strong> ' + esc(o[1]) + '<code>' + esc(o[2]) + '</code></button>').join('') + '</div>';
+                if (guideState.mode === 'advanced') html += '<details class="sg-advanced" open><summary>Advanced: operator precedence and mapping</summary><p class="sg-expl">Precedence mirrors Python: ** first, then * / // %, then + -, then comparisons, then NOT, then AND, then OR.</p><ul class="sg-adv-list"><li>** binds tightest. ^ is bitwise XOR at + precedence, not exponentiation.</li><li>// is floor division (DIV) and % is remainder (MOD) on integers.</li><li>AND / OR short-circuit exactly like Python and, or.</li></ul></details>';
+                content.innerHTML = html + '<div class="sg-op-example"></div>';
                 content.querySelectorAll('[data-op]').forEach(b => b.onclick = () => {
                     const o = StudentGuide.operators[Number(b.dataset.op)];
                     const target = content.querySelector('.sg-op-example');
@@ -9859,7 +10039,8 @@ const StudentWorkspace = (() => {
                 return;
             }
             const item = StudentGuide.entries[name];
-            content.innerHTML = '<h3>' + esc(name) + '</h3><p class="sg-expl">' + esc(item[0]) + '</p><div class="sg-comparison"><figure class="sg-code"><figcaption><h4>Pseudocode</h4><button type="button" class="sg-insert"><i data-lucide="code-2" aria-hidden="true"></i> Insert Example</button></figcaption><pre>' + esc(item[1]) + '</pre></figure><figure class="sg-code"><figcaption><h4>Python equivalent (simplified)</h4></figcaption><pre>' + esc(item[2]) + '</pre></figure></div>' + (advanced ? '<details class="sg-advanced"><summary>Advanced: how the compiler interprets this</summary><p class="sg-expl">Compiler interpretation: keywords identify statements; expressions use Python precedence. Blocks become indentation. Counted loops include the end value; the generated Python may include helper functions. ^ means bitwise XOR, not exponentiation.</p></details>' : '');
+            const adv = item && item[3];
+            content.innerHTML = '<h3>' + esc(name) + '</h3><p class="sg-expl">' + esc(item[0]) + '</p><div class="sg-comparison"><figure class="sg-code"><figcaption><h4>Pseudocode</h4><button type="button" class="sg-insert"><i data-lucide="code-2" aria-hidden="true"></i> Insert Example</button></figcaption><pre>' + esc(item[1]) + '</pre></figure><figure class="sg-code"><figcaption><h4>Python equivalent (simplified)</h4></figcaption><pre>' + esc(item[2]) + '</pre></figure></div>' + (guideState.mode === 'advanced' ? modeDetails(adv) : '');
             const insert = content.querySelector('.sg-insert');
             if (insert) insert.onclick = () => insertExample(item[1]);
             refreshIcons(content);
@@ -9875,13 +10056,14 @@ const StudentWorkspace = (() => {
             editor.dispatchEvent(new Event('input', { bubbles: true }));
         }
         [...Object.keys(StudentGuide.entries), 'Operators'].forEach(name => {
-            const b = document.createElement('button'); b.type = 'button'; b.className = 'sg-chip'; b.textContent = name; b.onclick = () => show(name); tabs.appendChild(b);
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'sg-chip'; b.textContent = name; b.setAttribute('aria-pressed', String(name === guideState.category)); b.onclick = () => show(name); cats.appendChild(b);
         });
         const modeButtons = guide.querySelectorAll('.seg [data-mode]');
         modeButtons.forEach(b => b.onclick = () => {
-            advanced = b.dataset.mode === 'advanced';
+            guideState.mode = (b.dataset.mode === 'advanced') ? 'advanced' : 'beginner';
             modeButtons.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-            show(category);
+            try { localStorage.setItem(modeKey, guideState.mode); } catch (_) { /* private browsing */ }
+            show(guideState.category);
         });
         guide.showCategory = name => { guide.open = true; show(StudentGuide.entries[name] ? name : 'Basics'); guide.scrollIntoView({ block: 'nearest' }); };
         if (!editor.dataset.studentInputBound) {
@@ -9896,7 +10078,7 @@ const StudentWorkspace = (() => {
                 }, 450);
             });
         }
-        show(category);
+        show(guideState.category);
     }
     function translated(editorId, source, result, learning) {
         if (!userId() || !['pseudocode-editor', 'translate-input'].includes(editorId)) return;

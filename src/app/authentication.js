@@ -176,6 +176,7 @@ async function handleLogin() {
 function handleLogout() {
     if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.reset();
     if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
+    if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
     // Invalidate session state
     currentUser = null;
     currentPage = '';

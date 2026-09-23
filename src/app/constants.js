@@ -76,5 +76,6 @@ const STORAGE_KEYS = {
     EDITOR_DRAFT: 'pseudopy_editor_draft',
     TUTORIAL_COMPLETED: 'pseudopy_tutorial_completed',
     UPDATE_DISMISSED: 'pseudopy_update_dismissed',
+    GUIDE_MODE: 'pseudopy_guide_mode',
     LOCAL_PREFIX: 'pseudopy_local_'
 };

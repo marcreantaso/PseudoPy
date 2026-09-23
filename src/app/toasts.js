@@ -4,6 +4,7 @@
 
 function showToast(message, type = 'info') {
     const container = $id('toast-container');
+    if (!container) return;
     const icons = { success: 'circle-check', error: 'circle-x', info: 'info' };
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;

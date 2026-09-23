@@ -84,6 +84,7 @@
     "src/devtools/inspectors.js",
     "src/devtools/diagnostics.js",
     "src/devtools/execution-trace.js",
+    "src/devtools/file-io.js",
     "src/devtools/dom.js"
   ]
 }

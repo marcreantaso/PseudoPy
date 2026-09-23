@@ -277,6 +277,8 @@
        ════════════════════════════════════════ -->
   <div id="app-layout" class="app-layout hidden">
 
+    <div id="connection-status-banner" class="connection-status-banner" role="status" hidden>{{ui:RefreshCw}} Reconnecting to the server…</div>
+
     <!-- ── Sidebar ── -->
     <aside class="sidebar" id="app-sidebar" aria-label="Main navigation">
       <button class="btn btn-ghost sidebar-close" type="button" onclick="closeMobileSidebar()" aria-label="Close navigation">Close menu <span aria-hidden="true">×</span></button>
@@ -1881,8 +1883,8 @@
         <!-- Three-Column Layout -->
         <div class="devtools-columns">
           <div class="devtools-col devtools-col-left">
-            <div class="devtools-panel"><div class="devtools-panel-header"><h3>{{ui:NotebookPen}} Source Pseudocode</h3></div>
-              <div class="devtools-panel-body"><textarea id="devtools-pseudocode" class="code-editor devtools-editor" spellcheck="false" placeholder="Enter pseudocode here...&#10;&#10;Example:&#10;BEGIN&#10;  DECLARE x AS INTEGER&#10;  SET x TO 5&#10;  IF x > 0 THEN&#10;    DISPLAY &quot;Positive&quot;&#10;  END IF&#10;END"></textarea></div>
+            <div class="devtools-panel"><div class="devtools-panel-header"><h3>{{ui:NotebookPen}} Source Pseudocode</h3><div class="devtools-panel-actions"><input type="file" id="devtools-file-input" accept=".txt,.pseudo,.psc,text/plain" hidden><button class="btn btn-ghost btn-sm" id="devtools-upload-btn" onclick="devToolsPickFile()" title="Upload pseudocode file" aria-label="Upload pseudocode file">{{ui:FileText}} Upload</button><button class="btn btn-ghost btn-sm" id="devtools-clear-btn" onclick="devToolsClearSource()" title="Clear pseudocode" aria-label="Clear pseudocode">{{ui:X}} Clear</button></div></div>
+              <div class="devtools-panel-body devtools-source-wrap"><textarea id="devtools-pseudocode" class="code-editor devtools-editor" spellcheck="false" placeholder="Enter pseudocode here...&#10;&#10;Example:&#10;BEGIN&#10;  DECLARE x AS INTEGER&#10;  SET x TO 5&#10;  IF x > 0 THEN&#10;    DISPLAY &quot;Positive&quot;&#10;  END IF&#10;END"></textarea><div class="devtools-drop-hint" id="devtools-drop-hint" aria-hidden="true">{{ui:Download}} Drop pseudocode file here</div></div>
             </div>
           </div>
           <div class="devtools-col devtools-col-center">
@@ -1893,7 +1895,7 @@
             </div>
           </div>
           <div class="devtools-col devtools-col-right">
-            <div class="devtools-panel"><div class="devtools-panel-header"><h3>{{ui:FileCode}} Generated Python</h3><button class="btn btn-ghost btn-sm" onclick="devToolsCopyPython()" title="Copy">{{ui:ClipboardList}}</button></div>
+            <div class="devtools-panel"><div class="devtools-panel-header"><h3>{{ui:FileCode}} Generated Python</h3><div class="devtools-panel-actions"><button class="btn btn-ghost btn-sm" id="devtools-download-btn" onclick="devToolsDownloadPython()" title="Download generated Python" aria-label="Download generated Python" disabled>{{ui:Download}} Download .py</button><button class="btn btn-ghost btn-sm" onclick="devToolsCopyPython()" title="Copy" aria-label="Copy generated Python">{{ui:ClipboardList}}</button></div></div>
               <div class="devtools-panel-body"><pre id="devtools-python-output" class="devtools-python-pre">Waiting for compilation...</pre></div>
             </div>
           </div>

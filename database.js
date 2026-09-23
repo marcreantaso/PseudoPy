@@ -74,6 +74,35 @@ function withFirestoreTimeout(promise, ms = 4000) {
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+/**
+ * Bounded retry for transient Firestore failures (timeouts/network blips).
+ * Runs `fetchFn` up to `attempts` times with `backoffMs` between tries, each
+ * protected by withFirestoreTimeout. Never retries an infinite loop, and
+ * throws a typed FirestoreUnavailableError once all attempts are exhausted so
+ * callers can decide (e.g. fall back to cached profile instead of logging out).
+ */
+function FirestoreUnavailableError(message) {
+    const err = new Error(message);
+    err.name = 'FirestoreUnavailable';
+    return err;
+}
+
+async function firestoreRetry(fetchFn, options = {}) {
+    const attempts = Math.max(1, options.attempts || 2);
+    const timeoutMs = options.timeoutMs || 4000;
+    const backoffMs = options.backoffMs === undefined ? 600 : Math.max(0, options.backoffMs || 0);
+    let lastErr = null;
+    for (let i = 0; i < attempts; i++) {
+        if (i > 0 && backoffMs > 0) await new Promise(r => setTimeout(r, backoffMs));
+        try {
+            return await withFirestoreTimeout(fetchFn(), timeoutMs);
+        } catch (err) {
+            lastErr = err;
+        }
+    }
+    throw FirestoreUnavailableError('Firestore operation failed after ' + attempts + ' attempt(s): ' + (lastErr && lastErr.message));
+}
+
 // ── Collection References ──────────────────────────────────
 const usersRef = "pseudopy_users";
 const exercisesRef = "pseudopy_exercises";
@@ -689,22 +718,30 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
 
 /**
  * Get a single document by ID.
+ * opts.strict (session/identity reads): when Firestore was reachable but the
+ * read failed after retries, throw a typed FirestoreUnavailableError instead of
+ * silently returning the local fallback, so callers can distinguish "account
+ * really gone" from "temporarily offline". Other callers keep the fallback.
  */
-async function dbGet(ref, docId) {
+async function dbGet(ref, docId, opts = {}) {
     if (firestoreReady()) {
         try {
-            const doc = await withFirestoreTimeout(firestore.collection(ref).doc(docId).get());
-            if (doc.exists) {
-                return { _docId: doc.id, ...doc.data() };
-            }
+            const doc = await firestoreRetry(() => firestore.collection(ref).doc(docId).get(), { attempts: opts.attempts || 2, timeoutMs: opts.timeoutMs, backoffMs: opts.backoffMs });
+            if (doc.exists) return { _docId: doc.id, ...doc.data() };
+            return null;
         } catch (err) {
+            if (opts.strict) {
+                console.warn(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
+                throw (err && err.name === 'FirestoreUnavailable') ? err : FirestoreUnavailableError(err.message);
+            }
             console.info(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
         }
     }
 
-    // Local fallback
+    // Local fallback / cache lookup (never used by strict identity reads)
     const local = getLocalCollection(ref);
-    return local.find(item => item._docId === docId || item.id === docId) || null;
+    const found = local.find(item => item._docId === docId || item.id === docId) || null;
+    return found;
 }
 
 /**
