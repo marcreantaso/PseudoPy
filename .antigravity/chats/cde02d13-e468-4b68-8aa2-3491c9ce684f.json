@@ -3,6 +3,31 @@
   "name": "Explain how this project works",
   "createdAt": "2026-09-24T17:46:27.872Z",
   "filename": "cde02d13-e468-4b68-8aa2-3491c9ce684f.json",
-  "geminiStarted": false,
-  "messages": []
+  "geminiStarted": true,
+  "messages": [
+    {
+      "id": "e7f68fbc-ca91-4e50-8e74-84bb3b6ce479",
+      "role": "user",
+      "content": "Explain this code so a junior developer can understand and maintain it:\n\n1. What problem it solves and where it fits in the bigger picture\n2. Walk through the main flow step by step in plain language\n3. Call out non-obvious decisions, gotchas, and dependencies\n4. Give one or two short examples of how to use or extend it\n\nKeep explanations concise; use analogies or diagrams (ASCII) only if they help.",
+      "status": "cancelled",
+      "model": "gemini-3.8-flash-high",
+      "client_type": "gemini-bridge",
+      "parent_message_id": null,
+      "created_at": "2026-09-24T17:47:39.611Z",
+      "sender": "ios",
+      "is_cancelled": true
+    },
+    {
+      "id": "23bc0fdd-a3a5-49a6-9331-3ad0c34a8823",
+      "role": "user",
+      "content": "Explain this code so a junior developer can understand and maintain it:\n\n1. What problem it solves and where it fits in the bigger picture\n2. Walk through the main flow step by step in plain language\n3. Call out non-obvious decisions, gotchas, and dependencies\n4. Give one or two short examples of how to use or extend it\n\nKeep explanations concise; use analogies or diagrams (ASCII) only if they help.",
+      "status": "pending",
+      "model": "gemini-3.1-pro-high",
+      "client_type": "gemini-bridge",
+      "parent_message_id": null,
+      "created_at": "2026-09-24T17:48:54.528Z",
+      "sender": "ios",
+      "is_cancelled": false
+    }
+  ]
 }
