@@ -29,6 +29,13 @@ function _buildExecutionTrace(result, stdout) {
                     step.output = outputLines[outputIdx++];
                 }
                 break;
+            case 'InputStatement':
+                step.description = node.prompt && node.prompt.length
+                    ? `INPUT WITH PROMPT "${node.prompt[0].value}", ${node.id}`
+                    : `INPUT ${node.id}`;
+                varState[node.id] = '<input>';
+                step.vars = { ...varState };
+                break;
             case 'IfStatement':
                 step.description = `IF <condition> THEN`;
                 step.condition = { expression: '<condition>', result: 'evaluated' };

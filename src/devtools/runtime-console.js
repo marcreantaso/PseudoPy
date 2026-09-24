@@ -25,6 +25,39 @@ const DEV_CONSOLE_RUNTIME_LABELS = {
     error: '{{ui:CircleX}} Error'
 };
 
+// Maps a transcript entry kind onto the console row CSS class. Every entry is
+// rendered as its own block row so prompts, the typed values that answer them,
+// program output and runtime errors never run together on one visual line.
+function _consoleRowClass(kind) {
+    if (kind === 'echo') return 'devtools-console-echo';
+    if (kind === 'question') return 'devtools-console-question';
+    if (kind === 'stderr' || kind === 'error') return 'devtools-console-error';
+    return 'devtools-console-stdout';
+}
+
+// Reads a numeric grade from the REAL program output only. A line is treated
+// as a grade when it is the final output line and is either a bare number or a
+// "Grade: <number>" style label. Formatting the value to two decimals happens
+// at display time and never mutates the transcript, so program output stays
+// byte-for-byte real.
+function _derivedGradeSummary(transcript) {
+    const lines = [];
+    for (const entry of transcript) {
+        if (entry.kind !== 'stdout') continue;
+        for (const line of String(entry.text).split('\n')) {
+            const trimmed = line.trim();
+            if (trimmed) lines.push(trimmed);
+        }
+    }
+    if (lines.length === 0) return null;
+    const last = lines[lines.length - 1];
+    const prefixed = /^GRADE\s*[:=]\s*(-?\d+(?:\.\d+)?)\s*$/i.exec(last);
+    if (prefixed) return { value: Number(prefixed[1]), source: last };
+    const bare = /^-?\d+(?:\.\d+)?$/.test(last) ? Number(last) : NaN;
+    if (Number.isFinite(bare)) return { value: bare, source: last };
+    return null;
+}
+
 // Pure state machine, no DOM. The DOM binding (createRuntimeConsole)
 // renders transcript entries through the onAppend hook.
 function createRuntimeConsoleModel() {
@@ -56,6 +89,7 @@ function createRuntimeConsoleModel() {
         get stopRequested() { return stopRequested; },
         get transcript() { return transcript; },
         get hasPendingInput() { return pending !== null; },
+        get pendingPrompt() { return pending ? pending.promptText : ''; },
 
         isActive() { return state === 'running' || state === 'waiting-input'; },
 
@@ -82,8 +116,13 @@ function createRuntimeConsoleModel() {
             }
             state = 'waiting-input';
             submitted = false;
+            const question = String(promptText == null ? '' : promptText);
+            const questionText = question.trim() ? question : 'Input required:';
+            const entry = { kind: 'question', text: questionText };
+            transcript.push(entry);
+            if (this.onAppend) this.onAppend(entry);
             return new Promise(function (resolve, reject) {
-                pending = { resolve: resolve, reject: reject, promptText: String(promptText || '') };
+                pending = { resolve: resolve, reject: reject, promptText: questionText };
             });
         },
 
@@ -92,7 +131,7 @@ function createRuntimeConsoleModel() {
             submitted = true;
             const p = settlePending();
             const text = String(value === null || value === undefined ? '' : value);
-            const entry = { kind: 'echo', text: (p.promptText ? p.promptText + ' ' : '') + text };
+            const entry = { kind: 'echo', text: text };
             transcript.push(entry);
             state = 'running';
             p.resolve(text);
@@ -173,10 +212,38 @@ function createRuntimeConsole() {
         if (copyBtn) copyBtn.disabled = model.transcript.length === 0;
         const inputRow = el('devtools-console-input-row');
         if (inputRow) inputRow.classList.toggle('hidden', model.state !== 'waiting-input');
+        const promptLabel = el('devtools-console-prompt');
+        if (promptLabel) promptLabel.textContent = (model.state === 'waiting-input') ? model.pendingPrompt : '';
         if (model.state === 'waiting-input') {
             const inputField = el('devtools-console-input');
             if (inputField) inputField.focus();
         }
+        _renderGradeSummary();
+    }
+
+    // Aligned "Grade Summary" footer shown only for a completed run whose real
+    // stdout ends in a numeric grade. The stored transcript value is never
+    // altered; only the displayed number is formatted to two decimals.
+    function _renderGradeSummary() {
+        const container = el('devtools-console-output');
+        if (!container) return;
+        let row = container.querySelector('.devtools-console-row-grade');
+        const summary = model.state === 'completed' ? _derivedGradeSummary(model.transcript) : null;
+        if (!summary) {
+            if (row) row.remove();
+            return;
+        }
+        if (!row) {
+            row = document.createElement('div');
+            row.className = 'devtools-console-row devtools-console-row-grade';
+            const label = document.createElement('span');
+            label.className = 'devtools-console-grade-label';
+            row.appendChild(label);
+            container.appendChild(row);
+            autoScroll(container);
+        }
+        const label = row.querySelector('.devtools-console-grade-label');
+        if (label) label.textContent = 'Grade Summary: ' + summary.value.toFixed(2);
     }
 
     function wipeOutput() {
@@ -200,10 +267,13 @@ function createRuntimeConsole() {
         if (!container) return;
         const ph = container.querySelector('.devtools-console-empty');
         if (ph) ph.remove();
-        const span = document.createElement('span');
-        span.className = 'devtools-console-' + entry.kind;
-        span.textContent = entry.text;
-        container.appendChild(span);
+        const row = document.createElement('div');
+        row.className = 'devtools-console-row ' + _consoleRowClass(entry.kind);
+        const text = document.createElement('span');
+        text.className = 'devtools-console-row-text';
+        text.textContent = entry.text;
+        row.appendChild(text);
+        container.appendChild(row);
         autoScroll(container);
     }
 
@@ -226,6 +296,7 @@ function createRuntimeConsole() {
         get sessionId() { return model.sessionId; },
         get stopRequested() { return model.stopRequested; },
         get transcript() { return model.transcript; },
+        get pendingPrompt() { return model.pendingPrompt; },
         isActive() { return model.isActive(); },
 
         beginRun() { model.beginRun(); wipeOutput(); setStateUI(); },
@@ -238,6 +309,7 @@ function createRuntimeConsole() {
         fail(err) { model.fail(err); setStateUI(); },
         clearOutput() { model.clearOutput(); wipeOutput(); setStateUI(); },
         reset() { model.reset(); wipeOutput(); setStateUI(); },
+        gradeSummary() { return _derivedGradeSummary(model.transcript); },
         transcriptText() {
             return model.transcript.map(function (e) { return e.text; }).join('');
         },

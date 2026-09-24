@@ -1935,6 +1935,7 @@
             <button class="devtools-tab" data-tab="attempts" onclick="devToolsSwitchTab('attempts')">Attempts</button>
             <button class="devtools-tab" data-tab="eventlog" onclick="devToolsSwitchTab('eventlog')">Event Log</button>
             <button class="devtools-tab" data-tab="metrics" onclick="devToolsSwitchTab('metrics')">Metrics</button>
+            <button class="devtools-tab" data-tab="simulation" onclick="devToolsSwitchTab('simulation')">Simulation</button>
             <button class="devtools-tab" data-tab="rawjson" onclick="devToolsSwitchTab('rawjson')">Raw JSON</button>
           </div>
 
@@ -1989,6 +1990,76 @@
               <div class="devtools-metric-card"><div class="devtools-metric-label" title="Loop-depth heuristic; ignores bounds, calls and recursion">Loop nesting estimate</div><div class="devtools-metric-value" id="dm-complexity">—</div></div>
               <div class="devtools-metric-card"><div class="devtools-metric-label">Attempt #</div><div class="devtools-metric-value" id="dm-attempt-num">—</div></div>
               <div class="devtools-metric-card"><div class="devtools-metric-label">Auto-Fix Count</div><div class="devtools-metric-value" id="dm-autofix-count">—</div></div>
+            </div>
+          </div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-simulation">
+            <div class="sim-layout">
+              <div class="sim-panel" data-sim="metrics">
+                <div class="devtools-panel-header"><h3>{{ui:ChartNoAxesCombined}} Stage Durations</h3><span class="devtools-count">real compiler metrics</span></div>
+                <div class="sim-bars" id="sim-metric-bars"><div class="devtools-idle-message"><p>Run the pipeline to chart real compiler stage timings.</p></div></div>
+                <div class="sim-stage-statuses" id="sim-stage-statuses"></div>
+              </div>
+
+              <div class="sim-panel" data-sim="cfg">
+                <div class="devtools-panel-header"><h3>{{ui:Radio}} Control Flow Graph</h3><span class="devtools-count">derived from the real AST</span></div>
+                <div class="sim-cfg" id="sim-cfg"><div class="devtools-idle-message"><p>Run the pipeline to build the control flow graph from the real AST.</p></div></div>
+              </div>
+
+              <div class="sim-panel" data-sim="sdt">
+                <div class="devtools-panel-header"><h3>{{ui:ClipboardList}} SDT — AST to Python</h3><span class="devtools-count">real per-node code generation</span></div>
+                <div class="devtools-table-wrap" style="max-height:440px;overflow:auto">
+                  <table class="devtools-table sim-sdt-table">
+                    <thead><tr><th scope="col">#</th><th scope="col">Line</th><th scope="col">AST Node</th><th scope="col">Pseudocode</th><th scope="col">SDT Action</th><th scope="col">Generated Python</th></tr></thead>
+                    <tbody id="sim-sdt-tbody"><tr><td colspan="6" class="devtools-empty">Run the pipeline to build the SDT table from the real AST.</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="sim-panel" data-sim="nlp">
+                <div class="devtools-panel-header"><h3>{{ui:Files}} NLP Mapping — original vs mapped</h3><span class="devtools-count">real NLP mapper output</span></div>
+                <div class="sim-nlp-cols">
+                  <div class="sim-nlp-col"><h4>Original</h4><pre id="sim-nlp-original" class="sim-nlp-pre">—</pre></div>
+                  <div class="sim-nlp-col"><h4>Mapped (NLP)</h4><pre id="sim-nlp-mapped" class="sim-nlp-pre">—</pre></div>
+                </div>
+                <div class="sim-nlp-meta" id="sim-nlp-meta">Run the pipeline to compare the original pseudocode with the NLP-mapped source.</div>
+                <div class="sim-nlp-diff" id="sim-nlp-diff"></div>
+              </div>
+
+              <div class="sim-panel" data-sim="ledger">
+                <div class="devtools-panel-header"><h3>{{ui:Clock}} Event Ledger</h3>
+                  <div class="devtools-panel-actions">
+                    <select class="devtools-filter" id="sim-ledger-stage" onchange="devToolsSimFilterLedger()"><option value="">All Stages</option></select>
+                    <select class="devtools-filter" id="sim-ledger-status" onchange="devToolsSimFilterLedger()"><option value="">All Statuses</option><option value="IDLE">IDLE</option><option value="RUNNING">RUNNING</option><option value="SUCCESS">SUCCESS</option><option value="WARNING">WARNING</option><option value="ERROR">ERROR</option><option value="SKIPPED">SKIPPED</option></select>
+                    <select class="devtools-filter" id="sim-ledger-type" onchange="devToolsSimFilterLedger()"><option value="">All Types</option></select>
+                    <input type="text" class="devtools-filter" id="sim-ledger-search" placeholder="Search events..." oninput="devToolsSimFilterLedger()">
+                  </div>
+                </div>
+                <div class="devtools-event-log" id="sim-ledger"><div class="devtools-idle-message"><p>No events recorded.</p></div></div>
+              </div>
+            </div>
+
+            <div class="sim-controls">
+              <div class="devtools-panel-header"><h3>{{ui:Zap}} Step Controller</h3><span class="devtools-count">advances over real trace events</span></div>
+              <div class="sim-step-buttons">
+                <button class="btn btn-ghost btn-sm" id="sim-step-begin" onclick="devToolsSimStepBegin()" disabled title="Jump to first event" aria-label="Jump to first event"><i data-lucide="skip-back" aria-hidden="true"></i></button>
+                <button class="btn btn-ghost btn-sm" id="sim-step-back" onclick="devToolsSimStepBack()" disabled title="One event back" aria-label="One event back"><i data-lucide="chevron-left" aria-hidden="true"></i></button>
+                <button class="btn btn-primary btn-sm" id="sim-step-play" onclick="devToolsSimPlay()" disabled title="Play through the trace" aria-label="Play through the trace"><i data-lucide="play" aria-hidden="true"></i> Play</button>
+                <button class="btn btn-secondary btn-sm" id="sim-step-pause" onclick="devToolsSimPause()" disabled title="Pause the trace" aria-label="Pause the trace"><i data-lucide="pause" aria-hidden="true"></i> Pause</button>
+                <button class="btn btn-ghost btn-sm" id="sim-step-fwd" onclick="devToolsSimStepFwd()" disabled title="One event forward" aria-label="One event forward"><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+                <button class="btn btn-ghost btn-sm" id="sim-step-end" onclick="devToolsSimStepEnd()" disabled title="Jump to last event" aria-label="Jump to last event"><i data-lucide="skip-forward" aria-hidden="true"></i></button>
+                <button class="btn btn-ghost btn-sm" onclick="devToolsSimReset()" title="Reset simulation highlights" aria-label="Reset simulation highlights">{{ui:RefreshCw}}</button>
+              </div>
+            </div>
+
+            <div class="sim-grade">
+              <div class="devtools-panel-header"><h3>{{ui:Target}} Grade Verdict</h3><span class="sim-grade-chip sim-grade-undetermined" id="sim-grade-chip">Not checked</span></div>
+              <div class="sim-grade-row">
+                <label for="sim-expected-output">Expected output (admin only):</label>
+                <textarea id="sim-expected-output" rows="2" spellcheck="false" aria-label="Expected output used to verify the real stdout"></textarea>
+                <button class="btn btn-secondary btn-sm" onclick="devToolsSimSaveExpectedOutput()">{{ui:Check}} Apply</button>
+              </div>
+              <div id="sim-grade-detail" class="sim-grade-detail">Run the pipeline, then set an expected output to compare real stdout against it.</div>
             </div>
           </div>
 

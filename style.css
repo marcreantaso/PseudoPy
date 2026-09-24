@@ -6989,12 +6989,41 @@ select.form-input {
   opacity: 0.7;
 }
 
-.devtools-console-echo {
-  color: var(--text-cyan);
+.devtools-console-row {
+  display: block;
+  min-height: 1.2em;
 }
 
+.devtools-console-row-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.devtools-console-row.devtools-console-question,
+.devtools-console-question {
+  color: var(--text-cyan);
+  font-weight: 600;
+}
+
+.devtools-console-row.devtools-console-echo,
+.devtools-console-echo {
+  color: var(--text-cyan);
+  padding-left: 0.5rem;
+}
+
+.devtools-console-row.devtools-console-error,
 .devtools-console-error {
   color: var(--danger);
+}
+
+/* Grade Summary footer — display-only two-decimal formatting of the real
+   numeric grade parsed from a completed run's stdout. */
+.devtools-console-row-grade {
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--border-divider);
+  font-weight: 700;
+  color: var(--status-success-fg);
 }
 
 .devtools-console-input-row {
@@ -7037,6 +7066,370 @@ select.form-input {
   outline: none;
   border-color: var(--dt-accent);
   box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/* ══════════════════════════════════════════════════════════
+   SIMULATION TAB — Compiler Pipeline Simulation
+   ══════════════════════════════════════════════════════════ */
+
+.sim-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.sim-panel {
+  background: var(--dt-surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+}
+
+.sim-panel .devtools-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.sim-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sim-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.sim-bar-label {
+  min-width: 5.5rem;
+  font-size: 0.78rem;
+  color: var(--dt-text-subtle);
+}
+
+.sim-bar-track {
+  flex: 1;
+  height: 0.6rem;
+  background: var(--dt-surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.sim-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--dt-accent);
+  border-radius: 999px;
+}
+
+.sim-bar-value {
+  min-width: 5.5rem;
+  text-align: right;
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--dt-text);
+}
+
+.sim-stage-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.7rem;
+}
+
+.sim-stage-chip {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--dt-text-subtle);
+  background: var(--dt-surface-subtle);
+}
+
+.sim-stage-chip.sim-stage-success {
+  color: var(--status-success-fg);
+  border-color: var(--status-success-border);
+}
+
+.sim-stage-chip.sim-stage-error {
+  color: var(--danger);
+  border-color: var(--status-danger-border);
+}
+
+.sim-stage-chip.sim-stage-running {
+  color: var(--dt-accent);
+  border-color: var(--dt-accent);
+}
+
+.sim-cfg {
+  overflow-x: auto;
+}
+
+.sim-cfg-graph {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  min-width: 22rem;
+}
+
+.sim-cfg-node {
+  border: 1px solid var(--border);
+  background: var(--dt-surface-subtle);
+  color: var(--dt-text);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.sim-cfg-node.sim-cfg-entry,
+.sim-cfg-node.sim-cfg-exit {
+  border-style: double;
+  border-color: var(--dt-accent);
+  color: var(--dt-accent);
+  font-weight: 600;
+}
+
+.sim-cfg-node.sim-cfg-decision {
+  border-color: var(--dt-accent);
+  color: var(--dt-accent);
+  font-weight: 600;
+}
+
+.sim-cfg-node.sim-cfg-join {
+  border-style: dashed;
+  color: var(--dt-text-subtle);
+}
+
+.sim-cfg-node.sim-cfg-active {
+  outline: 2px solid var(--dt-accent);
+  outline-offset: 2px;
+  background: var(--focus-ring);
+}
+
+.sim-cfg-edge {
+  color: var(--dt-accent);
+  width: 100%;
+  height: 20px;
+}
+
+.sim-cfg-arrowhead {
+  fill: var(--dt-accent);
+}
+
+.sim-cfg-edge-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sim-cfg-edge-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--dt-accent);
+  text-transform: uppercase;
+}
+
+.sim-sdt-table .devtools-trans-python {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: transparent;
+  border: 0;
+  padding: 0.1rem 0;
+}
+
+.sim-sdt-row.sim-sdt-active {
+  background: var(--focus-ring);
+}
+
+.sim-nlp-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.sim-nlp-col h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dt-text-subtle);
+}
+
+.sim-nlp-pre {
+  margin: 0;
+  padding: 0.6rem;
+  background: var(--code-surface);
+  color: var(--code-fg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.sim-nlp-meta {
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  color: var(--dt-text-subtle);
+}
+
+.sim-nlp-diff {
+  margin-top: 0.5rem;
+}
+
+.sim-nlp-word-diff {
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  padding: 0.5rem;
+  background: var(--code-surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  word-break: break-word;
+}
+
+.sim-nlp-same {
+  color: var(--code-fg);
+}
+
+.sim-nlp-del {
+  color: var(--danger);
+  text-decoration: line-through;
+  background: var(--status-danger-border);
+}
+
+.sim-nlp-ins {
+  color: var(--status-success-fg);
+  background: var(--status-success-border);
+}
+
+.sim-nlp-linelist {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.78rem;
+  color: var(--dt-text);
+}
+
+.sim-nlp-lineno {
+  font-family: 'Courier New', Consolas, monospace;
+  color: var(--dt-text-subtle);
+  margin-right: 0.35rem;
+}
+
+.sim-controls {
+  margin-top: 1rem;
+  background: var(--dt-surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+}
+
+.sim-step-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.sim-grade {
+  margin-top: 1rem;
+  background: var(--dt-surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+}
+
+.sim-grade-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.sim-grade-row label {
+  font-size: 0.8rem;
+  color: var(--dt-text);
+}
+
+.sim-grade-row textarea {
+  flex: 1;
+  min-width: 14rem;
+  padding: 0.4rem 0.6rem;
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--dt-text);
+  background: var(--bg-input-soft);
+  border: 1px solid var(--border-input);
+  border-radius: 0.375rem;
+}
+
+.sim-grade-chip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.sim-grade-chip.sim-grade-undetermined {
+  color: var(--dt-text-subtle);
+  background: var(--dt-surface-subtle);
+}
+
+.sim-grade-chip.sim-grade-pass {
+  color: var(--status-success-fg);
+  border-color: var(--status-success-border);
+}
+
+.sim-grade-chip.sim-grade-fail {
+  color: var(--danger);
+  border-color: var(--status-danger-border);
+}
+
+.sim-grade-detail {
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  color: var(--dt-text-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+#sim-ledger .devtools-log-entry.devTools-log-active {
+  outline: 2px solid var(--dt-accent);
+  outline-offset: -2px;
+  background: var(--focus-ring);
+}
+
+/* Responsive: single-column Simulation layout on narrow screens */
+@media (max-width: 1024px) {
+  .sim-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sim-nlp-cols {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Responsive */

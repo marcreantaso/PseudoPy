@@ -18,6 +18,7 @@ const devToolsState = {
     stepEvents: [],        // cached events for stepping
     allErrors: [],         // classified errors across all stages
     importedSourceName: null, // uploaded pseudocode filename (for .py export)
+    expectedOutput: null,  // admin-supplied expected stdout for the Simulation verdict
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -122,6 +123,7 @@ function devToolsRunPipeline() {
     _updateAutoFixPanel(result);
     _updateRawJSON(result);
     _updateActiveStage(result);
+    _updateSimulation(result);
 
     // Enable step-through
     const stepBtn = document.getElementById('devtools-step-btn');
@@ -380,6 +382,9 @@ function devToolsReset() {
 
     const stepBtn = document.getElementById('devtools-step-btn');
     if (stepBtn) stepBtn.disabled = true;
+
+    if (typeof devToolsSimReset === 'function') devToolsSimReset();
+    if (typeof _updateSimulation === 'function') _updateSimulation(null);
 
     const afp = document.getElementById('devtools-autofix-panel');
     if (afp) afp.classList.add('hidden');
