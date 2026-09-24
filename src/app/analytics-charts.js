@@ -87,8 +87,12 @@ function anShowTooltip(tip, event, html, card) {
     const targetRect = event.target?.getBoundingClientRect();
     const left = (event.clientX ?? targetRect?.left ?? cardRect.left) - cardRect.left + 12;
     const top = (event.clientY ?? targetRect?.top ?? cardRect.top) - cardRect.top - 12;
-    tip.style.left = Math.max(8, Math.min(left, cardRect.width - tip.offsetWidth - 8)) + 'px';
-    tip.style.top = Math.max(8, Math.min(top, cardRect.height - tip.offsetHeight - 8)) + 'px';
+    // Clamp in viewport coordinates (the card may be partially scrolled out of view),
+    // then convert back to card-relative offsets for the absolutely positioned tooltip.
+    const vpLeft = Math.max(8, Math.min(cardRect.left + left, window.innerWidth - tip.offsetWidth - 8));
+    const vpTop = Math.max(8, Math.min(cardRect.top + top, window.innerHeight - tip.offsetHeight - 8));
+    tip.style.left = (vpLeft - cardRect.left) + 'px';
+    tip.style.top = (vpTop - cardRect.top) + 'px';
 }
 
 function anHideTooltip(tip) {
@@ -145,7 +149,7 @@ function renderTrajectoryChart(records) {
     const classLine = result.classAverage.filter(p => p.y != null);
     const classPath = anSplitSegments(result.classAverage).map(segment => smoothPath(segment, xFor, yFor)).join(' ');
     const classDots = classLine.map(p => p.y == null ? '' :
-        `<circle cx="${xFor(p.x)}" cy="${yFor(p.y)}" r="3" class="an-class-dot"/>`).join('');
+        `<circle tabindex="0" role="button" data-x="${p.x}" data-y="${p.y}" aria-label="Class average, attempt ${p.x + 1}: ${p.y} percent" cx="${xFor(p.x)}" cy="${yFor(p.y)}" r="3" class="an-class-dot"/>`).join('');
 
     const xLabels = [];
     for (let x = 0; x < Math.min(maxAttempts, 8); x++) {
@@ -250,6 +254,20 @@ function anBindTrajectoryInteractions(plot, card, result) {
                 <div class="an-tt-row an-tt-muted">${anEsc(date || '')}</div>
             `, card);
         });
+        dot.addEventListener('mousemove', e => anShowTooltip(tip, e, tip.innerHTML, card));
+        dot.addEventListener('mouseleave', () => anHideTooltip(tip));
+        dot.addEventListener('focus', () => dot.dispatchEvent(new MouseEvent('mouseenter', { clientX: dot.getBoundingClientRect().left, clientY: dot.getBoundingClientRect().top })));
+        dot.addEventListener('blur', () => anHideTooltip(tip));
+    });
+    plot.querySelectorAll('.an-class-dot').forEach(dot => {
+        const attempt = parseInt(dot.getAttribute('data-x'), 10) + 1;
+        const score = dot.getAttribute('data-y');
+        const show = evt => anShowTooltip(tip, evt, `
+            <div class="an-tt-header"><span class="an-tt-dot" style="background:var(--muted-foreground)"></span>Class average</div>
+            <div class="an-tt-row">Attempt #${attempt}</div>
+            <div class="an-tt-row"><strong>Score ${score}%</strong></div>
+        `, card);
+        dot.addEventListener('mouseenter', show);
         dot.addEventListener('mousemove', e => anShowTooltip(tip, e, tip.innerHTML, card));
         dot.addEventListener('mouseleave', () => anHideTooltip(tip));
         dot.addEventListener('focus', () => dot.dispatchEvent(new MouseEvent('mouseenter', { clientX: dot.getBoundingClientRect().left, clientY: dot.getBoundingClientRect().top })));
