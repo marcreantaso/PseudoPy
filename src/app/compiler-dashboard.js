@@ -275,6 +275,26 @@ function renderPipelineTimingChart(timing) {
         '</div>'
     ).join('') + '</div>';
 
+    // Styled tooltip, consistent with the analytics SVG charts.
+    const tip = document.createElement('div');
+    tip.className = 'an-svg-tooltip hidden';
+    container.appendChild(tip);
+    const total = stages.reduce((sum, s) => sum + s.value, 0) || 1;
+    container.querySelectorAll('.chart-bar').forEach((bar, i) => {
+        const s = stages[i];
+        const share = Math.round((s.value / total) * 100);
+        const show = evt => anShowTooltip(tip, evt, `
+            <div class="an-tt-header"><span class="an-tt-dot" style="background:${s.color}"></span>${s.name}</div>
+            <div class="an-tt-row"><strong>${s.value}ms</strong> average</div>
+            <div class="an-tt-row an-tt-muted">${share}% of pipeline time</div>
+        `, container);
+        bar.addEventListener('mouseenter', show);
+        bar.addEventListener('mousemove', e => anShowTooltip(tip, e, tip.innerHTML, container));
+        bar.addEventListener('mouseleave', () => anHideTooltip(tip));
+        bar.addEventListener('focus', () => bar.dispatchEvent(new MouseEvent('mouseenter', { clientX: bar.getBoundingClientRect().left, clientY: bar.getBoundingClientRect().top })));
+        bar.addEventListener('blur', () => anHideTooltip(tip));
+    });
+
     // Accessible text equivalent for the bar chart.
     container.setAttribute('role', 'img');
     container.setAttribute('aria-label',

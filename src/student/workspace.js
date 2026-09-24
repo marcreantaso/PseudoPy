@@ -4,7 +4,7 @@ const StudentWorkspace = (() => {
     let history = [], historyStatus = '', historyMode = false, selected = 'source', step = -1;
     let activePage = '', serial = 0, sessionEpoch = 0;
     const visible = new Set(['compilation', 'validation', 'cumulative']);
-    let chartResizeObserver = null, chartResizeRaf = 0;
+    let chartResizeObserver = null, chartResizeRaf = 0, chartLayoutBin = 'tall';
     const guideState = { mode: 'beginner', category: 'Basics' };
     const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const userId = () => typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'student' ? String(currentUser._docId || currentUser.id || '') : '';
@@ -13,6 +13,7 @@ const StudentWorkspace = (() => {
         sessionEpoch++;
         generation++; if (unsubscribe) unsubscribe(); unsubscribe = null;
         if (chartResizeObserver) chartResizeObserver.disconnect(); chartResizeObserver = null;
+        chartLayoutBin = 'tall';
         owner = ''; attempts = []; executions = []; latest = null; history = []; historyStatus = ''; activePage = ''; step = -1; historyMode = false;
         document.querySelectorAll('.student-workspace').forEach(el => el.remove());
         document.querySelectorAll('[data-student-guide]').forEach(el => { el.dataset.owner = ''; });
@@ -143,18 +144,44 @@ const StudentWorkspace = (() => {
         if (latest && token.attemptId === latest.id) latest.runtime = { status: success ? 'Completed' : 'Error', output };
         render();
     }
+    function elementFocusKey(root) {
+        const el = typeof document !== 'undefined' ? document.activeElement : null;
+        if (!el || !el.getAttribute || !root.contains(el)) return null;
+        for (const attr of ['data-stage', 'data-step', 'data-history', 'data-info', 'data-point', 'data-series', 'data-legend']) {
+            const value = el.getAttribute(attr);
+            if (value != null) return attr + '=' + value;
+        }
+        if (el.tagName === 'SUMMARY') return 'summary=' + el.textContent.trim();
+        return null;
+    }
+    function restoreFocus(root, key) {
+        if (!key) return;
+        const split = key.indexOf('=');
+        const attr = key.slice(0, split), value = key.slice(split + 1);
+        if (attr === 'summary') {
+            root.querySelectorAll('details summary').forEach(s => { if (s.textContent.trim() === value) s.focus(); });
+            return;
+        }
+        const el = root.querySelector('[' + attr + '="' + value + '"]');
+        if (el) el.focus();
+    }
     function render() {
         if (!owner || owner !== userId()) return;
         const root = element('page-' + activePage), target = root && root.querySelector('.student-workspace'); if (!target) return;
-        const flowOpen = target.querySelector('.sw-flow')?.open || false;
-        const insightsOpen = target.querySelector('.sw-insights')?.open || false;
-        target.innerHTML = '<details class="sw-flow"' + (flowOpen ? ' open' : '') + '><summary>How Your Algorithm Works</summary><div class="sw-flow-body"></div></details><details class="sw-insights"' + (insightsOpen ? ' open' : '') + '><summary>Session Insights</summary><p>Live session: this signed-in browser session only. Metrics update after translating or running code.</p><div class="sw-kpis"></div><details class="sw-glossary"><summary>What do these numbers mean?</summary><p class="sw-learning"></p></details><div class="sw-chart an-chart-card"></div></details>';
+        const scrollY = (typeof window !== 'undefined' && window.scrollY) || 0;
+        const openSummaries = new Set();
+        target.querySelectorAll('details[open]').forEach(d => { const s = d.querySelector('summary'); if (s) openSummaries.add(s.textContent.trim()); });
+        const focusKey = elementFocusKey(target);
+        target.innerHTML = '<details class="sw-flow"><summary>How Your Algorithm Works</summary><div class="sw-flow-body"></div></details><details class="sw-insights"><summary>Session Insights</summary><p>Live session: this signed-in browser session only. Metrics update after translating or running code.</p><div class="sw-kpis"></div><details class="sw-glossary"><summary>What do these numbers mean?</summary><p class="sw-learning"></p></details><div class="sw-chart an-chart-card"></div></details>';
         renderFlow(target.querySelector('.sw-flow-body'), root);
         const k = StudentLearningModel.kpis(attempts, executions);
         target.querySelector('.sw-kpis').innerHTML = [ ['Total Translations', k.translations], ['Compilation Success Rate', k.success.toFixed(1) + '%'], ['Runtime Error Rate', k.runtime.toFixed(1) + '%'], ['Average Generation Time', k.average.toFixed(2) + ' ms'], ['Total Errors', k.errors], ['Total Executions', k.executions] ].map(([label, value]) => '<div><strong>' + value + '</strong><span>' + label + '</span></div>').join('');
         const patterns = [...new Set(attempts.flatMap(a => a.patterns))];
         target.querySelector('.sw-learning').textContent = 'Successful attempts: ' + attempts.filter(a => a.valid).length + '. Attempts with syntax/structure issues: ' + attempts.filter(a => a.categories.some(c => /syntax|structure/i.test(c))).length + '. Attempts with detected logic issues: ' + attempts.filter(a => a.categories.some(c => /logic/i.test(c))).length + '. Distinct patterns practiced: ' + patterns.length + ' (' + (patterns.join(', ') || 'none yet') + '). Generation time includes the complete translation pipeline. Total Errors counts compilation issues; runtime failures are shown separately.';
         renderChart(target.querySelector('.sw-chart'));
+        target.querySelectorAll('details').forEach(d => { const s = d.querySelector('summary'); if (s && openSummaries.has(s.textContent.trim())) d.open = true; });
+        restoreFocus(target, focusKey);
+        if ((typeof window !== 'undefined' && window.scrollTo) && ((window.scrollY || 0) !== scrollY)) window.scrollTo(window.scrollX || 0, scrollY);
     }
     function renderFlow(container, root) {
         if (!latest) { container.textContent = 'Translate your pseudocode to explore what PseudoPy understood.'; return; }
@@ -210,7 +237,13 @@ const StudentWorkspace = (() => {
             if (chartResizeObserver) chartResizeObserver.disconnect();
             chartResizeObserver = new ResizeObserver(() => {
                 cancelAnimationFrame(chartResizeRaf);
-                chartResizeRaf = requestAnimationFrame(() => { if (card.isConnected) renderChart(card); });
+                chartResizeRaf = requestAnimationFrame(() => {
+                    if (!card.isConnected) return;
+                    // Only a layout-bin change (crossing the 480px deadband)
+                    // rebuilds the chart; plain width/height changes scale the
+                    // SVG via CSS and must not churn the DOM mid-scroll.
+                    if (chartLayout(card.clientWidth, chartLayoutBin).bin !== chartLayoutBin) renderChart(card);
+                });
             });
             chartResizeObserver.observe(card);
         } catch (_) { /* best effort responsive redraw */ }
@@ -220,6 +253,7 @@ const StudentWorkspace = (() => {
         const series = [['compilation', 'Compilation Success', 'var(--chart-1)'], ['validation', 'Validation Indicator', 'var(--chart-5)'], ['cumulative', 'Cumulative Success Rate', 'var(--chart-2)']];
         const title = historyMode ? 'Your Learning Progress — Learning History' : 'Your Learning Progress';
         const subtitle = historyMode ? 'Saved translation evidence from your account. ' + esc(historyStatus) : 'Based on your latest translation attempts.';
+        const focusKey = elementFocusKey(card);
         card.innerHTML =
             '<div class="an-chart-header">' +
                 '<div><div class="an-chart-title">' + esc(title) + '<button type="button" class="an-info-badge" data-info aria-label="How is this calculated?"></button></div>' +
@@ -237,11 +271,13 @@ const StudentWorkspace = (() => {
             bindHistoryMode(card);
             refreshIcons(card);
             watchChartSize(card);
+            restoreFocus(card, focusKey);
             return;
         }
         const W = 600;
-        const cardWidth = card.clientWidth > 60 ? card.clientWidth : (typeof window !== 'undefined' ? Math.min(window.innerWidth, 600) : 600);
-        const H = cardWidth >= 480 ? 320 : 470;
+        const layout = chartLayout(card.clientWidth, chartLayoutBin);
+        chartLayoutBin = layout.bin;
+        const H = layout.h;
         const left = 52, right = 24, top = 18, bottom = 32;
         const x = i => left + (data.length === 1 ? (W - left - right) / 2 : i * (W - left - right) / (data.length - 1));
         const y = n => bottom + (1 - n / 100) * (H - top - bottom);
@@ -254,7 +290,7 @@ const StudentWorkspace = (() => {
         series.forEach(([key, label, color], index) => {
             if (!visible.has(key)) return;
             svg += '<path fill="none" stroke="' + color + '" stroke-width="2.5" stroke-dasharray="' + (index ? '6 3' : 'none') + '" d="' + data.map((p, i) => (i ? 'L' : 'M') + x(i) + ',' + y(p[key])).join(' ') + '"/>';
-            data.forEach((p, i) => { svg += '<circle tabindex="0" role="button" class="an-series-dot" data-point="' + i + '" aria-label="Attempt ' + (i + 1) + ', ' + label + ': ' + units(p[key]) + ' percent (errors ' + p.errors + ')" cx="' + x(i) + '" cy="' + y(p[key]) + '" r="4.5" fill="' + color + '"/>'; });
+            data.forEach((p, i) => { svg += '<circle tabindex="0" role="button" class="an-series-dot" data-point="' + i + '" data-series="' + key + '" aria-label="Attempt ' + (i + 1) + ', ' + label + ': ' + units(p[key]) + ' percent (errors ' + p.errors + ')" cx="' + x(i) + '" cy="' + y(p[key]) + '" r="4.5" fill="' + color + '"/>'; });
         });
         svg += '</svg>';
         const legend = series.map(([key, label, color]) => '<button type="button" class="sg-legend-chip" data-legend="' + key + '" aria-pressed="' + visible.has(key) + '"><span class="sg-legend-dot" style="background:' + color + '"></span>' + label + '</button>').join('');
@@ -262,7 +298,7 @@ const StudentWorkspace = (() => {
             '<div class="an-chart-plot">' + svg + '</div>' +
             '<div class="sg-legend">' + legend + '<span class="sg-mastery-note">Complete more exercises to unlock concept mastery insights.</span></div>' +
             '<div class="an-chart-footer">' + icon('trending-up') + trendSummary(data) + '</div>' +
-            '<details class="sw-data-table"><summary>View chart data as a table</summary><div class="sw-table"><table><thead><tr><th scope="col">Attempt</th><th scope="col">Compilation %</th><th scope="col">Validation indicator %</th><th scope="col">Errors</th></tr></thead><tbody>' + data.map((p, i) => '<tr><td>' + (i + 1) + '</td><td>' + p.compilation + '</td><td>' + p.validation + '</td><td>' + p.errors + '</td></tr>').join('') + '</tbody></table></div></details>';
+            '<details class="sw-data-table"><summary>View chart data as a table</summary><div class="sw-table"><table><thead><tr><th scope="col">Attempt</th><th scope="col">Compilation %</th><th scope="col">Validation indicator %</th><th scope="col">Cumulative %</th><th scope="col">Errors</th></tr></thead><tbody>' + data.map((p, i) => '<tr><td>' + (i + 1) + '</td><td>' + p.compilation + '</td><td>' + p.validation + '</td><td>' + units(p.cumulative) + '</td><td>' + p.errors + '</td></tr>').join('') + '</tbody></table></div></details>';
         const tip = anEnsureTooltip(card);
         const toggleSeries = key => {
             if (visible.has(key) && visible.size === 1) return;
@@ -298,10 +334,11 @@ const StudentWorkspace = (() => {
             dot.onfocus = () => anShowTooltip(tip, { clientX: dot.getBoundingClientRect().left, clientY: dot.getBoundingClientRect().top }, tooltipHtml(i, p), card);
             dot.onblur = hide;
             dot.onclick = show;
-            dot.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(e); } };
+            dot.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(e); } else if (e.key === 'Escape') { hide(); } };
         });
         refreshIcons(card);
         watchChartSize(card);
+        restoreFocus(card, focusKey);
     }
     function loadHistory() {
         const id = owner, ticket = generation;

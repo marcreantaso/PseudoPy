@@ -110,6 +110,30 @@ function round(value, precision) {
     return Math.round(value * Math.pow(10, p)) / Math.pow(10, p);
 }
 
+/* Responsive layout bins for the student Learning Progress chart. The
+   480px threshold is reported with a 40px deadband: while the measured
+   width sits inside the deadband the previous bin is kept, so viewport
+   flicker (mobile toolbar, rotation) cannot flap the chart aspect and
+   re-trigger full re-renders mid-scroll. */
+const CHART_LAYOUT_WIDE_MIN = 520;
+const CHART_LAYOUT_TALL_MAX = 460;
+
+/**
+ * Chooses the chart layout bin for a measured card width.
+ * @param {number} width - measured card width in px (0 when hidden)
+ * @param {'tall'|'wide'} [prevBin='tall'] - last committed bin
+ * @returns {{bin: 'tall'|'wide', h: number}} viewBox height (470 tall / 320 wide)
+ */
+function chartLayout(width, prevBin) {
+    const prev = prevBin === 'wide' ? 'wide' : 'tall';
+    if (!(width > 0)) return { bin: prev, h: prev === 'wide' ? 320 : 470 };
+    if (width >= CHART_LAYOUT_WIDE_MIN) return { bin: 'wide', h: 320 };
+    if (width <= CHART_LAYOUT_TALL_MAX) return { bin: 'tall', h: 470 };
+    return prev === 'wide'
+        ? { bin: 'wide', h: 320 }
+        : { bin: 'tall', h: 470 };
+}
+
 /* ============================================================
    CommonJS export guard — allows the Node suite to require()
    the same source the browser bundles.
@@ -123,6 +147,9 @@ if (typeof module !== 'undefined' && module.exports) {
         arcPath,
         sliceCentroid,
         polarPoint,
+        chartLayout,
+        CHART_LAYOUT_WIDE_MIN,
+        CHART_LAYOUT_TALL_MAX,
         START_ANGLE,
         TAU,
         round

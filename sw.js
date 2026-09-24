@@ -3,17 +3,18 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-shell-20260924-student-v3';
+const CACHE_NAME = 'pseudopy-shell-20260924-student-v4';
 const LOCAL_ASSETS = [
     './',
     './index.html',
     './pwa-updates.js?v=20260921-1',
     './style.css',
     './student-workspace.css',
-    './style.css?v=pseudopy-logo-1',
+    './style.css?v=charts-fix-1',
+    './student-workspace.css?v=charts-fix-1',
     './mapper.js',
     './app.js',
-    './app.js?v=icons-2',
+    './app.js?v=charts-fix-1',
     './ui-icons.js?v=2',
     './ui-icons.css?v=1',
     './compiler.js',

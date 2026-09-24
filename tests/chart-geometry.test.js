@@ -71,3 +71,23 @@ test('polarPoint places a point at the given angle/radius', () => {
     assert.ok(Math.abs(p.x - 150) < 1e-9, 'angle 0 → +x');
     assert.ok(Math.abs(p.y - 100) < 1e-9, 'angle 0 → same y');
 });
+
+test('chartLayout picks the tall bin below the deadband and wide above it', () => {
+    assert.deepEqual(geo.chartLayout(340, 'tall'), { bin: 'tall', h: 470 });
+    assert.deepEqual(geo.chartLayout(460, 'tall'), { bin: 'tall', h: 470 });
+    assert.deepEqual(geo.chartLayout(520, 'tall'), { bin: 'wide', h: 320 });
+    assert.deepEqual(geo.chartLayout(869, 'wide'), { bin: 'wide', h: 320 });
+});
+
+test('chartLayout deadband keeps the previous bin so widths near 480 cannot flap', () => {
+    assert.deepEqual(geo.chartLayout(470, 'tall'), { bin: 'tall', h: 470 }, '470 stays tall after tall');
+    assert.deepEqual(geo.chartLayout(510, 'wide'), { bin: 'wide', h: 320 }, '510 stays wide after wide');
+    assert.deepEqual(geo.chartLayout(500, 'tall'), { bin: 'tall', h: 470 }, '500 keeps tall until 520');
+    assert.deepEqual(geo.chartLayout(480, 'wide'), { bin: 'wide', h: 320 }, '480 keeps wide until 460');
+});
+
+test('chartLayout treats a hidden card (width 0) as unchanged', () => {
+    assert.deepEqual(geo.chartLayout(0, 'wide'), { bin: 'wide', h: 320 });
+    assert.deepEqual(geo.chartLayout(0, 'tall'), { bin: 'tall', h: 470 });
+    assert.deepEqual(geo.chartLayout(0), { bin: 'tall', h: 470 }, 'defaults to tall');
+});

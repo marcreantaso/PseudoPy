@@ -2230,6 +2230,7 @@ svg.lucide {
   display: flex;
   align-items: flex-end;
   gap: 0.5rem;
+  position: relative;
 }
 
 .chart-bar {
@@ -4664,6 +4665,19 @@ select.form-input {
 .an-bar-tooltip.hidden {
   display: none;
   opacity: 0;
+}
+
+/* Charts keep hover/focus feedback but skip layout-affecting motion. */
+@media (prefers-reduced-motion: reduce) {
+  .chart-bar,
+  .an-bar-inner,
+  .an-trajectory-line,
+  .an-area-dot,
+  .an-pie-slice,
+  .sg-legend-chip,
+  .an-legend-chip {
+    transition: none !important;
+  }
 }
 
 .an-tt-header {
