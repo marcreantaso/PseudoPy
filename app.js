@@ -831,6 +831,7 @@ function handleLogout() {
     if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.reset();
     if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
+    if (typeof devToolsAbortRun === 'function') devToolsAbortRun();
     // Invalidate session state
     currentUser = null;
     currentPage = '';
@@ -1224,6 +1225,10 @@ currentPage = pageId;
         } else {
             loadScripts(['devtools.js'], function () { if (typeof initDevTools === 'function') initDevTools(); });
         }
+    } else if (typeof devToolsAbortRun === 'function') {
+        // Leaving the DevTools page must stop any in-flight Skulpt run so a
+        // pending input can never resolve into a hidden page.
+        devToolsAbortRun();
     }
     // Refresh student progress pill whenever the Write Pseudocode page is shown
     if (pageId === 'write-pseudocode' && currentUser && currentUser.role === 'student') {

@@ -54,6 +54,10 @@ function devToolsSwitchTab(tabId) {
 // ══════════════════════════════════════════════════════════════
 
 function devToolsRunPipeline() {
+    if (typeof runtimeConsole !== 'undefined' && runtimeConsole.isActive()) {
+        if (typeof showToast === 'function') showToast('A run is already in progress. Stop it or wait for it to finish.', 'error');
+        return;
+    }
     const pseudocode = document.getElementById('devtools-pseudocode').value;
     if (!pseudocode.trim()) {
         if (typeof showToast === 'function') showToast('Please enter pseudocode first.', 'error');
@@ -134,6 +138,10 @@ function devToolsRunPipeline() {
 // ══════════════════════════════════════════════════════════════
 
 function _devToolsRenderSkulptUnavailable(statusEl, stderrEl, pipeRuntime) {
+    if (typeof runtimeConsole !== 'undefined') {
+        runtimeConsole.beginRun();
+        runtimeConsole.fail(new Error('Skulpt library not available.'));
+    }
     if (statusEl) statusEl.textContent = '{{ui:TriangleAlert}} Skulpt not loaded';
     if (stderrEl) stderrEl.textContent = 'Skulpt library not available.';
     if (pipeRuntime) pipeRuntime.className = 'pipeline-stage status-ERROR';
@@ -163,6 +171,8 @@ function _devToolsExecutePython(pythonCode, attempt) {
         return;
     }
 
+    const runSession = (typeof runtimeConsole !== 'undefined') ? runtimeConsole.beginRun() : null;
+
     if (pipeRuntime) {
         pipeRuntime.className = 'pipeline-stage status-RUNNING';
         pipeRuntime.querySelector('.pipe-status-dot').title = 'RUNNING';
@@ -178,33 +188,47 @@ function _devToolsExecutePython(pythonCode, attempt) {
     const execStart = performance.now();
 
     Sk.configure({
-        output: function (text) { stdoutBuffer.push(text); },
+        output: function (text) {
+            stdoutBuffer.push(text);
+            if (typeof runtimeConsole !== 'undefined') runtimeConsole.append(text, 'stdout');
+        },
         read: function (x) {
             if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined)
                 throw "File not found: '" + x + "'";
             return Sk.builtinFiles["files"][x];
         },
         inputfun: function (promptText) {
-            return new Promise(function (resolve) {
-                const value = prompt(promptText || 'Input required:');
-                resolve(value || '');
-            });
+            return runtimeConsole.requestInput(promptText || 'Input required:');
         },
         inputfunTakesPrompt: true,
         __future__: Sk.python3
     });
 
-    Sk.misceval.asyncToPromise(function () {
+    const execFn = function () {
         return Sk.importMainWithBody("<stdin>", false, pythonCode, true);
-    }).then(function () {
+    };
+    // Best-effort execution budget for Skulpt builds that expose
+    // Sk.misceval.timeout; tight synchronous loops cannot be preempted.
+    const guardedExec = (typeof Sk.misceval.timeout === 'function') ? Sk.misceval.timeout(execFn, 15000) : execFn;
+
+    Sk.misceval.asyncToPromise(guardedExec).then(function () {
         const execTime = performance.now() - execStart;
         const stdout = stdoutBuffer.join('');
 
-        if (statusEl) statusEl.textContent = '{{ui:CircleCheck}} Success';
+        // A newer run may have started (e.g. after Stop); ignore stale completions.
+        if (runSession !== null && typeof runtimeConsole !== 'undefined' && runtimeConsole.sessionId !== runSession) return;
+
+        const consoleStopped = typeof runtimeConsole !== 'undefined' && runtimeConsole.state === 'stopped';
+
+        if (typeof runtimeConsole !== 'undefined') {
+            runtimeConsole.finish();
+        } else if (statusEl) {
+            statusEl.textContent = '{{ui:CircleCheck}} Success';
+        }
         if (stdoutEl) stdoutEl.textContent = stdout || '(no output)';
         if (timeEl) timeEl.textContent = execTime.toFixed(3) + ' ms';
         if (pipeRuntime) {
-            pipeRuntime.className = 'pipeline-stage status-SUCCESS';
+            pipeRuntime.className = 'pipeline-stage ' + (consoleStopped ? 'status-SKIPPED' : 'status-SUCCESS');
             const pt = pipeRuntime.querySelector('.pipe-time');
             if (pt) pt.textContent = execTime.toFixed(2) + ' ms';
         }
@@ -213,21 +237,40 @@ function _devToolsExecutePython(pythonCode, attempt) {
         if (dm) dm.textContent = execTime.toFixed(3) + ' ms';
 
         attempt.runtimeOutput = stdout;
-        attempt.status = 'RUNTIME_SUCCESS';
+        attempt.status = consoleStopped ? 'RUNTIME_STOPPED' : 'RUNTIME_SUCCESS';
 
-        compilerTrace.emit({ type: 'EXECUTION_COMPLETE', stage: 'EXECUTION', status: 'SUCCESS', data: { stdout, executionTime: execTime } });
+        compilerTrace.emit({ type: 'EXECUTION_COMPLETE', stage: 'EXECUTION', status: consoleStopped ? 'SKIPPED' : 'SUCCESS', data: { stdout, executionTime: execTime, stopped: consoleStopped } });
         compilerTrace.disable();
         devToolsState.stepEvents = compilerTrace.getEvents();
         _updateEventLog(devToolsState.stepEvents);
-        _updateRawJSON(devToolsState.currentResult, { stdout, stderr: '', executionTime: execTime });
+        _updateRawJSON(devToolsState.currentResult, { stdout, stderr: '', executionTime: execTime, stopped: consoleStopped });
 
         // Build execution trace from AST
         _buildExecutionTrace(devToolsState.currentResult, stdout);
 
     }).catch(function (err) {
         const execTime = performance.now() - execStart;
-        const errStr = err.toString();
 
+        // A newer run may have started (e.g. after Stop); ignore stale failures.
+        if (runSession !== null && typeof runtimeConsole !== 'undefined' && runtimeConsole.sessionId !== runSession) return;
+
+        const aborted = typeof runtimeConsole !== 'undefined' && err === runtimeConsole.ABORTED;
+
+        if (aborted) {
+            if (typeof runtimeConsole !== 'undefined') runtimeConsole.fail(err);
+            if (pipeRuntime) pipeRuntime.className = 'pipeline-stage status-SKIPPED';
+            attempt.runtimeError = 'Stopped by user';
+            attempt.status = 'RUNTIME_STOPPED';
+            compilerTrace.emit({ type: 'EXECUTION_COMPLETE', stage: 'EXECUTION', status: 'SKIPPED', data: { stopped: true, executionTime: execTime } });
+            compilerTrace.disable();
+            devToolsState.stepEvents = compilerTrace.getEvents();
+            _updateEventLog(devToolsState.stepEvents);
+            _updateRawJSON(devToolsState.currentResult, { stdout: stdoutBuffer.join(''), stderr: '', executionTime: execTime, stopped: true });
+            return;
+        }
+
+        const errStr = err.toString();
+        if (typeof runtimeConsole !== 'undefined') runtimeConsole.fail(err);
         if (statusEl) statusEl.textContent = '{{ui:CircleX}} Error';
         if (stderrEl) stderrEl.textContent = errStr;
         if (stdoutEl) stdoutEl.textContent = stdoutBuffer.join('') || '(no output before error)';
@@ -307,6 +350,7 @@ function devToolsReset() {
     devToolsState.stepEvents = [];
     devToolsState.allErrors = [];
     compilerTrace.reset();
+    if (typeof runtimeConsole !== 'undefined') runtimeConsole.reset();
 
     _resetPipelineVis();
     document.getElementById('devtools-python-output').textContent = 'Waiting for compilation...';
