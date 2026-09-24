@@ -1901,6 +1901,25 @@
           </div>
         </div>
 
+        <!-- Runtime Console -->
+        <div class="devtools-console" id="devtools-console">
+          <div class="devtools-console-header">
+            <div class="devtools-console-title">{{ui:Terminal}} Runtime Console</div>
+            <span class="devtools-console-state" id="devtools-console-state" data-state="idle">Idle</span>
+            <div class="devtools-console-actions">
+              <button class="btn btn-ghost btn-sm" id="devtools-console-stop" onclick="runtimeConsoleStop()" title="Stop the running program" aria-label="Stop the running program" disabled>{{ui:CircleX}} Stop</button>
+              <button class="btn btn-ghost btn-sm" id="devtools-console-copy" onclick="runtimeConsoleCopy()" title="Copy console output" aria-label="Copy console output" disabled>{{ui:ClipboardList}} Copy</button>
+              <button class="btn btn-ghost btn-sm" id="devtools-console-clear" onclick="runtimeConsoleClear()" title="Clear console output" aria-label="Clear console output">{{ui:Trash2}} Clear</button>
+            </div>
+          </div>
+          <div class="devtools-console-output" id="devtools-console-output" role="log" aria-live="polite" aria-label="Runtime console output"></div>
+          <div class="devtools-console-input-row hidden" id="devtools-console-input-row">
+            <label class="devtools-console-prompt" id="devtools-console-prompt" for="devtools-console-input"></label>
+            <input class="devtools-console-input" id="devtools-console-input" type="text" autocomplete="off" spellcheck="false" enterkeyhint="send" aria-label="Input value for the running pseudocode" />
+            <button class="btn btn-success btn-sm" id="devtools-console-submit" type="button">Submit</button>
+          </div>
+        </div>
+
         <!-- Tabbed Inspector Panels -->
         <div class="devtools-tabs">
           <div class="devtools-tab-bar" id="devtools-tab-bar">

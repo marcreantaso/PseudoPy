@@ -108,6 +108,7 @@ function _updateAttemptHistory() {
         let statusClass = 'attempt-error';
         if (a.status === 'RUNTIME_SUCCESS') { icon = '{{ui:CircleCheck}}'; statusClass = 'attempt-success'; }
         else if (a.status === 'COMPILE_SUCCESS') { icon = '{{ui:TriangleAlert}}'; statusClass = 'attempt-warning'; }
+        else if (a.status === 'RUNTIME_STOPPED') { icon = '{{ui:CircleX}}'; statusClass = 'attempt-warning'; }
 
         return `<div class="devtools-attempt-card ${statusClass}" onclick="devToolsLoadAttempt(${i})">
             <div class="attempt-num">${icon} Attempt #${a.attemptNumber}</div>

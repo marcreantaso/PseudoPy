@@ -177,6 +177,7 @@ function handleLogout() {
     if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.reset();
     if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
+    if (typeof devToolsAbortRun === 'function') devToolsAbortRun();
     // Invalidate session state
     currentUser = null;
     currentPage = '';
