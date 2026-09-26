@@ -4503,6 +4503,13 @@ select.form-input {
   position: relative;
 }
 
+/* Analytics plots must never force their grid card wider than the column. */
+.an-trajectory-plot,
+.an-area-plot,
+.an-pie-plot {
+  min-width: 0;
+}
+
 .an-pie-slice {
   fill: var(--slice-color);
   stroke: var(--card);

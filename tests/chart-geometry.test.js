@@ -91,3 +91,24 @@ test('chartLayout treats a hidden card (width 0) as unchanged', () => {
     assert.deepEqual(geo.chartLayout(0, 'tall'), { bin: 'tall', h: 470 });
     assert.deepEqual(geo.chartLayout(0), { bin: 'tall', h: 470 }, 'defaults to tall');
 });
+
+test('progressXTicks keeps every attempt while the plot fits the minimum gap', () => {
+    assert.deepEqual(geo.progressXTicks(0, 524), []);
+    assert.deepEqual(geo.progressXTicks(1, 524), [0]);
+    assert.deepEqual(geo.progressXTicks(6, 524), [0, 1, 2, 3, 4, 5], '6 attempts all fit on a wide plot');
+});
+
+test('progressXTicks thins long runs to at most six evenly spread ticks', () => {
+    const ticks = geo.progressXTicks(12, 524);
+    assert.deepEqual(ticks, [0, 2, 4, 7, 9, 11], '12 attempts produce 6 evenly spread labels');
+    assert.equal(ticks[0], 0, 'always starts at the first attempt');
+    assert.equal(ticks[ticks.length - 1], 11, 'always ends at the last attempt');
+    assert.ok(ticks.every((t, i) => i === 0 || t > ticks[i - 1]), 'no duplicates, ascending order');
+});
+
+test('progressXTicks honors the plot width (minTickGap shrink), falling back to 2 ticks', () => {
+    assert.deepEqual(geo.progressXTicks(12, 88), [0, 11], 'a narrow plot keeps only first/last');
+    assert.deepEqual(geo.progressXTicks(12, 0), [0, 11], 'hidden card falls back to first/last');
+    assert.deepEqual(geo.progressXTicks(12, -5), [0, 11], 'negative width is clamped');
+    assert.deepEqual(geo.progressXTicks(12, 524, 150), [0, 6, 11], 'a larger min gap reduces tick count');
+});

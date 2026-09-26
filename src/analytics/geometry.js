@@ -134,6 +134,30 @@ function chartLayout(width, prevBin) {
         : { bin: 'tall', h: 470 };
 }
 
+/**
+ * Chooses the 0-based attempt indices to label on the Learning Progress
+ * x-axis so labels never crowd on narrow cards (the vanilla equivalent of
+ * a charting library's `minTickGap`). Always keeps the first and last
+ * attempt and never emits more than 6 ticks, evenly spread.
+ * @param {number} count - number of data points (0 → empty, 1 → [0])
+ * @param {number} plotWidth - plot width in px (0 falls back to 2 ticks)
+ * @param {number} [minPx=44] - minimum pixel gap between neighbouring ticks
+ * @returns {number[]} ascending 0-based indices to label
+ */
+function progressXTicks(count, plotWidth, minPx) {
+    const gap = Math.max(minPx === undefined ? 44 : Number(minPx) || 0, 1);
+    const n = Math.max(0, Math.floor(Number(count) || 0));
+    if (n === 0) return [];
+    if (n === 1) return [0];
+    const width = Math.max(0, Number(plotWidth) || 0);
+    const target = Math.max(2, Math.min(6, Math.floor(width / gap)));
+    if (n <= target) return Array.from({ length: n }, (_, i) => i);
+    const ticks = [0];
+    for (let t = 1; t < target; t++) ticks.push(Math.round((t * (n - 1)) / (target - 1)));
+    ticks.push(n - 1);
+    return [...new Set(ticks)].sort((a, b) => a - b);
+}
+
 /* ============================================================
    CommonJS export guard — allows the Node suite to require()
    the same source the browser bundles.
@@ -148,6 +172,7 @@ if (typeof module !== 'undefined' && module.exports) {
         sliceCentroid,
         polarPoint,
         chartLayout,
+        progressXTicks,
         CHART_LAYOUT_WIDE_MIN,
         CHART_LAYOUT_TALL_MAX,
         START_ANGLE,

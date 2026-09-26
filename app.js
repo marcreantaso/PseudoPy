@@ -4583,6 +4583,30 @@ function chartLayout(width, prevBin) {
         : { bin: 'tall', h: 470 };
 }
 
+/**
+ * Chooses the 0-based attempt indices to label on the Learning Progress
+ * x-axis so labels never crowd on narrow cards (the vanilla equivalent of
+ * a charting library's `minTickGap`). Always keeps the first and last
+ * attempt and never emits more than 6 ticks, evenly spread.
+ * @param {number} count - number of data points (0 → empty, 1 → [0])
+ * @param {number} plotWidth - plot width in px (0 falls back to 2 ticks)
+ * @param {number} [minPx=44] - minimum pixel gap between neighbouring ticks
+ * @returns {number[]} ascending 0-based indices to label
+ */
+function progressXTicks(count, plotWidth, minPx) {
+    const gap = Math.max(minPx === undefined ? 44 : Number(minPx) || 0, 1);
+    const n = Math.max(0, Math.floor(Number(count) || 0));
+    if (n === 0) return [];
+    if (n === 1) return [0];
+    const width = Math.max(0, Number(plotWidth) || 0);
+    const target = Math.max(2, Math.min(6, Math.floor(width / gap)));
+    if (n <= target) return Array.from({ length: n }, (_, i) => i);
+    const ticks = [0];
+    for (let t = 1; t < target; t++) ticks.push(Math.round((t * (n - 1)) / (target - 1)));
+    ticks.push(n - 1);
+    return [...new Set(ticks)].sort((a, b) => a - b);
+}
+
 /* ============================================================
    CommonJS export guard — allows the Node suite to require()
    the same source the browser bundles.
@@ -4597,6 +4621,7 @@ if (typeof module !== 'undefined' && module.exports) {
         sliceCentroid,
         polarPoint,
         chartLayout,
+        progressXTicks,
         CHART_LAYOUT_WIDE_MIN,
         CHART_LAYOUT_TALL_MAX,
         START_ANGLE,
@@ -10269,13 +10294,15 @@ const StudentWorkspace = (() => {
             '<div class="an-chart-header">' +
                 '<div><div class="an-chart-title">' + esc(title) + '<button type="button" class="an-info-badge" data-info aria-label="How is this calculated?"></button></div>' +
                 '<div class="an-chart-subtitle">' + subtitle + '</div></div>' +
+            '</div>' +
+            '<div class="an-chart-controls">' +
                 '<div class="seg" role="group" aria-label="Source of chart data">' +
                     '<button type="button" data-history="false" aria-pressed="' + !historyMode + '">Live Session</button>' +
                     '<button type="button" data-history="true" aria-pressed="' + historyMode + '">Learning History</button>' +
                 '</div>' +
-            '</div>' +
-            '<div class="seg sg-series" role="group" aria-label="Chart series">' +
-                series.map(([key, label]) => '<button type="button" data-series="' + key + '" aria-pressed="' + visible.has(key) + '">' + label + '</button>').join('') +
+                '<div class="seg sg-series" role="group" aria-label="Chart series">' +
+                    series.map(([key, label]) => '<button type="button" data-series="' + key + '" aria-pressed="' + visible.has(key) + '">' + label + '</button>').join('') +
+                '</div>' +
             '</div>';
         if (!data.length) {
             card.innerHTML += '<p class="an-chart-empty">' + (historyMode ? 'No saved translation evidence is available for this account yet.' : 'Complete your first translation to begin tracking this session.') + '</p><div class="an-chart-footer">' + icon('info') + 'This chart fills in with your real translation attempts.</div>';
@@ -10290,18 +10317,24 @@ const StudentWorkspace = (() => {
         chartLayoutBin = layout.bin;
         const H = layout.h;
         const left = 52, right = 24, top = 18, bottom = 32;
-        const x = i => left + (data.length === 1 ? (W - left - right) / 2 : i * (W - left - right) / (data.length - 1));
+        const plotW = W - left - right;
+        const plotWidth = card.clientWidth > 0 ? Math.max(0, card.clientWidth - left - right) : plotW;
+        const x = i => left + (data.length === 1 ? plotW / 2 : i * plotW / (data.length - 1));
         const y = n => bottom + (1 - n / 100) * (H - top - bottom);
         const units = m => Math.round(Number(m) * 10) / 10;
         let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="aspect-ratio:' + W + '/' + H + '" role="group" aria-label="Learning progress, percentage by translation attempt" class="an-svg">';
         [0, 25, 50, 75, 100].forEach(n => { svg += '<line class="an-grid-line" x1="' + left + '" x2="' + (W - right) + '" y1="' + y(n) + '" y2="' + y(n) + '"/><text x="' + (left - 8) + '" y="' + (y(n) + 3) + '" text-anchor="end" class="an-axis-label">' + n + '%</text>'; });
-        const ticks = new Set([0, data.length - 1]);
-        if (data.length > 8) { for (let k = 1; k <= 4; k++) ticks.add(Math.round((data.length - 1) * k / 5)); }
-        [...ticks].sort((a, b) => a - b).forEach(i => svg += '<text class="an-axis-label" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">Attempt ' + (i + 1) + '</text>');
-        series.forEach(([key, label, color], index) => {
+        progressXTicks(data.length, plotWidth).forEach(i => svg += '<text class="an-axis-label" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + (i + 1) + '</text>');
+        svg += '<defs><linearGradient id="sw-compilation-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--chart-1)" stop-opacity="0.22"/><stop offset="100%" stop-color="var(--chart-1)" stop-opacity="0.02"/></linearGradient><clipPath id="sw-plot-clip"><rect x="' + left + '" y="' + bottom + '" width="' + plotW + '" height="' + (H - top - bottom) + '"/></clipPath></defs>';
+        const baseline = y(0);
+        series.forEach(([key, label, color]) => {
             if (!visible.has(key)) return;
-            svg += '<path fill="none" stroke="' + color + '" stroke-width="2.5" stroke-dasharray="' + (index ? '6 3' : 'none') + '" d="' + data.map((p, i) => (i ? 'L' : 'M') + x(i) + ',' + y(p[key])).join(' ') + '"/>';
-            data.forEach((p, i) => { svg += '<circle tabindex="0" role="button" class="an-series-dot" data-point="' + i + '" data-series="' + key + '" aria-label="Attempt ' + (i + 1) + ', ' + label + ': ' + units(p[key]) + ' percent (errors ' + p.errors + ')" cx="' + x(i) + '" cy="' + y(p[key]) + '" r="4.5" fill="' + color + '"/>'; });
+            const pts = data.map((p, i) => ({ x: i, y: p[key] }));
+            const primary = key === 'compilation';
+            const dots = data.map((p, i) => '<circle tabindex="0" role="button" class="an-series-dot' + (primary ? '' : ' an-progress-aux-dot') + '" data-point="' + i + '" data-series="' + key + '" aria-label="Attempt ' + (i + 1) + ', ' + label + ': ' + units(p[key]) + ' percent (errors ' + p.errors + ')" cx="' + x(i) + '" cy="' + y(p[key]) + '" r="' + (primary ? 4.5 : 3) + '" fill="' + color + '"/>').join('');
+            svg += '<g clip-path="url(#sw-plot-clip)">' +
+                (primary ? '<path fill="url(#sw-compilation-grad)" d="' + areaPath(pts, x, y, baseline) + '"/>' : '') +
+                '<path fill="none" class="' + (primary ? 'an-progress-main' : 'an-progress-aux') + '" stroke="' + color + '" stroke-width="' + (primary ? 2 : 1.5) + '"' + (primary ? '' : ' stroke-dasharray="5 4"') + ' d="' + smoothPath(pts, x, y) + '"/></g>' + dots;
         });
         svg += '</svg>';
         const legend = series.map(([key, label, color]) => '<button type="button" class="sg-legend-chip" data-legend="' + key + '" aria-pressed="' + visible.has(key) + '"><span class="sg-legend-dot" style="background:' + color + '"></span>' + label + '</button>').join('');

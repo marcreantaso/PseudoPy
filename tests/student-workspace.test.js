@@ -94,7 +94,7 @@ test('learning progress hides formulas and mastery-unavailable jargon behind fri
     assert.match(workspaceSource, /How is this calculated\?/);
 });
 test('chart data points expose keyboard and labelled tooltip hooks', () => {
-    assert.match(workspaceSource, /role="button" class="an-series-dot"/);
+    assert.match(workspaceSource, /role="button" class="an-series-dot/);
     assert.match(workspaceSource, /dot\.onkeydown = e => \{ if \(e\.key === 'Enter' \|\| e\.key === ' '\) \{/);
 });
 test('chart layout never falls back to window width and only re-renders on bin flips', () => {
