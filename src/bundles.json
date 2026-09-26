@@ -52,6 +52,7 @@
     "src/student/workspace.js",
     "src/app/metric-formats.js",
     "src/app/compiler-dashboard.js",
+    "src/app/admin-analytics.js",
     "src/app/password-management.js",
     "src/app/appearance.js",
     "src/app/a11y.js",

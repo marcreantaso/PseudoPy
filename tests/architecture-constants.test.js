@@ -13,7 +13,7 @@ const expectedPages = [
 ];
 
 const expectedByRole = {
-    admin: ['manage-users', 'password-requests', 'admin-execute', 'developer-options'],
+    admin: ['manage-users', 'system-analytics', 'password-requests', 'admin-execute', 'developer-options'],
     instructor: ['analytics', 'manage-exercises', 'generate-code', 'compiler-metrics', 'manage-students', 'password-recovery'],
     student: ['write-pseudocode', 'translate', 'execute', 'feedback', 'exercises-student', 'student-settings', 'change-password']
 };

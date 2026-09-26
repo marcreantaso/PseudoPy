@@ -39,10 +39,12 @@ class MetricsEngine {
         this.sessionId         = 'session_' + Date.now();
         this.translations      = [];     // per-translation records (live session)
         this.executions        = [];     // per-execution records   (live session)
-        this.benchmarkResults  = null;   // latest benchmark run
 
         // Load persisted history
         this.history = this._loadHistory();
+
+        // Restore the last benchmark run (full result, incl. metrics table)
+        this.benchmarkResults = this._loadBenchmarkResult();
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -63,6 +65,65 @@ class MetricsEngine {
             localStorage.setItem('pseudopy_metrics_history', JSON.stringify(this.history));
         } catch (e) {
             console.warn('[Metrics] Failed to save history:', e);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // BENCHMARK RESULT PERSISTENCE
+    // The full benchmark result (summary + per-test-case metrics) is
+    // saved so the Last Run panel survives reloads. Only the simulated
+    // code bodies are stripped — the detail table does not need them.
+    // ══════════════════════════════════════════════════════════════
+
+    _loadBenchmarkResult() {
+        try {
+            const raw = localStorage.getItem('pseudopy_benchmark_result');
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            if (data && typeof data.totalTestCases === 'number' && Array.isArray(data.results)) {
+                return data;
+            }
+        } catch (e) {
+            console.warn('[Metrics] Failed to load benchmark result:', e);
+        }
+        return null;
+    }
+
+    _saveBenchmarkResult(data) {
+        if (!data || typeof data.totalTestCases !== 'number') return;
+        try {
+            const detailCap = 500;
+            const identical = (r) => ({
+                id: r && r.id,
+                concept: r && r.concept,
+                difficulty: r && r.difficulty,
+                compiled: !!(r && r.compiled),
+                exactMatch: !!(r && r.exactMatch),
+                precision: r && r.precision,
+                recall: r && r.recall,
+                f1: r && r.f1,
+                timeMs: r && r.timeMs,
+                errorCount: r ? (r.errorCount || 0) : 0
+            });
+            const slim = {
+                timestamp:            data.timestamp,
+                dateString:           data.dateString,
+                totalTestCases:       data.totalTestCases,
+                accuracy:             data.accuracy,
+                compilationSuccessRate: data.compilationSuccessRate,
+                avgPrecision:         data.avgPrecision,
+                avgRecall:            data.avgRecall,
+                f1Score:              data.f1Score,
+                avgTimeMs:            data.avgTimeMs,
+                totalTimeMs:          data.totalTimeMs,
+                runAt:                data.runAt || data.timestamp || Date.now(),
+                dataset:              data.dataset || { name: 'stored exercises', count: data.totalTestCases },
+                compilerVersion:      data.compilerVersion || null,
+                results:              (Array.isArray(data.results) ? data.results : []).slice(0, detailCap).map(identical)
+            };
+            localStorage.setItem('pseudopy_benchmark_result', JSON.stringify(slim));
+        } catch (e) {
+            console.warn('[Metrics] Failed to save benchmark result:', e);
         }
     }
 
@@ -201,8 +262,9 @@ class MetricsEngine {
     // Each test case must have: { id, concept, pseudocode, python_code }
     // ══════════════════════════════════════════════════════════════
 
-    runBenchmark(dataset, compiler) {
-        const results          = [];
+    runBenchmark(dataset, compiler, meta = {}) {
+        const startRunAt        = Date.now();
+        const results           = [];
         let exactMatches       = 0;
         let totalPrecision     = 0;
         let totalRecall        = 0;
@@ -281,8 +343,8 @@ class MetricsEngine {
         }
 
         const benchmarkData = {
-            timestamp:            Date.now(),
-            dateString:           new Date().toISOString().split('T')[0],
+            timestamp:            startRunAt,
+            dateString:           new Date(startRunAt).toISOString().split('T')[0],
             totalTestCases:       n,
             accuracy,
             compilationSuccessRate,
@@ -291,10 +353,16 @@ class MetricsEngine {
             f1Score,
             avgTimeMs,
             totalTimeMs:          parseFloat(totalTimingMs.toFixed(2)),
+            runAt:                startRunAt,
+            dataset:              { name: (meta.dataset && meta.dataset.name) || 'stored exercises', count: n },
+            compilerVersion:      (typeof window !== 'undefined' && window.APP_VERSION) || (compiler && compiler.version) || null,
             results
         };
 
         this.benchmarkResults = benchmarkData;
+
+        // Persist the full benchmark result (summary + metric table).
+        this._saveBenchmarkResult(benchmarkData);
 
         // Persist summary to history
         this.history.benchmarks.push({

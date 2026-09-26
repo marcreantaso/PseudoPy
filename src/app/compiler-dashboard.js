@@ -12,7 +12,7 @@ async function loadExercisesFromDB() {
         const exercises = await dbGetAll(exercisesRef);
         if (exercises && exercises.length > 0) {
             console.log(`[Benchmark] Loaded ${exercises.length} exercises from IndexedDB.`);
-            return exercises;
+            return { dataset: exercises, source: 'stored exercises (' + exercises.length + ')' };
         }
     } catch (e) {
         console.warn('[Benchmark] IndexedDB read failed, falling back to dataset.json:', e);
@@ -22,7 +22,8 @@ async function loadExercisesFromDB() {
     const res = await fetch('dataset.json');
     if (!res.ok) throw new Error('Failed to fetch dataset.json: ' + res.status);
     const raw = await res.json();
-    return Array.isArray(raw) ? raw : (raw.dataset || []);
+    const fallback = Array.isArray(raw) ? raw : (raw.dataset || []);
+    return { dataset: fallback, source: 'dataset.json fallback (' + fallback.length + ')' };
 }
 
 /**
@@ -32,53 +33,30 @@ async function loadExercisesFromDB() {
 function loadCompilerMetrics() {
     if (typeof metricsEngine === 'undefined') return;
 
-    // ── Session Metrics Cards ──
+    // Session metric cards are optional: the Instructor page is benchmark-first,
+    // so these elements may be absent — write them only when they exist.
     const session = metricsEngine.getSessionMetrics();
-    const improvement = metricsEngine.getImprovementMetrics();
 
-    setText('metric-total-translations', formatMetricValue(session.totalTranslations));
-    setText('metric-compilation-rate', formatPercent(session.compilationSuccessRate));
-    setText('metric-runtime-error-rate', formatPercent(session.runtimeErrorRate));
-    setText('metric-avg-gen-time', formatDuration(session.avgGenerationTime));
-    setText('metric-total-errors', formatMetricValue(session.totalErrors));
-    setText('metric-total-executions', formatMetricValue(session.totalExecutions));
+    const translationsEl = $id('metric-total-translations');
+    if (translationsEl) translationsEl.textContent = formatMetricValue(session.totalTranslations);
+    const compRateEl = $id('metric-compilation-rate');
+    if (compRateEl) compRateEl.textContent = formatPercent(session.compilationSuccessRate);
+    const runtimeRateEl = $id('metric-runtime-error-rate');
+    if (runtimeRateEl) runtimeRateEl.textContent = formatPercent(session.runtimeErrorRate);
+    const avgGenEl = $id('metric-avg-gen-time');
+    if (avgGenEl) avgGenEl.textContent = formatDuration(session.avgGenerationTime);
+    const totalErrorsEl = $id('metric-total-errors');
+    if (totalErrorsEl) totalErrorsEl.textContent = formatMetricValue(session.totalErrors);
+    const totalExecEl = $id('metric-total-executions');
+    if (totalExecEl) totalExecEl.textContent = formatMetricValue(session.totalExecutions);
 
-    // Error trend badge
+    // Error trend badge (optional)
     const trendEl = $id('metric-error-trend');
     const trendIcons = { improving: '↑ Improving', declining: '↓ Declining', stable: '— Stable' };
     const trendClasses = { improving: 'positive', declining: 'negative', stable: '' };
     if (trendEl) {
         trendEl.textContent = trendIcons[session.errorTrend] || '— Stable';
         trendEl.className = 'stat-change ' + (trendClasses[session.errorTrend] || '');
-    }
-
-    // ── Improvement Section ──
-    const improvementEl = $id('metrics-improvement-section');
-    if (improvement.hasData) {
-        improvementEl.innerHTML = `
-        <div class="stats-grid" style="margin-bottom: 1rem;">
-          <div class="stat-card">
-            <div class="stat-icon">{{ui:ChartNoAxesCombined}}</div>
-            <div class="stat-value">${formatPercent(improvement.correctnessImprovement)}</div>
-            <div class="stat-label">Correctness Improvement</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">{{ui:Zap}}</div>
-            <div class="stat-value">${formatPercent(improvement.speedImprovement)}</div>
-            <div class="stat-label">Speed Improvement</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">{{ui:CircleCheck}}</div>
-            <div class="stat-value">${formatPercent(improvement.overallSuccessRate)}</div>
-            <div class="stat-label">Overall Success Rate</div>
-          </div>
-        </div>`;
-    } else {
-        improvementEl.innerHTML = `<div class="empty-state" style="padding: 1.5rem;">
-            <div class="empty-icon">{{ui:ChartColumn}}</div>
-            <h3>No Improvement Data Yet</h3>
-            <p>${improvement.message}</p>
-        </div>`;
     }
 
     // ── Pipeline Timing Chart ──
@@ -153,7 +131,7 @@ async function runBenchmarkTest() {
 
     try {
         // Load from IndexedDB — no fetch/CORS errors
-        const dataset = await loadExercisesFromDB();
+        const { dataset, source } = await loadExercisesFromDB();
 
         if (!dataset || dataset.length === 0) {
             renderBenchmarkError('No test cases found. Please reload the app to seed the database.');
@@ -167,7 +145,7 @@ async function runBenchmarkTest() {
         await new Promise(r => setTimeout(r, 80));
 
         // Run benchmark pipeline with mathematical metrics engine
-        const results = metricsEngine.runBenchmark(dataset, compilerEngine);
+        const results = metricsEngine.runBenchmark(dataset, compilerEngine, { dataset: { name: source } });
 
         // Render all sections
         renderBenchmarkResults(results);
@@ -206,7 +184,16 @@ function renderBenchmarkResults(results) {
     const wrapper = $id('benchmark-detail-wrapper');
     const totalLabel = $id('benchmark-total-label');
     if (wrapper) wrapper.style.display = 'block';
-    if (totalLabel) totalLabel.textContent = `${results.totalTestCases} test cases`;
+    if (totalLabel) {
+        let metaLabel = `${results.totalTestCases} test cases`;
+        if (results.dataset && results.dataset.name) metaLabel += ' · ' + results.dataset.name;
+        if (results.runAt || results.timestamp) {
+            const d = new Date(results.timestamp || results.runAt);
+            metaLabel += ' · ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+        }
+        if (results.compilerVersion) metaLabel += ' · v' + results.compilerVersion;
+        totalLabel.textContent = metaLabel;
+    }
 
     // ── Detailed Results Table ──
     const tbody = $id('benchmark-results-body');

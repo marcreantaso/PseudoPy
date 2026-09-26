@@ -807,6 +807,16 @@ function _pipelineStatusLabel(status) {
     return _statusLabels[status] || status;
 }
 
+function _forceStage(elId, status, statusLabel) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.className = 'pipeline-stage status-' + status;
+    el.dataset.status = status;
+    el.dataset.statusLabel = statusLabel || _pipelineStatusLabel(status);
+    const dot = el.querySelector('.pipe-status-dot');
+    if (dot) dot.title = statusLabel || status;
+}
+
 function _resetPipelineVis() {
     document.querySelectorAll('.pipeline-stage').forEach(s => {
         s.className = 'pipeline-stage';
@@ -859,6 +869,15 @@ function _updatePipelineFromEvents(events, result) {
             const duration = times.end - times.start;
             timeEl.textContent = duration.toFixed(2) + ' ms';
         }
+    }
+
+    // Semantic type/structure failures stop code generation and execution.
+    const hasSemanticFailure = Array.isArray(result.errors) &&
+        result.errors.some(e => e && e.stage === 'Semantic Analysis' && e.severity === 'error');
+    if (hasSemanticFailure) {
+        _forceStage('pipe-semantic', 'ERROR');
+        _forceStage('pipe-codegen', 'SKIPPED', 'Not executed');
+        _forceStage('pipe-runtime', 'SKIPPED', 'Not executed');
     }
 
     // Also set pipeline times from metrics for accuracy

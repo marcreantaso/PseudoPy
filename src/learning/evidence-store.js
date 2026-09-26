@@ -94,7 +94,9 @@ const EV_ERROR_TYPE_CATEGORIES = {
     'Logic Error': ['logic'],
     'Missing END': ['structure'],
     'Indentation Error': ['structure', 'readability'],
-    'Type Error': ['logic', 'translation']
+    'Type Error': ['logic', 'translation'],
+    'Runtime Error': ['logic', 'translation'],
+    'Missing Terminator': ['syntax', 'structure']
 };
 
 const EV_EXERCISE_PATTERNS = [

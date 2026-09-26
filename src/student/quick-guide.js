@@ -12,6 +12,12 @@ const StudentGuide = (() => {
             'total = 0\ntotal = 10\nprint(total)',
             { intro: 'Think of DECLARE as reserving a named slot of a fixed type, and SET as storing a value into that slot.', bullets: ['INTEGER fits whole numbers, REAL fits decimals, STRING fits text, BOOLEAN fits TRUE/FALSE.', 'Re-declaring a variable is an error; declare each variable once.', 'A variable must be declared before it is read.'] }
         ],
+        'Data Types': [
+            'Every value has a type: INTEGER, REAL, STRING or BOOLEAN. Declare the type and the translator checks your values.',
+            'BEGIN\n    DECLARE count AS INTEGER\n    DECLARE price AS REAL\n    DECLARE name AS STRING\n    DECLARE passed AS BOOLEAN\n    SET count TO 3\n    SET price TO 9.99\n    SET name TO "Ada"\n    SET passed TO TRUE\n    DISPLAY "Count:", count, " Price:", price\n    DISPLAY "Name:", name, " Passed:", passed\nEND',
+            'count = 3\nprice = 9.99\nname = "Ada"\npassed = True\nprint("Count:", count, " Price:", price)\nprint("Name:", name, " Passed:", passed)',
+            { intro: 'Declaring a type means the translator can catch mismatches BEFORE the program runs — for example storing text in an INTEGER slot.', bullets: ['INTEGER holds whole numbers (3), REAL holds decimals (9.99), STRING holds text ("Ada"), BOOLEAN holds TRUE or FALSE.', 'Matching every DECLARE to its value is the first thing the translator checks.', 'Convert between types on purpose: INT(), FLOAT(), STR(), BOOL() — do not mix types with +.', 'Because types are checked, an INTEGER variable stays a whole number even after INPUT.'] }
+        ],
         'Input & Output': [
             'INPUT asks for a value. DISPLAY shows a result. Declare numeric inputs before reading them.',
             'BEGIN\n    DECLARE age AS INTEGER\n    INPUT age\n    DISPLAY "Age:", age\nEND',

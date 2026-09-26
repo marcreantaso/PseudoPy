@@ -342,6 +342,9 @@
           <button class="nav-item active" onclick="navigateTo('manage-users')">
             <span class="nav-icon"><i data-lucide="users" aria-hidden="true"></i></span> Manage Instructors
           </button>
+          <button class="nav-item" onclick="navigateTo('system-analytics')">
+            <span class="nav-icon"><i data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span> System Analytics
+          </button>
           <button class="nav-item" onclick="navigateTo('password-requests')" style="position:relative;">
             <span class="nav-icon"><i data-lucide="key-round" aria-hidden="true"></i></span> Password Requests
             <span id="nav-admin-recovery-badge" style="display:none; position:absolute; right:0.75rem; top:50%; transform:translateY(-50%); background:var(--danger); color:#fff; border-radius:999px; font-size:0.7rem; font-weight:700; min-width:18px; height:18px; align-items:center; justify-content:center; padding:0 4px;"></span>
@@ -1340,9 +1343,9 @@
             <h2>{{ui:FlaskConical}} Compiler Metrics &amp; Evaluation</h2>
             <p>Automated evaluation of the pseudocode-to-Python compiler using the built-in dataset of ground-truth test
               cases. Measures <strong>accuracy</strong> (exact-match), <strong>precision &amp; recall</strong>
-              (line-level overlap), <strong>compilation success rate</strong>, <strong>runtime error rate</strong>, and
-              <strong>pipeline stage timing</strong>. Session metrics update live as you translate; click <em>Run
-                Benchmark</em> to evaluate the full dataset.
+              (line-level overlap), <strong>compilation success rate</strong>, and <strong>pipeline stage timing</strong>.
+              The last benchmark result persists locally and is restored on reload; click <em>Run Benchmark</em> to
+              evaluate the stored exercise suite.
             </p>
           </div>
           <button id="run-benchmark-btn" class="btn btn-primary" style="width:auto" onclick="runBenchmarkTest()">
@@ -1356,103 +1359,22 @@
           <span style="font-size:1.3rem;line-height:1;">{{ui:Info}}</span>
           <div style="font-size:0.82rem;color:var(--text-secondary);line-height:1.65;">
             <strong style="color:var(--text-primary);">How to use this page:</strong><br>
-            <strong>Session Metrics</strong> track live activity from your current session (translations &amp;
-            executions done via the <em>Generate Python Code</em> page).<br>
-            <strong>Benchmark</strong> runs all test cases from <code>dataset.json</code> against the compiler and
-            computes Accuracy, Precision, Recall, F1 Score, and Compilation Rate.<br>
+            <strong>Benchmark</strong> runs the stored exercise suite against the compiler and
+            computes Accuracy, Precision, Recall, F1 Score, and Compile Rate. Results persist and restore on reload.<br>
             <strong>Concept Mastery</strong> groups benchmark results by programming concept so you can see where the
-            compiler performs best and worst.
+            compiler performs best and worst.<br>
+            <strong>Pipeline Stage Timing</strong> shows the average time spent in each compiler stage.
           </div>
         </div>
 
-        <!-- ── Section: Live Session Metrics ── -->
-        <div style="margin-bottom:0.6rem;">
-          <h3
-            style="font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;">
-            {{ui:Radio}} Live Session Metrics</h3>
-          <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">Updated automatically each time you
-            translate pseudocode or execute Python code in this session.</p>
-        </div>
-        <div class="metrics-grid" style="margin-bottom:1.5rem">
-          <div class="stat-card">
-            <div class="stat-icon"><i data-lucide="refresh-cw" aria-hidden="true"></i></div>
-            <div class="stat-value" id="metric-total-translations">0</div>
-            <div class="stat-label">Total Translations</div>
-            <div class="stat-change" id="metric-error-trend">— Stable</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon"><i data-lucide="circle-check" aria-hidden="true"></i></div>
-            <div class="stat-value" id="metric-compilation-rate">0%</div>
-            <div class="stat-label">Compilation Success Rate</div>
-            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">% of translations with no errors
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon"><i data-lucide="circle-x" aria-hidden="true"></i></div>
-            <div class="stat-value" id="metric-runtime-error-rate">0%</div>
-            <div class="stat-label">Runtime Error Rate</div>
-            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">% of executions that crashed</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon"><i data-lucide="timer" aria-hidden="true"></i></div>
-            <div class="stat-value" id="metric-avg-gen-time">0ms</div>
-            <div class="stat-label">Avg Generation Time</div>
-            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Mean compile time per translation
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon"><i data-lucide="triangle-alert" aria-hidden="true"></i></div>
-            <div class="stat-value" id="metric-total-errors">0</div>
-            <div class="stat-label">Total Errors</div>
-            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Cumulative compiler errors</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon"><i data-lucide="play-circle" aria-hidden="true"></i></div>
-            <div class="stat-value" id="metric-total-executions">0</div>
-            <div class="stat-label">Total Executions</div>
-            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Python runs via Skulpt engine</div>
-          </div>
-        </div>
-
-        <!-- ── Improvement Tracking ── -->
-        <div class="data-table-container" tabindex="0" role="region" aria-label="Scrollable data table" style="margin-bottom:1.5rem">
-          <div class="panel-header">
-            <h3><i data-lucide="trending-up" aria-hidden="true"></i> Improvement Tracking</h3>
-          </div>
-          <div style="padding:0.5rem 1rem 0;font-size:0.78rem;color:var(--text-muted);">Compares your first translation
-            against your latest to show directional improvement in correctness and speed.</div>
-          <div id="metrics-improvement-section" style="padding:1rem;">
-            <div class="empty-state" style="padding: 1.5rem;">
-              <div class="empty-icon"><i data-lucide="chart-column" aria-hidden="true"></i></div>
-              <h3>No Improvement Data Yet</h3>
-              <p>Need at least 2 translations to calculate improvement.</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- ── Pipeline Stage Timing ── -->
-        <div class="charts-grid" style="margin-bottom:1.5rem">
-          <div class="chart-container">
-            <div class="panel-header">
-              <h3>{{ui:Timer}} Pipeline Stage Timing (Avg)</h3>
-            </div>
-            <div style="padding:0.4rem 1rem 0;font-size:0.78rem;color:var(--text-muted);">Average milliseconds spent in
-              each compiler stage: Lexer → Parser → Semantic Analysis → Code Generation.</div>
-            <div id="chart-pipeline-timing" class="chart-body" style="padding-bottom:2.5rem">
-              <div style="text-align:center;color:var(--text-muted);padding:2rem;">No timing data yet. Translate some
-                pseudocode first.</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ── Section: Benchmark Results ── -->
+        <!-- ── Section: Benchmark Results (primary) ── -->
         <div style="margin-bottom:0.6rem;">
           <h3
             style="font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.07em;">
             {{ui:Target}} Benchmark Results</h3>
-          <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">Computed by running the full
-            <code>dataset.json</code> test suite through the compiler. Click <em>Run Benchmark</em> above to populate
-            these.
+          <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">Computed by running the stored
+            exercise suite through the compiler (quick run). The last benchmark result persists locally and is restored
+            automatically when you reopen this page. Click <em>Run Benchmark</em> above to refresh.
           </p>
         </div>
         <div class="metrics-grid metrics-grid--benchmark" style="margin-bottom:0.5rem">
@@ -1500,10 +1422,10 @@
           <div id="benchmark-empty-state" class="empty-state metrics-empty-state">
             <div class="empty-icon">{{ui:FlaskConical}}</div>
             <h3>Benchmark not run yet</h3>
-            <p>Run the full dataset benchmark to populate accuracy, precision, recall, F1 and compile-rate cards.</p>
+            <p>Run the benchmark to populate accuracy, precision, recall, F1 and compile-rate cards.</p>
           </div>
           <div id="benchmark-loading-state" class="metrics-feedback metrics-loading hidden">
-            {{ui:Hourglass}} Running the benchmark across the full dataset. This may take a moment…
+            {{ui:Hourglass}} Running the benchmark across the exercise suite. This may take a moment…
           </div>
           <div id="benchmark-error-state" class="metrics-feedback metrics-error hidden">
             <span>
@@ -1541,7 +1463,7 @@
         </div>
 
         <!-- ── Concept Mastery Analysis ── -->
-        <div class="data-table-container" tabindex="0" role="region" aria-label="Scrollable data table" style="margin-top: 1.5rem;">
+        <div class="data-table-container" tabindex="0" role="region" aria-label="Scrollable data table" style="margin-bottom:1.5rem;">
           <div class="panel-header">
             <h3>{{ui:GraduationCap}} Concept Mastery Analytics (Constructivism Model)</h3>
           </div>
@@ -1566,6 +1488,125 @@
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- ── Pipeline Stage Timing ── -->
+        <div class="charts-grid">
+          <div class="chart-container">
+            <div class="panel-header">
+              <h3>{{ui:Timer}} Pipeline Stage Timing (Avg)</h3>
+            </div>
+            <div style="padding:0.4rem 1rem 0;font-size:0.78rem;color:var(--text-muted);">Average milliseconds spent in
+              each compiler stage: Lexer → Parser → Semantic Analysis → Code Generation.</div>
+            <div id="chart-pipeline-timing" class="chart-body" style="padding-bottom:2.5rem">
+              <div style="text-align:center;color:var(--text-muted);padding:2rem;">No timing data yet. Translate some
+                pseudocode first.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════
+           PAGE: System Analytics (Admin)
+           ═══════════════════════════════════ -->
+      <div id="page-system-analytics" class="page-view hidden">
+        <div class="page-header">
+          <div>
+            <h2>{{ui:ChartNoAxesCombined}} System Analytics</h2>
+            <p>Live aggregate of the <strong>entire stored activity log</strong> (<code>pseudopy_activity</code>) —
+              every instructor and every student. System Overview KPIs, translations &amp; executions, and the system
+              error distribution update automatically while this page is open.</p>
+          </div>
+        </div>
+
+        <!-- Live status + time-range selector -->
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;margin-bottom:1.25rem;">
+          <span id="system-live-status" style="font-size:0.82rem;color:var(--text-muted);">Loading system analytics…</span>
+          <div class="sys-range-group" role="group" aria-label="System analytics time range">
+            <button class="sys-range-btn" data-range="24h" type="button" onclick="setSystemTimeRange('24h', this)">24h</button>
+            <button class="sys-range-btn" data-range="7d" type="button" onclick="setSystemTimeRange('7d', this)">7 Days</button>
+            <button class="sys-range-btn" data-range="30d" type="button" onclick="setSystemTimeRange('30d', this)">30 Days</button>
+            <button class="sys-range-btn" data-range="90d" type="button" onclick="setSystemTimeRange('90d', this)">90 Days</button>
+            <button class="sys-range-btn active" data-range="all" type="button" onclick="setSystemTimeRange('all', this)">All Time</button>
+          </div>
+        </div>
+        <p id="system-scope-label" style="font-size:0.78rem;color:var(--text-muted);margin-bottom:1.25rem;"></p>
+
+        <!-- System Overview KPIs -->
+        <div class="metrics-grid metrics-grid--benchmark" style="margin-bottom:1.5rem">
+          <div class="stat-card">
+            <div class="stat-icon">{{ui:FileCode}}</div>
+            <div class="stat-value" id="adv-total-translations">—</div>
+            <div class="stat-label">Total Translations</div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Pseudocode compiled app-wide</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">{{ui:Terminal}}</div>
+            <div class="stat-value" id="adv-total-executions">—</div>
+            <div class="stat-label">Total Executions</div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Python runs executed app-wide</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">{{ui:CircleCheck}}</div>
+            <div class="stat-value" id="adv-compile-rate">—</div>
+            <div class="stat-label">Compile Success Rate</div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">% of translations without errors</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">{{ui:TriangleAlert}}</div>
+            <div class="stat-value" id="adv-error-count">—</div>
+            <div class="stat-label">Recorded Errors</div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Failing activity records</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">{{ui:Users}}</div>
+            <div class="stat-value" id="adv-active-students">—</div>
+            <div class="stat-label">Active Students</div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Distinct student accounts</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">{{ui:GraduationCap}}</div>
+            <div class="stat-value" id="adv-unique-exercises">—</div>
+            <div class="stat-label">Unique Exercises</div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Distinct exercises attempted</div>
+          </div>
+        </div>
+
+        <!-- Translations & Executions chart -->
+        <div class="charts-grid" style="margin-bottom:1.5rem">
+          <div class="chart-container">
+            <div class="panel-header">
+              <h3>{{ui:ChartColumn}} Translations &amp; Executions</h3>
+              <span id="system-activity-total" style="font-size:0.78rem;color:var(--text-muted);"></span>
+            </div>
+            <div class="an-chart-plot an-chart-lg" id="chart-system-activity">
+              <svg id="system-activity-svg" aria-busy="true"></svg>
+            </div>
+            <div class="an-svg-legend">
+              <span class="an-legend-chip-static"><span class="an-legend-dot" style="background:var(--chart-1)"></span> Translations</span>
+              <span class="an-legend-chip-static"><span class="an-legend-dot" style="background:var(--chart-2)"></span> Executions</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- System error distribution chart -->
+        <div class="charts-grid">
+          <div class="chart-container">
+            <div class="panel-header">
+              <h3>{{ui:ChartNoAxesCombined}} System Error Distribution</h3>
+              <span id="system-error-total" style="font-size:0.78rem;color:var(--text-muted);"></span>
+            </div>
+            <div class="an-chart-plot an-chart-sm" id="chart-system-errors">
+              <svg id="system-errors-svg" aria-busy="true"></svg>
+            </div>
+            <div id="system-error-legend" class="an-legend"></div>
+          </div>
+        </div>
+
+        <div id="system-error-state" class="metrics-feedback metrics-error hidden" style="margin-top:1rem;">
+          <span><strong>{{ui:CircleX}} System analytics unavailable.</strong>
+            <span id="system-error-message" style="display:block;margin-top:0.15rem;"></span>
+          </span>
         </div>
       </div>
 

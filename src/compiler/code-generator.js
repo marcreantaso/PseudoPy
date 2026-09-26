@@ -56,7 +56,7 @@ class CodeGenerator {
                 '    if step == 0:', '        raise ValueError("FOR STEP must not be zero")',
                 '    return range(start, stop + (1 if step > 0 else -1), step)', '');
         }
-        if (this.lines.some(line => line.includes('_pseudopy_input_cast('))) {
+        if (this.lines.some(line => line.includes('_pseudopy_input_cast(') || line.includes('_pseudopy_input_int(') || line.includes('_pseudopy_input_float('))) {
             this.lines.unshift('def _pseudopy_input_cast(prompt):',
                 '    val = input(prompt)',
                 '    try:',
@@ -65,7 +65,21 @@ class CodeGenerator {
                 '        try:',
                 '            return float(val)',
                 '        except ValueError:',
-                '            return val', '');
+                '            return val',
+                '',
+                'def _pseudopy_input_int(prompt):',
+                '    while True:',
+                '        try:',
+                '            return int(input(prompt))',
+                '        except ValueError:',
+                "            print('Please enter a whole number (INTEGER).')",
+                '',
+                'def _pseudopy_input_float(prompt):',
+                '    while True:',
+                '        try:',
+                '            return float(input(prompt))',
+                '        except ValueError:',
+                "            print('Please enter a number (REAL).')", '');
         }
         const result = this.lines.join('\n');
         compilerTrace.emit({ type: 'CODEGEN_COMPLETE', stage: 'CODE_GENERATION', status: 'SUCCESS', data: { lineCount: this.lines.length, python: result } });
@@ -106,7 +120,6 @@ class CodeGenerator {
                 const inputType = (node.inputType || '').toUpperCase();
                 const isStringNode = inputType === 'STRING';
                 const isExplicitNumeric = ['INTEGER', 'FLOAT', 'REAL'].includes(inputType);
-                const converter = inputType === 'INTEGER' ? 'int' : 'float';
                 
                 let promptStr;
                 if (node.prompt && node.prompt.length > 0) {
@@ -116,7 +129,8 @@ class CodeGenerator {
                 }
 
                 if (isExplicitNumeric) {
-                    this.lines.push(this.ind() + node.id + ' = ' + converter + '(input(' + promptStr + '))');
+                    // Strict INPUT: keep asking until the user types a valid number.
+                    this.lines.push(this.ind() + node.id + ' = ' + (inputType === 'INTEGER' ? '_pseudopy_input_int' : '_pseudopy_input_float') + '(' + promptStr + ')');
                 } else if (isStringNode) {
                     this.lines.push(this.ind() + node.id + ' = input(' + promptStr + ')');
                 } else {

@@ -154,6 +154,15 @@
   --chart-3: #f59e0b;
   --chart-4: #ef4444;
   --chart-5: #8b5cf6;
+
+  /* ── Chart size tokens (Part H items 59-68) ──
+     One purpose → size map shared by every chart. SM: small KPI
+     trends, MD: standard charts (submission/error/compiler), LG:
+     large multi-series trajectories, XL: full-width dashboards. */
+  --chart-h-sm: 240px;
+  --chart-h-md: 300px;
+  --chart-h-lg: 360px;
+  --chart-h-xl: 420px;
 }
 
 [data-theme='dark'] {
@@ -2043,6 +2052,15 @@ svg.lucide {
   .metrics-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* Benchmark KPI cards: balanced 3+3 grid on desktop (item 101), and
+   the old 5+1 orphan layout is impossible. */
+.metrics-grid--benchmark {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+}
+@media (min-width: 1024px) {
+  .metrics-grid.metrics-grid--benchmark { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 /* Benchmark empty / running / failed panels */
 .metrics-empty-state {
   margin: 0;
@@ -2249,6 +2267,10 @@ svg.lucide {
   width: 100%;
   min-width: 0;
 }
+
+/* Standard chart sizing for the pipeline-timing / benchmark evaluation
+   charts (item 124): reserve the same box loading vs loaded. */
+#chart-pipeline-timing { min-height: clamp(240px, 30vw, 320px); }
 
 .chart-bar:hover {
   opacity: 0.8;
@@ -4289,11 +4311,35 @@ select.form-input {
 }
 .an-chart-header { flex-wrap: wrap; }
 #an-error-select { width: auto; max-width: 100%; min-height: 44px; }
-.an-chart-skeleton { min-height: 240px; border-radius: var(--radius-shadcn); background: var(--muted); }
+.an-chart-skeleton { min-height: var(--chart-h-md); border-radius: var(--radius-shadcn); background: var(--muted); }
+.an-chart-skeleton.an-chart-lg,
+.an-chart-lg .an-chart-skeleton { min-height: var(--chart-h-lg); }
+.an-chart-skeleton.an-chart-sm,
+.an-chart-sm .an-chart-skeleton { min-height: var(--chart-h-sm); }
 .an-chart-card .an-svg :focus-visible { outline: 2px solid var(--text-primary); outline-offset: 3px; }
 .an-chart-plot {
   position: relative;
 }
+
+/* ── Chart size system (Part H items 59-68, 124) ──
+   Fluid min-height clamps: a minimum readable height, a vw-driven
+   middle, and a controlled maximum so no chart invents its own box.
+   Purpose ranges (item 61):
+     sm  -> clamp(200px, 26vw, 260px)   small KPI trends
+     md  -> clamp(240px, 30vw, 320px)   standard (submission, errors, compiler)
+     lg  -> clamp(260px, 32vw, 380px)   large (trajectories, live activity)
+     xl  -> clamp(300px, 36vw, 420px)   full-width dashboards */
+.an-chart-sm { min-height: clamp(200px, 26vw, 260px); }
+.an-chart-md { min-height: clamp(240px, 30vw, 320px); }
+.an-chart-lg { min-height: clamp(260px, 32vw, 380px); }
+.an-chart-xl { min-height: clamp(300px, 36vw, 420px); }
+
+/* When a chart box is sized by a token class, a skeleton/empty state placed
+   inside it reserves the exact same space (item 67 — no layout shift). */
+.an-chart-plot.an-chart-sm { min-height: var(--chart-h-sm); }
+.an-chart-plot.an-chart-md { min-height: var(--chart-h-md); }
+.an-chart-plot.an-chart-lg { min-height: var(--chart-h-lg); }
+.an-chart-plot.an-chart-xl { min-height: var(--chart-h-xl); }
 
 .an-svg {
   width: 100%;
@@ -4305,9 +4351,20 @@ select.form-input {
   font-family: inherit;
 }
 
-.an-trajectory-plot .an-svg,
-.an-area-plot .an-svg {
-  min-height: clamp(220px, 46vw, 300px);
+/* Purpose → size mapping (item 61/124): */
+.an-trajectory-svg {           /* Student Learning Progress / Improvement Trajectory — large */
+  min-height: clamp(260px, 32vw, 380px);
+}
+.an-area-svg {                 /* Submission activity / compiler — standard */
+  min-height: clamp(240px, 30vw, 320px);
+}
+.an-pie-svg {                  /* Donut capped (item 64): 220-300px max, centered */
+  width: min(100%, 300px);
+  height: auto;
+  margin-inline: auto;
+}
+@media (max-width: 720px) {
+  .an-pie-svg { width: min(100%, 250px); }
 }
 
 .an-grid-line {
@@ -4486,6 +4543,66 @@ select.form-input {
   font-size: 0.68rem;
   color: var(--muted-foreground);
   width: 100%;
+}
+
+/* ── System Analytics (Admin) ── */
+.sys-range-group {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.2rem;
+}
+
+.sys-range-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+
+.sys-range-btn:hover {
+  background: var(--muted);
+  color: var(--text-primary);
+}
+
+.sys-range-btn.active {
+  background: var(--primary);
+  color: var(--primary-foreground, #fff);
+}
+
+.an-legend-chip-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  padding: 0.25rem 0.5rem;
+}
+
+#system-activity-svg,
+#system-errors-svg {
+  width: 100%;
+  height: 100%;
+  min-height: var(--chart-h-md);
+}
+
+#chart-system-errors {
+  min-height: var(--chart-h-sm);
+}
+
+@media (max-width: 767px) {
+  #system-activity-svg,
+  #system-errors-svg {
+    min-height: clamp(200px, 26vw, 260px);
+  }
 }
 
 /* ── Inline-pie (donut) ── */
@@ -7113,6 +7230,9 @@ select.form-input {
   gap: 0.6rem;
 }
 
+/* Devtools simulator metric bars reserve a stable box (item 67/124). */
+.sim-bars { min-height: var(--chart-h-sm); }
+
 .sim-bar-label {
   min-width: 5.5rem;
   font-size: 0.78rem;
@@ -7939,7 +8059,7 @@ select.form-input {
 /* Analytics: use the actual markup classes and override inline flex/widths. */
 .an-charts-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
 }
 .an-chart-card.an-trajectory-card {
   grid-column: 1 / -1;

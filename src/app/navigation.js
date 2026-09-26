@@ -64,6 +64,11 @@ currentPage = pageId;
         if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     }
     if (pageId === 'password-recovery') guarded(loadPasswordRecovery);
+    if (pageId === 'system-analytics') {
+        guarded(loadSystemAnalytics);
+    } else if (typeof stopSystemAnalyticsRealtime === 'function') {
+        stopSystemAnalyticsRealtime();
+    }
     if (pageId === 'compiler-metrics') guarded(loadCompilerMetrics);
     if (pageId === 'developer-options') {
         // DevTools is a dev-only surface; its bundle (devtools.js) is fetched

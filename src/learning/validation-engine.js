@@ -104,6 +104,10 @@ function explainIssue(type, message) {
             return 'INPUT statements read a value, and DISPLAY/PRINT/OUTPUT statements write one. The compiler needs a valid variable name (for INPUT) or expression (for DISPLAY) on these lines.';
         case PseudoPyLearning.RESULT_TYPE.LOGIC:
             return 'The logic of an expression or condition does not describe the intended behaviour. Check the numbers, operators and comparisons on the reported line.';
+        case PseudoPyLearning.RESULT_TYPE.TYPE:
+            return 'Every value in pseudocode has a data type: INTEGER/REAL numbers, STRING text or BOOLEAN TRUE/FALSE. When an operator or store mixes incompatible types, the program cannot translate into sensible Python. Use DECLARE to fix the type, or convert the value first.';
+        case PseudoPyLearning.RESULT_TYPE.RUNTIME:
+            return 'The program translated, but failed while running — for example an unhandled input or an operation Python could not do. Runtime problems usually come from values the program received, not from the syntax.';
         case PseudoPyLearning.RESULT_TYPE.TRANSLATION:
             return 'This constructs behaviour in a way that is not reliably preserved when the pseudocode becomes Python. Consider restructuring it.';
         case PseudoPyLearning.RESULT_TYPE.READABILITY:
@@ -125,6 +129,8 @@ function suggestionForType(type) {
         case PseudoPyLearning.RESULT_TYPE.VARIABLE: return 'Add DECLARE <name> AS <type> before using the variable.';
         case PseudoPyLearning.RESULT_TYPE.IO: return 'Write INPUT <variable> to read, or DISPLAY <expression> to show a result.';
         case PseudoPyLearning.RESULT_TYPE.LOGIC: return 'Re-check the operators, values and conditions on the reported line.';
+        case PseudoPyLearning.RESULT_TYPE.TYPE: return 'Fix the declared type with DECLARE <name> AS <type>, or convert the value (INT(), FLOAT(), STRING(), BOOL()) before using it.';
+        case PseudoPyLearning.RESULT_TYPE.RUNTIME: return 'Trace the program with different inputs and guard operations that could fail.';
         case PseudoPyLearning.RESULT_TYPE.TRANSLATION: return 'Rewrite the statement using supported pseudocode forms.';
         case PseudoPyLearning.RESULT_TYPE.READABILITY: return 'Split long lines and use meaningful, short names.';
         case PseudoPyLearning.RESULT_TYPE.SYNTAX:
@@ -143,6 +149,8 @@ function exampleForType(type) {
         case PseudoPyLearning.RESULT_TYPE.VARIABLE: return 'DECLARE total AS INTEGER';
         case PseudoPyLearning.RESULT_TYPE.IO: return 'INPUT name\nDISPLAY "Hello", name';
         case PseudoPyLearning.RESULT_TYPE.LOGIC: return 'IF score >= 50 THEN';
+        case PseudoPyLearning.RESULT_TYPE.TYPE: return 'DECLARE score AS INTEGER\nscore = INT(input)';
+        case PseudoPyLearning.RESULT_TYPE.RUNTIME: return 'INPUT n AS INTEGER\nFOR i FROM 1 TO n DO';
         case PseudoPyLearning.RESULT_TYPE.TRANSLATION: return 'Use SET x TO <expression>';
         case PseudoPyLearning.RESULT_TYPE.READABILITY: return 'total = total + item\n(one idea per line)';
         case PseudoPyLearning.RESULT_TYPE.SYNTAX:
@@ -158,7 +166,13 @@ function exampleForType(type) {
  */
 function resultFromCompilerIssue(issue, isWarning) {
     const message = String((issue && issue.message) || 'An issue was detected in the pseudocode.');
-    const type = classifyCompilerIssue(message);
+    const code = String((issue && issue.code) || '');
+    let type;
+    if (code === 'SEM_TYPE_MISMATCH' || code === 'SEM_INVALID_OPERANDS' || code === 'SEM_CONDITION_NOT_BOOLEAN') {
+        type = PseudoPyLearning.RESULT_TYPE.TYPE;
+    } else {
+        type = classifyCompilerIssue(message);
+    }
     return makeValidationResult({
         type: type,
         severity: isWarning ? PseudoPyLearning.SEVERITY.WARNING : PseudoPyLearning.SEVERITY.ERROR,
@@ -459,7 +473,9 @@ function summarizeValidation(items) {
 function gapCategoryForResultType(resultType) {
     switch (resultType) {
         case PseudoPyLearning.RESULT_TYPE.STRUCTURE: return PseudoPyLearning.GAP_CATEGORY.STRUCTURE;
-        case PseudoPyLearning.RESULT_TYPE.VARIABLE: return PseudoPyLearning.GAP_CATEGORY.VARIABLE;
+        case PseudoPyLearning.RESULT_TYPE.VARIABLE:
+        case PseudoPyLearning.RESULT_TYPE.TYPE:
+        case PseudoPyLearning.RESULT_TYPE.RUNTIME: return PseudoPyLearning.GAP_CATEGORY.VARIABLE;
         case PseudoPyLearning.RESULT_TYPE.LOGIC: return PseudoPyLearning.GAP_CATEGORY.LOGIC;
         case PseudoPyLearning.RESULT_TYPE.IO: return PseudoPyLearning.GAP_CATEGORY.IO;
         case PseudoPyLearning.RESULT_TYPE.PATTERN: return PseudoPyLearning.GAP_CATEGORY.PATTERN;

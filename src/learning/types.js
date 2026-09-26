@@ -54,6 +54,8 @@ PseudoPyLearning.RESULT_TYPE = Object.freeze({
     PATTERN: 'pattern',
     TRANSLATION: 'translation',
     READABILITY: 'readability',
+    TYPE: 'type',
+    RUNTIME: 'runtime',
     BEST_PRACTICE: 'best-practice'
 });
 
@@ -271,6 +273,8 @@ function defaultCategoryForType(type) {
         case PseudoPyLearning.RESULT_TYPE.SYNTAX: return PseudoPyLearning.FEEDBACK_CATEGORY.SYNTAX;
         case PseudoPyLearning.RESULT_TYPE.STRUCTURE: return PseudoPyLearning.FEEDBACK_CATEGORY.STRUCTURE;
         case PseudoPyLearning.RESULT_TYPE.LOGIC:
+        case PseudoPyLearning.RESULT_TYPE.TYPE:
+        case PseudoPyLearning.RESULT_TYPE.RUNTIME:
         case PseudoPyLearning.RESULT_TYPE.VARIABLE:
         case PseudoPyLearning.RESULT_TYPE.IO: return PseudoPyLearning.FEEDBACK_CATEGORY.LOGIC;
         case PseudoPyLearning.RESULT_TYPE.PATTERN: return PseudoPyLearning.FEEDBACK_CATEGORY.PROGRAMMING_PATTERN;

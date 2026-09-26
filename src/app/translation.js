@@ -105,15 +105,16 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
         const runBtn = runBtnSelector ? $qs(runBtnSelector) : null;
 
         if (!validation.valid) {
-            setPythonOutput(outputId, '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            setPythonOutput(outputId, '# Translation failed due to errors in your pseudocode.\n# Please check the console below for details.');
             if (consoleEl) {
                 consoleEl.innerHTML = renderHtmlErrors(validation.errors);
                 consoleEl.className = 'output-content error';
             }
             if (runBtn) runBtn.disabled = true;
-            showToast(`${validation.errors.length} syntax error(s) found. Check the console output.`, 'error');
+            showToast(`${validation.errors.length} error(s) found. Check the console output.`, 'error');
             if (outputId === 'python-output') {
                 currentErrorLineNumbers = validation.errors.map(err => err.line);
+                currentConsoleErrors = validation.errors;
                 updateGutter();
             }
             maybeRenderLearningPanel(outputId);
@@ -122,6 +123,7 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
 
         if (outputId === 'python-output') {
             currentErrorLineNumbers = [];
+            currentConsoleErrors = [];
             updateGutter();
         }
 

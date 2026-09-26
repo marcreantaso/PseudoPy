@@ -21,6 +21,7 @@ const PAGES = [
     'compiler-metrics',
     'password-recovery',
     'manage-users',
+    'system-analytics',
     'password-requests',
     'admin-execute',
     'developer-options'
@@ -29,7 +30,7 @@ const PAGES = [
 // Access-control lists (role -> allowed page ids). Order mirrors the
 // historical checkAccess() layout; do not change without a test change.
 const PAGES_BY_ROLE = {
-    admin: ['manage-users', 'password-requests', 'admin-execute', 'developer-options'],
+    admin: ['manage-users', 'system-analytics', 'password-requests', 'admin-execute', 'developer-options'],
     instructor: ['analytics', 'manage-exercises', 'generate-code', 'compiler-metrics', 'manage-students', 'password-recovery'],
     student: ['write-pseudocode', 'translate', 'execute', 'feedback', 'exercises-student', 'student-settings', 'change-password']
 };
@@ -53,6 +54,7 @@ const PAGE_TITLES = {
     'manage-exercises': 'Manage Exercises',
     'generate-code': 'Generate Python Code',
     'manage-users': 'Manage Instructors',
+    'system-analytics': 'System Analytics',
     'admin-execute': 'Execute Code',
     'change-password': 'Change Password',
     'student-settings': 'Settings',
@@ -1216,6 +1218,11 @@ currentPage = pageId;
         if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     }
     if (pageId === 'password-recovery') guarded(loadPasswordRecovery);
+    if (pageId === 'system-analytics') {
+        guarded(loadSystemAnalytics);
+    } else if (typeof stopSystemAnalyticsRealtime === 'function') {
+        stopSystemAnalyticsRealtime();
+    }
     if (pageId === 'compiler-metrics') guarded(loadCompilerMetrics);
     if (pageId === 'developer-options') {
         // DevTools is a dev-only surface; its bundle (devtools.js) is fetched
@@ -1398,15 +1405,16 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
         const runBtn = runBtnSelector ? $qs(runBtnSelector) : null;
 
         if (!validation.valid) {
-            setPythonOutput(outputId, '# Translation failed due to syntax error(s).\n# Please check the console below for details.');
+            setPythonOutput(outputId, '# Translation failed due to errors in your pseudocode.\n# Please check the console below for details.');
             if (consoleEl) {
                 consoleEl.innerHTML = renderHtmlErrors(validation.errors);
                 consoleEl.className = 'output-content error';
             }
             if (runBtn) runBtn.disabled = true;
-            showToast(`${validation.errors.length} syntax error(s) found. Check the console output.`, 'error');
+            showToast(`${validation.errors.length} error(s) found. Check the console output.`, 'error');
             if (outputId === 'python-output') {
                 currentErrorLineNumbers = validation.errors.map(err => err.line);
+                currentConsoleErrors = validation.errors;
                 updateGutter();
             }
             maybeRenderLearningPanel(outputId);
@@ -1415,6 +1423,7 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
 
         if (outputId === 'python-output') {
             currentErrorLineNumbers = [];
+            currentConsoleErrors = [];
             updateGutter();
         }
 
@@ -4162,7 +4171,7 @@ async function runStudentNumberMigration() {
 
 const AN_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const AN_DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const KNOWN_ERROR_TYPES = ['Syntax Error', 'Logic Error', 'Missing END', 'Indentation Error', 'Type Error'];
+const KNOWN_ERROR_TYPES = ['Syntax Error', 'Type Error', 'Logic Error', 'Runtime Error', 'Missing Terminator', 'Indentation Error'];
 
 function recordDate(record) {
     const raw = record && (record.timestamp || record.time);
@@ -4608,6 +4617,41 @@ function progressXTicks(count, plotWidth, minPx) {
 }
 
 /* ============================================================
+   Chart size system (Part H items 59-68): a single purpose → size
+   map shared by every chart. Mirrors the CSS tokens
+   --chart-h-{sm,md,lg,xl} in style.css so pure geometry and the DOM
+   agree on one source of truth.
+   ============================================================ */
+const CHART_SIZES = { sm: 240, md: 300, lg: 360, xl: 420 };
+
+/* Item 61 purpose ranges: [min, max] px. The clamp() low term is the
+   mobile-readable minimum, the vw term is fluid, and the high term is
+   the controlled desktop maximum (item 66). The nominal CHART_SIZES
+   tokens stay the spec's example values. */
+const CHART_RANGES = { sm: { min: 200, max: 260 }, md: { min: 240, max: 320 }, lg: { min: 260, max: 380 }, xl: { min: 300, max: 420 } };
+const CHART_VW = { sm: 26, md: 30, lg: 32, xl: 36 };
+
+/**
+ * Resolves a chart-size name into the responsive height contract.
+ * @param {'sm'|'md'|'lg'|'xl'|null} [size='md'] size token name
+ * @returns {{name:string, token:number, min:number, max:number, vw:number, toCss:()=>string}}
+ *   min/max/vw are the three clamp() terms the stylesheet uses (so
+ *   pure geometry and CSS agree on exactly one source of truth).
+ */
+function chartBox(size) {
+    const key = CHART_RANGES[size] ? size : 'md';
+    const r = CHART_RANGES[key];
+    return {
+        name: key,
+        token: CHART_SIZES[key],
+        min: r.min,
+        max: r.max,
+        vw: CHART_VW[key],
+        toCss() { return 'clamp(' + r.min + 'px, ' + CHART_VW[key] + 'vw, ' + r.max + 'px)'; }
+    };
+}
+
+/* ============================================================
    CommonJS export guard — allows the Node suite to require()
    the same source the browser bundles.
    ============================================================ */
@@ -4626,7 +4670,9 @@ if (typeof module !== 'undefined' && module.exports) {
         CHART_LAYOUT_TALL_MAX,
         START_ANGLE,
         TAU,
-        round
+        round,
+        CHART_SIZES,
+        chartBox
     };
 }
 /* ============================================================
@@ -7351,6 +7397,18 @@ function downloadPython() {
    Stack-based strict validation with educational error messages
    ============================================================ */
 
+let currentConsoleErrors = [];
+
+function _consoleEscape(str) {
+    const value = String(str == null ? '' : str);
+    if (typeof document !== 'undefined' && document.createElement) {
+        const div = document.createElement('div');
+        div.textContent = value;
+        return div.innerHTML;
+    }
+    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 /**
  * Core validation function — strict compiler-like approach.
  * Validates BEFORE any translation occurs.
@@ -7362,15 +7420,39 @@ function validatePseudocode(code) {
 }
 
 function renderHtmlErrors(errors) {
-    let output = '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># {{ui:CircleX}} Syntax Errors Found:</span></div><div><span style="color: var(--text-muted);">#</span></div>';
-    for (const err of errors) {
+    const list = Array.isArray(errors) ? errors : [];
+    const hasSemantic = list.some(e => e && e.stage === 'Semantic Analysis');
+    const header = hasSemantic
+        ? '# {{ui:CircleX}} Compilation Errors Found:'
+        : '# {{ui:CircleX}} Syntax Errors Found:';
+    let output = '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text">' + header + '</span></div>';
+
+    for (const err of list) {
+        const lineLabel = (err && err.line) != null ? 'Line ' + err.line + ': ' : '';
+        const icon = err && err.severity === 'warning' ? '{{ui:TriangleAlert}}' : '{{ui:CircleX}}';
         let suggestionHtml = '';
-        if (err.suggestion) {
-            suggestionHtml = `<div><span class="suggestion-text">#   {{ui:Lightbulb}} Suggestion: ${err.suggestion}</span></div>`;
+        if (err && err.suggestion) {
+            suggestionHtml = '<div><span class="suggestion-text">#   {{ui:Lightbulb}} Suggestion: ' + _consoleEscape(err.suggestion) + '</span></div>';
         }
-        output += `<div style="margin-bottom: 0.5rem; font-family: 'JetBrains Mono', monospace;"><div><span class="error-text"># Line ${err.line}: ${err.message}</span></div>${suggestionHtml}<div><span style="color: var(--text-muted);">#</span></div></div>`;
+        let detailsHtml = '';
+        if (err) {
+            const bits = [];
+            if (err.stage) bits.push('Stage: ' + _consoleEscape(err.stage));
+            if (err.code) bits.push('Code: ' + _consoleEscape(err.code));
+            if (err.received) bits.push('Received: ' + _consoleEscape(err.received));
+            if (err.expected) bits.push('Expected: ' + _consoleEscape(err.expected));
+            if (err.type) bits.push('Type: ' + _consoleEscape(err.type));
+            if (bits.length) {
+                detailsHtml = '<details class="console-details" style="margin-top:0.25rem"><summary><span class="suggestion-text"># {{ui:Info}} Technical Details</span></summary>' +
+                    bits.map(b => '<div style="color: var(--text-muted);"># &nbsp; ' + b + '</div>').join('') + '</details>';
+            }
+        }
+        output += '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;">' +
+            '<div><span class="error-text"># ' + icon + ' ' + _consoleEscape(lineLabel + (err ? err.message : '')) + '</span></div>' +
+            suggestionHtml + detailsHtml +
+            '<div><span style="color: var(--text-muted);">#</span></div></div>';
     }
-    output += '<div style="margin-top: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># Fix the pseudocode before translation.</span></div>';
+    output += '<div style="margin-top: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># Fix the errors in your pseudocode before translation.</span></div>';
     return output;
 }
 
@@ -7405,7 +7487,10 @@ function updateHighlights() {
         const displayContainer = lineText === '' ? '&nbsp;' : escapeHtml(lineText);
         const lineNumber = index + 1;
         const errorClass = currentErrorLineNumbers.includes(lineNumber) ? ' error-highlight-line' : '';
-        return `<div class="highlight-line${errorClass}">${displayContainer}</div>`;
+        const consoleErrors = typeof currentConsoleErrors === 'undefined' ? [] : currentConsoleErrors;
+        const lineNotes = consoleErrors.filter(e => e && e.line === lineNumber).map(e => String(e.message || ''));
+        const titleAttr = lineNotes.length ? ' title="' + _consoleEscape(lineNotes.join(' | ')) + '"' : '';
+        return `<div class="highlight-line${errorClass}"${titleAttr}>${displayContainer}</div>`;
     }).join('');
 
     highlights.scrollTop = editor.scrollTop;
@@ -7591,6 +7676,8 @@ PseudoPyLearning.RESULT_TYPE = Object.freeze({
     PATTERN: 'pattern',
     TRANSLATION: 'translation',
     READABILITY: 'readability',
+    TYPE: 'type',
+    RUNTIME: 'runtime',
     BEST_PRACTICE: 'best-practice'
 });
 
@@ -7808,6 +7895,8 @@ function defaultCategoryForType(type) {
         case PseudoPyLearning.RESULT_TYPE.SYNTAX: return PseudoPyLearning.FEEDBACK_CATEGORY.SYNTAX;
         case PseudoPyLearning.RESULT_TYPE.STRUCTURE: return PseudoPyLearning.FEEDBACK_CATEGORY.STRUCTURE;
         case PseudoPyLearning.RESULT_TYPE.LOGIC:
+        case PseudoPyLearning.RESULT_TYPE.TYPE:
+        case PseudoPyLearning.RESULT_TYPE.RUNTIME:
         case PseudoPyLearning.RESULT_TYPE.VARIABLE:
         case PseudoPyLearning.RESULT_TYPE.IO: return PseudoPyLearning.FEEDBACK_CATEGORY.LOGIC;
         case PseudoPyLearning.RESULT_TYPE.PATTERN: return PseudoPyLearning.FEEDBACK_CATEGORY.PROGRAMMING_PATTERN;
@@ -7977,6 +8066,10 @@ function explainIssue(type, message) {
             return 'INPUT statements read a value, and DISPLAY/PRINT/OUTPUT statements write one. The compiler needs a valid variable name (for INPUT) or expression (for DISPLAY) on these lines.';
         case PseudoPyLearning.RESULT_TYPE.LOGIC:
             return 'The logic of an expression or condition does not describe the intended behaviour. Check the numbers, operators and comparisons on the reported line.';
+        case PseudoPyLearning.RESULT_TYPE.TYPE:
+            return 'Every value in pseudocode has a data type: INTEGER/REAL numbers, STRING text or BOOLEAN TRUE/FALSE. When an operator or store mixes incompatible types, the program cannot translate into sensible Python. Use DECLARE to fix the type, or convert the value first.';
+        case PseudoPyLearning.RESULT_TYPE.RUNTIME:
+            return 'The program translated, but failed while running — for example an unhandled input or an operation Python could not do. Runtime problems usually come from values the program received, not from the syntax.';
         case PseudoPyLearning.RESULT_TYPE.TRANSLATION:
             return 'This constructs behaviour in a way that is not reliably preserved when the pseudocode becomes Python. Consider restructuring it.';
         case PseudoPyLearning.RESULT_TYPE.READABILITY:
@@ -7998,6 +8091,8 @@ function suggestionForType(type) {
         case PseudoPyLearning.RESULT_TYPE.VARIABLE: return 'Add DECLARE <name> AS <type> before using the variable.';
         case PseudoPyLearning.RESULT_TYPE.IO: return 'Write INPUT <variable> to read, or DISPLAY <expression> to show a result.';
         case PseudoPyLearning.RESULT_TYPE.LOGIC: return 'Re-check the operators, values and conditions on the reported line.';
+        case PseudoPyLearning.RESULT_TYPE.TYPE: return 'Fix the declared type with DECLARE <name> AS <type>, or convert the value (INT(), FLOAT(), STRING(), BOOL()) before using it.';
+        case PseudoPyLearning.RESULT_TYPE.RUNTIME: return 'Trace the program with different inputs and guard operations that could fail.';
         case PseudoPyLearning.RESULT_TYPE.TRANSLATION: return 'Rewrite the statement using supported pseudocode forms.';
         case PseudoPyLearning.RESULT_TYPE.READABILITY: return 'Split long lines and use meaningful, short names.';
         case PseudoPyLearning.RESULT_TYPE.SYNTAX:
@@ -8016,6 +8111,8 @@ function exampleForType(type) {
         case PseudoPyLearning.RESULT_TYPE.VARIABLE: return 'DECLARE total AS INTEGER';
         case PseudoPyLearning.RESULT_TYPE.IO: return 'INPUT name\nDISPLAY "Hello", name';
         case PseudoPyLearning.RESULT_TYPE.LOGIC: return 'IF score >= 50 THEN';
+        case PseudoPyLearning.RESULT_TYPE.TYPE: return 'DECLARE score AS INTEGER\nscore = INT(input)';
+        case PseudoPyLearning.RESULT_TYPE.RUNTIME: return 'INPUT n AS INTEGER\nFOR i FROM 1 TO n DO';
         case PseudoPyLearning.RESULT_TYPE.TRANSLATION: return 'Use SET x TO <expression>';
         case PseudoPyLearning.RESULT_TYPE.READABILITY: return 'total = total + item\n(one idea per line)';
         case PseudoPyLearning.RESULT_TYPE.SYNTAX:
@@ -8031,7 +8128,13 @@ function exampleForType(type) {
  */
 function resultFromCompilerIssue(issue, isWarning) {
     const message = String((issue && issue.message) || 'An issue was detected in the pseudocode.');
-    const type = classifyCompilerIssue(message);
+    const code = String((issue && issue.code) || '');
+    let type;
+    if (code === 'SEM_TYPE_MISMATCH' || code === 'SEM_INVALID_OPERANDS' || code === 'SEM_CONDITION_NOT_BOOLEAN') {
+        type = PseudoPyLearning.RESULT_TYPE.TYPE;
+    } else {
+        type = classifyCompilerIssue(message);
+    }
     return makeValidationResult({
         type: type,
         severity: isWarning ? PseudoPyLearning.SEVERITY.WARNING : PseudoPyLearning.SEVERITY.ERROR,
@@ -8332,7 +8435,9 @@ function summarizeValidation(items) {
 function gapCategoryForResultType(resultType) {
     switch (resultType) {
         case PseudoPyLearning.RESULT_TYPE.STRUCTURE: return PseudoPyLearning.GAP_CATEGORY.STRUCTURE;
-        case PseudoPyLearning.RESULT_TYPE.VARIABLE: return PseudoPyLearning.GAP_CATEGORY.VARIABLE;
+        case PseudoPyLearning.RESULT_TYPE.VARIABLE:
+        case PseudoPyLearning.RESULT_TYPE.TYPE:
+        case PseudoPyLearning.RESULT_TYPE.RUNTIME: return PseudoPyLearning.GAP_CATEGORY.VARIABLE;
         case PseudoPyLearning.RESULT_TYPE.LOGIC: return PseudoPyLearning.GAP_CATEGORY.LOGIC;
         case PseudoPyLearning.RESULT_TYPE.IO: return PseudoPyLearning.GAP_CATEGORY.IO;
         case PseudoPyLearning.RESULT_TYPE.PATTERN: return PseudoPyLearning.GAP_CATEGORY.PATTERN;
@@ -9742,7 +9847,9 @@ const EV_ERROR_TYPE_CATEGORIES = {
     'Logic Error': ['logic'],
     'Missing END': ['structure'],
     'Indentation Error': ['structure', 'readability'],
-    'Type Error': ['logic', 'translation']
+    'Type Error': ['logic', 'translation'],
+    'Runtime Error': ['logic', 'translation'],
+    'Missing Terminator': ['syntax', 'structure']
 };
 
 const EV_EXERCISE_PATTERNS = [
@@ -9982,6 +10089,12 @@ const StudentGuide = (() => {
             'BEGIN\n    DECLARE total AS INTEGER\n    SET total TO 10\n    DISPLAY total\nEND',
             'total = 0\ntotal = 10\nprint(total)',
             { intro: 'Think of DECLARE as reserving a named slot of a fixed type, and SET as storing a value into that slot.', bullets: ['INTEGER fits whole numbers, REAL fits decimals, STRING fits text, BOOLEAN fits TRUE/FALSE.', 'Re-declaring a variable is an error; declare each variable once.', 'A variable must be declared before it is read.'] }
+        ],
+        'Data Types': [
+            'Every value has a type: INTEGER, REAL, STRING or BOOLEAN. Declare the type and the translator checks your values.',
+            'BEGIN\n    DECLARE count AS INTEGER\n    DECLARE price AS REAL\n    DECLARE name AS STRING\n    DECLARE passed AS BOOLEAN\n    SET count TO 3\n    SET price TO 9.99\n    SET name TO "Ada"\n    SET passed TO TRUE\n    DISPLAY "Count:", count, " Price:", price\n    DISPLAY "Name:", name, " Passed:", passed\nEND',
+            'count = 3\nprice = 9.99\nname = "Ada"\npassed = True\nprint("Count:", count, " Price:", price)\nprint("Name:", name, " Passed:", passed)',
+            { intro: 'Declaring a type means the translator can catch mismatches BEFORE the program runs — for example storing text in an INTEGER slot.', bullets: ['INTEGER holds whole numbers (3), REAL holds decimals (9.99), STRING holds text ("Ada"), BOOLEAN holds TRUE or FALSE.', 'Matching every DECLARE to its value is the first thing the translator checks.', 'Convert between types on purpose: INT(), FLOAT(), STR(), BOOL() — do not mix types with +.', 'Because types are checked, an INTEGER variable stays a whole number even after INPUT.'] }
         ],
         'Input & Output': [
             'INPUT asks for a value. DISPLAY shows a result. Declare numeric inputs before reading them.',
@@ -10322,7 +10435,7 @@ const StudentWorkspace = (() => {
         const x = i => left + (data.length === 1 ? plotW / 2 : i * plotW / (data.length - 1));
         const y = n => bottom + (1 - n / 100) * (H - top - bottom);
         const units = m => Math.round(Number(m) * 10) / 10;
-        let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="aspect-ratio:' + W + '/' + H + '" role="group" aria-label="Learning progress, percentage by translation attempt" class="an-svg">';
+        let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="group" aria-label="Learning progress, percentage by translation attempt" class="an-svg">';
         [0, 25, 50, 75, 100].forEach(n => { svg += '<line class="an-grid-line" x1="' + left + '" x2="' + (W - right) + '" y1="' + y(n) + '" y2="' + y(n) + '"/><text x="' + (left - 8) + '" y="' + (y(n) + 3) + '" text-anchor="end" class="an-axis-label">' + n + '%</text>'; });
         progressXTicks(data.length, plotWidth).forEach(i => svg += '<text class="an-axis-label" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + (i + 1) + '</text>');
         svg += '<defs><linearGradient id="sw-compilation-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--chart-1)" stop-opacity="0.22"/><stop offset="100%" stop-color="var(--chart-1)" stop-opacity="0.02"/></linearGradient><clipPath id="sw-plot-clip"><rect x="' + left + '" y="' + bottom + '" width="' + plotW + '" height="' + (H - top - bottom) + '"/></clipPath></defs>';
@@ -10490,7 +10603,7 @@ async function loadExercisesFromDB() {
         const exercises = await dbGetAll(exercisesRef);
         if (exercises && exercises.length > 0) {
             console.log(`[Benchmark] Loaded ${exercises.length} exercises from IndexedDB.`);
-            return exercises;
+            return { dataset: exercises, source: 'stored exercises (' + exercises.length + ')' };
         }
     } catch (e) {
         console.warn('[Benchmark] IndexedDB read failed, falling back to dataset.json:', e);
@@ -10500,7 +10613,8 @@ async function loadExercisesFromDB() {
     const res = await fetch('dataset.json');
     if (!res.ok) throw new Error('Failed to fetch dataset.json: ' + res.status);
     const raw = await res.json();
-    return Array.isArray(raw) ? raw : (raw.dataset || []);
+    const fallback = Array.isArray(raw) ? raw : (raw.dataset || []);
+    return { dataset: fallback, source: 'dataset.json fallback (' + fallback.length + ')' };
 }
 
 /**
@@ -10510,53 +10624,30 @@ async function loadExercisesFromDB() {
 function loadCompilerMetrics() {
     if (typeof metricsEngine === 'undefined') return;
 
-    // ── Session Metrics Cards ──
+    // Session metric cards are optional: the Instructor page is benchmark-first,
+    // so these elements may be absent — write them only when they exist.
     const session = metricsEngine.getSessionMetrics();
-    const improvement = metricsEngine.getImprovementMetrics();
 
-    setText('metric-total-translations', formatMetricValue(session.totalTranslations));
-    setText('metric-compilation-rate', formatPercent(session.compilationSuccessRate));
-    setText('metric-runtime-error-rate', formatPercent(session.runtimeErrorRate));
-    setText('metric-avg-gen-time', formatDuration(session.avgGenerationTime));
-    setText('metric-total-errors', formatMetricValue(session.totalErrors));
-    setText('metric-total-executions', formatMetricValue(session.totalExecutions));
+    const translationsEl = $id('metric-total-translations');
+    if (translationsEl) translationsEl.textContent = formatMetricValue(session.totalTranslations);
+    const compRateEl = $id('metric-compilation-rate');
+    if (compRateEl) compRateEl.textContent = formatPercent(session.compilationSuccessRate);
+    const runtimeRateEl = $id('metric-runtime-error-rate');
+    if (runtimeRateEl) runtimeRateEl.textContent = formatPercent(session.runtimeErrorRate);
+    const avgGenEl = $id('metric-avg-gen-time');
+    if (avgGenEl) avgGenEl.textContent = formatDuration(session.avgGenerationTime);
+    const totalErrorsEl = $id('metric-total-errors');
+    if (totalErrorsEl) totalErrorsEl.textContent = formatMetricValue(session.totalErrors);
+    const totalExecEl = $id('metric-total-executions');
+    if (totalExecEl) totalExecEl.textContent = formatMetricValue(session.totalExecutions);
 
-    // Error trend badge
+    // Error trend badge (optional)
     const trendEl = $id('metric-error-trend');
     const trendIcons = { improving: '↑ Improving', declining: '↓ Declining', stable: '— Stable' };
     const trendClasses = { improving: 'positive', declining: 'negative', stable: '' };
     if (trendEl) {
         trendEl.textContent = trendIcons[session.errorTrend] || '— Stable';
         trendEl.className = 'stat-change ' + (trendClasses[session.errorTrend] || '');
-    }
-
-    // ── Improvement Section ──
-    const improvementEl = $id('metrics-improvement-section');
-    if (improvement.hasData) {
-        improvementEl.innerHTML = `
-        <div class="stats-grid" style="margin-bottom: 1rem;">
-          <div class="stat-card">
-            <div class="stat-icon">{{ui:ChartNoAxesCombined}}</div>
-            <div class="stat-value">${formatPercent(improvement.correctnessImprovement)}</div>
-            <div class="stat-label">Correctness Improvement</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">{{ui:Zap}}</div>
-            <div class="stat-value">${formatPercent(improvement.speedImprovement)}</div>
-            <div class="stat-label">Speed Improvement</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">{{ui:CircleCheck}}</div>
-            <div class="stat-value">${formatPercent(improvement.overallSuccessRate)}</div>
-            <div class="stat-label">Overall Success Rate</div>
-          </div>
-        </div>`;
-    } else {
-        improvementEl.innerHTML = `<div class="empty-state" style="padding: 1.5rem;">
-            <div class="empty-icon">{{ui:ChartColumn}}</div>
-            <h3>No Improvement Data Yet</h3>
-            <p>${improvement.message}</p>
-        </div>`;
     }
 
     // ── Pipeline Timing Chart ──
@@ -10631,7 +10722,7 @@ async function runBenchmarkTest() {
 
     try {
         // Load from IndexedDB — no fetch/CORS errors
-        const dataset = await loadExercisesFromDB();
+        const { dataset, source } = await loadExercisesFromDB();
 
         if (!dataset || dataset.length === 0) {
             renderBenchmarkError('No test cases found. Please reload the app to seed the database.');
@@ -10645,7 +10736,7 @@ async function runBenchmarkTest() {
         await new Promise(r => setTimeout(r, 80));
 
         // Run benchmark pipeline with mathematical metrics engine
-        const results = metricsEngine.runBenchmark(dataset, compilerEngine);
+        const results = metricsEngine.runBenchmark(dataset, compilerEngine, { dataset: { name: source } });
 
         // Render all sections
         renderBenchmarkResults(results);
@@ -10684,7 +10775,16 @@ function renderBenchmarkResults(results) {
     const wrapper = $id('benchmark-detail-wrapper');
     const totalLabel = $id('benchmark-total-label');
     if (wrapper) wrapper.style.display = 'block';
-    if (totalLabel) totalLabel.textContent = `${results.totalTestCases} test cases`;
+    if (totalLabel) {
+        let metaLabel = `${results.totalTestCases} test cases`;
+        if (results.dataset && results.dataset.name) metaLabel += ' · ' + results.dataset.name;
+        if (results.runAt || results.timestamp) {
+            const d = new Date(results.timestamp || results.runAt);
+            metaLabel += ' · ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+        }
+        if (results.compilerVersion) metaLabel += ' · v' + results.compilerVersion;
+        totalLabel.textContent = metaLabel;
+    }
 
     // ── Detailed Results Table ──
     const tbody = $id('benchmark-results-body');
@@ -10796,6 +10896,346 @@ if (document.readyState === 'loading') {
 
 
 /* ============================================================
+   SYSTEM ANALYTICS (Admin)
+   Live aggregate of the ENTIRE stored activity log
+   (pseudopy_activity) — every instructor and every student.
+   Single realtime subscription with proper cleanup on leave.
+   ============================================================ */
+
+const SystemAnalyticsTime = {
+    RANGES: { '24h': 1, '7d': 7, '30d': 30, '90d': 90, 'all': null }
+};
+
+function systemRecordTime(record) {
+    if (record && typeof record.timestamp === 'number' && isFinite(record.timestamp)) return record.timestamp;
+    if (record && typeof record.time === 'string') {
+        const parsed = Date.parse(record.time);
+        if (!isNaN(parsed)) return parsed;
+    }
+    return null;
+}
+
+function systemFilterByRange(records, range) {
+    const days = SystemAnalyticsTime.RANGES[range];
+    if (days == null) return Array.isArray(records) ? records.slice() : [];
+    const cutoff = Date.now() - days * 864e5;
+    return (Array.isArray(records) ? records : []).filter(record => {
+        const t = systemRecordTime(record);
+        return t != null && t >= cutoff;
+    });
+}
+
+function systemHasPseudocode(record) {
+    return !!(record && (record.pseudocode || record.submittedCode));
+}
+
+function systemHasExecution(record) {
+    return !!(record && (record.python_code || record.pythonCode || record.output || record.status === 'Completed'));
+}
+
+function systemComputeOverview(records) {
+    const list = Array.isArray(records) ? records : [];
+    let totalTranslations = 0;
+    let totalExecutions = 0;
+    let errorCount = 0;
+    const students = new Set();
+    const exercises = new Set();
+    for (const record of list) {
+        if (systemHasPseudocode(record)) totalTranslations++;
+        if (systemHasExecution(record)) totalExecutions++;
+        const errorText = (record && record.errorType) || '';
+        const resultText = String((record && record.result) || '');
+        const isError = errorText.trim() !== '' ||
+            /error|failed/i.test(resultText) ||
+            (record && record.status === 'Failed');
+        if (isError) errorCount++;
+        const studentKey = record && (record.studentAccountId || record.studentId || record.username || record.student);
+        if (studentKey) students.add(String(studentKey));
+        const exerciseKey = record && (record.exerciseId || record.exercise || record.title);
+        if (exerciseKey) exercises.add(String(exerciseKey));
+    }
+    const compilationSuccessRate = totalTranslations > 0
+        ? parseFloat(((1 - errorCount / totalTranslations) * 100).toFixed(1))
+        : null;
+    return {
+        totalRecords: list.length,
+        totalTranslations,
+        totalExecutions,
+        errorCount,
+        compilationSuccessRate,
+        activeStudents: students.size,
+        uniqueExercises: exercises.size
+    };
+}
+
+function systemBuildActivitySeries(records, range) {
+    const days = SystemAnalyticsTime.RANGES[range] || 30;
+    const buckets = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = days - 1; i >= 0; i--) {
+        const day = new Date(today.getTime() - i * 864e5);
+        buckets.push({
+            key: day.toDateString(),
+            label: (day.getMonth() + 1) + '/' + day.getDate(),
+            translations: 0,
+            executions: 0
+        });
+    }
+    const byKey = {};
+    buckets.forEach(bucket => { byKey[bucket.key] = bucket; });
+    (Array.isArray(records) ? records : []).forEach(record => {
+        const t = systemRecordTime(record);
+        if (t == null) return;
+        const bucket = byKey[new Date(t).toDateString()];
+        if (!bucket) return;
+        if (systemHasPseudocode(record)) bucket.translations++;
+        if (systemHasExecution(record)) bucket.executions++;
+    });
+    return buckets;
+}
+
+/* ════════════════════════════════════════════════════════════
+   DOM / REALTIME LAYER
+   ════════════════════════════════════════════════════════════ */
+
+let cachedSystemActivity = [];
+let systemTimeRange = 'all';
+let systemAnalyticsLoadGeneration = 0;
+
+var systemAnalyticsUnsubscribe = null;
+
+function startSystemAnalyticsRealtime() {
+    if (systemAnalyticsUnsubscribe || !currentUser || currentUser.role !== 'admin') return;
+    const owner = currentUser;
+    const subscriptions = [];
+    systemAnalyticsUnsubscribe = () => subscriptions.forEach(unsubscribe => unsubscribe());
+    const refresh = () => {
+        if (currentUser !== owner || currentPage !== 'system-analytics') return;
+        renderSystemAnalytics();
+    };
+    subscriptions.push(subscribeCollection(activityRef, records => {
+        if (currentUser !== owner || currentPage !== 'system-analytics') return;
+        cachedSystemActivity = Array.isArray(records) ? records : [];
+        refresh();
+    }, error => {
+        console.error('[SystemAnalytics] Realtime subscription error:', error);
+        setText('system-live-status', 'Live updates unavailable. Reopen System Analytics to retry.');
+    }));
+}
+
+function stopSystemAnalyticsRealtime() {
+    systemAnalyticsLoadGeneration++;
+    if (systemAnalyticsUnsubscribe) {
+        systemAnalyticsUnsubscribe();
+        systemAnalyticsUnsubscribe = null;
+    }
+}
+
+async function loadSystemAnalytics() {
+    stopSystemAnalyticsRealtime();
+    const generation = systemAnalyticsLoadGeneration;
+    const owner = currentUser;
+    if (!owner || owner.role !== 'admin') return;
+    setText('system-live-status', 'Loading system analytics…');
+    try {
+        const records = await dbGetAll(activityRef);
+        if (generation !== systemAnalyticsLoadGeneration || currentUser !== owner || currentPage !== 'system-analytics') return;
+        cachedSystemActivity = Array.isArray(records) ? records : [];
+        renderSystemAnalytics();
+        startSystemAnalyticsRealtime();
+    } catch (error) {
+        if (generation !== systemAnalyticsLoadGeneration || currentUser !== owner) return;
+        console.error('[SystemAnalytics] Loading failed:', error);
+        cachedSystemActivity = [];
+        renderSystemAnalyticsError('Unable to load system analytics. Reopen this page to retry.');
+    }
+}
+
+function setSystemTimeRange(range, button) {
+    if (SystemAnalyticsTime.RANGES[range] === undefined) return;
+    systemTimeRange = range;
+    const buttons = typeof $qsa === 'function' ? $qsa('.sys-range-btn') : [];
+    buttons.forEach(btn => btn.classList.toggle('active', btn === button || btn.getAttribute('data-range') === range));
+    renderSystemAnalytics();
+}
+
+function systemRenderErrorState(message) {
+    const messageElement = $id('system-error-message');
+    if (messageElement) messageElement.textContent = message;
+    const state = $id('system-error-state');
+    if (state) state.classList.remove('hidden');
+}
+
+function renderSystemAnalyticsError(message) {
+    systemRenderErrorState(message);
+    ['chart-system-activity', 'chart-system-errors'].forEach(id => {
+        const container = $id(id);
+        if (container) container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:2rem;">' + message + '</div>';
+    });
+    setText('system-live-status', 'System analytics unavailable.');
+}
+
+function renderSystemAnalytics() {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    const filtered = systemFilterByRange(cachedSystemActivity, systemTimeRange);
+    const overview = systemComputeOverview(filtered);
+
+    // ── System Overview KPIs ──
+    setText('adv-total-translations', formatMetricValue(overview.totalTranslations));
+    setText('adv-total-executions', formatMetricValue(overview.totalExecutions));
+    setText('adv-compile-rate', formatPercent(overview.compilationSuccessRate));
+    setText('adv-error-count', formatMetricValue(overview.errorCount));
+    setText('adv-active-students', formatMetricValue(overview.activeStudents));
+    setText('adv-unique-exercises', formatMetricValue(overview.uniqueExercises));
+
+    const scopeLabel = $id('system-scope-label');
+    if (scopeLabel) {
+        const rangeNames = { '24h': 'last 24 hours', '7d': 'last 7 days', '30d': 'last 30 days', '90d': 'last 90 days', all: 'all time' };
+        scopeLabel.textContent = `${overview.totalRecords} activity record(s) across ${rangeNames[systemTimeRange] || 'all time'}.`;
+    }
+    setText('system-live-status', 'Live system analytics — every stored activity record is included.');
+
+    // ── Charts ──
+    try { renderSystemActivityChart(filtered); }
+    catch (e) { console.error('[SystemAnalytics] activity chart failed:', e); }
+    try { renderSystemErrorChart(filtered); }
+    catch (e) { console.error('[SystemAnalytics] error chart failed:', e); }
+}
+
+function renderSystemActivityChart(records) {
+    const plot = $id('system-activity-svg');
+    if (!plot) return;
+    const series = systemBuildActivitySeries(records, systemTimeRange);
+    const total = series.reduce((sum, bucket) => sum + bucket.translations + bucket.executions, 0);
+    const totalElement = $id('system-activity-total');
+    if (totalElement) totalElement.textContent = total + ' activity events in the charted period';
+
+    if (total === 0) {
+        plot.innerHTML = '<div class="an-chart-empty"><p class="an-chart-empty-title">No activity in this period.</p><p class="an-chart-empty-hint">Activity appears once students translate or execute pseudocode.</p></div>';
+        return;
+    }
+
+    const viewW = 560, viewH = 240;
+    const margin = { left: 40, right: 16, top: 18, bottom: 30 };
+    const plotW = viewW - margin.left - margin.right;
+    const plotH = viewH - margin.top - margin.bottom;
+    const baseline = margin.top + plotH;
+
+    const maxCount = series.reduce((max, bucket) => Math.max(max, bucket.translations, bucket.executions), 1);
+    const yMax = niceCeil(maxCount);
+    const yStep = yMax <= 6 ? 2 : yMax <= 12 ? 2 : Math.ceil(yMax / 6);
+    const yTicks = [];
+    for (let v = yMax; v >= 0; v -= yStep) yTicks.push(v);
+    if (yTicks[yTicks.length - 1] !== 0) yTicks.push(0);
+
+    const yFor = linearScale([0, yMax], [baseline, margin.top]);
+    const barSlot = plotW / series.length;
+    const barW = Math.min(11, Math.max(3, barSlot * 0.34));
+
+    const grid = yTicks.map(v =>
+        `<line x1="${margin.left}" y1="${yFor(v)}" x2="${margin.left + plotW}" y2="${yFor(v)}" class="an-grid-line"/>` +
+        `<text x="${margin.left - 6}" y="${yFor(v) + 3}" text-anchor="end" class="an-axis-label">${v}</text>`
+    ).join('');
+
+    const labelEvery = Math.max(1, Math.ceil(series.length / 12));
+    const xLabels = series.map((bucket, i) =>
+        (i % labelEvery === 0)
+            ? `<text x="${margin.left + barSlot * i + barSlot / 2}" y="${baseline + 16}" text-anchor="middle" class="an-axis-label an-axis-label-x">${anEsc(bucket.label)}</text>`
+            : ''
+    ).join('');
+
+    const bars = series.map((bucket, i) => {
+        const centerX = margin.left + barSlot * i + barSlot / 2;
+        const transY = bucket.translations > 0 ? yFor(bucket.translations) : baseline - 1;
+        const execY = bucket.executions > 0 ? yFor(bucket.executions) : baseline - 1;
+        const transH = baseline - transY;
+        const execH = baseline - execY;
+        return `<g role="img" aria-label="${anAttr(bucket.label + ': ' + bucket.translations + ' translations, ' + bucket.executions + ' executions')}">
+            ${bucket.translations > 0 ? `<rect x="${centerX - barW - 1}" y="${transY}" width="${barW}" height="${transH}" rx="2" fill="var(--chart-1)"/>` : ''}
+            ${bucket.executions > 0 ? `<rect x="${centerX + 1}" y="${execY}" width="${barW}" height="${execH}" rx="2" fill="var(--chart-2)"/>` : ''}
+        </g>`;
+    }).join('');
+
+    const aria = series.map(bucket => `${bucket.label}: ${bucket.translations} translations, ${bucket.executions} executions`).join('; ');
+    plot.innerHTML = `
+        <svg class="an-svg an-area-svg" viewBox="0 0 ${viewW} ${viewH}" role="img"
+             aria-label="${anAttr('Translations and executions per day: ' + aria)}"
+             preserveAspectRatio="xMidYMid meet">
+            ${grid}
+            ${bars}
+            ${xLabels}
+        </svg>`;
+}
+
+function renderSystemErrorChart(records) {
+    const plot = $id('system-errors-svg');
+    if (!plot) return;
+    const distribution = buildErrorDistribution(records || []);
+    const totalElement = $id('system-error-total');
+    if (totalElement) totalElement.textContent = String(distribution.total) + ' recorded error(s)';
+
+    if (distribution.total === 0) {
+        plot.innerHTML = '<div class="an-chart-empty"><p class="an-chart-empty-title">No errors in this period.</p><p class="an-chart-empty-hint">Recorded error types appear once activity contains failures.</p></div>';
+        const legend = $id('system-error-legend');
+        if (legend) legend.innerHTML = '<div class="an-legend-note">Clean code — no errors recorded.</div>';
+        return;
+    }
+
+    const size = 220;
+    const cx = size / 2, cy = size / 2;
+    const outerR = 90, innerR = 54;
+    const palette = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
+
+    let cursor = 0;
+    const slices = distribution.categories.map((cat, i) => {
+        const sweep = (cat.count / distribution.total) * Math.PI * 2;
+        const start = -Math.PI / 2 + cursor;
+        const end = start + sweep;
+        cursor += sweep;
+        const color = palette[i % palette.length];
+        return {
+            cat,
+            path: arcPath(cx, cy, outerR, innerR, start, end),
+            color
+        };
+    });
+
+    const sliceMarkup = slices.map(slice =>
+        `<path d="${slice.path}" class="an-pie-slice" style="--slice-color:${slice.color}"/>`
+    ).join('');
+
+    plot.innerHTML = `
+        <svg class="an-svg an-pie-svg" viewBox="0 0 ${size} ${size}" role="img"
+             aria-label="${anAttr('Error distribution: ' + distribution.categories.map(c => c.name + ' ' + c.pct + '% (' + c.count + ')').join(', '))}"
+             preserveAspectRatio="xMidYMid meet">
+            ${sliceMarkup}
+            <text x="${cx}" y="${cy - 4}" text-anchor="middle" class="an-pie-center-num">${distribution.total}</text>
+            <text x="${cx}" y="${cy + 14}" text-anchor="middle" class="an-pie-center-label">errors</text>
+        </svg>`;
+
+    const legend = $id('system-error-legend');
+    if (legend) {
+        legend.innerHTML = distribution.categories.map((cat, i) => {
+            const color = palette[i % palette.length];
+            return `<div class="an-legend-chip-static">
+                <span class="an-legend-dot" style="background:${color}"></span>
+                <span class="an-legend-name">${anEsc(cat.name)}</span>
+                <span class="an-legend-val">${cat.pct}% (${cat.count})</span>
+            </div>`;
+        }).join('');
+    }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        SystemAnalyticsTime: { RANGES: SystemAnalyticsTime.RANGES },
+        systemRecordTime,
+        systemFilterByRange,
+        systemComputeOverview,
+        systemBuildActivitySeries
+    };
+}/* ============================================================
    PASSWORD MANAGEMENT
    ============================================================ */
 

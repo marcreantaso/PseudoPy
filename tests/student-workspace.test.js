@@ -190,7 +190,7 @@ test('quick guide state machine persists mode, keeps the category, and never dup
 
     const h = guideHarness(null);
     h.sandbox.workspace.activate('write-pseudocode');
-    assert.equal(h.cats.chips.length, 9, 'one chip per guide category plus Operators');
+    assert.equal(h.cats.chips.length, Object.keys(guide.entries).length + 1, 'one chip per guide category plus Operators');
     assert.equal(h.beginner.aria['aria-pressed'], 'true', 'Beginner pressed by default');
     assert.equal(h.advanced.aria['aria-pressed'], 'false', 'Advanced not pressed by default');
 

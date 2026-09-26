@@ -286,7 +286,7 @@ const StudentWorkspace = (() => {
         const x = i => left + (data.length === 1 ? plotW / 2 : i * plotW / (data.length - 1));
         const y = n => bottom + (1 - n / 100) * (H - top - bottom);
         const units = m => Math.round(Number(m) * 10) / 10;
-        let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="aspect-ratio:' + W + '/' + H + '" role="group" aria-label="Learning progress, percentage by translation attempt" class="an-svg">';
+        let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="group" aria-label="Learning progress, percentage by translation attempt" class="an-svg">';
         [0, 25, 50, 75, 100].forEach(n => { svg += '<line class="an-grid-line" x1="' + left + '" x2="' + (W - right) + '" y1="' + y(n) + '" y2="' + y(n) + '"/><text x="' + (left - 8) + '" y="' + (y(n) + 3) + '" text-anchor="end" class="an-axis-label">' + n + '%</text>'; });
         progressXTicks(data.length, plotWidth).forEach(i => svg += '<text class="an-axis-label" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + (i + 1) + '</text>');
         svg += '<defs><linearGradient id="sw-compilation-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--chart-1)" stop-opacity="0.22"/><stop offset="100%" stop-color="var(--chart-1)" stop-opacity="0.02"/></linearGradient><clipPath id="sw-plot-clip"><rect x="' + left + '" y="' + bottom + '" width="' + plotW + '" height="' + (H - top - bottom) + '"/></clipPath></defs>';

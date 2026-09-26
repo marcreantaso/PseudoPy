@@ -3,6 +3,18 @@
    Stack-based strict validation with educational error messages
    ============================================================ */
 
+let currentConsoleErrors = [];
+
+function _consoleEscape(str) {
+    const value = String(str == null ? '' : str);
+    if (typeof document !== 'undefined' && document.createElement) {
+        const div = document.createElement('div');
+        div.textContent = value;
+        return div.innerHTML;
+    }
+    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 /**
  * Core validation function — strict compiler-like approach.
  * Validates BEFORE any translation occurs.
@@ -14,15 +26,39 @@ function validatePseudocode(code) {
 }
 
 function renderHtmlErrors(errors) {
-    let output = '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># {{ui:CircleX}} Syntax Errors Found:</span></div><div><span style="color: var(--text-muted);">#</span></div>';
-    for (const err of errors) {
+    const list = Array.isArray(errors) ? errors : [];
+    const hasSemantic = list.some(e => e && e.stage === 'Semantic Analysis');
+    const header = hasSemantic
+        ? '# {{ui:CircleX}} Compilation Errors Found:'
+        : '# {{ui:CircleX}} Syntax Errors Found:';
+    let output = '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text">' + header + '</span></div>';
+
+    for (const err of list) {
+        const lineLabel = (err && err.line) != null ? 'Line ' + err.line + ': ' : '';
+        const icon = err && err.severity === 'warning' ? '{{ui:TriangleAlert}}' : '{{ui:CircleX}}';
         let suggestionHtml = '';
-        if (err.suggestion) {
-            suggestionHtml = `<div><span class="suggestion-text">#   {{ui:Lightbulb}} Suggestion: ${err.suggestion}</span></div>`;
+        if (err && err.suggestion) {
+            suggestionHtml = '<div><span class="suggestion-text">#   {{ui:Lightbulb}} Suggestion: ' + _consoleEscape(err.suggestion) + '</span></div>';
         }
-        output += `<div style="margin-bottom: 0.5rem; font-family: 'JetBrains Mono', monospace;"><div><span class="error-text"># Line ${err.line}: ${err.message}</span></div>${suggestionHtml}<div><span style="color: var(--text-muted);">#</span></div></div>`;
+        let detailsHtml = '';
+        if (err) {
+            const bits = [];
+            if (err.stage) bits.push('Stage: ' + _consoleEscape(err.stage));
+            if (err.code) bits.push('Code: ' + _consoleEscape(err.code));
+            if (err.received) bits.push('Received: ' + _consoleEscape(err.received));
+            if (err.expected) bits.push('Expected: ' + _consoleEscape(err.expected));
+            if (err.type) bits.push('Type: ' + _consoleEscape(err.type));
+            if (bits.length) {
+                detailsHtml = '<details class="console-details" style="margin-top:0.25rem"><summary><span class="suggestion-text"># {{ui:Info}} Technical Details</span></summary>' +
+                    bits.map(b => '<div style="color: var(--text-muted);"># &nbsp; ' + b + '</div>').join('') + '</details>';
+            }
+        }
+        output += '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;">' +
+            '<div><span class="error-text"># ' + icon + ' ' + _consoleEscape(lineLabel + (err ? err.message : '')) + '</span></div>' +
+            suggestionHtml + detailsHtml +
+            '<div><span style="color: var(--text-muted);">#</span></div></div>';
     }
-    output += '<div style="margin-top: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># Fix the pseudocode before translation.</span></div>';
+    output += '<div style="margin-top: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># Fix the errors in your pseudocode before translation.</span></div>';
     return output;
 }
 
@@ -57,7 +93,10 @@ function updateHighlights() {
         const displayContainer = lineText === '' ? '&nbsp;' : escapeHtml(lineText);
         const lineNumber = index + 1;
         const errorClass = currentErrorLineNumbers.includes(lineNumber) ? ' error-highlight-line' : '';
-        return `<div class="highlight-line${errorClass}">${displayContainer}</div>`;
+        const consoleErrors = typeof currentConsoleErrors === 'undefined' ? [] : currentConsoleErrors;
+        const lineNotes = consoleErrors.filter(e => e && e.line === lineNumber).map(e => String(e.message || ''));
+        const titleAttr = lineNotes.length ? ' title="' + _consoleEscape(lineNotes.join(' | ')) + '"' : '';
+        return `<div class="highlight-line${errorClass}"${titleAttr}>${displayContainer}</div>`;
     }).join('');
 
     highlights.scrollTop = editor.scrollTop;

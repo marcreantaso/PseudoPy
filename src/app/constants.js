@@ -21,6 +21,7 @@ const PAGES = [
     'compiler-metrics',
     'password-recovery',
     'manage-users',
+    'system-analytics',
     'password-requests',
     'admin-execute',
     'developer-options'
@@ -29,7 +30,7 @@ const PAGES = [
 // Access-control lists (role -> allowed page ids). Order mirrors the
 // historical checkAccess() layout; do not change without a test change.
 const PAGES_BY_ROLE = {
-    admin: ['manage-users', 'password-requests', 'admin-execute', 'developer-options'],
+    admin: ['manage-users', 'system-analytics', 'password-requests', 'admin-execute', 'developer-options'],
     instructor: ['analytics', 'manage-exercises', 'generate-code', 'compiler-metrics', 'manage-students', 'password-recovery'],
     student: ['write-pseudocode', 'translate', 'execute', 'feedback', 'exercises-student', 'student-settings', 'change-password']
 };
@@ -53,6 +54,7 @@ const PAGE_TITLES = {
     'manage-exercises': 'Manage Exercises',
     'generate-code': 'Generate Python Code',
     'manage-users': 'Manage Instructors',
+    'system-analytics': 'System Analytics',
     'admin-execute': 'Execute Code',
     'change-password': 'Change Password',
     'student-settings': 'Settings',

@@ -66,7 +66,7 @@
 
 /* ── Learning Progress card ── */
 .sw-chart { margin-top: 1rem; min-width: 0; }
-.sw-chart .an-svg { width: 100%; height: auto; display: block; }
+.sw-chart .an-svg { width: 100%; height: auto; min-height: clamp(260px, 32vw, 380px); max-height: var(--chart-h-lg); display: block; }
 .sw-chart .an-chart-title { font-size: .95rem; }
 .sw-chart .an-info-badge { appearance: none; background: transparent; border: 0; padding: .2rem; margin: 0; cursor: help; display: inline-flex; }
 .sw-chart .an-info-badge svg.lucide { width: .95rem; height: .95rem; }

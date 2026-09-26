@@ -159,6 +159,41 @@ function progressXTicks(count, plotWidth, minPx) {
 }
 
 /* ============================================================
+   Chart size system (Part H items 59-68): a single purpose → size
+   map shared by every chart. Mirrors the CSS tokens
+   --chart-h-{sm,md,lg,xl} in style.css so pure geometry and the DOM
+   agree on one source of truth.
+   ============================================================ */
+const CHART_SIZES = { sm: 240, md: 300, lg: 360, xl: 420 };
+
+/* Item 61 purpose ranges: [min, max] px. The clamp() low term is the
+   mobile-readable minimum, the vw term is fluid, and the high term is
+   the controlled desktop maximum (item 66). The nominal CHART_SIZES
+   tokens stay the spec's example values. */
+const CHART_RANGES = { sm: { min: 200, max: 260 }, md: { min: 240, max: 320 }, lg: { min: 260, max: 380 }, xl: { min: 300, max: 420 } };
+const CHART_VW = { sm: 26, md: 30, lg: 32, xl: 36 };
+
+/**
+ * Resolves a chart-size name into the responsive height contract.
+ * @param {'sm'|'md'|'lg'|'xl'|null} [size='md'] size token name
+ * @returns {{name:string, token:number, min:number, max:number, vw:number, toCss:()=>string}}
+ *   min/max/vw are the three clamp() terms the stylesheet uses (so
+ *   pure geometry and CSS agree on exactly one source of truth).
+ */
+function chartBox(size) {
+    const key = CHART_RANGES[size] ? size : 'md';
+    const r = CHART_RANGES[key];
+    return {
+        name: key,
+        token: CHART_SIZES[key],
+        min: r.min,
+        max: r.max,
+        vw: CHART_VW[key],
+        toCss() { return 'clamp(' + r.min + 'px, ' + CHART_VW[key] + 'vw, ' + r.max + 'px)'; }
+    };
+}
+
+/* ============================================================
    CommonJS export guard — allows the Node suite to require()
    the same source the browser bundles.
    ============================================================ */
@@ -177,6 +212,8 @@ if (typeof module !== 'undefined' && module.exports) {
         CHART_LAYOUT_TALL_MAX,
         START_ANGLE,
         TAU,
-        round
+        round,
+        CHART_SIZES,
+        chartBox
     };
 }

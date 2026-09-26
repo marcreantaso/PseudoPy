@@ -112,3 +112,29 @@ test('progressXTicks honors the plot width (minTickGap shrink), falling back to 
     assert.deepEqual(geo.progressXTicks(12, -5), [0, 11], 'negative width is clamped');
     assert.deepEqual(geo.progressXTicks(12, 524, 150), [0, 6, 11], 'a larger min gap reduces tick count');
 });
+
+test('CHART_SIZES keeps one purpose -> height map across all charts (item 59-62)', () => {
+    assert.deepEqual(geo.CHART_SIZES, { sm: 240, md: 300, lg: 360, xl: 420 });
+});
+
+test('chartBox resolves every size against the shared spec ranges (item 61)', () => {
+    const sm = geo.chartBox('sm');
+    assert.equal(sm.min, 200);
+    assert.equal(sm.max, 260);
+    const md = geo.chartBox('md');
+    assert.equal(md.min, 240);
+    assert.equal(md.max, 320);
+    const lg = geo.chartBox('lg');
+    assert.equal(lg.min, 260);
+    assert.equal(lg.max, 380);
+    const xl = geo.chartBox('xl');
+    assert.equal(xl.min, 300);
+    assert.equal(xl.max, 420);
+});
+
+test('chartBox validates the token and renders the exact clamp() used by CSS', () => {
+    assert.equal(geo.chartBox('lg').toCss(), 'clamp(260px, 32vw, 380px)');
+    assert.equal(geo.chartBox('sm').toCss(), 'clamp(200px, 26vw, 260px)');
+    assert.equal(geo.chartBox(null).name, 'md', 'unknown/absent size falls back to standard');
+    assert.equal(geo.chartBox('bogus').toCss(), 'clamp(240px, 30vw, 320px)');
+});

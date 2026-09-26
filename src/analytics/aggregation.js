@@ -6,7 +6,7 @@
 
 const AN_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const AN_DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const KNOWN_ERROR_TYPES = ['Syntax Error', 'Logic Error', 'Missing END', 'Indentation Error', 'Type Error'];
+const KNOWN_ERROR_TYPES = ['Syntax Error', 'Type Error', 'Logic Error', 'Runtime Error', 'Missing Terminator', 'Indentation Error'];
 
 function recordDate(record) {
     const raw = record && (record.timestamp || record.time);
