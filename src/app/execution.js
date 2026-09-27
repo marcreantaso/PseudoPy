@@ -37,17 +37,17 @@ function runPythonCode(code, outputElementId) {
 
     if (typeof Sk === 'undefined') {
         outputEl.textContent = 'Loading Python runtime...';
-        const fallback = function () {
-            outputEl.textContent = 'Skulpt library not loaded. Please check your internet connection.\n\nFalling back to static analysis...\n\n';
-            outputEl.textContent += simulateExecution(code);
-        };
-        loadScripts(CDN_BASE_URLS.skulpt, function () {
+        ensureSkulptLoaded(function () {
             if (typeof Sk !== 'undefined') {
                 runPythonCode(code, outputElementId);
             } else {
-                fallback();
+                outputEl.textContent = 'Skulpt library not loaded.\n\nFalling back to static analysis...\n\n';
+                outputEl.textContent += simulateExecution(code);
             }
-        }, fallback);
+        }, function () {
+            outputEl.textContent = 'Skulpt library not loaded.\n\nFalling back to static analysis...\n\n';
+            outputEl.textContent += simulateExecution(code);
+        });
         return;
     }
 

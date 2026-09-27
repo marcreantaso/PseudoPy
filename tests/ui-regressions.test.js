@@ -132,10 +132,19 @@ test('heavy libraries are loaded on demand, not at page load', () => {
     assert.match(app, /Loading Python runtime\.\.\./, 'skulpt lazy-load branch missing');
 });
 
-test('service worker no longer pre-caches lazy libraries', () => {
+test('service worker caches local Skulpt, vendor-caches PDF, never remote', () => {
     const sw = read('sw.js');
-    assert.ok(!sw.includes('skulpt.'), 'sw still pre-caches skulpt');
-    assert.ok(!sw.includes('pdf.min.js'), 'sw still pre-caches pdf.js');
+    // Local vendored Skulpt is a blocking precache asset for offline execution.
+    assert.ok(sw.includes('./vendor/skulpt/skulpt.min.js'), 'local skulpt.min.js not pre-cached');
+    assert.ok(sw.includes('./vendor/skulpt/skulpt-stdlib.js'), 'local skulpt-stdlib.js not pre-cached');
+    // PDF.js is large and optional: it lives in a dedicated vendor cache filled
+    // at activation, not in the blocking shell install.
+    assert.ok(sw.includes("const VENDOR_CACHE_NAME"), 'vendor cache missing');
+    assert.ok(sw.includes('./vendor/pdfjs/pdf.min.js'), 'vendor pdf.min.js not cached');
+    assert.ok(sw.includes('./vendor/pdfjs/pdf.worker.min.js'), 'vendor pdf.worker.min.js not cached');
+    // No remote runtime dependency may be baked into the service worker.
+    assert.ok(!sw.includes('skulpt.org'), 'remote skulpt.org still referenced');
+    assert.ok(!sw.includes('cdnjs'), 'remote cdnjs still referenced');
     assert.ok(sw.includes('./robots.txt'), 'sw does not cache robots.txt');
 });
 

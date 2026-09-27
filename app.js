@@ -339,16 +339,19 @@ function $qsa(selector) {
 
 /* ============================================================
    ON-DEMAND THIRD-PARTY LIBRARY LOADING
-   Heavy libraries (Skulpt, PDF.js, anime, lucide) are no longer
-   loaded at page start. They download on first use so the app
-   shell, login and navigation render without waiting on CDNs.
+   Heavy libraries (Skulpt, PDF.js, lucide) are not loaded at
+   page start. They download on first use so the app shell, login
+   and navigation render without waiting. Skulpt and PDF.js are
+   now served from local vendor/ assets so they work fully offline
+   once the service worker has installed them.
    ============================================================ */
 
 const CDN_BASE_URLS = {
     lucide: 'https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.js',
-    skulpt: ['https://skulpt.org/js/skulpt.min.js', 'https://skulpt.org/js/skulpt-stdlib.js'],
-    pdfjs: ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'],
-    anime: ['https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js']
+    skulpt: ['./vendor/skulpt/skulpt.min.js', './vendor/skulpt/skulpt-stdlib.js'],
+    pdfjs: ['./vendor/pdfjs/pdf.min.js'],
+    pdfWorker: './vendor/pdfjs/pdf.worker.min.js',
+    anime: 'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js'
 };
 
 function loadScripts(srcList, onSuccess, onError) {
@@ -360,7 +363,9 @@ function loadScripts(srcList, onSuccess, onError) {
             return;
         }
         const s = document.createElement('script');
-        s.src = srcList[index++] + '?v=on-demand';
+        // No cache-busting query string: the service worker precaches these
+        // exact URLs, so a query suffix would break the offline cache match.
+        s.src = srcList[index++];
         s.async = true;
         s.onload = next;
         s.onerror = function () {
@@ -369,6 +374,61 @@ function loadScripts(srcList, onSuccess, onError) {
         document.head.appendChild(s);
     }
     next();
+}
+
+// ── Memoized lazy loaders ────────────────────────────────────
+// A single shared promise per library prevents concurrent call sites
+// (execution, exercises, devtools) from injecting duplicate scripts.
+
+const ensureLoadedPromises = {};
+
+/**
+ * Ensure the Skulpt runtime (window.Sk) is available, then call onSuccess.
+ * Returns immediately when Sk is already present or when the load fails
+ * (onError). Never injects the runtime more than once.
+ */
+function ensureSkulptLoaded(onSuccess, onError) {
+    onSuccess = onSuccess || function () {};
+    onError = onError || function () {};
+    if (typeof Sk !== 'undefined') { onSuccess(); return; }
+
+    let pending = ensureLoadedPromises.skulpt;
+    if (pending) {
+        pending.then(onSuccess).catch(onError);
+        return;
+    }
+
+    pending = new Promise(function (resolve, reject) {
+        const ok = function () { if (typeof Sk !== 'undefined') resolve(); else reject(new Error('Skulpt did not initialize')); };
+        const fail = function (err) { reject(err || new Error('Skulpt failed to load')); };
+        loadScripts(CDN_BASE_URLS.skulpt, ok, fail);
+    });
+    ensureLoadedPromises.skulpt = pending;
+    pending.then(onSuccess).catch(onError);
+}
+
+/**
+ * Ensure the PDF.js library (window.pdfjsLib) is available, then resolve.
+ * The worker is configured against the locally vendored worker file so PDF
+ * text extraction also works offline.
+ */
+function ensurePdfJsLoaded() {
+    if (typeof pdfjsLib !== 'undefined') return Promise.resolve();
+    if (ensureLoadedPromises.pdfjs) return ensureLoadedPromises.pdfjs;
+
+    ensureLoadedPromises.pdfjs = new Promise(function (resolve, reject) {
+        loadScripts(CDN_BASE_URLS.pdfjs, function () {
+            if (typeof pdfjsLib !== 'undefined') {
+                try {
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = CDN_BASE_URLS.pdfWorker;
+                } catch (e) { /* non-critical */ }
+                resolve();
+            } else {
+                reject(new Error('PDF library could not be loaded.'));
+            }
+        }, reject);
+    });
+    return ensureLoadedPromises.pdfjs;
 }/* ============================================================
    INITIALIZATION
    ============================================================ */
@@ -412,6 +472,12 @@ async function init() {
         // Restore the persisted session FIRST so a refresh never flashes
         // login and never behaves like a logout.
         await restoreSession();
+
+        // Non-destructively migrate legacy localStorage collections into the
+        // IndexedDB offline store (idempotent, never deletes localStorage).
+        if (typeof ensureOfflineDataMigration === 'function') {
+            try { await ensureOfflineDataMigration(); } catch (e) { /* non-fatal */ }
+        }
 
         // Seed at most once per browser (never on every startup), then
         // pre-load data from Offline Database into cache.
@@ -1038,6 +1104,9 @@ function scheduleProfileRefresh(docId, fallbackRoute) {
             profileRefreshAttempts = 0;
             hideConnectionBanner();
             if (typeof refreshAuthoritativeCaches === 'function') refreshAuthoritativeCaches();
+            // Connectivity is back: replay any offline mutations queued while
+            // the app was degraded.
+            if (typeof syncNow === 'function') syncNow('recovered');
             const route = getPersistedRoute();
             const targetPage = (route && checkAccess(fresh.role, route)) ? route : (fallbackRoute || '');
             renderSessionState({ state: BOOT_AUTHENTICATED, user: fresh, route: targetPage });
@@ -1511,18 +1580,12 @@ async function handleFileUpload(event, targetEditorId) {
             showToast('Extracting PDF text...', 'info');
 
             if (typeof pdfjsLib === 'undefined') {
-                await new Promise(function (resolve, reject) {
-                    loadScripts(CDN_BASE_URLS.pdfjs, function () {
-                        if (typeof pdfjsLib !== 'undefined') {
-                            try {
-                                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                            } catch (e) { /* non-critical */ }
-                            resolve();
-                        } else {
-                            reject(new Error('PDF library could not be loaded.'));
-                        }
-                    }, reject);
-                });
+                try {
+                    await ensurePdfJsLoaded();
+                } catch (e) {
+                    showToast(e && e.message ? e.message : 'PDF library could not be loaded.', 'error');
+                    return;
+                }
             }
 
             const arrayBuffer = await file.arrayBuffer();
@@ -1618,17 +1681,17 @@ function runPythonCode(code, outputElementId) {
 
     if (typeof Sk === 'undefined') {
         outputEl.textContent = 'Loading Python runtime...';
-        const fallback = function () {
-            outputEl.textContent = 'Skulpt library not loaded. Please check your internet connection.\n\nFalling back to static analysis...\n\n';
-            outputEl.textContent += simulateExecution(code);
-        };
-        loadScripts(CDN_BASE_URLS.skulpt, function () {
+        ensureSkulptLoaded(function () {
             if (typeof Sk !== 'undefined') {
                 runPythonCode(code, outputElementId);
             } else {
-                fallback();
+                outputEl.textContent = 'Skulpt library not loaded.\n\nFalling back to static analysis...\n\n';
+                outputEl.textContent += simulateExecution(code);
             }
-        }, fallback);
+        }, function () {
+            outputEl.textContent = 'Skulpt library not loaded.\n\nFalling back to static analysis...\n\n';
+            outputEl.textContent += simulateExecution(code);
+        });
         return;
     }
 
@@ -3387,6 +3450,10 @@ async function _runDeviceAction(deviceDocId, action) {
 }
 
 async function approveDevice(deviceDocId) {
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
     await _runDeviceAction(deviceDocId, async () => {
         await dbUpdate(devicesRef, deviceDocId, {
             status: 'approved',
@@ -3400,6 +3467,10 @@ async function approveDevice(deviceDocId) {
 }
 
 async function revokeDevice(deviceDocId) {
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
     await _runDeviceAction(deviceDocId, async () => {
         await dbUpdate(devicesRef, deviceDocId, {
             status: 'revoked',
@@ -3427,6 +3498,10 @@ let _approveAllDevicesBusy = false;
 async function approveAllPendingDevices() {
     if (_approveAllDevicesBusy) return;
     if (!activeDeviceInstructorId) return;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
     const instructor = allCachedInstructors.find(u => u.id === activeDeviceInstructorId || u._docId === activeDeviceInstructorId);
     if (!instructor) return;
 
@@ -3545,6 +3620,11 @@ async function saveInstructor() {
     const confirm = getValue('inst-confirm-password').trim();
     const status = getValue('inst-status') || 'active';
 
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { _showInstAlert(gate.message); return; }
+    }
+
     const alertEl = $id('inst-form-alert');
     if (alertEl) { alertEl.textContent = ''; alertEl.classList.add('hidden'); }
 
@@ -3662,6 +3742,10 @@ async function confirmToggleInstructorStatus(id) {
     const newStatus = user.status === 'active' ? 'inactive' : 'active';
     const action = newStatus === 'inactive' ? 'deactivate' : 'activate';
     if (!confirm(`Are you sure you want to ${action} ${user.fullName}?\n\n${newStatus === 'inactive' ? 'They will not be able to log in.' : 'They will be able to log in again.'}`)) return;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
     try {
         await dbUpdate(usersRef, user._docId, { status: newStatus });
         showToast(`Instructor status updated to ${newStatus} successfully.`, 'success');
@@ -3703,6 +3787,14 @@ async function executeArchiveInstructor() {
         closeArchiveInstructorModal();
         return;
     }
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) {
+            showToast(gate.message, 'error');
+            closeArchiveInstructorModal();
+            return;
+        }
+    }
     try {
         const allUsers = cachedUsers.length ? cachedUsers : await refreshUsers();
         const user = allUsers.find(u => u.id === id || u._docId === id);
@@ -3741,6 +3833,14 @@ async function executeRestoreInstructor() {
         return;
     }
     const id = pendingRestoreInstructorId;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) {
+            showToast(gate.message, 'error');
+            closeRestoreInstructorModal();
+            return;
+        }
+    }
     try {
         const allUsers = cachedUsers.length ? cachedUsers : await refreshUsers();
         const user = allUsers.find(u => u.id === id || u._docId === id);
@@ -3798,6 +3898,10 @@ async function loadStudents() {
 
 
 async function toggleUserStatus(id) {
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
     try {
         const user = cachedUsers.find(u => u.id === id);
         if (!user) return;
@@ -3884,6 +3988,11 @@ async function saveUser() {
     }
 
     if (!fullName || !username || !email || (!editingUserId && !password)) { showToast('Please fill in all required fields.', 'error'); return; }
+
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
 
     try {
         const users = cachedUsers.length ? cachedUsers : await refreshUsers();
@@ -5994,6 +6103,11 @@ async function submitPasswordChangeRequest() {
         return;
     }
 
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
+
     try {
         // Hash the new password before storing
         const salt = generateSalt();
@@ -6311,6 +6425,11 @@ async function submitPasswordReset() {
         return;
     }
 
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
+
     try {
         // Hash the new password
         const salt = generateSalt();
@@ -6543,6 +6662,10 @@ async function approveRecoveryRequest() {
     if (_recoveryApproveBusy) return;
     hide('recovery-confirm-dialog');
     if (!currentReviewRequestId) return;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
 
     const approveBtn = $id('recovery-confirm-approve-btn');
     _recoveryApproveBusy = true;
@@ -6608,6 +6731,10 @@ async function approveRecoveryRequest() {
 async function rejectRecoveryRequest() {
     if (_recoveryRejectBusy) return;
     if (!currentReviewRequestId) return;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
 
     const rejectBtn = $id('recovery-reject-btn');
     _recoveryRejectBusy = true;
@@ -7119,6 +7246,10 @@ async function approveAdminRecoveryRequest() {
     if (_adminRecoveryBusy) return;
     hide('admin-recovery-confirm-dialog');
     if (!currentAdminReviewRequestId) return;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
 
     const approveBtn = $id('admin-recovery-confirm-approve-btn');
     _adminRecoveryBusy = true;
@@ -7182,6 +7313,10 @@ async function approveAdminRecoveryRequest() {
 async function rejectAdminRecoveryRequest() {
     if (_adminRecoveryRejectBusy) return;
     if (!currentAdminReviewRequestId) return;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
 
     const rejectBtn = $id('admin-recovery-reject-btn');
     _adminRecoveryRejectBusy = true;
@@ -11268,6 +11403,11 @@ async function handleChangePassword() {
     if (newParam !== confirmParam) {
         showToast('New passwords do not match.', 'error');
         return;
+    }
+
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
     }
 
     try {

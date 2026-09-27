@@ -10,7 +10,7 @@ function harness(addAll) {
     vm.runInNewContext(source, { self: { location: { origin: 'https://pseudopy.test' },
         addEventListener: (name, fn) => { handlers[name] = fn; },
         clients: { claim: async () => { claimed = true; } } },
-        caches: { open: async () => ({ addAll, put: async () => {} }),
+        caches: { open: async () => ({ addAll, add: async () => {}, put: async () => {} }),
             keys: async () => ['pseudopy-shell-old', 'unrelated-cache'], delete: async key => deleted.push(key) },
         fetch: async () => ({}), Request: class {}, URL, console });
     return { handlers, deleted, claimed: () => claimed };

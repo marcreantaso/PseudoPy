@@ -632,7 +632,723 @@ function setLocalCollection(ref, data) {
     } catch (e) { }
 }
 
-// ══════════════════════════════════════════════════════════════
+/* ============================================================
+   OFFLINE DATA STORE — IndexedDB (OfflineStore)
+   Durable companion to the existing localStorage cache:
+   - caches a mirrored copy of each local collection
+   - hosts the offline mutation queue (durable, survives restarts)
+   - stores sync/migration metadata
+
+   Reads intentionally stay on the synchronous localStorage/memory
+   path used across the app; these IndexedDB writes run in parallel
+   and are best-effort. If IndexedDB is unavailable (private
+   browsing, storage evicted, blocked upgrade, quota) the app is
+   unaffected: every call falls back to today's localStorage
+   behaviour, exactly as before.
+   ============================================================ */
+
+const OFFLINE_DB_NAME = 'pseudopy-offline';
+const OFFLINE_DB_VERSION = 1;
+
+const OFFLINE_STORES = {
+    collections: 'collections',
+    mutations: 'mutations',
+    meta: 'meta'
+};
+
+const OFFLINE_MIGRATION_META = 'migrations.local-collections';
+const OFFLINE_LOCAL_PREFIX = 'pseudopy_local_';
+
+let offlineDb = null;
+let offlineDbOpening = null;
+
+/** True only when IndexedDB is actually available to open (safe to call anywhere). */
+function offlineIdbAvailable() {
+    try {
+        return typeof indexedDB !== 'undefined' && typeof indexedDB.open === 'function';
+    } catch (e) {
+        return false;
+    }
+}
+
+/** Create the request wrapper for an object-store transaction in the offline DB. */
+function offlineTransaction(db, storeName, mode) {
+    return db.transaction(storeName, mode);
+}
+
+/** Low-level promisified op; run(store, done) wires done() to the request onsuccess. */
+function offlineOp(db, storeName, mode, run) {
+    return new Promise(function (resolve, reject) {
+        let transaction;
+        try {
+            transaction = offlineTransaction(db, storeName, mode);
+        } catch (e) {
+            reject(e);
+            return;
+        }
+        let captured;
+        let settled = false;
+        const finish = function () {
+            if (settled) return;
+            settled = true;
+            if (transaction.error) reject(transaction.error);
+            else resolve(captured);
+        };
+        transaction.oncomplete = finish;
+        transaction.onerror = function () {
+            if (settled) return;
+            settled = true;
+            reject(transaction.error || new Error('IndexedDB transaction failed'));
+        };
+        transaction.onabort = function () {
+            if (settled) return;
+            settled = true;
+            reject(transaction.error || new Error('IndexedDB transaction aborted'));
+        };
+        try {
+            run(transaction.objectStore(storeName), function (value) { captured = value; });
+        } catch (e) {
+            if (!settled) { settled = true; reject(e); }
+        }
+    });
+}
+
+/**
+ * Resolve the shared IndexedDB instance. Returns null (never throws) when
+ * IndexedDB is unsupported, blocked or failed so callers keep the fallback.
+ */
+function openOfflineDb() {
+    if (offlineDb) return Promise.resolve(offlineDb);
+    if (offlineDbOpening) return offlineDbOpening;
+    if (!offlineIdbAvailable()) return Promise.resolve(null);
+
+    offlineDbOpening = new Promise(function (resolve) {
+        let request;
+        try {
+            request = indexedDB.open(OFFLINE_DB_NAME, OFFLINE_DB_VERSION);
+        } catch (e) {
+            offlineDbOpening = null;
+            resolve(null);
+            return;
+        }
+        request.onupgradeneeded = function () {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(OFFLINE_STORES.collections)) {
+                db.createObjectStore(OFFLINE_STORES.collections, { keyPath: 'ref' });
+            }
+            if (!db.objectStoreNames.contains(OFFLINE_STORES.mutations)) {
+                const store = db.createObjectStore(OFFLINE_STORES.mutations, { keyPath: 'mutationId' });
+                store.createIndex('byCreatedAt', 'createdAt', { unique: false });
+            }
+            if (!db.objectStoreNames.contains(OFFLINE_STORES.meta)) {
+                db.createObjectStore(OFFLINE_STORES.meta, { keyPath: 'key' });
+            }
+        };
+        request.onsuccess = function () {
+            offlineDb = request.result;
+            offlineDb.onversionchange = function () { try { offlineDb.close(); } catch (e) { /* other tab */ } offlineDb = null; };
+            offlineDbOpening = null;
+            resolve(offlineDb);
+        };
+        request.onerror = function () {
+            offlineDbOpening = null;
+            offlineDb = null;
+            resolve(null);
+        };
+        request.onblocked = function () {
+            offlineDbOpening = null;
+            resolve(null);
+        };
+    });
+    return offlineDbOpening;
+}
+
+/** Best-effort expiry-touch for the offline DB; never fails callers. */
+async function offlineGet(db, storeName, key) {
+    if (!db) return undefined;
+    return await offlineOp(db, storeName, 'readonly', function (store, done) {
+        const req = store.get(key);
+        req.onsuccess = function () { done(req.result); };
+    });
+}
+
+async function offlinePut(db, storeName, record) {
+    if (!db) return;
+    await offlineOp(db, storeName, 'readwrite', function (store, done) {
+        const req = store.put(record);
+        req.onsuccess = function () { done(req.result); };
+    });
+}
+
+async function offlineDelete(db, storeName, key) {
+    if (!db) return;
+    await offlineOp(db, storeName, 'readwrite', function (store, done) {
+        const req = store.delete(key);
+        req.onsuccess = function () { done(req.result); };
+    });
+}
+
+/** Read every record in a store (small stores only). */
+async function offlineGetAll(db, storeName) {
+    if (!db) return [];
+    return await offlineOp(db, storeName, 'readonly', function (store, done) {
+        const req = store.getAll();
+        req.onsuccess = function () { done(req.result || []); };
+    });
+}
+
+// ── OfflineStore adapter ─────────────────────────────────────
+// Every method is async and best-effort. Returns null/[]/false on any
+// failure so the app keeps behaving exactly as before when IDB is absent.
+
+const offlineStore = {
+    isAvailable: offlineIdbAvailable,
+
+    open: openOfflineDb,
+
+    async getCollection(ref) {
+        try {
+            const db = await openOfflineDb();
+            if (!db) return null;
+            const rec = await offlineGet(db, OFFLINE_STORES.collections, ref);
+            return rec && Array.isArray(rec.docs) ? rec.docs : null;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    async setCollection(ref, docs) {
+        try {
+            const db = await openOfflineDb();
+            if (!db) return;
+            await offlinePut(db, OFFLINE_STORES.collections, { ref, docs: Array.isArray(docs) ? docs : [], updatedAt: Date.now() });
+        } catch (e) { /* best-effort mirror */ }
+    },
+
+    async getDocument(ref, docId) {
+        const docs = await this.getCollection(ref);
+        if (!docs) return null;
+        return docs.find(d => d._docId === docId || d.id === docId) || null;
+    },
+
+    async setDocument(ref, doc) {
+        const docs = (await this.getCollection(ref)) || [];
+        const targetId = doc && (doc._docId || doc.id);
+        const idx = targetId ? docs.findIndex(d => d._docId === targetId || d.id === targetId) : -1;
+        if (idx >= 0) docs[idx] = doc;
+        else docs.unshift(doc);
+        await this.setCollection(ref, docs);
+    },
+
+    async deleteDocument(ref, docId) {
+        const docs = (await this.getCollection(ref)) || [];
+        const next = docs.filter(d => d._docId !== docId && d.id !== docId);
+        await this.setCollection(ref, next);
+    },
+
+    async clearCollection(ref) {
+        await this.setCollection(ref, []);
+    },
+
+    async metaGet(key) {
+        try {
+            const db = await openOfflineDb();
+            if (!db) return undefined;
+            return await offlineGet(db, OFFLINE_STORES.meta, key);
+        } catch (e) {
+            return undefined;
+        }
+    },
+
+    async metaSet(key, value) {
+        try {
+            const db = await openOfflineDb();
+            if (!db) return;
+            await offlinePut(db, OFFLINE_STORES.meta, { key, ...value });
+        } catch (e) { /* best-effort */ }
+    },
+
+    // ── Mutation queue low-level records ──
+    async getMutations() {
+        try {
+            const db = await openOfflineDb();
+            if (!db) return null;
+            return await offlineGetAll(db, OFFLINE_STORES.mutations);
+        } catch (e) {
+            return null;
+        }
+    },
+
+    async putMutation(record) {
+        try {
+            const db = await openOfflineDb();
+            if (!db) return;
+            await offlinePut(db, OFFLINE_STORES.mutations, record);
+        } catch (e) { /* best-effort */ }
+    },
+
+    async removeMutation(mutationId) {
+        try {
+            const db = await openOfflineDb();
+            if (!db) return;
+            await offlineDelete(db, OFFLINE_STORES.mutations, mutationId);
+        } catch (e) { /* best-effort */ }
+    }
+};
+
+/**
+ * One-time, non-destructive migration: copy any existing
+ * pseudopy_local_<ref> collections into the IndexedDB mirror. Runs at boot;
+ * never deletes or rewrites localStorage (kept for backward compatibility).
+ */
+async function ensureOfflineDataMigration() {
+    if (!offlineIdbAvailable()) return;
+    if (typeof localStorage === 'undefined') return;
+    try {
+        const migrated = await offlineStore.metaGet(OFFLINE_MIGRATION_META);
+        if (migrated && migrated.done) return;
+
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key || key.indexOf(OFFLINE_LOCAL_PREFIX) !== 0) continue;
+            const ref = key.slice(OFFLINE_LOCAL_PREFIX.length);
+            const existing = await offlineStore.getCollection(ref);
+            if (existing && existing.length > 0) continue;
+            let docs;
+            try {
+                docs = JSON.parse(localStorage.getItem(key));
+            } catch (e) {
+                continue;
+            }
+            if (!Array.isArray(docs)) continue;
+            await offlineStore.setCollection(ref, docs);
+        }
+        await offlineStore.metaSet(OFFLINE_MIGRATION_META, { done: true, migratedAt: new Date().toISOString() });
+    } catch (e) {
+        console.info('[Offline] Migration skipped (best-effort):', e && e.message);
+    }
+}/* ============================================================
+   OFFLINE MUTATION QUEUE
+   Durable record of writes that could not reach Firestore, so a
+   temporary outage never silently loses a local change and every
+   queued write synchronizes once connectivity returns.
+
+   Primary storage: IndexedDB (offlineStore). When IndexedDB is
+   unavailable the queue degrades to a localStorage array so writes
+   are still never silently discarded.
+
+   Coalescing rules (keep the queue lean without changing semantic
+   order):
+   - ADD/SET then UPDATE    → folded into the ADD/SET payload
+   - UPDATE then UPDATE     → merged, latest keys win
+   - UPDATE then ADD/SET    → replaced by the ADD/SET payload
+   - DELETE                 → cancels any earlier pending op for
+                              the same document (net: delete wins)
+   - ADD → DELETE ordering  → preserved / collapse to a delete
+   ============================================================ */
+
+const OFFLINE_QUEUE_FALLBACK_KEY = 'pseudopy_offline_queue';
+
+const MUTATION_STATUS = {
+    PENDING: 'PENDING',
+    SYNCING: 'SYNCING',
+    SYNCED: 'SYNCED',
+    FAILED: 'FAILED'
+};
+
+const MUTATION_OP_ADD = 'ADD';
+const MUTATION_OP_SET = 'SET';
+const MUTATION_OP_UPDATE = 'UPDATE';
+const MUTATION_OP_DELETE = 'DELETE';
+
+/** Stable unique id: crypto.randomUUID where available, safe fallback otherwise. */
+function generateMutationId() {
+    try {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
+    } catch (e) { /* fall through */ }
+    return 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10) + '_' + Math.random().toString(36).slice(2, 6);
+}
+
+function mergeDoc(base, overlay) {
+    const merged = Object.assign({}, base || {});
+    if (overlay && typeof overlay === 'object') {
+        for (const key of Object.keys(overlay)) {
+            if (overlay[key] !== undefined) merged[key] = overlay[key];
+        }
+    }
+    return merged;
+}
+
+// ── Storage backend: IDB first, localStorage fallback ────────
+
+function queueFallbackList() {
+    try {
+        const raw = localStorage.getItem(OFFLINE_QUEUE_FALLBACK_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function queueFallbackSave(list) {
+    try {
+        localStorage.setItem(OFFLINE_QUEUE_FALLBACK_KEY, JSON.stringify(list));
+    } catch (e) {
+        console.warn('[Queue] Failed to persist fallback queue:', e);
+    }
+}
+
+async function queueReadRecords() {
+    if (offlineStore && offlineStore.isAvailable && offlineStore.isAvailable()) {
+        const records = await offlineStore.getMutations();
+        if (records) return records;
+    }
+    return queueFallbackList();
+}
+
+async function queueWriteRecord(record) {
+    if (offlineStore && offlineStore.isAvailable && offlineStore.isAvailable()) {
+        return await offlineStore.putMutation(record);
+    }
+    const list = queueFallbackList();
+    const idx = list.findIndex(r => r.mutationId === record.mutationId);
+    if (idx >= 0) list[idx] = record;
+    else list.push(record);
+    queueFallbackSave(list);
+}
+
+async function queueRemoveRecord(mutationId) {
+    if (offlineStore && offlineStore.isAvailable && offlineStore.isAvailable()) {
+        return await offlineStore.removeMutation(mutationId);
+    }
+    const list = queueFallbackList();
+    queueFallbackSave(list.filter(r => r.mutationId !== mutationId));
+}
+
+function makeMutationRecord(operation, ref, docId, payload) {
+    return {
+        mutationId: generateMutationId(),
+        operation: String(operation).toUpperCase(),
+        collection: ref,
+        documentId: docId,
+        payload: payload || null,
+        createdAt: Date.now(),
+        attempts: 0,
+        status: MUTATION_STATUS.PENDING,
+        lastError: null,
+        updatedAt: Date.now()
+    };
+}
+
+/**
+ * Enqueue a write to be replayed once Firestore is reachable. Coalesces where
+ * order-safe; returns the (possibly folded) mutation record.
+ */
+async function enqueueMutation(operation, ref, docId, payload) {
+    const op = String(operation).toUpperCase();
+    const prior = await listPendingMutations(ref, docId);
+
+    // DELETE collapses any pending ops for the same document: the net effect
+    // for the document is "gone", and Firestore deletes are idempotent.
+    if (op === MUTATION_OP_DELETE) {
+        for (const p of prior) {
+            if (p.status === MUTATION_STATUS.SYNCING) continue;
+            await queueRemoveRecord(p.mutationId);
+        }
+    }
+
+    if (op === MUTATION_OP_DELETE) {
+        const record = makeMutationRecord('DELETE', ref, docId, null);
+        await queueWriteRecord(record);
+        return record;
+    }
+
+    // Fold order-safe consecutive operations for the same document.
+    const pending = prior.filter(p => p.status === MUTATION_STATUS.PENDING && p.operation !== MUTATION_OP_DELETE);
+    if (pending.length === 1) {
+        const existing = pending[0];
+        if (existing.operation === MUTATION_OP_ADD || existing.operation === MUTATION_OP_SET) {
+            existing.payload = (op === MUTATION_OP_UPDATE) ? mergeDoc(existing.payload, payload) : (payload || null);
+        } else {
+            // Prior UPDATE, now ADD/SET -> replace the final payload.
+            existing.payload = (op === MUTATION_OP_UPDATE) ? mergeDoc(existing.payload, payload) : (payload || null);
+            existing.operation = (op === MUTATION_OP_UPDATE) ? MUTATION_OP_UPDATE : op;
+        }
+        existing.updatedAt = Date.now();
+        await queueWriteRecord(existing);
+        return existing;
+    }
+
+    const record = makeMutationRecord(op, ref, docId, payload);
+    await queueWriteRecord(record);
+    return record;
+}
+
+/**
+ * Pending (not yet synced) mutations, in deterministic createdAt order.
+ * Pass includeFailed=true (authoritative-local reads) to also surface FAILED
+ * records so a snapshot never overwrites them either.
+ */
+async function listPendingMutations(ref, docId, includeFailed) {
+    const records = await queueReadRecords();
+    return records
+        .filter(r => r.collection === (ref || r.collection) && r.documentId === (docId || r.documentId))
+        .filter(r => r.status === MUTATION_STATUS.PENDING || r.status === MUTATION_STATUS.SYNCING || (includeFailed && r.status === MUTATION_STATUS.FAILED))
+        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+}
+
+/** Every record still owned by the queue (for sync + diagnostics). */
+async function listAllMutations() {
+    const records = await queueReadRecords();
+    return records.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+}
+
+async function updateMutationStatus(mutationId, status, lastError, attempts) {
+    const records = await queueReadRecords();
+    const record = records.find(r => r.mutationId === mutationId);
+    if (!record) return null;
+    record.status = status || record.status;
+    if (lastError !== undefined && lastError !== null) record.lastError = lastError;
+    if (typeof attempts === 'number') record.attempts = attempts;
+    record.updatedAt = Date.now();
+    await queueWriteRecord(record);
+    return record;
+}
+
+async function removeSyncedMutation(mutationId) {
+    await queueRemoveRecord(mutationId);
+}
+
+/** Drop PENDING (not SYNCING) mutations for a document after a confirmed remote write. */
+async function clearPendingForDocument(ref, docId) {
+    const current = await listPendingMutations(ref, docId);
+    for (const record of current) {
+        if (record.status !== MUTATION_STATUS.SYNCING) {
+            await queueRemoveRecord(record.mutationId);
+        }
+    }
+}
+
+/** When a document is deleted locally the sync engine records a final DELETE. */
+async function enqueueDocumentDelete(ref, docId) {
+    return await enqueueMutation('DELETE', ref, docId, null);
+}/* ============================================================
+   SYNCHRONIZATION COORDINATOR
+   Replays the durable offline mutation queue whenever connectivity
+   returns, with a lock, bounded retries and deterministic order.
+
+   Connectivity model:
+   - Platform events (online/pageshow/visibilitychange) are hints only.
+   - Real connectivity is proven by actual Firestore operations:
+     a successful op marks Firestore reachable; a transient failure
+     marks it unreachable. requireOnline() blocks security-sensitive
+     writes until Firestore is genuinely reachable.
+   ============================================================ */
+
+const SYNC_MAX_ATTEMPTS = 3;
+const SYNC_BACKOFF_MS = [1500, 4000, 10000];
+const ONLINE_REQUIRED_MESSAGE = 'This action requires an internet connection.';
+
+let syncInProgress = false;
+// Optimistic at boot; only corrected by real Firestore operations (or an
+// explicit navigator.onLine === false hint). Never treated as proof of
+// connectivity on its own.
+let firestoreReachable = true;
+
+/** Normalize errors into a stable taxonomy (never thrown). */
+function classifyDbError(err) {
+    if (!err) return { category: 'UNKNOWN', transient: false, message: 'Unknown database error' };
+    const message = err && err.message ? String(err.message) : String(err);
+    const code = String((err && (err.code || err.name)) || '').toLowerCase();
+    const haystack = code + ' ' + message;
+
+    if (err.name === 'FirestoreUnavailable') return { category: 'FIRESTORE_UNAVAILABLE', transient: true, message };
+    if (/timed out after|deadline-exceeded|deadline_exceeded|timeout/.test(haystack)) return { category: 'TIMEOUT', transient: true, message };
+    if (/unavailable/.test(code)) return { category: 'FIRESTORE_UNAVAILABLE', transient: true, message };
+    if (/offline|cannot reach|networkerror|failed to fetch|typeerror/i.test(haystack)) return { category: 'OFFLINE', transient: true, message };
+    if (/quota|quotaexceeded|resource-exhausted|resource_exhausted/.test(haystack)) return { category: 'QUOTA', transient: false, message };
+    if (/permission-denied|permission_denied|unauthenticated/.test(haystack)) return { category: 'PERMISSION_DENIED', transient: false, message };
+    if (/invalid-argument|invalid_argument|not-found|not_found|failed-precondition|failed_precondition|invalid data/.test(haystack)) return { category: 'INVALID_DATA', transient: false, message };
+    if (/aborted|conflict/.test(haystack)) return { category: 'CONFLICT', transient: false, message };
+    return { category: 'UNKNOWN', transient: false, message };
+}
+
+function isTransientDbError(err) {
+    return classifyDbError(err).transient;
+}
+
+function markFirestoreReachable(reachable) {
+    firestoreReachable = Boolean(reachable);
+}
+
+function isFirestoreReachable() {
+    return firestoreReachable;
+}
+
+/**
+ * Gate for security-sensitive writes. Returns { ok: true } only when Firestore
+ * is genuinely reachable; otherwise a blocked result so the caller can show
+ * "This action requires an internet connection." instead of queuing the action.
+ */
+function requireOnline() {
+    if (typeof firestoreReady !== 'function' || !firestoreReady()) {
+        return { ok: false, blocked: true, reason: 'online', message: ONLINE_REQUIRED_MESSAGE };
+    }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        return { ok: false, blocked: true, reason: 'online', message: ONLINE_REQUIRED_MESSAGE };
+    }
+    if (firestoreReachable === false) {
+        return { ok: false, blocked: true, reason: 'reachability', message: ONLINE_REQUIRED_MESSAGE };
+    }
+    return { ok: true };
+}
+
+function scheduleSyncRetry(mutationId, attempt) {
+    if (typeof setTimeout !== 'function') return;
+    const index = Math.min(Math.max(attempt - 1, 0), SYNC_BACKOFF_MS.length - 1);
+    const delay = SYNC_BACKOFF_MS[index] || SYNC_BACKOFF_MS[SYNC_BACKOFF_MS.length - 1];
+    setTimeout(function () {
+        syncOneMutation(mutationId).catch(function () { /* bounded retry, never throws */ });
+    }, delay);
+}
+
+/**
+ * Replay a single queued mutation. idempotent (fixed documentId); bounded
+ * retries (SYNC_MAX_ATTEMPTS) then FAILED. Transient failures re-queue with
+ * backoff; permanent failures stay FAILED and are never silently discarded.
+ * Returns true (synced), false (still pending / failed) or null (retired).
+ */
+async function trySyncMutation(mutation) {
+    if (mutation.attempts >= SYNC_MAX_ATTEMPTS) return null;
+    const attempt = (mutation.attempts || 0) + 1;
+    await updateMutationStatus(mutation.mutationId, MUTATION_STATUS.SYNCING, null, attempt);
+    try {
+        const ref = mutation.collection;
+        const docId = mutation.documentId;
+        if (mutation.operation === MUTATION_OP_DELETE) {
+            if (firestoreReady()) await withFirestoreTimeout(firestore.collection(ref).doc(docId).delete());
+        } else {
+            const payload = mutation.payload || {};
+            if (mutation.operation === MUTATION_OP_UPDATE) {
+                await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(payload, { merge: true }));
+            } else {
+                await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(payload));
+            }
+        }
+        markFirestoreReachable(true);
+        await removeSyncedMutation(mutation.mutationId);
+        return true;
+    } catch (err) {
+        const classification = classifyDbError(err);
+        if (!classification.transient) {
+            await updateMutationStatus(mutation.mutationId, MUTATION_STATUS.FAILED, classification.message, attempt);
+            markFirestoreReachable(firestoreReady());
+            return false;
+        }
+        markFirestoreReachable(false);
+        if (attempt >= SYNC_MAX_ATTEMPTS) {
+            await updateMutationStatus(mutation.mutationId, MUTATION_STATUS.FAILED, 'Sync retry limit reached: ' + classification.message, attempt);
+            return false;
+        }
+        await updateMutationStatus(mutation.mutationId, MUTATION_STATUS.PENDING, classification.message, attempt);
+        scheduleSyncRetry(mutation.mutationId, attempt);
+        return false;
+    }
+}
+
+/** Single-mutation sync used by backoff timers; respects the global lock. */
+async function syncOneMutation(mutationId) {
+    if (!firestoreReady()) return false;
+    if (syncInProgress) {
+        if (typeof setTimeout === 'function') setTimeout(function () {
+            syncOneMutation(mutationId).catch(function () {});
+        }, 150);
+        return false;
+    }
+    const records = await listAllMutations();
+    const mutation = records.find(m => m.mutationId === mutationId);
+    if (!mutation) return false;
+    if (mutation.status !== MUTATION_STATUS.PENDING && mutation.status !== MUTATION_STATUS.SYNCING) return false;
+    if (mutation.attempts >= SYNC_MAX_ATTEMPTS) return false;
+    syncInProgress = true;
+    try {
+        return await trySyncMutation(mutation);
+    } finally {
+        syncInProgress = false;
+    }
+}
+
+/**
+ * Drain the queue. Application-driven (never depends on Background Sync):
+ * returns immediately if a sync is already running (lock) or Firestore is not
+ * ready; otherwise replays PENDING/SYNCING mutations in createdAt order.
+ */
+async function syncNow(reason) {
+    if (syncInProgress) return { started: false, reason };
+    if (typeof firestoreReady !== 'function' || !firestoreReady()) {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) markFirestoreReachable(false);
+        return { started: false, reason };
+    }
+    syncInProgress = true;
+    let synced = 0, failed = 0, skipped = 0;
+    try {
+        const records = await listAllMutations();
+        const queue = records.filter(m => m.status === MUTATION_STATUS.PENDING || m.status === MUTATION_STATUS.SYNCING);
+        for (const mutation of queue) {
+            const outcome = await trySyncMutation(mutation);
+            if (outcome === true) synced++;
+            else if (outcome === false) failed++;
+            else skipped++;
+        }
+    } finally {
+        syncInProgress = false;
+    }
+    if (synced > 0) console.info('[Sync] Processed ' + synced + ' queued mutation(s).');
+    return { started: true, synced, failed, skipped, reason };
+}
+
+/** Register application-driven sync triggers (registered once at boot). */
+function initSyncCoordinator() {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) markFirestoreReachable(false);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+        window.addEventListener('online', function () {
+            markFirestoreReachable(true);
+            syncNow('online');
+        });
+        window.addEventListener('pageshow', function () {
+            if (typeof navigator === 'undefined' || navigator.onLine !== false) syncNow('pageshow');
+        });
+    }
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden && (typeof navigator === 'undefined' || navigator.onLine !== false)) syncNow('visibility');
+        });
+    }
+    syncNow('startup');
+}
+
+/** Diagnostics surface for tests and developer tools. */
+async function getSyncState() {
+    const mutations = await listAllMutations();
+    return {
+        pending: mutations.filter(m => m.status === MUTATION_STATUS.PENDING).length,
+        syncing: mutations.filter(m => m.status === MUTATION_STATUS.SYNCING).length,
+        failed: mutations.filter(m => m.status === MUTATION_STATUS.FAILED).length,
+        queue: mutations,
+        reachable: firestoreReachable,
+        syncInProgress
+    };
+}
+
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initSyncCoordinator);
+    else initSyncCoordinator();
+} else if (typeof window !== 'undefined') {
+    initSyncCoordinator();
+}// ══════════════════════════════════════════════════════════════
 //  CORE CRUD FUNCTIONS (Firestore + Local Sync)
 // ══════════════════════════════════════════════════════════════
 
@@ -655,6 +1371,10 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
                     const missingSeeds = seedRecords.filter(s => !existingIds.has(s._docId));
                     if (missingSeeds.length > 0) results = [...results, ...missingSeeds];
                 }
+                // Never let a cloud snapshot fully overwrite locally pending
+                // (unsynced) writes: local data wins until the sync engine
+                // reconciles the queue and confirms the remote write.
+                results = await mergePendingMutationsOverSnapshot(ref, results);
                 setLocalCollection(ref, results);
             }
         } catch (err) {
@@ -745,27 +1465,94 @@ async function dbGet(ref, docId, opts = {}) {
 }
 
 /**
+ * Optimistic local write: updates the synchronous localStorage cache and the
+ * best-effort IndexedDB mirror. Never throws into callers.
+ */
+function upsertLocalCache(ref, docId, docData, prepend) {
+    const local = getLocalCollection(ref);
+    const idx = local.findIndex(item => item._docId === docId || item.id === docId);
+    if (idx >= 0) local[idx] = docData;
+    else if (prepend) local.unshift(docData);
+    else local.push(docData);
+    setLocalCollection(ref, local);
+    if (typeof offlineStore !== 'undefined' && offlineStore && typeof offlineStore.setDocument === 'function') {
+        offlineStore.setDocument(ref, docData).catch(function () { /* best-effort mirror */ });
+    }
+    return docData;
+}
+
+/**
+ * Overlay locally pending (unsynced) write payloads over a cloud snapshot so a
+ * reconnect never silently clobbers changes that have not reached Firestore.
+ */
+async function mergePendingMutationsOverSnapshot(ref, results) {
+    if (typeof listPendingMutations !== 'function') return results;
+    try {
+        const pending = await listPendingMutations(ref, null, true);
+        if (!pending || pending.length === 0) return results;
+        const list = (Array.isArray(results) ? results : []).slice();
+        for (const mutation of pending) {
+            if (!mutation.documentId || mutation.operation === 'DELETE') continue;
+            const payload = Object.assign({}, mutation.payload || {}, { _docId: mutation.documentId });
+            const idx = list.findIndex(d => d._docId === mutation.documentId || d.id === mutation.documentId);
+            if (idx >= 0) list[idx] = payload;
+            else list.unshift(payload);
+        }
+        return list;
+    } catch (e) {
+        return results;
+    }
+}
+
+/**
+ * Write to Firestore with a durable offline queue behind it:
+ *  - success        → clear any stale pending mutation, then kick a sync
+ *  - transient fail → persist a PENDING mutation (replayed on reconnection)
+ *  - permanent fail → structured log only, never queued, never fabricated
+ * This never throws into callers so existing flows keep their old contract.
+ */
+async function queueFirestoreWrite({ operation, ref, docId, payload }) {
+    if (!firestoreReady()) {
+        if (typeof markFirestoreReachable === 'function') markFirestoreReachable(false);
+        if (typeof enqueueMutation === 'function') await enqueueMutation(operation, ref, docId, payload);
+        if (typeof syncNow === 'function') syncNow('write');
+        return;
+    }
+    try {
+        if (operation === 'UPDATE') {
+            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(payload, { merge: true }));
+        } else {
+            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(payload));
+        }
+        if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
+        if (typeof clearPendingForDocument === 'function') await clearPendingForDocument(ref, docId);
+        if (typeof syncNow === 'function') syncNow('write');
+    } catch (err) {
+        const classification = (typeof classifyDbError === 'function' ? classifyDbError(err) : { transient: false, message: err.message });
+        if (classification.transient) {
+            if (typeof markFirestoreReachable === 'function') markFirestoreReachable(false);
+            if (typeof enqueueMutation === 'function') await enqueueMutation(operation, ref, docId, payload);
+            if (typeof syncNow === 'function') syncNow('write');
+            console.info(`[Database] Firestore ${ref}/${docId} temporarily unavailable; write queued offline.`);
+        } else {
+            if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
+            console.warn(`[Database] Permanent Firestore failure on ${ref}/${docId}:`, classification.message);
+        }
+    }
+}
+
+/**
  * Add a new document.
  */
 async function dbAdd(ref, data) {
     const docId = data._docId || ('doc_' + Date.now() + '_' + Math.floor(Math.random() * 1000));
     const docData = { ...data, _docId: docId };
 
-    // Update local cache immediately
-    const local = getLocalCollection(ref);
-    const existingIdx = local.findIndex(item => item._docId === docId);
-    if (existingIdx >= 0) local[existingIdx] = docData;
-    else local.unshift(docData);
-    setLocalCollection(ref, local);
+    // 1. Optimistic local write (localStorage + IndexedDB mirror)
+    upsertLocalCache(ref, docId, docData, true);
 
-    // Save to Firestore if available
-    if (firestoreReady()) {
-        try {
-            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(docData));
-        } catch (err) {
-            console.info(`[Database] Error saving to Firestore ${ref} (local cache updated):`, err.message);
-        }
-    }
+    // 2. Firestore write with durable offline queue
+    await queueFirestoreWrite({ operation: 'ADD', ref, docId, payload: docData });
 
     return docId;
 }
@@ -776,21 +1563,11 @@ async function dbAdd(ref, data) {
 async function dbSet(ref, docId, data) {
     const docData = { ...data, _docId: docId };
 
-    // Update local cache immediately
-    const local = getLocalCollection(ref);
-    const existingIdx = local.findIndex(item => item._docId === docId);
-    if (existingIdx >= 0) local[existingIdx] = docData;
-    else local.push(docData);
-    setLocalCollection(ref, local);
+    // Update local cache immediately (localStorage + IndexedDB mirror)
+    upsertLocalCache(ref, docId, docData, false);
 
-    // Save to Firestore if available
-    if (firestoreReady()) {
-        try {
-            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(docData));
-        } catch (err) {
-            console.info(`[Database] Error setting to Firestore ${ref}/${docId} (local cache updated):`, err.message);
-        }
-    }
+    // Save to Firestore with durable offline queue
+    await queueFirestoreWrite({ operation: 'SET', ref, docId, payload: docData });
 
     return docData;
 }
@@ -803,21 +1580,11 @@ async function dbUpdate(ref, docId, data) {
     const existing = local.find(item => item._docId === docId || item.id === docId);
     const merged = existing ? { ...existing, ...data, _docId: docId } : { ...data, _docId: docId };
 
-    // Update local cache immediately
-    const existingIdx = local.findIndex(item => item._docId === docId || item.id === docId);
-    if (existingIdx >= 0) local[existingIdx] = merged;
-    else local.push(merged);
-    setLocalCollection(ref, local);
+    // Update local cache immediately (localStorage + IndexedDB mirror)
+    upsertLocalCache(ref, docId, merged, false);
 
-    // Save to Firestore if available
-    if (firestoreReady()) {
-        try {
-            const docRef = firestore.collection(ref).doc(docId);
-            await withFirestoreTimeout(docRef.set(merged, { merge: true }));
-        } catch (err) {
-            console.info(`[Database] Error updating Firestore ${ref}/${docId} (local cache updated):`, err.message);
-        }
-    }
+    // Save to Firestore with durable offline queue
+    await queueFirestoreWrite({ operation: 'UPDATE', ref, docId, payload: merged });
 
     return merged;
 }
@@ -1117,11 +1884,17 @@ async function refreshAuditLog() {
 function subscribeCollection(ref, onChange, onError) {
     if (!firestoreReady() || typeof firestore.collection(ref).onSnapshot !== 'function') return () => {};
     let active = true;
-    const unsubscribe = firestore.collection(ref).onSnapshot(snapshot => {
+    const unsubscribe = firestore.collection(ref).onSnapshot(async snapshot => {
         if (!active) return;
         const records = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
-        setLocalCollection(ref, records);
-        onChange(records);
+        // Reconnect fire events: never let a snapshot clobber locally pending
+        // (unsynced) writes. mergePendingMutationsOverSnapshot is defined in
+        // collections.js (earlier in the bundle) and overlays them.
+        const merged = typeof mergePendingMutationsOverSnapshot === 'function'
+            ? await mergePendingMutationsOverSnapshot(ref, records)
+            : records;
+        setLocalCollection(ref, merged);
+        onChange(merged);
     }, error => { if (active && typeof onError === 'function') onError(error); });
     return () => { active = false; if (typeof unsubscribe === 'function') unsubscribe(); };
 }

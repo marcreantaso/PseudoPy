@@ -17,18 +17,12 @@ async function handleFileUpload(event, targetEditorId) {
             showToast('Extracting PDF text...', 'info');
 
             if (typeof pdfjsLib === 'undefined') {
-                await new Promise(function (resolve, reject) {
-                    loadScripts(CDN_BASE_URLS.pdfjs, function () {
-                        if (typeof pdfjsLib !== 'undefined') {
-                            try {
-                                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                            } catch (e) { /* non-critical */ }
-                            resolve();
-                        } else {
-                            reject(new Error('PDF library could not be loaded.'));
-                        }
-                    }, reject);
-                });
+                try {
+                    await ensurePdfJsLoaded();
+                } catch (e) {
+                    showToast(e && e.message ? e.message : 'PDF library could not be loaded.', 'error');
+                    return;
+                }
             }
 
             const arrayBuffer = await file.arrayBuffer();

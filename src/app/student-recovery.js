@@ -214,6 +214,11 @@ async function submitPasswordReset() {
         return;
     }
 
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
+
     try {
         // Hash the new password
         const salt = generateSalt();

@@ -519,7 +519,7 @@ function _devToolsExecutePython(pythonCode, attempt) {
 
     if (typeof Sk === 'undefined') {
         if (statusEl) statusEl.textContent = 'Loading Python runtime...';
-        loadScripts(CDN_BASE_URLS.skulpt, function () {
+        ensureSkulptLoaded(function () {
             if (typeof Sk !== 'undefined') {
                 _devToolsExecutePython(pythonCode, attempt);
             } else {

@@ -129,6 +129,9 @@ function scheduleProfileRefresh(docId, fallbackRoute) {
             profileRefreshAttempts = 0;
             hideConnectionBanner();
             if (typeof refreshAuthoritativeCaches === 'function') refreshAuthoritativeCaches();
+            // Connectivity is back: replay any offline mutations queued while
+            // the app was degraded.
+            if (typeof syncNow === 'function') syncNow('recovered');
             const route = getPersistedRoute();
             const targetPage = (route && checkAccess(fresh.role, route)) ? route : (fallbackRoute || '');
             renderSessionState({ state: BOOT_AUTHENTICATED, user: fresh, route: targetPage });

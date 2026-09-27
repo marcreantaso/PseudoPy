@@ -3,7 +3,11 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-shell-20260924-student-v4';
+const CACHE_NAME = 'pseudopy-shell-20260927-v5';
+// Vendor cache name is versioned so the old-worker cleanup below can prune
+// superseded PDF worker generations instead of accumulating them.
+const VENDOR_CACHE_NAME = 'pseudopy-vendor-20260927-v5';
+
 const LOCAL_ASSETS = [
     './',
     './index.html',
@@ -23,29 +27,53 @@ const LOCAL_ASSETS = [
     './metrics.js?v=20260903',
     './manifest.json',
     './database.js',
+    './devtools.js',
     './robots.txt',
     './icons/icon.svg',
     './icons/pseudopy-192.png?v=2',
     './icons/pseudopy-apple.png?v=2',
     './icons/pseudopy-favicon.png?v=2',
-    './icons/pseudopy-maskable.png?v=2'
+    './icons/pseudopy-maskable.png?v=2',
+    // Core Python execution is an offline feature: the Skulpt runtime and its
+    // stdlib are vendored under vendor/ and pre-cached at install time so an
+    // installed PWA can translate AND execute Python with no network at all.
+    './vendor/skulpt/skulpt.min.js',
+    './vendor/skulpt/skulpt-stdlib.js'
 ];
 
-// Only always-needed external assets are pre-cached. Skulpt, PDF.js, lucide
-// and anime are fetched on first use (see src/app/on-demand.js) and cached
-// lazily by the fetch handler, so installation never pays for unused code.
+// External assets are pre-cached best-effort (non-blocking): installation never
+// fails if a CDN is unreachable at install time. Firebase SDK scripts are
+// needed to initialize Firestore; Google Fonts load via CSS and fall back to
+// the local font stack when offline; lucide and anime are the only remaining
+// non-vendored lazy dependencies and are cached so icons/animations survive.
+// Firestore/Auth DATA responses are never cached as static shell assets
+// (handled in the fetch handler below).
 const EXTERNAL_ASSETS = [
     'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap',
     'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
-    'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js'
+    'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js',
+    'https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.js',
+    'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js'
+];
+
+// PDF.js is large, so it is NOT added to the blocking shell install. Instead
+// it lives in a dedicated vendor cache that is populated right after
+// activation (while the app is online). The fetch handler falls back to that
+// cache, so a PWA that was opened once after install can still extract PDFs
+// fully offline. Vendored files are same-origin, so the runtime cache-promotion
+// path is a second safety net for the very first offline launch.
+const VENDOR_ASSETS = [
+    './vendor/pdfjs/pdf.min.js',
+    './vendor/pdfjs/pdf.worker.min.js'
 ];
 
 // Install — cache core assets
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME).then(async (cache) => {
-            // Installation is not complete until the entire local shell is ready.
-            // A failed core request must leave the previous worker in control.
+            // Installation is not complete until the entire local shell (and the
+            // offline Skulpt runtime) is ready. A failed core request must leave
+            // the previous worker in control.
             await cache.addAll(LOCAL_ASSETS);
             await Promise.allSettled(EXTERNAL_ASSETS.map(async url => {
                 const req = new Request(url, { mode: 'no-cors' });
@@ -69,19 +97,28 @@ self.addEventListener('install', (event) => {
     //   responses are excluded from this cache by the fetch handler.
 });
 
-// Activate — clean old caches
+// Activate — populate the optional vendor cache, then clean old caches
 self.addEventListener('activate', (event) => {
+    const activeCaches = [CACHE_NAME, VENDOR_CACHE_NAME];
     event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.filter((name) => name.startsWith('pseudopy-') && name !== CACHE_NAME)
-                    .map((name) => caches.delete(name))
-            );
-        }).then(() => self.clients.claim())
+        // Populate the optional PDF.js vendor cache after install while still
+        // online. Failures here (offline install) are non-fatal: same-origin
+        // vendor scripts are additionally runtime-cached by the fetch handler
+        // on first successful use.
+        caches.open(VENDOR_CACHE_NAME).then(cache =>
+            Promise.allSettled(VENDOR_ASSETS.map(url => cache.add(url)))
+        ).then(() =>
+            caches.keys().then((cacheNames) => {
+                return Promise.all(
+                    cacheNames.filter((name) => name.startsWith('pseudopy-') && !activeCaches.includes(name))
+                        .map((name) => caches.delete(name))
+                );
+            })
+        ).then(() => self.clients.claim())
     );
 });
 
-// Fetch — cache-first, fallback to network
+// Fetch — cache-first (shell, then vendor), fallback to network
 self.addEventListener('fetch', (event) => {
     const requestUrl = new URL(event.request.url);
     const isSameOrigin = requestUrl.origin === self.location.origin;
@@ -94,22 +131,27 @@ self.addEventListener('fetch', (event) => {
             if (cachedResponse) {
                 return cachedResponse;
             }
-            return fetch(event.request).then((networkResponse) => {
-                // Only same-origin GET successes are promoted to the runtime
-                // cache. Firestore/Auth and other third-party responses are
-                // never cached as static public app assets.
-                if (isSameOrigin && event.request.method === 'GET' && networkResponse.status === 200) {
-                    const responseClone = networkResponse.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseClone);
-                    });
+            return caches.open(VENDOR_CACHE_NAME).then(vendorCache => vendorCache.match(event.request)).then((vendorResponse) => {
+                if (vendorResponse) {
+                    return vendorResponse;
                 }
-                return networkResponse;
-            }).catch(() => {
-                // Offline fallback for same-origin navigations only
-                if (event.request.mode === 'navigate' && isSameOrigin) {
-                    return caches.open(CACHE_NAME).then(cache => cache.match('./index.html'));
-                }
+                return fetch(event.request).then((networkResponse) => {
+                    // Only same-origin GET successes are promoted to the runtime
+                    // cache. Firestore/Auth and other third-party responses are
+                    // never cached as static public app assets.
+                    if (isSameOrigin && event.request.method === 'GET' && networkResponse.status === 200) {
+                        const responseClone = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(event.request, responseClone);
+                        });
+                    }
+                    return networkResponse;
+                }).catch(() => {
+                    // Offline fallback for same-origin navigations only
+                    if (event.request.mode === 'navigate' && isSameOrigin) {
+                        return caches.open(CACHE_NAME).then(cache => cache.match('./index.html'));
+                    }
+                });
             });
         })
     );

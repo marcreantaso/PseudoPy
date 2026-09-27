@@ -33,6 +33,11 @@ async function handleChangePassword() {
         return;
     }
 
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
+
     try {
         const salt = generateSalt();
         const hash = await hashPassword(newParam, salt);

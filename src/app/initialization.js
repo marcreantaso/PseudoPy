@@ -42,6 +42,12 @@ async function init() {
         // login and never behaves like a logout.
         await restoreSession();
 
+        // Non-destructively migrate legacy localStorage collections into the
+        // IndexedDB offline store (idempotent, never deletes localStorage).
+        if (typeof ensureOfflineDataMigration === 'function') {
+            try { await ensureOfflineDataMigration(); } catch (e) { /* non-fatal */ }
+        }
+
         // Seed at most once per browser (never on every startup), then
         // pre-load data from Offline Database into cache.
         await ensureSeedDatabase();

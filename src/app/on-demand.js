@@ -1,15 +1,18 @@
 /* ============================================================
    ON-DEMAND THIRD-PARTY LIBRARY LOADING
-   Heavy libraries (Skulpt, PDF.js, anime, lucide) are no longer
-   loaded at page start. They download on first use so the app
-   shell, login and navigation render without waiting on CDNs.
+   Heavy libraries (Skulpt, PDF.js, lucide) are not loaded at
+   page start. They download on first use so the app shell, login
+   and navigation render without waiting. Skulpt and PDF.js are
+   now served from local vendor/ assets so they work fully offline
+   once the service worker has installed them.
    ============================================================ */
 
 const CDN_BASE_URLS = {
     lucide: 'https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.js',
-    skulpt: ['https://skulpt.org/js/skulpt.min.js', 'https://skulpt.org/js/skulpt-stdlib.js'],
-    pdfjs: ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'],
-    anime: ['https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js']
+    skulpt: ['./vendor/skulpt/skulpt.min.js', './vendor/skulpt/skulpt-stdlib.js'],
+    pdfjs: ['./vendor/pdfjs/pdf.min.js'],
+    pdfWorker: './vendor/pdfjs/pdf.worker.min.js',
+    anime: 'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js'
 };
 
 function loadScripts(srcList, onSuccess, onError) {
@@ -21,7 +24,9 @@ function loadScripts(srcList, onSuccess, onError) {
             return;
         }
         const s = document.createElement('script');
-        s.src = srcList[index++] + '?v=on-demand';
+        // No cache-busting query string: the service worker precaches these
+        // exact URLs, so a query suffix would break the offline cache match.
+        s.src = srcList[index++];
         s.async = true;
         s.onload = next;
         s.onerror = function () {
@@ -30,4 +35,59 @@ function loadScripts(srcList, onSuccess, onError) {
         document.head.appendChild(s);
     }
     next();
+}
+
+// ── Memoized lazy loaders ────────────────────────────────────
+// A single shared promise per library prevents concurrent call sites
+// (execution, exercises, devtools) from injecting duplicate scripts.
+
+const ensureLoadedPromises = {};
+
+/**
+ * Ensure the Skulpt runtime (window.Sk) is available, then call onSuccess.
+ * Returns immediately when Sk is already present or when the load fails
+ * (onError). Never injects the runtime more than once.
+ */
+function ensureSkulptLoaded(onSuccess, onError) {
+    onSuccess = onSuccess || function () {};
+    onError = onError || function () {};
+    if (typeof Sk !== 'undefined') { onSuccess(); return; }
+
+    let pending = ensureLoadedPromises.skulpt;
+    if (pending) {
+        pending.then(onSuccess).catch(onError);
+        return;
+    }
+
+    pending = new Promise(function (resolve, reject) {
+        const ok = function () { if (typeof Sk !== 'undefined') resolve(); else reject(new Error('Skulpt did not initialize')); };
+        const fail = function (err) { reject(err || new Error('Skulpt failed to load')); };
+        loadScripts(CDN_BASE_URLS.skulpt, ok, fail);
+    });
+    ensureLoadedPromises.skulpt = pending;
+    pending.then(onSuccess).catch(onError);
+}
+
+/**
+ * Ensure the PDF.js library (window.pdfjsLib) is available, then resolve.
+ * The worker is configured against the locally vendored worker file so PDF
+ * text extraction also works offline.
+ */
+function ensurePdfJsLoaded() {
+    if (typeof pdfjsLib !== 'undefined') return Promise.resolve();
+    if (ensureLoadedPromises.pdfjs) return ensureLoadedPromises.pdfjs;
+
+    ensureLoadedPromises.pdfjs = new Promise(function (resolve, reject) {
+        loadScripts(CDN_BASE_URLS.pdfjs, function () {
+            if (typeof pdfjsLib !== 'undefined') {
+                try {
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = CDN_BASE_URLS.pdfWorker;
+                } catch (e) { /* non-critical */ }
+                resolve();
+            } else {
+                reject(new Error('PDF library could not be loaded.'));
+            }
+        }, reject);
+    });
+    return ensureLoadedPromises.pdfjs;
 }

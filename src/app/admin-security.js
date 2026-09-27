@@ -270,6 +270,10 @@ async function approveAdminRecoveryRequest() {
     if (_adminRecoveryBusy) return;
     hide('admin-recovery-confirm-dialog');
     if (!currentAdminReviewRequestId) return;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
 
     const approveBtn = $id('admin-recovery-confirm-approve-btn');
     _adminRecoveryBusy = true;
@@ -333,6 +337,10 @@ async function approveAdminRecoveryRequest() {
 async function rejectAdminRecoveryRequest() {
     if (_adminRecoveryRejectBusy) return;
     if (!currentAdminReviewRequestId) return;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
 
     const rejectBtn = $id('admin-recovery-reject-btn');
     _adminRecoveryRejectBusy = true;

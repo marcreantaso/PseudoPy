@@ -170,6 +170,10 @@ async function approveRecoveryRequest() {
     if (_recoveryApproveBusy) return;
     hide('recovery-confirm-dialog');
     if (!currentReviewRequestId) return;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
 
     const approveBtn = $id('recovery-confirm-approve-btn');
     _recoveryApproveBusy = true;
@@ -235,6 +239,10 @@ async function approveRecoveryRequest() {
 async function rejectRecoveryRequest() {
     if (_recoveryRejectBusy) return;
     if (!currentReviewRequestId) return;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
 
     const rejectBtn = $id('recovery-reject-btn');
     _recoveryRejectBusy = true;

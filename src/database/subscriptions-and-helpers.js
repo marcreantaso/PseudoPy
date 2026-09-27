@@ -31,11 +31,17 @@ async function refreshAuditLog() {
 function subscribeCollection(ref, onChange, onError) {
     if (!firestoreReady() || typeof firestore.collection(ref).onSnapshot !== 'function') return () => {};
     let active = true;
-    const unsubscribe = firestore.collection(ref).onSnapshot(snapshot => {
+    const unsubscribe = firestore.collection(ref).onSnapshot(async snapshot => {
         if (!active) return;
         const records = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
-        setLocalCollection(ref, records);
-        onChange(records);
+        // Reconnect fire events: never let a snapshot clobber locally pending
+        // (unsynced) writes. mergePendingMutationsOverSnapshot is defined in
+        // collections.js (earlier in the bundle) and overlays them.
+        const merged = typeof mergePendingMutationsOverSnapshot === 'function'
+            ? await mergePendingMutationsOverSnapshot(ref, records)
+            : records;
+        setLocalCollection(ref, merged);
+        onChange(merged);
     }, error => { if (active && typeof onError === 'function') onError(error); });
     return () => { active = false; if (typeof unsubscribe === 'function') unsubscribe(); };
 }

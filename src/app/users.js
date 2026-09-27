@@ -374,6 +374,10 @@ async function _runDeviceAction(deviceDocId, action) {
 }
 
 async function approveDevice(deviceDocId) {
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
     await _runDeviceAction(deviceDocId, async () => {
         await dbUpdate(devicesRef, deviceDocId, {
             status: 'approved',
@@ -387,6 +391,10 @@ async function approveDevice(deviceDocId) {
 }
 
 async function revokeDevice(deviceDocId) {
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
     await _runDeviceAction(deviceDocId, async () => {
         await dbUpdate(devicesRef, deviceDocId, {
             status: 'revoked',
@@ -414,6 +422,10 @@ let _approveAllDevicesBusy = false;
 async function approveAllPendingDevices() {
     if (_approveAllDevicesBusy) return;
     if (!activeDeviceInstructorId) return;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
     const instructor = allCachedInstructors.find(u => u.id === activeDeviceInstructorId || u._docId === activeDeviceInstructorId);
     if (!instructor) return;
 
@@ -532,6 +544,11 @@ async function saveInstructor() {
     const confirm = getValue('inst-confirm-password').trim();
     const status = getValue('inst-status') || 'active';
 
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { _showInstAlert(gate.message); return; }
+    }
+
     const alertEl = $id('inst-form-alert');
     if (alertEl) { alertEl.textContent = ''; alertEl.classList.add('hidden'); }
 
@@ -649,6 +666,10 @@ async function confirmToggleInstructorStatus(id) {
     const newStatus = user.status === 'active' ? 'inactive' : 'active';
     const action = newStatus === 'inactive' ? 'deactivate' : 'activate';
     if (!confirm(`Are you sure you want to ${action} ${user.fullName}?\n\n${newStatus === 'inactive' ? 'They will not be able to log in.' : 'They will be able to log in again.'}`)) return;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
     try {
         await dbUpdate(usersRef, user._docId, { status: newStatus });
         showToast(`Instructor status updated to ${newStatus} successfully.`, 'success');
@@ -690,6 +711,14 @@ async function executeArchiveInstructor() {
         closeArchiveInstructorModal();
         return;
     }
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) {
+            showToast(gate.message, 'error');
+            closeArchiveInstructorModal();
+            return;
+        }
+    }
     try {
         const allUsers = cachedUsers.length ? cachedUsers : await refreshUsers();
         const user = allUsers.find(u => u.id === id || u._docId === id);
@@ -728,6 +757,14 @@ async function executeRestoreInstructor() {
         return;
     }
     const id = pendingRestoreInstructorId;
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) {
+            showToast(gate.message, 'error');
+            closeRestoreInstructorModal();
+            return;
+        }
+    }
     try {
         const allUsers = cachedUsers.length ? cachedUsers : await refreshUsers();
         const user = allUsers.find(u => u.id === id || u._docId === id);
@@ -785,6 +822,10 @@ async function loadStudents() {
 
 
 async function toggleUserStatus(id) {
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
     try {
         const user = cachedUsers.find(u => u.id === id);
         if (!user) return;
@@ -871,6 +912,11 @@ async function saveUser() {
     }
 
     if (!fullName || !username || !email || (!editingUserId && !password)) { showToast('Please fill in all required fields.', 'error'); return; }
+
+    if (typeof requireOnline === 'function') {
+        const gate = requireOnline();
+        if (!gate.ok) { showToast(gate.message, 'error'); return; }
+    }
 
     try {
         const users = cachedUsers.length ? cachedUsers : await refreshUsers();
