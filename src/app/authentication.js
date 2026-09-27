@@ -2,6 +2,8 @@
    AUTHENTICATION
    ============================================================ */
 
+var loginInProgress = false;
+
 function toggleLoginHint(header) {
     const box = header.closest('.login-hint-box');
     box.classList.toggle('open');
@@ -16,13 +18,60 @@ function fillLoginUser(username) {
     if (passwordField) passwordField.focus();
 }
 
+function getLoginSubmitButton() {
+    return typeof $id === 'function' ? $id('login-submit') : null;
+}
+
+function resetLoginBusy(submitBtn) {
+    loginInProgress = false;
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('is-loading');
+    }
+}
+
+/**
+ * Real `<form id="login-form">` submission: the single Enter/GO/RETURN path.
+ * Native submission (no synthetic keydown) is IME-safe, and the bound-once
+ * guard keeps rapid DOM re-inits from stacking listeners.
+ */
+function setupLoginForm() {
+    if (typeof $id !== 'function') return;
+    const form = $id('login-form');
+    if (!form || form.dataset.bound === 'true') return;
+    form.dataset.bound = 'true';
+    form.addEventListener('submit', function (event) {
+        if (event && typeof event.preventDefault === 'function') event.preventDefault();
+        if (loginInProgress) return;
+        handleLogin();
+    });
+}
+
 async function handleLogin() {
+    if (loginInProgress) return;
+    loginInProgress = true;
+    const submitBtn = getLoginSubmitButton();
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.classList.add('is-loading');
+    }
+
     const rawUsername = getValue('login-username').trim();
     const username = typeof normalizeUsername === 'function' ? normalizeUsername(rawUsername) : rawUsername;
     const password = getValue('login-password').trim();
 
     if (!username || !password) {
         showToast('Please enter your username and password.', 'error');
+        if (typeof $id === 'function') {
+            if (!username) {
+                const userField = $id('login-username');
+                if (userField) userField.focus();
+            } else {
+                const passField = $id('login-password');
+                if (passField) passField.focus();
+            }
+        }
+        resetLoginBusy(submitBtn);
         return;
     }
 
@@ -170,6 +219,8 @@ async function handleLogin() {
     } catch (err) {
         console.error('[Login] Error:', err);
         showToast('Login failed. Check your connection.', 'error');
+    } finally {
+        resetLoginBusy(submitBtn);
     }
 }
 

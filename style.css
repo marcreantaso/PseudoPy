@@ -841,7 +841,10 @@ h4 {
   .login-page {
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    min-height: 100vh;
+    min-height: 100svh;
+    min-height: 100dvh;
+    overflow: visible;
   }
 
   .login-hero {
@@ -861,8 +864,10 @@ h4 {
   }
 
   .login-form-section {
-    min-height: auto;
-    padding: 2rem 1.5rem 4rem;
+    min-height: 0;
+    flex: 0 0 auto;
+    align-items: flex-start;
+    padding: 2rem 1.5rem max(4rem, calc(2rem + env(safe-area-inset-bottom, 0px)));
   }
 
   .login-form-section::before {
@@ -871,6 +876,33 @@ h4 {
 
   .login-card-header h2 {
     font-size: 1.5rem;
+  }
+}
+
+/* ── Login mobile: single scroll owner, safe-area bottom, touch sizing ── */
+@media (max-width: 768px) and (max-height: 600px) {
+  .login-hero {
+    padding: 2rem 1.5rem 1.5rem;
+  }
+}
+
+/* Prevent iOS focus-zoom and enforce ~44px touch targets on touch devices
+   without altering the desktop login look. */
+@media (hover: none) and (pointer: coarse) {
+  .login-page .form-input {
+    font-size: 16px;
+  }
+
+  .login-page .btn {
+    min-height: 44px;
+  }
+}
+
+/* Keep long mono hint rows from forcing horizontal scroll on narrow phones. */
+@media (max-width: 768px) {
+  .login-hint-row > * {
+    min-width: 0;
+    overflow-wrap: break-word;
   }
 }
 

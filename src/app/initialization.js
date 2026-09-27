@@ -38,6 +38,9 @@ async function init() {
     console.log('[App] init() called');
     try {
 
+        // Bind the real login form once (Enter / GO / RETURN submit path).
+        if (typeof setupLoginForm === 'function') setupLoginForm();
+
         // Restore the persisted session FIRST so a refresh never flashes
         // login and never behaves like a logout.
         await restoreSession();
