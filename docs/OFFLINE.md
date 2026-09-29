@@ -91,20 +91,53 @@ recovery in `session.js` (`syncNow('recovered')`).
 
 ## Error taxonomy (`classifyDbError`)
 
+Classification walks the error's **cause chain** (`.cause` / `.originalError`),
+because retry wrappers such as `FirestoreUnavailableError` hide the real failure
+in `.cause`. Permanent verdicts are evaluated first: a Firestore rules denial
+wrapped in a `FirestoreUnavailable` is still a denial.
+
 | Category | Example signals | Transient? | Behaviour |
 | --- | --- | --- | --- |
 | `OFFLINE` | `TypeError` / `NetworkError` / "Failed to fetch" | yes | queue + retry with backoff |
 | `TIMEOUT` | `withFirestoreTimeout` message, `deadline-exceeded` | yes | queue + retry with backoff |
 | `FIRESTORE_UNAVAILABLE` | `Unavailable`, `firestore/unavailable` | yes | queue + retry with backoff |
 | `QUOTA` | `resource-exhausted` | no | `FAILED`, never retried or fabricated |
-| `PERMISSION_DENIED` | `permission-denied`, `unauthenticated` | no | `FAILED`, never retried |
+| `PERMISSION_DENIED` | `permission-denied`, `unauthenticated`, "Missing or insufficient permissions" | no | `FAILED`, never retried |
 | `INVALID_DATA` | `invalid-argument`, `not-found`, `failed-precondition` | no | `FAILED` |
 | `CONFLICT` | `aborted`, `conflict` | no | `FAILED` |
 | `UNKNOWN` | anything else | no | `FAILED` (fail-safe, never silently dropped) |
 
 `markFirestoreReachable` / `isFirestoreReachable` implement the reachability
 model: `navigator.onLine` is only a hint; real proof comes from an actual
-successful or failed Firestore operation.
+successful or failed Firestore operation. A **refusing** Firestore counts as
+*reachable* — the request completed and was denied. Only genuine transport
+failures mark it unreachable.
+
+### Retry backoff
+
+`syncBackoffDelay(attempt, randomFn)` is exponential from
+`SYNC_BACKOFF_BASE_MS` (1500 ms), clamped to `SYNC_BACKOFF_MAX_MS` (60 s) and
+jittered over the lower half of the window, with a 250 ms floor. The old fixed
+`[1500, 4000, 10000]` table could not express "keep backing off" past the attempt
+cap, so a long outage always retried on the same short schedule.
+
+`firestoreRetry` also short-circuits: a permanent error is attempted once, then
+thrown, instead of consuming the whole attempt budget.
+
+### Connectivity UI
+
+`src/app/connection-status.js` owns the two distinct states:
+
+| State | Element | Dismissable? | Shown when |
+| --- | --- | --- | --- |
+| Reconnecting | `#connection-status-banner` | no (auto-hides on `online`) | a **transient** failure |
+| Saved on this device | `#offline-save-status` + `#offline-save-dismiss` | **yes**, sticky for the session | a **permanent** refusal, or `navigator.onLine === false` handled separately |
+
+A permanent refusal hides the reconnecting banner first, so the two are never
+both on screen. The refusal is announced at most once per session and dismissal
+persists in `sessionStorage` under `pseudopy.offlineSaveDismissed`. The local
+write is never rolled back: work stays safe on the device and the user is told
+plainly that it is not in the cloud.
 
 ## Bundling and the service worker
 
@@ -132,6 +165,9 @@ promise, no duplicate `<script>`/duplicate PDF worker set).
 - `tests/offline-sync.test.js` — taxonomy, bounded retries, `requireOnline`, sync drain.
 - `tests/offline-wiring.test.js` — bundle ordering, queue routing, clobber
   protection and the security gates, read from the committed sources.
+- `tests/cloud-save-failure.test.js` — cause preservation through the retry
+  wrapper, permanent-vs-transient classification, capped backoff, the
+  dismissible offline-save status, and the "never both banners at once" rule.
 
 The pre-existing compiler-suite failures (`tests/compiler.test.js`) are expected
 and unrelated to the offline layer.

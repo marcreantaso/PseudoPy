@@ -6086,6 +6086,84 @@ select.form-input {
   display: none;
 }
 
+/* Permanent cloud refusals are NOT a reconnect state: this banner states the
+   real outcome (work is safe locally) and offers an explicit dismissal. */
+.offline-save-status {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3000;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  max-width: min(34rem, calc(100vw - 2rem));
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.75rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--warning);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+
+.offline-save-status[hidden] {
+  display: none;
+}
+
+.offline-save-status-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.4;
+}
+
+.offline-save-status-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.offline-save-status-title {
+  font-weight: 600;
+}
+
+.offline-save-status-detail {
+  color: var(--text-secondary, var(--text-primary));
+  overflow-wrap: anywhere;
+}
+
+.offline-save-dismiss {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 0.3rem 0.7rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.offline-save-dismiss:hover {
+  background: rgba(127, 127, 127, 0.14);
+}
+
+.offline-save-dismiss:focus-visible {
+  outline: 2px solid var(--primary, currentColor);
+  outline-offset: 2px;
+}
+
+@media (max-width: 30rem) {
+  .offline-save-status {
+    font-size: 0.8rem;
+  }
+}
+
 .devtools-controls .btn {
   width: auto;
 }

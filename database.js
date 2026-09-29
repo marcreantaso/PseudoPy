@@ -80,27 +80,49 @@ function withFirestoreTimeout(promise, ms = 4000) {
  * protected by withFirestoreTimeout. Never retries an infinite loop, and
  * throws a typed FirestoreUnavailableError once all attempts are exhausted so
  * callers can decide (e.g. fall back to cached profile instead of logging out).
+ *
+ * The original failure is preserved on `.cause` so downstream classification
+ * can still see it. Without that, a permission-denied was laundered into
+ * "FirestoreUnavailable" and re-read as a transient outage.
  */
-function FirestoreUnavailableError(message) {
+function FirestoreUnavailableError(message, cause) {
     const err = new Error(message);
     err.name = 'FirestoreUnavailable';
+    if (cause) {
+        err.cause = cause;
+        err.originalError = cause;
+    }
     return err;
 }
 
+/** Permanent failures never benefit from another attempt. */
+function isPermanentFirestoreFailure(err) {
+    if (typeof isPermanentDbError === 'function') return isPermanentDbError(err);
+    if (typeof classifyDbError === 'function') return !classifyDbError(err).transient;
+    return false;
+}
+
 async function firestoreRetry(fetchFn, options = {}) {
-    const attempts = Math.max(1, options.attempts || 2);
+    const requested = Math.max(1, options.attempts || 2);
     const timeoutMs = options.timeoutMs || 4000;
     const backoffMs = options.backoffMs === undefined ? 600 : Math.max(0, options.backoffMs || 0);
     let lastErr = null;
-    for (let i = 0; i < attempts; i++) {
+    let performed = 0;
+    for (let i = 0; i < requested; i++) {
         if (i > 0 && backoffMs > 0) await new Promise(r => setTimeout(r, backoffMs));
         try {
             return await withFirestoreTimeout(fetchFn(), timeoutMs);
         } catch (err) {
             lastErr = err;
+            performed = i + 1;
+            if (isPermanentFirestoreFailure(err)) break;
         }
     }
-    throw FirestoreUnavailableError('Firestore operation failed after ' + attempts + ' attempt(s): ' + (lastErr && lastErr.message));
+    const attempts = performed || requested;
+    throw FirestoreUnavailableError(
+        'Firestore operation failed after ' + attempts + ' attempt(s): ' + (lastErr && lastErr.message),
+        lastErr
+    );
 }
 
 // ── Collection References ──────────────────────────────────
@@ -1149,8 +1171,20 @@ async function enqueueDocumentDelete(ref, docId) {
    ============================================================ */
 
 const SYNC_MAX_ATTEMPTS = 3;
-const SYNC_BACKOFF_MS = [1500, 4000, 10000];
+// Capped exponential backoff: base * 2^(attempt-1), clamped to SYNC_BACKOFF_MAX_MS.
+// A flat lookup table left dead entries behind once the attempt cap was reached,
+// and could not express "keep backing off" for a long outage.
+const SYNC_BACKOFF_BASE_MS = 1500;
+const SYNC_BACKOFF_MAX_MS = 60000;
 const ONLINE_REQUIRED_MESSAGE = 'This action requires an internet connection.';
+
+/**
+ * Categories that can never succeed on retry. Retrying them loops forever and
+ * presents a permanent policy failure (bad Firestore rules, missing auth) as a
+ * transient connectivity problem, which is what made the "Reconnecting" banner
+ * un-dismissable.
+ */
+const PERMANENT_DB_CATEGORIES = ['PERMISSION_DENIED', 'INVALID_DATA', 'CONFLICT', 'QUOTA', 'PERMANENT'];
 
 let syncInProgress = false;
 // Optimistic at boot; only corrected by real Firestore operations (or an
@@ -1158,26 +1192,73 @@ let syncInProgress = false;
 // connectivity on its own.
 let firestoreReachable = true;
 
+/** Error text markers that mean "the server answered, and the answer is no". */
+const PERMISSION_DENIED_PATTERN = /permission[-_]denied|permission[-_]not[-_]granted|missing or insufficient permissions|unauthenticated|not authorized|unauthorized|insufficient permission/;
+const INVALID_DATA_PATTERN = /invalid[-_]argument|invalid[-_]data|not[-_]found|failed[-_]precondition/;
+const CONFLICT_PATTERN = /aborted|conflict/;
+const QUOTA_PATTERN = /quota|resource[-_]exhausted/;
+const TRANSIENT_PATTERN = /timed out after|deadline[-_]exceeded|timeout|unavailable|offline|cannot reach|networkerror|network[-_]error|failed to fetch|load failed/;
+
+/**
+ * Walk an error's cause chain. Retry wrappers (FirestoreUnavailableError) hide
+ * the real cause in `.cause`; classifying only the wrapper turned every
+ * permission-denied into a transient failure.
+ */
+function dbErrorChain(err, depth) {
+    const chain = [];
+    const seen = [];
+    let current = err;
+    while (current && chain.length < 8) {
+        if (seen.indexOf(current) !== -1) break; // cycle guard
+        seen.push(current);
+        chain.push(current);
+        current = current.cause || current.originalError || current.error || null;
+        if (depth !== undefined && chain.length >= depth) break;
+    }
+    return chain;
+}
+
+function dbErrorText(err) {
+    const message = err && err.message ? String(err.message) : String(err);
+    const code = String((err && (err.code || err.name)) || '').toLowerCase();
+    return code + ' ' + message;
+}
+
 /** Normalize errors into a stable taxonomy (never thrown). */
 function classifyDbError(err) {
     if (!err) return { category: 'UNKNOWN', transient: false, message: 'Unknown database error' };
-    const message = err && err.message ? String(err.message) : String(err);
-    const code = String((err && (err.code || err.name)) || '').toLowerCase();
-    const haystack = code + ' ' + message;
 
-    if (err.name === 'FirestoreUnavailable') return { category: 'FIRESTORE_UNAVAILABLE', transient: true, message };
-    if (/timed out after|deadline-exceeded|deadline_exceeded|timeout/.test(haystack)) return { category: 'TIMEOUT', transient: true, message };
-    if (/unavailable/.test(code)) return { category: 'FIRESTORE_UNAVAILABLE', transient: true, message };
-    if (/offline|cannot reach|networkerror|failed to fetch|typeerror/i.test(haystack)) return { category: 'OFFLINE', transient: true, message };
-    if (/quota|quotaexceeded|resource-exhausted|resource_exhausted/.test(haystack)) return { category: 'QUOTA', transient: false, message };
-    if (/permission-denied|permission_denied|unauthenticated/.test(haystack)) return { category: 'PERMISSION_DENIED', transient: false, message };
-    if (/invalid-argument|invalid_argument|not-found|not_found|failed-precondition|failed_precondition|invalid data/.test(haystack)) return { category: 'INVALID_DATA', transient: false, message };
-    if (/aborted|conflict/.test(haystack)) return { category: 'CONFLICT', transient: false, message };
+    const chain = dbErrorChain(err);
+    const texts = chain.map(dbErrorText);
+    const haystack = texts.join(' | ');
+    const message = err && err.message ? String(err.message) : String(err);
+
+    // Permanent verdicts win over the wrapper they arrived in. Firestore's
+    // permission errors are always permanent for this app: no amount of
+    // retrying changes a ruleset or a missing session.
+    if (PERMISSION_DENIED_PATTERN.test(haystack)) return { category: 'PERMISSION_DENIED', transient: false, message };
+    if (QUOTA_PATTERN.test(haystack)) return { category: 'QUOTA', transient: false, message };
+    if (INVALID_DATA_PATTERN.test(haystack)) return { category: 'INVALID_DATA', transient: false, message };
+    if (CONFLICT_PATTERN.test(haystack)) return { category: 'CONFLICT', transient: false, message };
+
+    // Only now consider the wrapper and the transient markers.
+    const outerCode = String((err && (err.code || err.name)) || '').toLowerCase();
+    const outerText = dbErrorText(err);
+    if (err.name === 'FirestoreUnavailable' || /unavailable/.test(outerCode)) {
+        return { category: 'FIRESTORE_UNAVAILABLE', transient: true, message };
+    }
+    if (TRANSIENT_PATTERN.test(haystack)) return { category: 'TIMEOUT', transient: true, message };
+    if (/offline|cannot reach|network[-_]?error|failed to fetch|typeerror/i.test(haystack)) return { category: 'OFFLINE', transient: true, message };
     return { category: 'UNKNOWN', transient: false, message };
 }
 
 function isTransientDbError(err) {
     return classifyDbError(err).transient;
+}
+
+/** True when retrying can never help (rules/auth/data problems). */
+function isPermanentDbError(err) {
+    return PERMANENT_DB_CATEGORIES.indexOf(classifyDbError(err).category) !== -1;
 }
 
 function markFirestoreReachable(reachable) {
@@ -1186,6 +1267,23 @@ function markFirestoreReachable(reachable) {
 
 function isFirestoreReachable() {
     return firestoreReachable;
+}
+
+/**
+ * Announce a permanent cloud-write failure to the UI layer exactly once per
+ * occurrence, instead of every caller logging its own warning. The UI module
+ * owns the once-per-session latch; this is only the transport.
+ */
+function notifyCloudSaveDenied(context, classification) {
+    const hook = (typeof window !== 'undefined' && typeof window.reportCloudSaveDenied === 'function')
+        ? window.reportCloudSaveDenied
+        : (typeof reportCloudSaveDenied === 'function' ? reportCloudSaveDenied : null);
+    if (!hook) return;
+    try {
+        hook(context || {}, classification || { category: 'PERMISSION_DENIED', message: '' });
+    } catch (e) {
+        console.warn('[Sync] Cloud-denial reporter threw:', e && e.message);
+    }
 }
 
 /**
@@ -1206,13 +1304,26 @@ function requireOnline() {
     return { ok: true };
 }
 
+/**
+ * Capped exponential backoff with jitter. Bounded above by
+ * SYNC_BACKOFF_MAX_MS so a long outage never parks a mutation behind an
+ * unbounded timer.
+ */
+function syncBackoffDelay(attempt, randomFn) {
+    const n = Math.max(1, attempt | 0);
+    const raw = SYNC_BACKOFF_BASE_MS * Math.pow(2, n - 1);
+    const capped = Math.min(raw, SYNC_BACKOFF_MAX_MS);
+    const rand = typeof randomFn === 'function' ? randomFn() : Math.random();
+    // Full jitter over the lower half keeps concurrent clients from
+    // re-attempting in lockstep after a shared outage.
+    return Math.max(250, Math.round(capped * (0.5 + 0.5 * Math.abs(rand % 1))));
+}
+
 function scheduleSyncRetry(mutationId, attempt) {
     if (typeof setTimeout !== 'function') return;
-    const index = Math.min(Math.max(attempt - 1, 0), SYNC_BACKOFF_MS.length - 1);
-    const delay = SYNC_BACKOFF_MS[index] || SYNC_BACKOFF_MS[SYNC_BACKOFF_MS.length - 1];
     setTimeout(function () {
         syncOneMutation(mutationId).catch(function () { /* bounded retry, never throws */ });
-    }, delay);
+    }, syncBackoffDelay(attempt));
 }
 
 /**
@@ -1224,10 +1335,10 @@ function scheduleSyncRetry(mutationId, attempt) {
 async function trySyncMutation(mutation) {
     if (mutation.attempts >= SYNC_MAX_ATTEMPTS) return null;
     const attempt = (mutation.attempts || 0) + 1;
+    const ref = mutation.collection;
+    const docId = mutation.documentId;
     await updateMutationStatus(mutation.mutationId, MUTATION_STATUS.SYNCING, null, attempt);
     try {
-        const ref = mutation.collection;
-        const docId = mutation.documentId;
         if (mutation.operation === MUTATION_OP_DELETE) {
             if (firestoreReady()) await withFirestoreTimeout(firestore.collection(ref).doc(docId).delete());
         } else {
@@ -1244,8 +1355,13 @@ async function trySyncMutation(mutation) {
     } catch (err) {
         const classification = classifyDbError(err);
         if (!classification.transient) {
+            // A denying Firestore IS reachable — the request completed and was
+            // refused. Reporting it as an outage is what drove the endless
+            // "Reconnecting" banner.
             await updateMutationStatus(mutation.mutationId, MUTATION_STATUS.FAILED, classification.message, attempt);
-            markFirestoreReachable(firestoreReady());
+            markFirestoreReachable(true);
+            notifyCloudSaveDenied({ ref, docId, operation: mutation.operation }, classification);
+            console.warn(`[Sync] Permanent failure on ${ref}/${docId}: ${classification.message}`);
             return false;
         }
         markFirestoreReachable(false);
@@ -1452,7 +1568,10 @@ async function dbGet(ref, docId, opts = {}) {
         } catch (err) {
             if (opts.strict) {
                 console.warn(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
-                throw (err && err.name === 'FirestoreUnavailable') ? err : FirestoreUnavailableError(err.message);
+                // Keep the original failure reachable: a permission denial
+                // must stay a permanent error after the retry wrapper is
+                // applied, or callers will treat it as an outage.
+                throw (err && err.name === 'FirestoreUnavailable') ? err : FirestoreUnavailableError(err.message, err);
             }
             console.info(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
         }
@@ -1535,7 +1654,14 @@ async function queueFirestoreWrite({ operation, ref, docId, payload }) {
             if (typeof syncNow === 'function') syncNow('write');
             console.info(`[Database] Firestore ${ref}/${docId} temporarily unavailable; write queued offline.`);
         } else {
+            // A refusing Firestore is reachable; the request completed and was
+            // refused. Marking it unreachable is what fed the endless
+            // "Reconnecting" banner. The local write already succeeded, so the
+            // user keeps their work and is told why it is not in the cloud.
             if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
+            if (typeof notifyCloudSaveDenied === 'function') {
+                notifyCloudSaveDenied({ ref, docId, operation }, classification);
+            }
             console.warn(`[Database] Permanent Firestore failure on ${ref}/${docId}:`, classification.message);
         }
     }

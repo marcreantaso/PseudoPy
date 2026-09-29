@@ -11,6 +11,7 @@
     "src/app/toasts.js",
     "src/app/device-authorization.js",
     "src/app/authentication.js",
+    "src/app/connection-status.js",
     "src/app/session.js",
     "src/app/navigation.js",
     "src/app/mobile-navigation.js",

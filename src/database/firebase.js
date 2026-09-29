@@ -58,27 +58,49 @@ function withFirestoreTimeout(promise, ms = 4000) {
  * protected by withFirestoreTimeout. Never retries an infinite loop, and
  * throws a typed FirestoreUnavailableError once all attempts are exhausted so
  * callers can decide (e.g. fall back to cached profile instead of logging out).
+ *
+ * The original failure is preserved on `.cause` so downstream classification
+ * can still see it. Without that, a permission-denied was laundered into
+ * "FirestoreUnavailable" and re-read as a transient outage.
  */
-function FirestoreUnavailableError(message) {
+function FirestoreUnavailableError(message, cause) {
     const err = new Error(message);
     err.name = 'FirestoreUnavailable';
+    if (cause) {
+        err.cause = cause;
+        err.originalError = cause;
+    }
     return err;
 }
 
+/** Permanent failures never benefit from another attempt. */
+function isPermanentFirestoreFailure(err) {
+    if (typeof isPermanentDbError === 'function') return isPermanentDbError(err);
+    if (typeof classifyDbError === 'function') return !classifyDbError(err).transient;
+    return false;
+}
+
 async function firestoreRetry(fetchFn, options = {}) {
-    const attempts = Math.max(1, options.attempts || 2);
+    const requested = Math.max(1, options.attempts || 2);
     const timeoutMs = options.timeoutMs || 4000;
     const backoffMs = options.backoffMs === undefined ? 600 : Math.max(0, options.backoffMs || 0);
     let lastErr = null;
-    for (let i = 0; i < attempts; i++) {
+    let performed = 0;
+    for (let i = 0; i < requested; i++) {
         if (i > 0 && backoffMs > 0) await new Promise(r => setTimeout(r, backoffMs));
         try {
             return await withFirestoreTimeout(fetchFn(), timeoutMs);
         } catch (err) {
             lastErr = err;
+            performed = i + 1;
+            if (isPermanentFirestoreFailure(err)) break;
         }
     }
-    throw FirestoreUnavailableError('Firestore operation failed after ' + attempts + ' attempt(s): ' + (lastErr && lastErr.message));
+    const attempts = performed || requested;
+    throw FirestoreUnavailableError(
+        'Firestore operation failed after ' + attempts + ' attempt(s): ' + (lastErr && lastErr.message),
+        lastErr
+    );
 }
 
 // ── Collection References ──────────────────────────────────

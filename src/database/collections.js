@@ -102,7 +102,10 @@ async function dbGet(ref, docId, opts = {}) {
         } catch (err) {
             if (opts.strict) {
                 console.warn(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
-                throw (err && err.name === 'FirestoreUnavailable') ? err : FirestoreUnavailableError(err.message);
+                // Keep the original failure reachable: a permission denial
+                // must stay a permanent error after the retry wrapper is
+                // applied, or callers will treat it as an outage.
+                throw (err && err.name === 'FirestoreUnavailable') ? err : FirestoreUnavailableError(err.message, err);
             }
             console.info(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
         }
@@ -185,7 +188,14 @@ async function queueFirestoreWrite({ operation, ref, docId, payload }) {
             if (typeof syncNow === 'function') syncNow('write');
             console.info(`[Database] Firestore ${ref}/${docId} temporarily unavailable; write queued offline.`);
         } else {
+            // A refusing Firestore is reachable; the request completed and was
+            // refused. Marking it unreachable is what fed the endless
+            // "Reconnecting" banner. The local write already succeeded, so the
+            // user keeps their work and is told why it is not in the cloud.
             if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
+            if (typeof notifyCloudSaveDenied === 'function') {
+                notifyCloudSaveDenied({ ref, docId, operation }, classification);
+            }
             console.warn(`[Database] Permanent Firestore failure on ${ref}/${docId}:`, classification.message);
         }
     }

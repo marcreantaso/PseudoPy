@@ -77,14 +77,24 @@ function hideBootSplash() {
     if (splash) splash.classList.add('hidden');
 }
 
+// Session-level names kept for the existing callers (authentication logout,
+// renderSessionState). The behaviour lives in connection-status.js so the
+// transient "Reconnecting" state and the permanent "saved on this device"
+// state cannot be confused for one another.
 function showConnectionBanner() {
-    const banner = $id('connection-status-banner');
-    if (banner) banner.hidden = false;
+    if (typeof showReconnectingStatus === 'function') showReconnectingStatus();
+    else {
+        const banner = $id('connection-status-banner');
+        if (banner) banner.hidden = false;
+    }
 }
 
 function hideConnectionBanner() {
-    const banner = $id('connection-status-banner');
-    if (banner) banner.hidden = true;
+    if (typeof hideReconnectingStatus === 'function') hideReconnectingStatus();
+    else {
+        const banner = $id('connection-status-banner');
+        if (banner) banner.hidden = true;
+    }
 }
 
 function makeGoneError() {
@@ -115,6 +125,10 @@ function loadCachedProfileFor(snapshot) {
  * Bounded background re-sync after a degraded boot. Refetches the profile from
  * Firestore (with a few attempts), then restores authority by refreshing the
  * cached collections and re-rendering. Never loops forever (max 3 retries).
+ *
+ * A *permanent* refusal (rules/permissions) is not a connectivity problem, so
+ * it switches to the dismissible "saved on this device" status and stops
+ * probing instead of cycling the "Reconnecting" banner forever.
  */
 function scheduleProfileRefresh(docId, fallbackRoute) {
     if (typeof dbGet !== 'function' || typeof checkAccess !== 'function') return;
@@ -127,7 +141,7 @@ function scheduleProfileRefresh(docId, fallbackRoute) {
             if (!fresh) { profileRefreshAttempts = 3; return; }
             currentUser = fresh;
             profileRefreshAttempts = 0;
-            hideConnectionBanner();
+            if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
             if (typeof refreshAuthoritativeCaches === 'function') refreshAuthoritativeCaches();
             // Connectivity is back: replay any offline mutations queued while
             // the app was degraded.
@@ -137,6 +151,16 @@ function scheduleProfileRefresh(docId, fallbackRoute) {
             renderSessionState({ state: BOOT_AUTHENTICATED, user: fresh, route: targetPage });
             console.log('[Session] Background re-sync completed; Firestore is authoritative again.');
         } catch (e) {
+            if (typeof isPermanentDbError === 'function' && isPermanentDbError(e)) {
+                // Stop probing: no retry can change a ruleset.
+                profileRefreshAttempts = 3;
+                if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
+                if (typeof reportCloudSaveDenied === 'function') {
+                    reportCloudSaveDenied({ ref: 'pseudopy_users', docId, operation: 'READ' }, classifyDbError(e));
+                }
+                console.info('[Session] Firestore refused the profile read permanently; staying on local data.');
+                return;
+            }
             console.info('[Session] Background re-sync still unavailable:', e && e.message);
         }
     }, backoffMs);
@@ -232,6 +256,7 @@ async function restoreSession() {
         // kept so a later boot can retry. A temporary outage must never
         // behave like a (silent) logout.
         console.warn('[Session] Restore temporarily unavailable; kept session for retry:', err && err.message);
+        const permanent = typeof isPermanentDbError === 'function' && isPermanentDbError(err);
         const cached = loadCachedProfileFor(snapshot);
         if (cached || (snapshot && (snapshot._docId || snapshot.id))) {
             currentUser = cached || sanitizeUser(snapshot);
@@ -239,7 +264,15 @@ async function restoreSession() {
             const route = getPersistedRoute();
             const targetPage = (route && checkAccess(currentUser.role, route)) ? route : '';
             renderSessionState({ state: BOOT_AUTHENTICATED_DEGRADED, user: currentUser, route: targetPage });
-            scheduleProfileRefresh(docId, targetPage);
+            if (permanent) {
+                // A refusal is not an outage: dismissible status, no retry loop.
+                hideConnectionBanner();
+                if (typeof reportCloudSaveDenied === 'function') {
+                    reportCloudSaveDenied({ ref: 'pseudopy_users', docId, operation: 'READ' }, classifyDbError(err));
+                }
+            } else {
+                scheduleProfileRefresh(docId, targetPage);
+            }
             return { state: BOOT_AUTHENTICATED_DEGRADED, user: currentUser, route: targetPage };
         }
         bootState = BOOT_UNAUTHENTICATED;
