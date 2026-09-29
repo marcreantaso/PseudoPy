@@ -654,6 +654,8 @@ class Parser {
 
         if (t.type !== TOKEN_TYPES.NEWLINE && t.type !== TOKEN_TYPES.EOF) {
             this.errors.push({ line: t.line, message: 'Unrecognized statement: ' + t.value, suggestion: 'Use a supported statement such as SET, DISPLAY, IF, FOR or WHILE.' });
+            // Recover at the statement boundary instead of reporting every token.
+            while (this.peek().type !== TOKEN_TYPES.NEWLINE && this.peek().type !== TOKEN_TYPES.EOF) this.consume();
         }
         return null;
     }
@@ -912,7 +914,14 @@ class Parser {
         // FOR i FROM start TO end DO
         const id = this.match(TOKEN_TYPES.IDENTIFIER);
         if (!id) this.errors.push({ line: kw.line, message: 'FOR requires an iterator name.' });
-        if (!this.match(TOKEN_TYPES.KEYWORD, 'FROM')) this.errors.push({ line: kw.line, message: 'FOR requires FROM.' });
+        if (!this.match(TOKEN_TYPES.KEYWORD, 'FROM')) {
+            this.errors.push({ line: kw.line, message: 'Invalid FOR header: expected FROM after the iterator.', suggestion: 'Use FOR x FROM 1 TO 10 DO, or WHILE x <= 10 DO with END WHILE for a condition.' });
+            this.collectLineTokens();
+            this.skipNewlines();
+            this.parseBlock(['ENDFOR', 'END']);
+            this.consumeEndBlock('FOR', kw.line);
+            return null;
+        }
         const startExpr = this.collectLineTokens(['TO']);
         if (!this.match(TOKEN_TYPES.KEYWORD, 'TO')) this.errors.push({ line: kw.line, message: 'FOR requires TO.' });
         const endExpr = this.collectLineTokens(['STEP', 'DO']);
@@ -1063,6 +1072,7 @@ class Parser {
 // and flag undeclared variables BEFORE code generation occurs.
 // This prevents silent execution failures in Skulpt.
 // ══════════════════════════════════════════════════════════════
+
 const SEM__NUMBER_KINDS = new Set(['INTEGER', 'INT', 'FLOAT', 'REAL', 'NUMERIC', 'NUMBER', 'DOUBLE']);
 const SEM__STRING_KINDS = new Set(['STRING', 'CHAR', 'CHARACTER', 'TEXT']);
 const SEM__BOOLEAN_KINDS = new Set(['BOOLEAN', 'BOOL', 'LOGICAL']);
