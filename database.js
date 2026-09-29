@@ -30,12 +30,14 @@ console.log('[Database] Initializing Central Database Client...');
 function resolveFirebaseConfig() {
     const browserConfig = typeof window !== 'undefined' && window.__FIREBASE_CONFIG__ ? window.__FIREBASE_CONFIG__ : null;
     const defaultConfig = {
-        apiKey: "AIzaSyAkm5sWvJpcF05QCDDSa8VcUIhh3L0c58U",
-        authDomain: "pseudopy-e7e74.firebaseapp.com",
-        projectId: "pseudopy-e7e74",
-        storageBucket: "pseudopy-e7e74.firebasestorage.app",
-        messagingSenderId: "442571972919",
-        appId: "1:442571972919:web:53fc4b941b37c484247ab2"
+        apiKey: "AIzaSyBWBtGTHxGSrsvKu-Q4CtFcTY7r--wnKgo",
+        authDomain: "pseudopy-86149.firebaseapp.com",
+        databaseURL: "https://pseudopy-86149-default-rtdb.firebaseio.com",
+        projectId: "pseudopy-86149",
+        storageBucket: "pseudopy-86149.firebasestorage.app",
+        messagingSenderId: "1091297272681",
+        appId: "1:1091297272681:web:fa674a7656d0e06326d3f8",
+        measurementId: "G-QGVJ6471XS"
     };
 
     return browserConfig && browserConfig.projectId ? browserConfig : defaultConfig;
