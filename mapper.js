@@ -31,6 +31,8 @@ class NaturalLanguageMapper {
 
         // ── Structural mapping rules (regex pattern -> replacement string) ──
         this.rules = [
+            { pattern: /^add\s+(.+?)\s+to\s+([a-zA-Z_]\w*)\s*$/i, replacement: "SET $2 TO $2 + ($1)" },
+            { pattern: /^subtract\s+(.+?)\s+from\s+([a-zA-Z_]\w*)\s*$/i, replacement: "SET $2 TO $2 - ($1)" },
             // Assignment / Set
             { pattern: /^(?:set|make|assign|let)\s+(?:variable\s+)?([a-zA-Z_]\w*)\s+(?:to|equal to|be|=|as)\s+(.+)$/i, replacement: "SET $1 TO $2" },
             
