@@ -2,6 +2,23 @@
    INITIALIZATION
    ============================================================ */
 
+window.addEventListener('pseudopy:sync-error', event => {
+    let notice = document.getElementById('cloud-save-status');
+    if (!notice) {
+        notice = document.createElement('div');
+        notice.id = 'cloud-save-status';
+        notice.setAttribute('role', 'alert');
+        notice.style.cssText = 'position:fixed;bottom:1rem;left:1rem;right:1rem;z-index:10000;padding:1rem;border:1px solid var(--danger);background:var(--bg-primary,#171923);color:var(--text-primary,#fff);border-radius:12px;';
+        document.body.appendChild(notice);
+    }
+    notice.textContent = event.detail.message;
+    notice.dataset.record = JSON.stringify([event.detail.ref, event.detail.docId]);
+});
+window.addEventListener('pseudopy:sync-saved', event => {
+    const notice = document.getElementById('cloud-save-status');
+    if (notice && notice.dataset.record === JSON.stringify([event.detail.ref, event.detail.docId])) notice.remove();
+});
+
 const SEED_DONE_KEY = 'pseudopy_seeded';
 
 /**
@@ -79,6 +96,11 @@ async function init() {
     const editor = $id('pseudocode-editor');
     if (editor) {
         const syncEditorState = () => {
+            if (currentErrorLineNumbers.length) {
+                currentErrorLineNumbers = [];
+                clearEditorErrors('pseudocode-editor');
+                setText('console-output', 'Source changed — translate again to refresh diagnostics.');
+            }
             setText('line-count', editor.value.split('\n').length + ' lines');
             updateGutter();
 
@@ -164,5 +186,4 @@ function updateClock() {
             now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     }
 }
-
 

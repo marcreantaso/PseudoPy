@@ -7,6 +7,21 @@ const path = require('node:path');
 const context = vm.createContext({ performance, console: { log() {} } });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../mapper.js'), 'utf8') + '\n' + fs.readFileSync(path.join(__dirname, '../compiler.js'), 'utf8') + '\nglobalThis.engine = new PseudocodeCompiler();', context);
 const compile = source => context.engine.compile(source);
+test('natural language increment preserves expression precedence', () => {
+    assert.equal(run('SET x TO 1\nadd 2 * 3 to x\nsubtract 1 from x\nDISPLAY x'), '6');
+    assert.equal(run('DISPLAY "add 1 to x"'), 'add 1 to x');
+});
+test('condition-style FOR reports one actionable header error', () => {
+    const result = compile('BEGIN\nx = 1\nfor x <= 10 do\ndisplay "hi"\nend for\nEND');
+    assert.equal(result.valid, false);
+    assert.equal(result.errors.length, 1, JSON.stringify(result.errors));
+    assert.match(result.errors[0].suggestion, /WHILE/);
+});
+test('unsupported statement recovers at the next line', () => {
+    const result = compile('BEGIN\nBOGUS 1 TO x\nDISPLAY 2\nEND');
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.ast.body.length, 1);
+});
 function python(code, input = '') {
     const result = spawnSync(process.env.PYTHON || 'python3', ['-I', '-c', code], { input, encoding: 'utf8', timeout: 3000 });
     assert.equal(result.status, 0, result.stderr || String(result.error));
@@ -95,3 +110,4 @@ test('function locals do not leak into outer scope', () => {
 });
 test('reject NOT as an unparenthesized arithmetic operand', () => assert.equal(compile('BEGIN\nDISPLAY 2 + NOT 1\nEND').valid, false));
 test('empty tuple assignment stays an expression', () => assert.equal(run('SET x TO ()\nDISPLAY x'), '()'));
+

@@ -30,12 +30,14 @@ console.log('[Database] Initializing Central Database Client...');
 function resolveFirebaseConfig() {
     const browserConfig = typeof window !== 'undefined' && window.__FIREBASE_CONFIG__ ? window.__FIREBASE_CONFIG__ : null;
     const defaultConfig = {
-        apiKey: "AIzaSyAkm5sWvJpcF05QCDDSa8VcUIhh3L0c58U",
-        authDomain: "pseudopy-e7e74.firebaseapp.com",
-        projectId: "pseudopy-e7e74",
-        storageBucket: "pseudopy-e7e74.firebasestorage.app",
-        messagingSenderId: "442571972919",
-        appId: "1:442571972919:web:53fc4b941b37c484247ab2"
+        apiKey: "AIzaSyBWBtGTHxGSrsvKu-Q4CtFcTY7r--wnKgo",
+        authDomain: "pseudopy-86149.firebaseapp.com",
+        databaseURL: "https://pseudopy-86149-default-rtdb.firebaseio.com",
+        projectId: "pseudopy-86149",
+        storageBucket: "pseudopy-86149.firebasestorage.app",
+        messagingSenderId: "1091297272681",
+        appId: "1:1091297272681:web:fa674a7656d0e06326d3f8",
+        measurementId: "G-QGVJ6471XS"
     };
 
     return browserConfig && browserConfig.projectId ? browserConfig : defaultConfig;
@@ -1468,6 +1470,26 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
 //  CORE CRUD FUNCTIONS (Firestore + Local Sync)
 // ══════════════════════════════════════════════════════════════
 
+function cloudSaveFailure(ref, docId, cause) {
+    const denied = /permission-denied|unauthenticated/.test(String(cause && cause.code));
+    const error = new Error(denied
+        ? 'Cloud save denied. Your change is only stored on this device. Ask your administrator to check Firebase authentication and permissions.'
+        : 'Cloud save failed. Your change is only stored on this device. Check the connection and try saving again.');
+    error.code = cause && cause.code || 'cloud-unavailable';
+    error.localOnly = true;
+    error.cause = cause;
+    if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('pseudopy:sync-error', { detail: { ref, docId, code: error.code, message: error.message } }));
+    }
+    return error;
+}
+
+function cloudSaveComplete(ref, docId) {
+    if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('pseudopy:sync-saved', { detail: { ref, docId } }));
+    }
+}
+
 /**
  * Get all documents from a collection.
  */
@@ -1501,10 +1523,7 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
     // 2. Fallback to Local/Seed data if empty.
     if (!results || results.length === 0) {
         results = getLocalCollection(ref);
-        // If Firestore is connected, seed it in the background.
-        if (firestoreReady() && results.length > 0) {
-            seedDatabase().catch(e => console.info('[Database] Background seed attempt:', e));
-        }
+        // A fallback read must not trigger cloud writes or permission retry loops.
     }
 
     // Ensure instructor mreantaso_instructor is present in users
@@ -1628,14 +1647,15 @@ async function mergePendingMutationsOverSnapshot(ref, results) {
  *  - success        → clear any stale pending mutation, then kick a sync
  *  - transient fail → persist a PENDING mutation (replayed on reconnection)
  *  - permanent fail → structured log only, never queued, never fabricated
- * This never throws into callers so existing flows keep their old contract.
+ * Reject unconfirmed saves after retaining/queuing them so callers cannot
+ * mistake a local write for confirmed cloud persistence.
  */
 async function queueFirestoreWrite({ operation, ref, docId, payload }) {
     if (!firestoreReady()) {
         if (typeof markFirestoreReachable === 'function') markFirestoreReachable(false);
         if (typeof enqueueMutation === 'function') await enqueueMutation(operation, ref, docId, payload);
         if (typeof syncNow === 'function') syncNow('write');
-        return;
+        throw cloudSaveFailure(ref, docId);
     }
     try {
         if (operation === 'UPDATE') {
@@ -1646,6 +1666,7 @@ async function queueFirestoreWrite({ operation, ref, docId, payload }) {
         if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
         if (typeof clearPendingForDocument === 'function') await clearPendingForDocument(ref, docId);
         if (typeof syncNow === 'function') syncNow('write');
+        cloudSaveComplete(ref, docId);
     } catch (err) {
         const classification = (typeof classifyDbError === 'function' ? classifyDbError(err) : { transient: false, message: err.message });
         if (classification.transient) {
@@ -1664,6 +1685,7 @@ async function queueFirestoreWrite({ operation, ref, docId, payload }) {
             }
             console.warn(`[Database] Permanent Firestore failure on ${ref}/${docId}:`, classification.message);
         }
+        throw cloudSaveFailure(ref, docId, err);
     }
 }
 
@@ -1758,7 +1780,6 @@ async function dbClearCollection(ref) {
     }
     if (batchSize > 0) await withFirestoreTimeout(batch.commit());
 }
-
 /* ============================================================
    STUDENT NUMBER SERVICE — '230xxxx' allocation
    Canonical field: users.studentNumber  (/^230\d{4}$/)
