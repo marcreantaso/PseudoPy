@@ -63,7 +63,15 @@ function runPythonCode(code, outputElementId) {
         outputEl.appendChild(span);
     }
 
-    Sk.configure({
+    // execLimit must be part of the Sk.configure() payload: Skulpt's compiler
+    // bakes the interrupt test into the generated code from this option, so a
+    // later `Sk.execLimit = ...` assignment would be ignored and a runaway
+    // loop would freeze the tab.
+    const execLimitOptions = (typeof skulptExecLimitOptions === 'function')
+        ? skulptExecLimitOptions(SKULPT_EXEC_LIMIT_MS)
+        : { execLimit: 15000 };
+
+    Sk.configure(Object.assign({
         output: function (text) { appendOutput(text); },
         read: function (x) {
             if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) throw "File not found: '" + x + "'";
@@ -132,7 +140,7 @@ function runPythonCode(code, outputElementId) {
         },
         inputfunTakesPrompt: true,
         __future__: Sk.python3
-    });
+    }, execLimitOptions));
 
     Sk.misceval.asyncToPromise(function () {
         return Sk.importMainWithBody("<stdin>", false, cleanCode, true);
@@ -162,14 +170,22 @@ function runPythonCode(code, outputElementId) {
             updateExerciseStatus();
         }
     }).catch(function (err) {
-        appendOutput('\nError: ' + err.toString());
+        const errText = String(err && err.toString ? err.toString() : err);
+        // A tripped run budget is a stop condition, not a program bug. Say so
+        // plainly so the student does not hunt for a syntax error that is not
+        // there.
+        const timedOut = /exceeded run time limit|TimeoutError/i.test(errText);
+        appendOutput('\nError: ' + errText);
+        if (timedOut) {
+            appendOutput('\n\nStopped after ' + Math.round((typeof SKULPT_EXEC_LIMIT_MS === 'number' ? SKULPT_EXEC_LIMIT_MS : 15000) / 1000) + ' seconds. Check for a loop that never ends.');
+        }
         outputEl.className = 'output-content error';
-        showToast('Runtime error occurred.', 'error');
+        showToast(timedOut ? 'Execution stopped: time limit reached.' : 'Runtime error occurred.', 'error');
         if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.endRun(studentRun, false, outputEl.textContent);
 
         // ── Panel 1: Record failed execution ──
         if (typeof metricsEngine !== 'undefined') {
-            metricsEngine.recordExecution(false, err.toString());
+            metricsEngine.recordExecution(false, errText);
         }
 
         if (outputElementId === 'console-output' && exerciseState.activeExercise) {

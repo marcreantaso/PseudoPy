@@ -497,7 +497,9 @@ function computeExpectedOutput(code) {
         return;
     }
     let outText = '';
-    Sk.configure({
+    // Same run budget as every other execution path: a malformed solution key
+    // must not be able to freeze the tab while expected output is computed.
+    Sk.configure(Object.assign({
         output: function (text) { outText += text; },
         read: function (x) {
             if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) throw "File not found: '" + x + "'";
@@ -506,7 +508,7 @@ function computeExpectedOutput(code) {
         inputfun: function () { return ''; },
         inputfunTakesPrompt: true,
         __future__: Sk.python3
-    });
+    }, (typeof skulptExecLimitOptions === 'function') ? skulptExecLimitOptions(SKULPT_EXEC_LIMIT_MS) : { execLimit: 15000 }));
     Sk.misceval.asyncToPromise(function () {
         return Sk.importMainWithBody("<stdin>", false, code, true);
     }).then(() => {

@@ -7,6 +7,14 @@
 
 const DevConsoleAborted = Object.freeze({ aborted: true });
 
+/**
+ * Upper bound on rendered console rows. A runaway program can emit output far
+ * faster than the DOM can absorb it; keeping every row is what turned a big
+ * print loop into a multi-second freeze. Older rows are dropped from the top
+ * and the drop is announced, so nothing silently disappears mid-run.
+ */
+const DEV_CONSOLE_MAX_ROWS = 2000;
+
 const DEV_CONSOLE_STATE_LABELS = {
     idle: 'Idle',
     running: 'Running',
@@ -194,7 +202,143 @@ function createRuntimeConsole() {
     const model = createRuntimeConsoleModel();
     let wired = false;
 
+    // ── Batched renderer ──────────────────────────────────────
+    // Program output arrives one entry at a time. Rendering each entry
+    // synchronously meant a createElement + appendChild + a forced layout read
+    // (scrollHeight/scrollTop/clientHeight) PER LINE, so a few thousand lines
+    // of output meant a few thousand reflows on the UI thread. Entries are
+    // queued here and flushed once per animation frame into a single
+    // DocumentFragment, with a single layout read at the end.
+    let pendingEntries = [];
+    let frameHandle = null;
+    let droppedRows = 0;
+
     function el(id) { return document.getElementById(id); }
+
+    function _requestFrame() {
+        if (frameHandle !== null) return;
+        if (typeof requestAnimationFrame === 'function') {
+            frameHandle = requestAnimationFrame(function () {
+                frameHandle = null;
+                flushOutput();
+            });
+        } else if (typeof setTimeout === 'function') {
+            // No rAF (tests / reduced environments): fall back to a macrotask
+            // so batching still happens, just without frame alignment.
+            frameHandle = setTimeout(function () {
+                frameHandle = null;
+                flushOutput();
+            }, 0);
+        } else {
+            // Neither scheduler is available. Correctness beats batching: render
+            // now rather than dropping output or throwing.
+            flushOutput();
+        }
+    }
+
+    function _makeRow(entry) {
+        const row = document.createElement('div');
+        row.className = 'devtools-console-row ' + _consoleRowClass(entry.kind);
+        const text = document.createElement('span');
+        text.className = 'devtools-console-row-text';
+        text.textContent = entry.text;
+        row.appendChild(text);
+        return row;
+    }
+
+    // Trim the container to DEV_CONSOLE_MAX_ROWS from the top, skipping the
+    // grade footer and the truncation notice. Returns how many rows went.
+    function _removeOldestRows(container, excess) {
+        let removed = 0;
+        while (removed < excess && container.firstElementChild) {
+            const first = container.firstElementChild;
+            if (first.classList.contains('devtools-console-row-grade')) break;
+            if (first.classList.contains('devtools-console-row-truncated')) break;
+            container.removeChild(first);
+            removed++;
+        }
+        return removed;
+    }
+
+    function _updateTruncationNotice(container) {
+        let notice = container.querySelector('.devtools-console-row-truncated');
+        if (droppedRows <= 0) {
+            if (notice) notice.remove();
+            return;
+        }
+        if (!notice) {
+            notice = document.createElement('div');
+            notice.className = 'devtools-console-row devtools-console-row-truncated';
+            // firstElementChild, not firstChild: a stray text node would
+            // otherwise push the notice to the end, where it reads as the last
+            // line of output instead of a header. A null ref appends, which is
+            // correct for an empty container.
+            container.insertBefore(notice, container.firstElementChild);
+        }
+        notice.textContent = '... ' + droppedRows.toLocaleString() +
+            ' earlier output ' + (droppedRows === 1 ? 'line was' : 'lines were') +
+            ' trimmed to keep the console responsive.';
+    }
+
+    function flushOutput() {
+        const container = el('devtools-console-output');
+        if (!container) {
+            pendingEntries = [];
+            return;
+        }
+        if (pendingEntries.length === 0 && droppedRows === 0) return;
+
+        const entries = pendingEntries;
+        pendingEntries = [];
+
+        const ph = container.querySelector('.devtools-console-empty');
+        if (ph) ph.remove();
+
+        if (entries.length > 0) {
+            const fragment = document.createDocumentFragment();
+            for (let i = 0; i < entries.length; i++) fragment.appendChild(_makeRow(entries[i]));
+            container.appendChild(fragment);
+        }
+
+        // A single layout read for the whole batch instead of one per line.
+        // The notice occupies a row too, so reserve it headroom on the batch
+        // that first trips the cap, otherwise the DOM ends up one row over.
+        const noticeExists = !!container.querySelector('.devtools-console-row-truncated');
+        let effectiveCap = DEV_CONSOLE_MAX_ROWS;
+        if (!noticeExists && container.childElementCount > DEV_CONSOLE_MAX_ROWS) {
+            effectiveCap = DEV_CONSOLE_MAX_ROWS - 1;
+        }
+        const excess = container.childElementCount - effectiveCap;
+        if (excess > 0) {
+            droppedRows += _removeOldestRows(container, excess);
+        }
+        if (droppedRows > 0 || noticeExists) _updateTruncationNotice(container);
+        autoScroll(container);
+    }
+
+    function _removeOldestRows(container, excess) {
+        let removed = 0;
+        while (removed < excess && container.firstElementChild) {
+            const first = container.firstElementChild;
+            if (first.classList.contains('devtools-console-row-grade')) break;
+            if (first.classList.contains('devtools-console-row-truncated')) break;
+            container.removeChild(first);
+            removed++;
+        }
+        return removed;
+    }
+
+    function _cancelFrame() {
+        if (frameHandle === null) return;
+        if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frameHandle);
+        else if (typeof clearTimeout === 'function') clearTimeout(frameHandle);
+        frameHandle = null;
+    }
+
+    function _flushNow() {
+        _cancelFrame();
+        flushOutput();
+    }
 
     function setStateUI() {
         const stateEl = el('devtools-console-state');
@@ -225,6 +369,9 @@ function createRuntimeConsole() {
     // stdout ends in a numeric grade. The stored transcript value is never
     // altered; only the displayed number is formatted to two decimals.
     function _renderGradeSummary() {
+        // The footer must land AFTER the real output, so any batched rows still
+        // queued have to land first.
+        _flushNow();
         const container = el('devtools-console-output');
         if (!container) return;
         let row = container.querySelector('.devtools-console-row-grade');
@@ -247,6 +394,11 @@ function createRuntimeConsole() {
     }
 
     function wipeOutput() {
+        // Drop any batched rows still queued for the PREVIOUS run; flushing them
+        // now would splice stale output into a freshly started run.
+        _cancelFrame();
+        pendingEntries = [];
+        droppedRows = 0;
         const container = el('devtools-console-output');
         if (!container) return;
         container.replaceChildren();
@@ -263,18 +415,8 @@ function createRuntimeConsole() {
     }
 
     function renderAppend(entry) {
-        const container = el('devtools-console-output');
-        if (!container) return;
-        const ph = container.querySelector('.devtools-console-empty');
-        if (ph) ph.remove();
-        const row = document.createElement('div');
-        row.className = 'devtools-console-row ' + _consoleRowClass(entry.kind);
-        const text = document.createElement('span');
-        text.className = 'devtools-console-row-text';
-        text.textContent = entry.text;
-        row.appendChild(text);
-        container.appendChild(row);
-        autoScroll(container);
+        pendingEntries.push(entry);
+        _requestFrame();
     }
 
     function wire() {
@@ -313,6 +455,12 @@ function createRuntimeConsole() {
         transcriptText() {
             return model.transcript.map(function (e) { return e.text; }).join('');
         },
+        // Force the batched rows out now instead of waiting for the next
+        // frame. Used by the test suite and before reading the DOM.
+        flush() { _flushNow(); },
+        get pendingRenderCount() { return pendingEntries.length; },
+        get droppedRowCount() { return droppedRows; },
+        get maxRows() { return DEV_CONSOLE_MAX_ROWS; },
         wire: wire
     };
 
@@ -547,7 +695,14 @@ function _devToolsExecutePython(pythonCode, attempt) {
     const stdoutBuffer = [];
     const execStart = performance.now();
 
-    Sk.configure({
+    // Skulpt bakes the run budget into the generated code from the
+    // Sk.configure() payload, so execLimit has to be supplied HERE, before
+    // importMainWithBody compiles the program. This build has no
+    // Sk.misceval.timeout, so a guard written against that API is a no-op and
+    // a tight loop would freeze the tab.
+    const execLimitMs = (typeof SKULPT_EXEC_LIMIT_MS === 'number') ? SKULPT_EXEC_LIMIT_MS : 15000;
+
+    Sk.configure(Object.assign({
         output: function (text) {
             stdoutBuffer.push(text);
             if (typeof runtimeConsole !== 'undefined') runtimeConsole.append(text, 'stdout');
@@ -562,16 +717,13 @@ function _devToolsExecutePython(pythonCode, attempt) {
         },
         inputfunTakesPrompt: true,
         __future__: Sk.python3
-    });
+    }, { execLimit: execLimitMs }));
 
     const execFn = function () {
         return Sk.importMainWithBody("<stdin>", false, pythonCode, true);
     };
-    // Best-effort execution budget for Skulpt builds that expose
-    // Sk.misceval.timeout; tight synchronous loops cannot be preempted.
-    const guardedExec = (typeof Sk.misceval.timeout === 'function') ? Sk.misceval.timeout(execFn, 15000) : execFn;
 
-    Sk.misceval.asyncToPromise(guardedExec).then(function () {
+    Sk.misceval.asyncToPromise(execFn).then(function () {
         const execTime = performance.now() - execStart;
         const stdout = stdoutBuffer.join('');
 
@@ -630,7 +782,17 @@ function _devToolsExecutePython(pythonCode, attempt) {
         }
 
         const errStr = err.toString();
-        if (typeof runtimeConsole !== 'undefined') runtimeConsole.fail(err);
+        // A tripped run budget is a stop condition, not a program bug. Say so
+        // plainly instead of reporting it as an unexplained runtime error.
+        const timedOut = /exceeded run time limit|TimeoutError/i.test(errStr);
+        if (typeof runtimeConsole !== 'undefined') {
+            runtimeConsole.fail(err);
+            if (timedOut) {
+                runtimeConsole.append(
+                    '\nStopped after ' + Math.round((typeof execLimitMs === 'number' ? execLimitMs : 15000) / 1000) +
+                    ' seconds. Check for a loop that never ends.', 'stderr');
+            }
+        }
         if (statusEl) statusEl.textContent = '{{ui:CircleX}} Error';
         if (stderrEl) stderrEl.textContent = errStr;
         if (stdoutEl) stdoutEl.textContent = stdoutBuffer.join('') || '(no output before error)';
@@ -643,7 +805,10 @@ function _devToolsExecutePython(pythonCode, attempt) {
         // Add runtime error to classified errors
         devToolsState.allErrors.push({
             category: 'RUNTIME', stage: 'EXECUTION', line: '—',
-            message: errStr, suggestion: 'Check the generated Python code for runtime issues.'
+            message: errStr,
+            suggestion: timedOut
+                ? 'The program exceeded the ' + Math.round((typeof execLimitMs === 'number' ? execLimitMs : 15000) / 1000) + 's run limit. Check for a loop that never ends.'
+                : 'Check the generated Python code for runtime issues.'
         });
         _renderErrorTable();
 

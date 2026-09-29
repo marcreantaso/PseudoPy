@@ -189,7 +189,14 @@ function _devToolsExecutePython(pythonCode, attempt) {
     const stdoutBuffer = [];
     const execStart = performance.now();
 
-    Sk.configure({
+    // Skulpt bakes the run budget into the generated code from the
+    // Sk.configure() payload, so execLimit has to be supplied HERE, before
+    // importMainWithBody compiles the program. This build has no
+    // Sk.misceval.timeout, so a guard written against that API is a no-op and
+    // a tight loop would freeze the tab.
+    const execLimitMs = (typeof SKULPT_EXEC_LIMIT_MS === 'number') ? SKULPT_EXEC_LIMIT_MS : 15000;
+
+    Sk.configure(Object.assign({
         output: function (text) {
             stdoutBuffer.push(text);
             if (typeof runtimeConsole !== 'undefined') runtimeConsole.append(text, 'stdout');
@@ -204,16 +211,13 @@ function _devToolsExecutePython(pythonCode, attempt) {
         },
         inputfunTakesPrompt: true,
         __future__: Sk.python3
-    });
+    }, { execLimit: execLimitMs }));
 
     const execFn = function () {
         return Sk.importMainWithBody("<stdin>", false, pythonCode, true);
     };
-    // Best-effort execution budget for Skulpt builds that expose
-    // Sk.misceval.timeout; tight synchronous loops cannot be preempted.
-    const guardedExec = (typeof Sk.misceval.timeout === 'function') ? Sk.misceval.timeout(execFn, 15000) : execFn;
 
-    Sk.misceval.asyncToPromise(guardedExec).then(function () {
+    Sk.misceval.asyncToPromise(execFn).then(function () {
         const execTime = performance.now() - execStart;
         const stdout = stdoutBuffer.join('');
 
@@ -272,7 +276,17 @@ function _devToolsExecutePython(pythonCode, attempt) {
         }
 
         const errStr = err.toString();
-        if (typeof runtimeConsole !== 'undefined') runtimeConsole.fail(err);
+        // A tripped run budget is a stop condition, not a program bug. Say so
+        // plainly instead of reporting it as an unexplained runtime error.
+        const timedOut = /exceeded run time limit|TimeoutError/i.test(errStr);
+        if (typeof runtimeConsole !== 'undefined') {
+            runtimeConsole.fail(err);
+            if (timedOut) {
+                runtimeConsole.append(
+                    '\nStopped after ' + Math.round((typeof execLimitMs === 'number' ? execLimitMs : 15000) / 1000) +
+                    ' seconds. Check for a loop that never ends.', 'stderr');
+            }
+        }
         if (statusEl) statusEl.textContent = '{{ui:CircleX}} Error';
         if (stderrEl) stderrEl.textContent = errStr;
         if (stdoutEl) stdoutEl.textContent = stdoutBuffer.join('') || '(no output before error)';
@@ -285,7 +299,10 @@ function _devToolsExecutePython(pythonCode, attempt) {
         // Add runtime error to classified errors
         devToolsState.allErrors.push({
             category: 'RUNTIME', stage: 'EXECUTION', line: '—',
-            message: errStr, suggestion: 'Check the generated Python code for runtime issues.'
+            message: errStr,
+            suggestion: timedOut
+                ? 'The program exceeded the ' + Math.round((typeof execLimitMs === 'number' ? execLimitMs : 15000) / 1000) + 's run limit. Check for a loop that never ends.'
+                : 'Check the generated Python code for runtime issues.'
         });
         _renderErrorTable();
 

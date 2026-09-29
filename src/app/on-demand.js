@@ -37,6 +37,36 @@ function loadScripts(srcList, onSuccess, onError) {
     next();
 }
 
+/**
+ * Wall-clock budget for a single student program run.
+ *
+ * Skulpt enforces this through `Sk.execLimit`, which its compiler bakes into
+ * the generated code as an interrupt test. Two consequences matter:
+ *   1. `execLimit` is read from the `Sk.configure()` options, so it MUST be
+ *      supplied before `Sk.importMainWithBody` compiles the program. Setting
+ *      `Sk.execLimit` afterwards has no effect.
+ *   2. This build of Skulpt has no `Sk.misceval.timeout`, so a guard written
+ *      against that API silently does nothing and a tight `while True:`
+ *      loop freezes the tab forever.
+ */
+const SKULPT_EXEC_LIMIT_MS = 15000;
+
+/**
+ * Build the Sk.configure() options fragment that arms the run budget.
+ * Returns `{ execLimit }`, or an empty object when the caller has explicitly
+ * opted out (used by long-running simulations).
+ */
+function skulptExecLimitOptions(limitMs) {
+    const ms = (limitMs === undefined || limitMs === null) ? SKULPT_EXEC_LIMIT_MS : limitMs;
+    if (ms === Infinity) return {};
+    return { execLimit: ms };
+}
+
+/** True when a Skulpt build can actually enforce a wall-clock budget. */
+function skulptSupportsExecLimit() {
+    return typeof Sk !== 'undefined' && Sk !== null;
+}
+
 // ── Memoized lazy loaders ────────────────────────────────────
 // A single shared promise per library prevents concurrent call sites
 // (execution, exercises, devtools) from injecting duplicate scripts.

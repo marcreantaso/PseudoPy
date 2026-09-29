@@ -150,14 +150,38 @@ test('runtime errors remain visible in the console transcript', () => {
 });
 
 function makeEl() {
-    return {
+    const el = {
         textContent: '', value: '', disabled: false, className: '', hidden: false,
         classList: { toggles: [], toggle(cls, force) { this.toggles.push({ cls, force }); } },
         setAttribute() {}, focus() { this.focusCount = (this.focusCount || 0) + 1; },
-        addEventListener() {}, appendChild(node) { (this.appended = this.appended || []).push(node); },
+        addEventListener() {},
+        // `appended` is the child list. Appends into a DocumentFragment are
+        // MOVED into the parent, so a batched row lands as a real child rather
+        // than as a nested fragment.
+        appendChild(node) {
+            (this.appended = this.appended || []);
+            if (node && node.isFragment) { this.appended.push(...(node.appended || [])); return node; }
+            this.appended.push(node);
+            return node;
+        },
+        insertBefore(node, ref) {
+            (this.appended = this.appended || []);
+            const i = ref ? this.appended.indexOf(ref) : -1;
+            this.appended.splice(i < 0 ? this.appended.length : i, 0, node);
+            return node;
+        },
+        removeChild(node) {
+            const i = (this.appended || []).indexOf(node);
+            if (i >= 0) this.appended.splice(i, 1);
+            return node;
+        },
+        remove() { if (this.parentNode) this.parentNode.removeChild(this); },
         replaceChildren() { this.appended = []; }, querySelector() { return null; },
+        get childElementCount() { return (this.appended || []).length; },
+        get firstElementChild() { return (this.appended || [])[0] || null; },
         scrollHeight: 0, scrollTop: 0, clientHeight: 0
     };
+    return el;
 }
 
 test('the DOM binding renders the question, shows and focuses the input row, and hides it on submit', async () => {
@@ -169,13 +193,18 @@ test('the DOM binding renders the question, shows and focuses the input row, and
     }
     const doc = {
         getElementById: id => els[id] || null,
-        createElement: () => makeEl()
+        createElement: () => makeEl(),
+        // Rows are batched into a fragment and flushed once per frame, so the
+        // stub needs real fragment semantics for the assertions below to mean
+        // anything.
+        createDocumentFragment: () => { const f = makeEl(); f.isFragment = true; return f; }
     };
     const sandbox = loadConsole(doc);
     const rc = sandbox.consoleFactory();
 
     rc.beginRun();
     const p = rc.requestInput('Name: ');
+    rc.flush(); // rows are batched; force them out before inspecting the DOM
 
     assert.equal(els['devtools-console-prompt'].textContent, 'Name: ', 'the label shows the question while waiting');
     assert.equal(els['devtools-console-state'].textContent, 'Waiting for Input');

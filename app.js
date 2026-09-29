@@ -376,6 +376,36 @@ function loadScripts(srcList, onSuccess, onError) {
     next();
 }
 
+/**
+ * Wall-clock budget for a single student program run.
+ *
+ * Skulpt enforces this through `Sk.execLimit`, which its compiler bakes into
+ * the generated code as an interrupt test. Two consequences matter:
+ *   1. `execLimit` is read from the `Sk.configure()` options, so it MUST be
+ *      supplied before `Sk.importMainWithBody` compiles the program. Setting
+ *      `Sk.execLimit` afterwards has no effect.
+ *   2. This build of Skulpt has no `Sk.misceval.timeout`, so a guard written
+ *      against that API silently does nothing and a tight `while True:`
+ *      loop freezes the tab forever.
+ */
+const SKULPT_EXEC_LIMIT_MS = 15000;
+
+/**
+ * Build the Sk.configure() options fragment that arms the run budget.
+ * Returns `{ execLimit }`, or an empty object when the caller has explicitly
+ * opted out (used by long-running simulations).
+ */
+function skulptExecLimitOptions(limitMs) {
+    const ms = (limitMs === undefined || limitMs === null) ? SKULPT_EXEC_LIMIT_MS : limitMs;
+    if (ms === Infinity) return {};
+    return { execLimit: ms };
+}
+
+/** True when a Skulpt build can actually enforce a wall-clock budget. */
+function skulptSupportsExecLimit() {
+    return typeof Sk !== 'undefined' && Sk !== null;
+}
+
 // ── Memoized lazy loaders ────────────────────────────────────
 // A single shared promise per library prevents concurrent call sites
 // (execution, exercises, devtools) from injecting duplicate scripts.
@@ -1927,7 +1957,15 @@ function runPythonCode(code, outputElementId) {
         outputEl.appendChild(span);
     }
 
-    Sk.configure({
+    // execLimit must be part of the Sk.configure() payload: Skulpt's compiler
+    // bakes the interrupt test into the generated code from this option, so a
+    // later `Sk.execLimit = ...` assignment would be ignored and a runaway
+    // loop would freeze the tab.
+    const execLimitOptions = (typeof skulptExecLimitOptions === 'function')
+        ? skulptExecLimitOptions(SKULPT_EXEC_LIMIT_MS)
+        : { execLimit: 15000 };
+
+    Sk.configure(Object.assign({
         output: function (text) { appendOutput(text); },
         read: function (x) {
             if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) throw "File not found: '" + x + "'";
@@ -1996,7 +2034,7 @@ function runPythonCode(code, outputElementId) {
         },
         inputfunTakesPrompt: true,
         __future__: Sk.python3
-    });
+    }, execLimitOptions));
 
     Sk.misceval.asyncToPromise(function () {
         return Sk.importMainWithBody("<stdin>", false, cleanCode, true);
@@ -2026,14 +2064,22 @@ function runPythonCode(code, outputElementId) {
             updateExerciseStatus();
         }
     }).catch(function (err) {
-        appendOutput('\nError: ' + err.toString());
+        const errText = String(err && err.toString ? err.toString() : err);
+        // A tripped run budget is a stop condition, not a program bug. Say so
+        // plainly so the student does not hunt for a syntax error that is not
+        // there.
+        const timedOut = /exceeded run time limit|TimeoutError/i.test(errText);
+        appendOutput('\nError: ' + errText);
+        if (timedOut) {
+            appendOutput('\n\nStopped after ' + Math.round((typeof SKULPT_EXEC_LIMIT_MS === 'number' ? SKULPT_EXEC_LIMIT_MS : 15000) / 1000) + ' seconds. Check for a loop that never ends.');
+        }
         outputEl.className = 'output-content error';
-        showToast('Runtime error occurred.', 'error');
+        showToast(timedOut ? 'Execution stopped: time limit reached.' : 'Runtime error occurred.', 'error');
         if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.endRun(studentRun, false, outputEl.textContent);
 
         // ── Panel 1: Record failed execution ──
         if (typeof metricsEngine !== 'undefined') {
-            metricsEngine.recordExecution(false, err.toString());
+            metricsEngine.recordExecution(false, errText);
         }
 
         if (outputElementId === 'console-output' && exerciseState.activeExercise) {
@@ -2991,7 +3037,9 @@ function computeExpectedOutput(code) {
         return;
     }
     let outText = '';
-    Sk.configure({
+    // Same run budget as every other execution path: a malformed solution key
+    // must not be able to freeze the tab while expected output is computed.
+    Sk.configure(Object.assign({
         output: function (text) { outText += text; },
         read: function (x) {
             if (Sk.builtinFiles === undefined || Sk.builtinFiles["files"][x] === undefined) throw "File not found: '" + x + "'";
@@ -3000,7 +3048,7 @@ function computeExpectedOutput(code) {
         inputfun: function () { return ''; },
         inputfunTakesPrompt: true,
         __future__: Sk.python3
-    });
+    }, (typeof skulptExecLimitOptions === 'function') ? skulptExecLimitOptions(SKULPT_EXEC_LIMIT_MS) : { execLimit: 15000 }));
     Sk.misceval.asyncToPromise(function () {
         return Sk.importMainWithBody("<stdin>", false, code, true);
     }).then(() => {

@@ -7260,6 +7260,19 @@ select.form-input {
   color: var(--status-success-fg);
 }
 
+/* Notice shown when the rendered-row cap drops the oldest output. Output is
+   capped for responsiveness, so the drop is never silent. */
+.devtools-console-row-truncated {
+  position: sticky;
+  top: 0;
+  padding: 0.35rem 0.6rem;
+  font-style: italic;
+  font-size: 0.78rem;
+  color: var(--text-muted, var(--text-secondary));
+  background: var(--dt-surface-subtle, var(--bg-elevated));
+  border-bottom: 1px dashed var(--border-divider);
+}
+
 .devtools-console-input-row {
   display: flex;
   align-items: center;
