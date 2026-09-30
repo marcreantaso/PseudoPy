@@ -14,6 +14,8 @@ rules_version = '2';
    Deploying this file before login uses Firebase Auth will lock every
    user out. Deploy `firestore.interim.rules` first (it removes the red
    toast immediately), then complete the migration and swap this file in.
+   That swap is a one-line edit to `firebase.json` once the migration
+   criteria in that file's header are met. Project: `pseudopy-86149`.
 
    ── Role source ──────────────────────────────────────────────────
    `isAdmin()` / `isInstructor()` use a ROLE LOOKUP in `pseudopy_users`

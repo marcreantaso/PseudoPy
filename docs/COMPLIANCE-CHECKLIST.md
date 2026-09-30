@@ -75,17 +75,21 @@ must report **0 non-Python failures** and 137+ passes.
 
 ### Security / privacy (P2, C1, H3)
 
-- [ ] `measurementId` absent from `window.__FIREBASE_CONFIG__` and the
-      Firebase config in `src/database/firebase.js` (now optional).
+- [ ] `measurementId` absent from the Firebase config in
+      `src/database/firebase.js` (now optional). There is no inline
+      `window.__FIREBASE_CONFIG__` copy any more; that duplicate once
+      pointed the app at a different project than the one in use.
 - [ ] No raw `userAgent` string is persisted in Firestore device records;
       the attacker-behavior fingerprint remains (UA is not stored).
 - [ ] Devices now appear as "Unknown device/browser" in the devices list;
       approve that text is friendlier than the raw string.
 - [ ] `.form-privacy-note` privacy text is visible under the account-modals and
       the Forgot Password flow.
-- [ ] Deployment of `firestore.rules` (proposed, baseline-open) — see the
-      REST API note below — must be reviewed first; the app does not use
-      Firebase Auth, so locked-down rules would break the app.
+- [ ] Deployment of Firestore rules must be reviewed first. `firebase.json`
+      deploys `firestore.interim.rules` (open baseline) precisely because
+      the app does not use Firebase Auth, so locked-down rules would break
+      it. Do not repoint it at `firestore.rules` until that file's header
+      migration criteria are met.
 
 ### REST API / backend (P2, document-only)
 

@@ -2953,16 +2953,14 @@
        read/write/listener is anonymous and any auth-required ruleset refuses it. -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 
-  <script>
-    window.__FIREBASE_CONFIG__ = {
-      apiKey: "AIzaSyAkm5sWvJpcF05QCDDSa8VcUIhh3L0c58U",
-      authDomain: "pseudopy-e7e74.firebaseapp.com",
-      projectId: "pseudopy-e7e74",
-      storageBucket: "pseudopy-e7e74.firebasestorage.app",
-      messagingSenderId: "442571972919",
-      appId: "1:442571972919:web:53fc4b941b37c484247ab2"
-    };
-  </script>
+  <!-- Firebase project configuration lives in ONE place: the default config in
+       src/database/firebase.js (project `pseudopy-86149`). A second inline copy
+       here previously pointed the app at `pseudopy-e7e74` and, because the
+       `window.__FIREBASE_CONFIG__` override wins, the two disagreed silently.
+       To target a different project, set the override before database.js
+       loads, using a real <script> block that assigns
+       window.__FIREBASE_CONFIG__ to { projectId, apiKey, authDomain, appId }.
+       Keep it in sync with the console, or change the default instead. -->
 
   <!-- Database Config & Client (Firebase Firestore) -->
   <script src="database.js"></script>

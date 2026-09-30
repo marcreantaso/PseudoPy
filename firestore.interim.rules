@@ -20,6 +20,14 @@ rules_version = '2';
      `pseudopy_passwordRequests` and every `pseudopy_users` document
      (which stores password hashes and salts).
 
+   PROJECT: `pseudopy-86149` (see .firebaserc, and the single default
+     config in src/database/firebase.js).
+
+   DEPLOYED BY DEFAULT: `firebase.json` points firestore.rules at THIS
+     file on purpose. `firestore deploy --only firestore:rules` therefore
+     deploys the safe bridge. If you ever point it at `firestore.rules`
+     before the exit criteria below are met, you lock every user out.
+
    EXIT CRITERIA — replace this file with `firestore.rules` as soon as
      1. Firebase Auth → Email/Password is enabled in the console, AND
      2. every account has a Firebase Auth user, AND
