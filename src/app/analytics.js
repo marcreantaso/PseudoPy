@@ -61,7 +61,7 @@ function rebuildAnalyticsScope() {
     const myStudentUsernames = new Set(myStudents.map(s => s.username).filter(Boolean));
     const myStudentNames = new Set(myStudents.map(s => s.fullName).filter(Boolean));
 
-    cachedInstructorActivity = cachedActivity.filter(a => {
+    cachedInstructorActivity = realAnalyticsRecords(cachedActivity).filter(a => {
         if (a.instructorId) return ownerIds.has(a.instructorId);
         if (a.studentAccountId) return myStudentIds.has(a.studentAccountId);
         if (a.studentId) return myStudentIds.has(a.studentId) || myStudentEnrolledIds.has(a.studentId);
@@ -199,7 +199,8 @@ function applyAnalyticsFilters() {
 
         // 5. Submission status
         if (submissionVal) {
-            const normStatus = a.status === 'In Progress' ? 'Pending' : a.status;
+            const normStatus = a.status === 'compile_error' ? 'Failed' :
+                a.status === 'ungraded' || a.status === 'In Progress' ? 'Pending' : a.status;
             const targetStatus = submissionVal === 'In Progress' ? 'Pending' : submissionVal;
             if (normStatus !== targetStatus && a.status !== submissionVal) return false;
         }
@@ -246,7 +247,8 @@ function resetAnalyticsFilters() {
 }
 
 function updateAnalyticsUI() {
-    const total = currentFilteredActivity.length;
+    const submissions = currentFilteredActivity.filter(isSubmissionActivity);
+    const total = submissions.length;
 
     // Stat Cards
     const ownerIds = new Set([currentUser?.id, currentUser?._docId].filter(Boolean));
@@ -260,11 +262,11 @@ function updateAnalyticsUI() {
     setText('stat-students', String(activeStudents.length));
     setText('stat-submissions', String(total));
 
-    const completed = currentFilteredActivity.filter(a => a.status === 'Completed').length;
+    const completed = submissions.filter(a => a.status === 'Completed').length;
     const successRate = total > 0 ? Math.round((completed / total) * 100) : 0;
     setText('stat-success-rate', successRate + '%');
 
-    const errCount = currentFilteredActivity.filter(a => a.errorType && a.errorType.trim() !== '').length;
+    const errCount = buildErrorDistribution(currentFilteredActivity).total;
     setText('stat-common-errors', String(errCount));
 
     // Dynamic Trend Elements
@@ -295,7 +297,8 @@ function updateAnalyticsUI() {
 
     // Record count label
     const countLabel = $id('activity-count-label');
-    if (countLabel) countLabel.textContent = total === 0 ? 'No records' : `${total} record${total !== 1 ? 's' : ''}`;
+    const recordCount = currentFilteredActivity.length;
+    if (countLabel) countLabel.textContent = recordCount === 0 ? 'No records' : `${recordCount} record${recordCount !== 1 ? 's' : ''}`;
 
     // Render Charts
     if (typeof renderAnalyticsCharts === 'function') renderAnalyticsCharts(currentFilteredActivity);
@@ -332,7 +335,7 @@ function renderFilteredActivityTable(activityList) {
     if (totalRecords === 0) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:2.5rem;color:var(--text-muted)">
             <div class="analytics-empty-icon"><i data-lucide="chart-column" aria-hidden="true"></i></div>
-            No matching student submissions found for the selected filters.
+            No matching student activity found for the selected filters.
         </td></tr>`;
         if (pageInfo) pageInfo.textContent = 'Showing 0 of 0 results';
         if (prevBtn) prevBtn.disabled = true;
@@ -366,6 +369,8 @@ function renderFilteredActivityTable(activityList) {
         const norm = (s || '').toLowerCase();
         if (norm === 'completed') return `<span class="badge-status badge-completed">Completed</span>`;
         if (norm === 'failed') return `<span class="badge-status badge-failed">Failed</span>`;
+        if (norm === 'compile_error') return `<span class="badge-status badge-failed">Compile error</span>`;
+        if (norm === 'ungraded') return `<span class="badge-status badge-pending">Ungraded</span>`;
         if (norm === 'revision requested') return `<span class="badge-status badge-pending">Revision Requested</span>`;
         return `<span class="badge-status badge-pending">Pending</span>`;
     };
@@ -412,7 +417,7 @@ function renderFilteredActivityTable(activityList) {
             </div>
           </td>
           <td class="an-cell-muted an-cell-mono">${anEsc(analyticsStudentNumber(a))}</td>
-          <td class="an-cell-secondary">${a.exercise || '—'}</td>
+          <td class="an-cell-secondary">${anEsc(a.exercise || '—')}${a.type === 'translate_attempt' ? '<br><small>Translation attempt</small>' : ''}</td>
           <td>${diffBadge(a.difficulty)}</td>
           <td>${anStatusBadge(a.status)}</td>
           <td class="an-cell-score" style="color:${scoreColor(a)}">${a.score || '—'}</td>
@@ -494,7 +499,7 @@ function viewSubmissionDetail(docId) {
 
     const requestButton = $id('sdm-request-resubmit');
     if (requestButton) {
-        const ownsSubmission = currentUser?.role === 'instructor' &&
+        const ownsSubmission = isSubmissionActivity(a) && currentUser?.role === 'instructor' &&
             (!a.instructorId || a.instructorId === currentUser.id || a.instructorId === currentUser._docId);
         requestButton.classList.toggle('hidden', !ownsSubmission || a.status === 'Revision Requested');
         requestButton.disabled = false;

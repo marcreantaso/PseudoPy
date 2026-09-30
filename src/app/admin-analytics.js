@@ -33,6 +33,7 @@ function systemHasPseudocode(record) {
 }
 
 function systemHasExecution(record) {
+    if (record && record.type === 'translate_attempt') return false;
     return !!(record && (record.python_code || record.pythonCode || record.output || record.status === 'Completed'));
 }
 

@@ -15,6 +15,7 @@
     "src/app/session.js",
     "src/app/navigation.js",
     "src/app/mobile-navigation.js",
+    "src/app/translation-activity.js",
     "src/app/translation.js",
     "src/app/file-import.js",
     "src/app/execution.js",

@@ -71,7 +71,17 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
             input = cleanedInput;
         }
 
-        const result = pseudocodeToPython(input);
+        let result;
+        try {
+            result = pseudocodeToPython(input);
+        } catch (error) {
+            result = { valid: false, python: '', warnings: [], errors: [{
+                errorType: 'Compiler Error', message: error.message || String(error)
+            }] };
+        }
+        if (typeof recordStudentTranslation === 'function') {
+            recordStudentTranslation(input, result, inputId).catch(error => console.warn('[Translation activity]', error));
+        }
         const validation = result;
 
         // Learning layer hook (non-destructive): run the feedback pipeline so

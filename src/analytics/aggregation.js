@@ -6,7 +6,35 @@
 
 const AN_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const AN_DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const KNOWN_ERROR_TYPES = ['Syntax Error', 'Type Error', 'Logic Error', 'Runtime Error', 'Missing Terminator', 'Indentation Error'];
+const KNOWN_ERROR_TYPES = ['Syntax Error', 'Type Error', 'Logic Error', 'Runtime Error', 'Missing Terminator', 'Indentation Error', 'Undefined Variable', 'Compiler Error'];
+
+function classifyActivityError(error) {
+    const explicit = String(error.errorType || error.type || '').trim();
+    if (explicit === 'Missing END') return 'Missing Terminator';
+    const detail = String(error.code || '') + ' ' + String(error.message || '');
+    if (/UNDECLARED_VARIABLE|undefined variable|undeclared variable/i.test(detail)) return 'Undefined Variable';
+    if (/\bmissing\b.*\bEND\b|\bexpected\b.*\bEND\b|unclosed|unterminated.*block/i.test(detail)) return 'Missing Terminator';
+    if (explicit) return KNOWN_ERROR_TYPES.includes(explicit) ? explicit : 'Other';
+    if (/TYPE_MISMATCH/i.test(detail)) return 'Type Error';
+    return 'Syntax Error';
+}
+
+function realAnalyticsRecords(records) {
+    const seen = new Set();
+    return (records || []).filter(record => {
+        if (!record) return false;
+        const id = record._docId || record.id;
+        // Reserved IDs used by getInitialSeedActivity, including older cloud seeds.
+        if (record.isDemo === true || /^act_sp_(?:\d+|em\d+|md\d+)$/.test(id || '')) return false;
+        if (id && seen.has(id)) return false;
+        if (id) seen.add(id);
+        return true;
+    });
+}
+
+function isSubmissionActivity(record) {
+    return !record.type || record.type === 'submission';
+}
 
 function recordDate(record) {
     const raw = record && (record.timestamp || record.time);
@@ -245,11 +273,12 @@ function buildErrorDistribution(records) {
     const counts = {};
     KNOWN_ERROR_TYPES.concat(['Other']).forEach(t => (counts[t] = 0));
 
-    (records || []).forEach(record => {
-        const type = String(record.errorType || '').trim();
-        if (!type) return;
-        if (counts[type] !== undefined) counts[type]++;
-        else counts['Other']++;
+    realAnalyticsRecords(records).forEach(record => {
+        const errors = Array.isArray(record.errors) ? record.errors
+            : record.errorType ? [{ errorType: record.errorType }] : [];
+        errors.filter(error => error && error.severity !== 'warning').forEach(error => {
+            counts[classifyActivityError(error)]++;
+        });
     });
 
     const total = KNOWN_ERROR_TYPES.concat(['Other']).reduce((sum, t) => sum + counts[t], 0);
@@ -277,6 +306,9 @@ function buildErrorDistribution(records) {
    ============================================================ */
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+        classifyActivityError,
+        realAnalyticsRecords,
+        isSubmissionActivity,
         recordDate,
         maxRecordDate,
         dayKey,

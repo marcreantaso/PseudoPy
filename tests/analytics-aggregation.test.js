@@ -123,7 +123,7 @@ test('buildErrorDistribution folds unknown types into Other and sums to 100%', (
         rec('John', mk(2025, 8, 1, 9), '0%', 'Syntax Error'),
         rec('John', mk(2025, 8, 2, 9), '0%', 'Syntax Error'),
         rec('Maria', mk(2025, 8, 1, 9), '0%', 'Logic Error'),
-        rec('Maria', mk(2025, 8, 1, 9), '0%', 'Weird Runtime Crash'),
+        rec('Maria', mk(2025, 8, 2, 9), '0%', 'Weird Runtime Crash'),
         rec('Zoe', mk(2025, 8, 1, 9), '0%') // no errorType
     ];
     const dist = agg.buildErrorDistribution(records);

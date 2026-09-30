@@ -71,3 +71,18 @@ test('a single error category draws a complete ring with four arcs', () => {
     assert.equal((ring.match(/ A /g) || []).length, 4);
     assert.ok(!/NaN|Infinity/.test(ring));
 });
+
+test('instructor filters include free-practice failures and exclude demo and duplicate activity', () => {
+    const h = harness();
+    const filters = { 'filter-search': { value: 'free practice' }, 'filter-submission': { value: 'Failed' } };
+    h.context.$id = id => filters[id] || null;
+    const attempt = { id: 'translate_1', instructorId: 'teacher', exercise: 'Free practice',
+        type: 'translate_attempt', status: 'compile_error', errors: [{ errorType: 'Syntax Error' }] };
+    h.context.cachedActivity = [attempt, attempt,
+        { ...attempt, id: 'act_sp_3' },
+        { ...attempt, id: 'other', instructorId: 'other-teacher' }];
+    h.context.rebuildAnalyticsScope();
+    h.context.applyAnalyticsFilters();
+    assert.equal(h.rows().length, 1);
+    assert.equal(aggregation.buildErrorDistribution(h.rows()).total, 1);
+});

@@ -20,15 +20,16 @@ function renderAnalyticsCharts(filteredActivity) {
             anHideTooltip(plot.closest('.an-chart-card')?.querySelector('.an-svg-tooltip'));
         }
     });
-    setText('an-live-status', 'Showing recorded submissions for the selected filters.');
+    setText('an-live-status', 'Showing recorded submissions and translation attempts for the selected filters.');
+    const submissions = filteredActivity.filter(isSubmissionActivity);
     try {
-        renderTrajectoryChart(filteredActivity);
+        renderTrajectoryChart(submissions);
     } catch (e) {
         console.error('[Analytics] trajectory render failed:', e);
         showChartError('an-trajectory-svg', anErrMessage(e));
     }
     try {
-        renderSubmissionActivityChart(filteredActivity);
+        renderSubmissionActivityChart(submissions);
     } catch (e) {
         console.error('[Analytics] submission activity render failed:', e);
         showChartError('an-submissions-svg', anErrMessage(e));
@@ -442,9 +443,9 @@ function renderErrorDistributionChart(records) {
 
     if (dist.total === 0) {
         plot.innerHTML = anEmptyHtml('No errors in the selected period.',
-            'Error distribution appears once failing submissions are recorded.');
+            'Student translation errors appear here automatically, including free practice. No submission is required.');
         const legend = card ? card.querySelector('#an-error-legend') : null;
-        if (legend) legend.innerHTML = '<div class="an-legend-note">Clean code — no errors recorded.</div>';
+        if (legend) legend.innerHTML = '<div class="an-legend-note">No matching errors recorded yet.</div>';
         return;
     }
 

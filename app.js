@@ -1768,6 +1768,68 @@ window.addEventListener('resize', () => {
 });
 
 
+/* Student-initiated translations are learning attempts, not graded submissions. */
+let lastTranslationActivity = null;
+
+function recordStudentTranslation(source, result, inputId) {
+    if (!currentUser || currentUser.role !== 'student' ||
+        !['pseudocode-editor', 'translate-input'].includes(inputId)) return Promise.resolve(null);
+    const user = currentUser;
+    const exercise = inputId === 'pseudocode-editor' ? exerciseState.activeExercise : null;
+    const accountId = user._docId || user.id;
+    const exerciseId = exercise ? exercise._docId || exercise.id : null;
+    const now = Date.now();
+    const key = JSON.stringify([accountId, exerciseId, inputId, source]);
+    // Coalesce accidental double clicks, but allow deliberate later retries.
+    if (lastTranslationActivity && lastTranslationActivity.key === key && now - lastTranslationActivity.time < 800) {
+        return lastTranslationActivity.promise;
+    }
+    const id = 'translate_' + (typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID() : now + '_' + Math.random().toString(36).slice(2));
+    const errors = (Array.isArray(result.errors) ? result.errors : []).filter(Boolean).map(error => ({
+        line: Number.isInteger(error.line) ? error.line : null,
+        column: Number.isInteger(error.column) ? error.column : null,
+        errorType: classifyActivityError(error),
+        message: String(error.message || 'Compilation failed.'),
+        suggestion: String(error.suggestion || '')
+    }));
+    const record = {
+        _docId: id, id, type: 'translate_attempt',
+        uid: typeof cloudUid === 'function' ? cloudUid() : null,
+        studentAccountId: accountId, studentId: user.studentId || accountId,
+        studentNumber: user.studentNumber || user.studentId || '',
+        student: user.fullName || user.username || '', username: user.username || '',
+        instructorId: (exercise && (exercise.instructorId || exercise.createdBy)) || user.instructorId || 'u2',
+        section: user.section || '', exerciseId,
+        exercise: exercise ? exercise.title || exercise.concept || 'Exercise' : 'Free practice',
+        difficulty: exercise ? exercise.difficulty || 'moderate' : null,
+        status: result.valid ? 'ungraded' : 'compile_error', compileSuccess: !!result.valid,
+        score: null, pseudocode: source, generatedPython: result.python || '',
+        python_code: result.python || '', errors, errorType: errors.length ? errors[0].errorType : null,
+        result: result.valid ? 'Translation successful' : (errors[0] ? errors[0].errorType : 'Compiler Error'),
+        output: errors.map(error => (error.line ? 'Line ' + error.line + ': ' : '') + error.message).join('\n'),
+        processingTime: ((result.metrics && result.metrics.totalTime || 0) / 1000).toFixed(3) + 's',
+        timestamp: now, time: new Date(now).toISOString(), createdAt: new Date(now).toISOString()
+    };
+    const promise = (async () => {
+        try {
+            // dbSet persists locally first and queues the same document ID for replay.
+            await dbSet(activityRef, id, record);
+            return record;
+        } catch (error) {
+            if (currentUser === user) {
+                showToast(error.localOnly
+                    ? 'Translation attempt saved on this device. Sync will retry when connected or signed in.'
+                    : 'Could not record this translation attempt. Your code is still in the editor.',
+                error.localOnly ? 'info' : 'error');
+            }
+            console.warn('[Translation activity] Save not confirmed:', error);
+            return error.localOnly ? record : null;
+        }
+    })();
+    lastTranslationActivity = { key, time: now, promise };
+    return promise;
+}
 /* ============================================================
    PSEUDOCODE → PYTHON TRANSLATION ENGINE
    ============================================================ */
@@ -1841,7 +1903,17 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
             input = cleanedInput;
         }
 
-        const result = pseudocodeToPython(input);
+        let result;
+        try {
+            result = pseudocodeToPython(input);
+        } catch (error) {
+            result = { valid: false, python: '', warnings: [], errors: [{
+                errorType: 'Compiler Error', message: error.message || String(error)
+            }] };
+        }
+        if (typeof recordStudentTranslation === 'function') {
+            recordStudentTranslation(input, result, inputId).catch(error => console.warn('[Translation activity]', error));
+        }
         const validation = result;
 
         // Learning layer hook (non-destructive): run the feedback pipeline so
@@ -4699,7 +4771,35 @@ async function runStudentNumberMigration() {
 
 const AN_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const AN_DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const KNOWN_ERROR_TYPES = ['Syntax Error', 'Type Error', 'Logic Error', 'Runtime Error', 'Missing Terminator', 'Indentation Error'];
+const KNOWN_ERROR_TYPES = ['Syntax Error', 'Type Error', 'Logic Error', 'Runtime Error', 'Missing Terminator', 'Indentation Error', 'Undefined Variable', 'Compiler Error'];
+
+function classifyActivityError(error) {
+    const explicit = String(error.errorType || error.type || '').trim();
+    if (explicit === 'Missing END') return 'Missing Terminator';
+    const detail = String(error.code || '') + ' ' + String(error.message || '');
+    if (/UNDECLARED_VARIABLE|undefined variable|undeclared variable/i.test(detail)) return 'Undefined Variable';
+    if (/\bmissing\b.*\bEND\b|\bexpected\b.*\bEND\b|unclosed|unterminated.*block/i.test(detail)) return 'Missing Terminator';
+    if (explicit) return KNOWN_ERROR_TYPES.includes(explicit) ? explicit : 'Other';
+    if (/TYPE_MISMATCH/i.test(detail)) return 'Type Error';
+    return 'Syntax Error';
+}
+
+function realAnalyticsRecords(records) {
+    const seen = new Set();
+    return (records || []).filter(record => {
+        if (!record) return false;
+        const id = record._docId || record.id;
+        // Reserved IDs used by getInitialSeedActivity, including older cloud seeds.
+        if (record.isDemo === true || /^act_sp_(?:\d+|em\d+|md\d+)$/.test(id || '')) return false;
+        if (id && seen.has(id)) return false;
+        if (id) seen.add(id);
+        return true;
+    });
+}
+
+function isSubmissionActivity(record) {
+    return !record.type || record.type === 'submission';
+}
 
 function recordDate(record) {
     const raw = record && (record.timestamp || record.time);
@@ -4938,11 +5038,12 @@ function buildErrorDistribution(records) {
     const counts = {};
     KNOWN_ERROR_TYPES.concat(['Other']).forEach(t => (counts[t] = 0));
 
-    (records || []).forEach(record => {
-        const type = String(record.errorType || '').trim();
-        if (!type) return;
-        if (counts[type] !== undefined) counts[type]++;
-        else counts['Other']++;
+    realAnalyticsRecords(records).forEach(record => {
+        const errors = Array.isArray(record.errors) ? record.errors
+            : record.errorType ? [{ errorType: record.errorType }] : [];
+        errors.filter(error => error && error.severity !== 'warning').forEach(error => {
+            counts[classifyActivityError(error)]++;
+        });
     });
 
     const total = KNOWN_ERROR_TYPES.concat(['Other']).reduce((sum, t) => sum + counts[t], 0);
@@ -4970,6 +5071,9 @@ function buildErrorDistribution(records) {
    ============================================================ */
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+        classifyActivityError,
+        realAnalyticsRecords,
+        isSubmissionActivity,
         recordDate,
         maxRecordDate,
         dayKey,
@@ -5266,7 +5370,7 @@ function rebuildAnalyticsScope() {
     const myStudentUsernames = new Set(myStudents.map(s => s.username).filter(Boolean));
     const myStudentNames = new Set(myStudents.map(s => s.fullName).filter(Boolean));
 
-    cachedInstructorActivity = cachedActivity.filter(a => {
+    cachedInstructorActivity = realAnalyticsRecords(cachedActivity).filter(a => {
         if (a.instructorId) return ownerIds.has(a.instructorId);
         if (a.studentAccountId) return myStudentIds.has(a.studentAccountId);
         if (a.studentId) return myStudentIds.has(a.studentId) || myStudentEnrolledIds.has(a.studentId);
@@ -5404,7 +5508,8 @@ function applyAnalyticsFilters() {
 
         // 5. Submission status
         if (submissionVal) {
-            const normStatus = a.status === 'In Progress' ? 'Pending' : a.status;
+            const normStatus = a.status === 'compile_error' ? 'Failed' :
+                a.status === 'ungraded' || a.status === 'In Progress' ? 'Pending' : a.status;
             const targetStatus = submissionVal === 'In Progress' ? 'Pending' : submissionVal;
             if (normStatus !== targetStatus && a.status !== submissionVal) return false;
         }
@@ -5451,7 +5556,8 @@ function resetAnalyticsFilters() {
 }
 
 function updateAnalyticsUI() {
-    const total = currentFilteredActivity.length;
+    const submissions = currentFilteredActivity.filter(isSubmissionActivity);
+    const total = submissions.length;
 
     // Stat Cards
     const ownerIds = new Set([currentUser?.id, currentUser?._docId].filter(Boolean));
@@ -5465,11 +5571,11 @@ function updateAnalyticsUI() {
     setText('stat-students', String(activeStudents.length));
     setText('stat-submissions', String(total));
 
-    const completed = currentFilteredActivity.filter(a => a.status === 'Completed').length;
+    const completed = submissions.filter(a => a.status === 'Completed').length;
     const successRate = total > 0 ? Math.round((completed / total) * 100) : 0;
     setText('stat-success-rate', successRate + '%');
 
-    const errCount = currentFilteredActivity.filter(a => a.errorType && a.errorType.trim() !== '').length;
+    const errCount = buildErrorDistribution(currentFilteredActivity).total;
     setText('stat-common-errors', String(errCount));
 
     // Dynamic Trend Elements
@@ -5500,7 +5606,8 @@ function updateAnalyticsUI() {
 
     // Record count label
     const countLabel = $id('activity-count-label');
-    if (countLabel) countLabel.textContent = total === 0 ? 'No records' : `${total} record${total !== 1 ? 's' : ''}`;
+    const recordCount = currentFilteredActivity.length;
+    if (countLabel) countLabel.textContent = recordCount === 0 ? 'No records' : `${recordCount} record${recordCount !== 1 ? 's' : ''}`;
 
     // Render Charts
     if (typeof renderAnalyticsCharts === 'function') renderAnalyticsCharts(currentFilteredActivity);
@@ -5537,7 +5644,7 @@ function renderFilteredActivityTable(activityList) {
     if (totalRecords === 0) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:2.5rem;color:var(--text-muted)">
             <div class="analytics-empty-icon"><i data-lucide="chart-column" aria-hidden="true"></i></div>
-            No matching student submissions found for the selected filters.
+            No matching student activity found for the selected filters.
         </td></tr>`;
         if (pageInfo) pageInfo.textContent = 'Showing 0 of 0 results';
         if (prevBtn) prevBtn.disabled = true;
@@ -5571,6 +5678,8 @@ function renderFilteredActivityTable(activityList) {
         const norm = (s || '').toLowerCase();
         if (norm === 'completed') return `<span class="badge-status badge-completed">Completed</span>`;
         if (norm === 'failed') return `<span class="badge-status badge-failed">Failed</span>`;
+        if (norm === 'compile_error') return `<span class="badge-status badge-failed">Compile error</span>`;
+        if (norm === 'ungraded') return `<span class="badge-status badge-pending">Ungraded</span>`;
         if (norm === 'revision requested') return `<span class="badge-status badge-pending">Revision Requested</span>`;
         return `<span class="badge-status badge-pending">Pending</span>`;
     };
@@ -5617,7 +5726,7 @@ function renderFilteredActivityTable(activityList) {
             </div>
           </td>
           <td class="an-cell-muted an-cell-mono">${anEsc(analyticsStudentNumber(a))}</td>
-          <td class="an-cell-secondary">${a.exercise || '—'}</td>
+          <td class="an-cell-secondary">${anEsc(a.exercise || '—')}${a.type === 'translate_attempt' ? '<br><small>Translation attempt</small>' : ''}</td>
           <td>${diffBadge(a.difficulty)}</td>
           <td>${anStatusBadge(a.status)}</td>
           <td class="an-cell-score" style="color:${scoreColor(a)}">${a.score || '—'}</td>
@@ -5699,7 +5808,7 @@ function viewSubmissionDetail(docId) {
 
     const requestButton = $id('sdm-request-resubmit');
     if (requestButton) {
-        const ownsSubmission = currentUser?.role === 'instructor' &&
+        const ownsSubmission = isSubmissionActivity(a) && currentUser?.role === 'instructor' &&
             (!a.instructorId || a.instructorId === currentUser.id || a.instructorId === currentUser._docId);
         requestButton.classList.toggle('hidden', !ownsSubmission || a.status === 'Revision Requested');
         requestButton.disabled = false;
@@ -5848,15 +5957,16 @@ function renderAnalyticsCharts(filteredActivity) {
             anHideTooltip(plot.closest('.an-chart-card')?.querySelector('.an-svg-tooltip'));
         }
     });
-    setText('an-live-status', 'Showing recorded submissions for the selected filters.');
+    setText('an-live-status', 'Showing recorded submissions and translation attempts for the selected filters.');
+    const submissions = filteredActivity.filter(isSubmissionActivity);
     try {
-        renderTrajectoryChart(filteredActivity);
+        renderTrajectoryChart(submissions);
     } catch (e) {
         console.error('[Analytics] trajectory render failed:', e);
         showChartError('an-trajectory-svg', anErrMessage(e));
     }
     try {
-        renderSubmissionActivityChart(filteredActivity);
+        renderSubmissionActivityChart(submissions);
     } catch (e) {
         console.error('[Analytics] submission activity render failed:', e);
         showChartError('an-submissions-svg', anErrMessage(e));
@@ -6270,9 +6380,9 @@ function renderErrorDistributionChart(records) {
 
     if (dist.total === 0) {
         plot.innerHTML = anEmptyHtml('No errors in the selected period.',
-            'Error distribution appears once failing submissions are recorded.');
+            'Student translation errors appear here automatically, including free practice. No submission is required.');
         const legend = card ? card.querySelector('#an-error-legend') : null;
-        if (legend) legend.innerHTML = '<div class="an-legend-note">Clean code — no errors recorded.</div>';
+        if (legend) legend.innerHTML = '<div class="an-legend-note">No matching errors recorded yet.</div>';
         return;
     }
 
@@ -11494,6 +11604,7 @@ function systemHasPseudocode(record) {
 }
 
 function systemHasExecution(record) {
+    if (record && record.type === 'translate_attempt') return false;
     return !!(record && (record.python_code || record.pythonCode || record.output || record.status === 'Completed'));
 }
 
@@ -11799,7 +11910,8 @@ if (typeof module !== 'undefined' && module.exports) {
         systemComputeOverview,
         systemBuildActivitySeries
     };
-}/* ============================================================
+}
+/* ============================================================
    PASSWORD MANAGEMENT
    ============================================================ */
 
