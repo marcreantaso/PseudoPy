@@ -9899,7 +9899,11 @@ const onboardingState = {
 /* ── State adapter (localStorage now; DB-backed in Phase 6) ── */
 
 function onbGetCompleted() {
-    try { return onbStorageGet(ONBOARDING.storageKey) === 'true'; } catch (e) { return false; }
+    try {
+        const key = ONBOARDING.storageKey;
+        const userId = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser._docId || currentUser.id) : 'anonymous';
+        return onbStorageGet(key + '_' + userId) === 'true';
+    } catch (e) { return false; }
 }
 
 function onbSetCompleted(done) {
@@ -10185,9 +10189,14 @@ function restartBeginnerTutorial() {
     startBeginnerTutorial();
 }
 
+function replayBeginnerTutorial() {
+    startBeginnerTutorial();
+}
+
 function onbStop() {
     const wasActive = onboardingState.active;
     onboardingState.active = false;
+    if (wasActive) onbSetCompleted(true);
     if (onboardingState.overlay) onboardingState.overlay.classList.add('hidden');
     if (wasActive && onboardingState.returnFocus && typeof onboardingState.returnFocus.focus === 'function' && document.contains(onboardingState.returnFocus)) {
         try { onboardingState.returnFocus.focus({ preventScroll: true }); } catch (e) { /* no-op */ }
@@ -10203,6 +10212,7 @@ function maybeAutoStartTutorial() {
 PseudoPyLearning.register.onboarding = {
     start: startBeginnerTutorial,
     restart: restartBeginnerTutorial,
+    replay: replayBeginnerTutorial,
     stop: onbStop,
     autoStart: maybeAutoStartTutorial,
     isCompleted: onbGetCompleted
