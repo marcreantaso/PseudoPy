@@ -11,10 +11,15 @@
 window.addEventListener('pseudopy:sync-error', event => {
     const detail = event.detail || {};
     hideLegacyCloudSaveNotice();
+    const classification = typeof classifyDbError === 'function' ? classifyDbError(detail) : null;
+    if (classification && classification.transient) {
+        if (typeof showReconnectingStatus === 'function') showReconnectingStatus();
+        return;
+    }
     if (typeof reportCloudSaveDenied === 'function') {
         reportCloudSaveDenied(
             { ref: detail.ref, docId: detail.docId, operation: 'WRITE' },
-            { category: detail.code === 'permission-denied' ? 'PERMISSION_DENIED' : 'CLOUD_SAVE_FAILED', transient: false, message: detail.message }
+            typeof classifyDbError === 'function' ? classifyDbError({code:detail.code,message:detail.message}) : {category:'CLOUD_SAVE_FAILED',transient:false,message:detail.message}
         );
     }
 });

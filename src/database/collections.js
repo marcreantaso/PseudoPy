@@ -29,9 +29,10 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
     let results = [];
 
     // 1. Try Firestore
-    if (firestoreReady()) {
+    if (firestoreReady() && (typeof cloudRequestsAllowed !== 'function' || cloudRequestsAllowed())) {
         try {
             const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
+            if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
             if (snapshot && !snapshot.empty) {
                 results = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
                 // For activity, always merge with full seed demo data so charts are rich
@@ -48,6 +49,7 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
                 setLocalCollection(ref, results);
             }
         } catch (err) {
+            if (typeof recordCloudFailure === 'function') recordCloudFailure(err);
             console.info(`[Database] Firestore fetch error on ${ref}, using local fallback:`, err.message);
         }
     }
@@ -111,12 +113,14 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
  * really gone" from "temporarily offline". Other callers keep the fallback.
  */
 async function dbGet(ref, docId, opts = {}) {
-    if (firestoreReady()) {
+    if (firestoreReady() && (typeof cloudRequestsAllowed !== 'function' || cloudRequestsAllowed())) {
         try {
             const doc = await firestoreRetry(() => firestore.collection(ref).doc(docId).get(), { attempts: opts.attempts || 2, timeoutMs: opts.timeoutMs, backoffMs: opts.backoffMs });
+            if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
             if (doc.exists) return { _docId: doc.id, ...doc.data() };
             return null;
         } catch (err) {
+            if (typeof recordCloudFailure === 'function') recordCloudFailure(err);
             if (opts.strict) {
                 console.warn(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
                 // Keep the original failure reachable: a permission denial
@@ -276,7 +280,7 @@ async function dbDelete(ref, docId) {
     const local = getLocalCollection(ref);
     const exists = local.some(item => item._docId === docId || item.id === docId);
 
-    if (firestoreReady()) {
+    if (firestoreReady() && (typeof cloudRequestsAllowed !== 'function' || cloudRequestsAllowed())) {
         try {
             await firestore.collection(ref).doc(docId).delete();
         } catch (err) {

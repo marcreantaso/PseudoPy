@@ -83,6 +83,9 @@ function isPermanentFirestoreFailure(err) {
 }
 
 async function firestoreRetry(fetchFn, options = {}) {
+    if (typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) {
+        throw cloudCircuitError || Object.assign(new Error('Browser offline'), {code:'unavailable'});
+    }
     const requested = Math.max(1, options.attempts || 2);
     const timeoutMs = options.timeoutMs || 4000;
     const backoffMs = options.backoffMs === undefined ? 600 : Math.max(0, options.backoffMs || 0);
@@ -94,6 +97,7 @@ async function firestoreRetry(fetchFn, options = {}) {
             return await withFirestoreTimeout(fetchFn(), timeoutMs);
         } catch (err) {
             lastErr = err;
+            if (typeof recordCloudFailure === 'function') recordCloudFailure(err);
             performed = i + 1;
             if (isPermanentFirestoreFailure(err)) break;
         }

@@ -230,6 +230,7 @@ async function handleLogin() {
         } catch (e) { /* non-critical */ }
 
         showToast(`Welcome back, ${currentUser.fullName}!`, 'success');
+        if (typeof syncNow === 'function') syncNow('sign-in');
         showApp();
     } catch (err) {
         console.error('[Login] Error:', err);

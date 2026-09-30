@@ -38,6 +38,7 @@ function resetOfflineSaveStatusForTests() {
 }
 
 function showReconnectingStatus() {
+    if (!isBrowserOffline() && typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) return;
     const banner = typeof $id === 'function' ? $id('connection-status-banner') : null;
     if (banner) banner.hidden = false;
 }
@@ -45,7 +46,6 @@ function showReconnectingStatus() {
 function hideReconnectingStatus() {
     const banner = typeof $id === 'function' ? $id('connection-status-banner') : null;
     if (banner) banner.hidden = true;
-    hideOfflineSaveStatus();
 }
 
 function showOfflineSaveStatus(reason) {
@@ -103,7 +103,7 @@ function reportCloudSaveDenied(context, classification) {
         // soon as this browser has a Firebase Auth session.
         reason = 'Saved on this device. This browser is not signed in to the cloud, so your changes are waiting to sync.';
     } else if (classification.category === 'PERMISSION_DENIED') {
-        reason = 'Your changes are saved on this device, but this account is not permitted to sync them to the server.';
+        reason = 'Working offline - saved on this device. This account is not permitted to sync yet.';
     } else {
         reason = 'Your changes are saved on this device, but the server rejected them (' + (classification.category || 'unknown') + ').';
     }
@@ -154,7 +154,11 @@ function initConnectionStatus() {
         initConnectionStatus.__bound = true;
         window.addEventListener('online', function () {
             hideReconnectingStatus();
-            if (typeof syncNow === 'function') syncNow('online');
+            if (typeof resetCloudCircuit === 'function') resetCloudCircuit();
+        });
+        window.addEventListener('pseudopy:connection-state', function (event) {
+            if (event.detail.reachable) hideReconnectingStatus();
+            else showReconnectingStatus();
         });
         window.addEventListener('offline', function () {
             showReconnectingStatus();

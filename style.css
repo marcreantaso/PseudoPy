@@ -8510,3 +8510,15 @@ select.form-input {
   white-space: nowrap;
   border: 0;
 }
+
+/* Connectivity occupies document flow so it never covers the editor. */
+#app-status-region {
+  display: grid; gap: .75rem; min-width: 0;
+  padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+}
+#app-status-region:has(> :not([hidden]):not(:empty)) { margin-block-end: 1rem; }
+#app-status-region .connection-status-banner {
+  position: relative; inset: auto; transform: none; z-index: auto;
+  max-width: 100%; overflow-wrap: anywhere; border-radius: .75rem;
+  padding-block-start: max(.5rem, env(safe-area-inset-top, 0px));
+}

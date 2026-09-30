@@ -106,8 +106,28 @@ function isPermanentDbError(err) {
     return PERMANENT_DB_CATEGORIES.indexOf(classifyDbError(err).category) !== -1;
 }
 
+let cloudCircuitError = null;
+function cloudRequestsAllowed() {
+    return !cloudCircuitError && !(typeof navigator !== 'undefined' && navigator.onLine === false);
+}
+function recordCloudFailure(error, context) {
+    const classification = classifyDbError(error);
+    if (isPermanentDbError(error)) {
+        cloudCircuitError = error;
+        syncPermissionBlocked = true;
+        notifyCloudSaveDenied(context || {}, classification);
+    }
+    if (classification.transient) markFirestoreReachable(false);
+}
+function resetCloudCircuit() {
+    cloudCircuitError = null;
+    syncPermissionBlocked = false;
+}
 function markFirestoreReachable(reachable) {
     firestoreReachable = Boolean(reachable);
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('pseudopy:connection-state', {detail:{reachable:firestoreReachable}}));
+    }
 }
 
 function isFirestoreReachable() {
@@ -143,7 +163,7 @@ function requireOnline() {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         return { ok: false, blocked: true, reason: 'online', message: ONLINE_REQUIRED_MESSAGE };
     }
-    if (firestoreReachable === false) {
+    if (firestoreReachable === false || !cloudRequestsAllowed()) {
         return { ok: false, blocked: true, reason: 'reachability', message: ONLINE_REQUIRED_MESSAGE };
     }
     return { ok: true };
@@ -220,9 +240,10 @@ async function trySyncMutation(mutation) {
         if (!classification.transient) {
             const permission = classification.category === 'PERMISSION_DENIED';
             if (permission) syncPermissionBlocked = true;
+            recordCloudFailure(err, { ref, docId, operation: mutation.operation });
             await updateMutationStatus(mutation.mutationId, permission ? 'blocked-permission' : MUTATION_STATUS.FAILED, classification.message, attempt);
             markFirestoreReachable(true);
-            notifyCloudSaveDenied({ ref, docId, operation: mutation.operation }, classification);
+
             return false;
         }
         markFirestoreReachable(false);
@@ -254,7 +275,7 @@ function syncNow(reason) {
 
 async function drainSyncQueue(reason) {
     const recovery = SYNC_RECOVERY_REASONS.includes(reason);
-    if (recovery) syncPermissionBlocked = false;
+    if (recovery) resetCloudCircuit();
     if (syncPermissionBlocked || !firestoreReady() || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
         return { started: false, reason };
     }
@@ -286,6 +307,8 @@ async function drainSyncQueue(reason) {
 
 /** Register application-driven sync triggers (registered once at boot). */
 function initSyncCoordinator() {
+    if (initSyncCoordinator.__bound) return;
+    initSyncCoordinator.__bound = true;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) markFirestoreReachable(false);
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
         window.addEventListener('online', function () {

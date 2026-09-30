@@ -277,7 +277,7 @@
        ════════════════════════════════════════ -->
   <div id="app-layout" class="app-layout hidden">
 
-    <div id="connection-status-banner" class="connection-status-banner" role="status" hidden>{{ui:RefreshCw}} Reconnecting to the server…</div>
+
 
     <div id="offline-save-status" class="offline-save-status" role="status" hidden>
       <span class="offline-save-status-icon" aria-hidden="true">{{ui:CloudOff}}</span>
@@ -438,6 +438,9 @@
 
     <!-- ── Main Content Area ── -->
       <main class="main-content" id="main-content" tabindex="-1">
+        <div id="app-status-region">
+    <div id="connection-status-banner" class="connection-status-banner" role="status" hidden>{{ui:RefreshCw}} Reconnecting to the server…</div>
+        </div>
 
       <!-- ═══════════════════════════════════
            PAGE: Write Pseudocode (Student)

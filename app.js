@@ -472,10 +472,15 @@ function ensurePdfJsLoaded() {
 window.addEventListener('pseudopy:sync-error', event => {
     const detail = event.detail || {};
     hideLegacyCloudSaveNotice();
+    const classification = typeof classifyDbError === 'function' ? classifyDbError(detail) : null;
+    if (classification && classification.transient) {
+        if (typeof showReconnectingStatus === 'function') showReconnectingStatus();
+        return;
+    }
     if (typeof reportCloudSaveDenied === 'function') {
         reportCloudSaveDenied(
             { ref: detail.ref, docId: detail.docId, operation: 'WRITE' },
-            { category: detail.code === 'permission-denied' ? 'PERMISSION_DENIED' : 'CLOUD_SAVE_FAILED', transient: false, message: detail.message }
+            typeof classifyDbError === 'function' ? classifyDbError({code:detail.code,message:detail.message}) : {category:'CLOUD_SAVE_FAILED',transient:false,message:detail.message}
         );
     }
 });
@@ -1034,6 +1039,7 @@ async function handleLogin() {
         } catch (e) { /* non-critical */ }
 
         showToast(`Welcome back, ${currentUser.fullName}!`, 'success');
+        if (typeof syncNow === 'function') syncNow('sign-in');
         showApp();
     } catch (err) {
         console.error('[Login] Error:', err);
@@ -1164,6 +1170,7 @@ function resetOfflineSaveStatusForTests() {
 }
 
 function showReconnectingStatus() {
+    if (!isBrowserOffline() && typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) return;
     const banner = typeof $id === 'function' ? $id('connection-status-banner') : null;
     if (banner) banner.hidden = false;
 }
@@ -1171,7 +1178,6 @@ function showReconnectingStatus() {
 function hideReconnectingStatus() {
     const banner = typeof $id === 'function' ? $id('connection-status-banner') : null;
     if (banner) banner.hidden = true;
-    hideOfflineSaveStatus();
 }
 
 function showOfflineSaveStatus(reason) {
@@ -1229,7 +1235,7 @@ function reportCloudSaveDenied(context, classification) {
         // soon as this browser has a Firebase Auth session.
         reason = 'Saved on this device. This browser is not signed in to the cloud, so your changes are waiting to sync.';
     } else if (classification.category === 'PERMISSION_DENIED') {
-        reason = 'Your changes are saved on this device, but this account is not permitted to sync them to the server.';
+        reason = 'Working offline - saved on this device. This account is not permitted to sync yet.';
     } else {
         reason = 'Your changes are saved on this device, but the server rejected them (' + (classification.category || 'unknown') + ').';
     }
@@ -1280,7 +1286,11 @@ function initConnectionStatus() {
         initConnectionStatus.__bound = true;
         window.addEventListener('online', function () {
             hideReconnectingStatus();
-            if (typeof syncNow === 'function') syncNow('online');
+            if (typeof resetCloudCircuit === 'function') resetCloudCircuit();
+        });
+        window.addEventListener('pseudopy:connection-state', function (event) {
+            if (event.detail.reachable) hideReconnectingStatus();
+            else showReconnectingStatus();
         });
         window.addEventListener('offline', function () {
             showReconnectingStatus();
@@ -1430,10 +1440,11 @@ function loadCachedProfileFor(snapshot) {
  */
 function scheduleProfileRefresh(docId, fallbackRoute) {
     if (typeof dbGet !== 'function' || typeof checkAccess !== 'function') return;
-    if (profileRefreshAttempts >= 3) return;
+    if (profileRefreshAttempts >= 3 || (typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed())) return;
     profileRefreshAttempts++;
     const backoffMs = [1500, 3000, 6000][profileRefreshAttempts - 1] || 6000;
     setTimeout(async () => {
+        if (typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) return;
         try {
             const fresh = await dbGet(usersRef, docId, { strict: true });
             if (!fresh) { profileRefreshAttempts = 3; return; }
@@ -1478,7 +1489,7 @@ function renderSessionState(result) {
     if (typeof showApp === 'function') {
         try { showApp(targetPage); } catch (e) { console.warn('[Session] App render failed, session kept:', e && e.message); }
     }
-    if (result.state === BOOT_AUTHENTICATED_DEGRADED) showConnectionBanner();
+    if (result.state === BOOT_AUTHENTICATED_DEGRADED && !result.permanentFailure) showConnectionBanner();
     hideBootSplash();
 }
 
@@ -1561,7 +1572,7 @@ async function restoreSession() {
             bootState = BOOT_AUTHENTICATED_DEGRADED;
             const route = getPersistedRoute();
             const targetPage = (route && checkAccess(currentUser.role, route)) ? route : '';
-            renderSessionState({ state: BOOT_AUTHENTICATED_DEGRADED, user: currentUser, route: targetPage });
+            renderSessionState({ state: BOOT_AUTHENTICATED_DEGRADED, user: currentUser, route: targetPage, permanentFailure: permanent });
             if (permanent) {
                 // A refusal is not an outage: dismissible status, no retry loop.
                 hideConnectionBanner();
