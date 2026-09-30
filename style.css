@@ -8510,3 +8510,39 @@ select.form-input {
   white-space: nowrap;
   border: 0;
 }
+
+/* Connectivity occupies document flow so it never covers the editor. */
+#app-status-region {
+  display: grid; gap: .75rem; min-width: 0;
+  padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+}
+#app-status-region:has(> :not([hidden]):not(:empty)) { margin-block-end: 1rem; }
+#app-status-region .connection-status-banner {
+  position: relative; inset: auto; transform: none; z-index: auto;
+  max-width: 100%; overflow-wrap: anywhere; border-radius: .75rem;
+  padding-block-start: max(.5rem, env(safe-area-inset-top, 0px));
+}
+
+/* Sync notices and toasts share a flow layout, outside role-specific pages. */
+#app-status-region .sync-notice {
+  position: relative; inset: auto; transform: none; z-index: auto;
+  display: grid; grid-template-columns: 1.25rem minmax(0, 1fr) auto auto;
+  width: 100%; max-width: 100%; box-sizing: border-box; align-items: start;
+  padding: .875rem; gap: .75rem; text-align: start;
+  padding-block-start: max(.875rem, env(safe-area-inset-top, 0px));
+}
+#app-status-region .sync-notice[hidden] { display: none; }
+.sync-notice .offline-save-body, .sync-notice .offline-save-status-body { min-width: 0; overflow-wrap: anywhere; }
+.sync-notice button { min-width: 44px; min-height: 44px; white-space: normal; }
+#app-status-region .toast-container {
+  position: static; inset: auto; transform: none; width: 100%; max-width: 100%;
+  margin: 0; padding: 0; z-index: auto;
+}
+#app-status-region .toast-container:empty { display: none; }
+#app-status-region .toast { min-width: 0; max-width: 100%; overflow-wrap: anywhere; box-sizing: border-box; }
+@media (max-width: 48rem) {
+  #app-status-region .sync-notice { grid-template-columns: 1.25rem minmax(0, 1fr) auto; }
+  .sync-notice .offline-save-status-body { grid-column: 2 / -1; }
+  .sync-notice .offline-save-retry { grid-column: 2; justify-self: start; }
+  .sync-notice .offline-save-dismiss { grid-column: 3; justify-self: end; }
+}

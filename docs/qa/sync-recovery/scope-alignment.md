@@ -1,0 +1,24 @@
+# Defect 5 — offline/thesis scope regression
+
+This audit distinguishes source/harness evidence from browser evidence. All cloud writes in regression tests are mocked; no live Firestore policy or authentication changes were made.
+
+| Requirement | Result | Evidence and limits |
+| --- | --- | --- |
+| a. Installed PWA boots, translates and runs Python with the network fully off | **Partial; browser acceptance blocked** | `offline-scope.test.js` executes the current compiler and actual vendored Skulpt without any network APIs and verifies output `42`. Every blocking service-worker asset exists. `service-worker-install.test.js` verifies install lifetime/failure behavior in a harness. A real offline reload/Run Code script is provided but could not execute after the environment resumed: Chromium local IPC socket permission was denied and escalation rejected. Do not describe the full browser acceptance as passed. |
+| b. Local data survives reload while offline | **Pass in persistence/session harnesses; browser acceptance blocked** | `sync-recovery.test.js` creates a new application context over the same IndexedDB test database and separately over persistent localStorage, then verifies queued data and one successful replay. Existing offline-storage and session tests pass. `scripts/qa/offline-scope-browser.cjs` also checks editor draft, local collection and queue after reload; that real-browser run remains pending. |
+| c. Student/Instructor/Admin see only permitted views | **Pass for client route/role tests; server authorization not established** | Existing `role-workspaces.test.js`, `session-persistence.test.js`, and `session-resilience.test.js` cover role routing and session restoration. The earlier popup browser run switched a synthetic Student profile to Admin and checked singleton cleanup. Full three-role browser script is supplied but blocked. Client-visible navigation is not a database authorization boundary; see Firebase owner actions. |
+| d. “No backend server is needed” | **Needs qualification** | Translation, semantic checks and Skulpt run in the browser. `src/database/` uses localStorage/IndexedDB and optionally connects directly to Firestore. `server.js` starts Express; `server/create-app.js` serves static assets and `/api/` routes. `api/` Vercel handlers share the separate in-memory `server/collection-store.js`. The inspected browser workflows do not call those collection API routes. A static host can deliver the client; a running Express process is not a prerequisite for the client compiler. Cloud sync still requires Firebase service availability, suitable rules and the intended identity model. |
+| e. TXT/PDF/DOCX import | **TXT pass; PDF path pass; DOCX gap confirmed** | `offline-scope.test.js` exercises TXT file content, PDF extraction using a mocked PDF.js page, and rejection of DOCX without overwriting the existing editor. `src/app/file-import.js` accepts TXT/PSEUDO/PDF. It has no DOCX extraction path. PDF.js is vendored but its cache is best-effort after activation; offline PDF import depends on having cached its files. Actual PDF rendering/extraction was not re-tested in a browser here. |
+
+## Recommended thesis wording
+
+“PseudoPy performs pseudocode translation, semantic validation, and Python execution on the client using JavaScript and the Skulpt interpreter. After the application shell and required runtime assets have been cached, core translation and execution are designed to remain available offline. Browser storage preserves local work, while Firebase Firestore provides optional cloud synchronization when connectivity and permissions permit. An Express/serverless API implementation is included in the repository, but it is not required by the client-side translation pipeline. TXT and PDF imports are supported; DOCX import is outside the currently implemented scope.”
+
+Use “verified offline in the target browser” only after running and recording the pending browser acceptance on that browser/device. First-ever visits without a cached application cannot bootstrap offline. Cloud-only account approvals/management and uncached optional assets are outside the offline core guarantee.
+
+## Remaining owner/device checks
+
+- Run `scripts/qa/offline-scope-browser.cjs` with a local static server and Playwright, then repeat install → airplane mode → reopen → translate/run → reload on a physical iPhone and Android device.
+- Verify deployed rules/auth and actual Vercel configuration using `firebase-owner-actions.md`; no live configuration is certified by these unit tests.
+- Verify the single polite notice announcement with VoiceOver/NVDA, and complete the final browser rerun of the notice lifecycle/RTL region changes.
+- Decide whether to implement DOCX later or revise the thesis scope now. No DOCX feature was added under this report-only scope.

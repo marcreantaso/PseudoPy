@@ -161,3 +161,40 @@ test('localStorage fallback queue keeps records when IndexedDB is unavailable', 
     const persisted = JSON.parse(ls.getItem('pseudopy_offline_queue'));
     assert.equal(persisted[0].payload.title, 'Fallback');
 });
+test('blocked records survive reload in fallback storage and remain visible to local overlays', async () => {
+    const ls = localStorageMock();
+    const ctx = harness({storeAvailable:false,ls});
+    const record = await ctx.enqueueMutation('SET','work','a',{value:1});
+    await ctx.updateMutationStatus(record.mutationId,'blocked-permission','permission-denied',1);
+    const reload = harness({storeAvailable:false,ls});
+    assert.equal((await reload.listPendingMutations('work'))[0].status,'blocked-permission');
+});
+test('concurrent enqueue is serialized and queue overflow reports an explicit error', async () => {
+    const ctx = harness();
+    await Promise.all([1,2,3].map(value => ctx.enqueueMutation('SET','work','a',{value})));
+    assert.equal(ctx.offlineStore.records.length,1);
+    assert.equal(ctx.offlineStore.records[0].payload.value,3);
+    for(let i=1;i<500;i++) await ctx.enqueueMutation('SET','work','d'+i,{value:i});
+    await assert.rejects(ctx.enqueueMutation('SET','work','overflow',{value:1}), /queue is full/);
+    assert.equal(ctx.offlineStore.records.length,500);
+});
+test('IndexedDB write failure uses durable fallback, and exhausted storage throws', async () => {
+    const store = memStore(); store.putMutation = async () => { throw new Error('QuotaExceeded'); };
+    const ls = localStorageMock(); const ctx = harness({store,ls});
+    await ctx.enqueueMutation('SET','work','a',{value:7});
+    assert.equal((await ctx.listAllMutations())[0].payload.value,7);
+    const full = harness({store,ls:{getItem:()=>null,setItem(){throw new Error('full');}}});
+    await assert.rejects(full.enqueueMutation('SET','work','b',{}),/could not be saved/);
+});
+test('DELETE obeys the size cap and a failed replacement never erases a prior mutation', async () => {
+    const store=memStore();const ctx=harness({store});
+    for(let i=0;i<500;i++)await ctx.enqueueMutation('SET','work','d'+i,{value:i});
+    await assert.rejects(ctx.enqueueMutation('DELETE','work','overflow',null),/queue is full/);
+    await ctx.enqueueMutation('DELETE','work','d0',null);
+    assert.equal(store.records.length,500);assert.equal(store.records[0].operation,'DELETE');
+    const failing=memStore();const other=harness({store:failing,ls:{getItem:()=>null,setItem(){throw Error('full');}}});
+    await other.enqueueMutation('SET','work','a',{value:1});
+    failing.putMutation=async()=>{throw Error('full');};
+    await assert.rejects(other.enqueueMutation('DELETE','work','a',null),/could not be saved/);
+    assert.equal(failing.records[0].operation,'SET');assert.equal(failing.records[0].payload.value,1);
+});

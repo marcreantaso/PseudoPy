@@ -230,6 +230,7 @@ async function handleLogin() {
         } catch (e) { /* non-critical */ }
 
         showToast(`Welcome back, ${currentUser.fullName}!`, 'success');
+        if (typeof syncNow === 'function') syncNow('sign-in');
         showApp();
     } catch (err) {
         console.error('[Login] Error:', err);
@@ -273,6 +274,8 @@ function checkAccess(role, pageId) {
 }
 
 function showApp(restorePage) {
+    if (showApp.noticeRole && showApp.noticeRole !== currentUser.role && typeof resolveSyncNotice === 'function') resolveSyncNotice();
+    showApp.noticeRole = currentUser.role;
     hide('login-page');
     show('app-layout');
 

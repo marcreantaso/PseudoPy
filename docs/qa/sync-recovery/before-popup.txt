@@ -1,0 +1,32 @@
+✖ sync notice announces once across autosaves and reloads in the same session (2.369311ms)
+✖ Escape dismisses visible notice; recovery resolves the existing singleton (0.934776ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9.500302
+
+✖ failing tests:
+
+test at tests/sync-notice.test.js:11:1
+✖ sync notice announces once across autosaves and reloads in the same session (2.369311ms)
+  TypeError: h.ctx.showSyncNotice is not a function
+      at TestContext.<anonymous> (/workspace/scratch/d1179c676b95/PseudoPy-sync-qa/tests/sync-notice.test.js:12:29)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17)
+
+test at tests/sync-notice.test.js:17:1
+✖ Escape dismisses visible notice; recovery resolves the existing singleton (0.934776ms)
+  TypeError: h.ctx.showSyncNotice is not a function
+      at TestContext.<anonymous> (/workspace/scratch/d1179c676b95/PseudoPy-sync-qa/tests/sync-notice.test.js:18:29)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)

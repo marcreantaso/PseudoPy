@@ -63,7 +63,7 @@ function harness({ ready = true, onLine = true, fail, withTimers = true } = {}) 
         listAllMutations: queue.listAllMutations,
         updateMutationStatus: queue.updateMutationStatus,
         removeSyncedMutation: queue.removeSyncedMutation,
-        MUTATION_STATUS: { PENDING: 'PENDING', SYNCING: 'SYNCING', SYNCED: 'SYNCED', FAILED: 'FAILED' },
+        MUTATION_STATUS: { PENDING: 'PENDING', SYNCING: 'SYNCING', SYNCED: 'SYNCED', FAILED: 'FAILED', BLOCKED_PERMISSION: 'blocked-permission' },
         MUTATION_OP_ADD: 'ADD',
         MUTATION_OP_SET: 'SET',
         MUTATION_OP_UPDATE: 'UPDATE',
@@ -157,12 +157,12 @@ test('transient failures stay PENDING with bounded backoff, then FAILED at the r
 
     await ctx.syncNow('test');
     assert.equal(queue.records[0].attempts, 2);
-    assert.equal(capturedTimers.length, 2);
+    assert.equal(capturedTimers.length, 1, 'only one backoff timer is needed');
 
     await ctx.syncNow('test');
     assert.equal(queue.records[0].status, 'FAILED');
     assert.match(queue.records[0].lastError, /Sync retry limit reached/);
-    assert.equal(capturedTimers.length, 2, 'no new retry once the cap is hit');
+    assert.equal(capturedTimers.length, 1, 'no new retry once the cap is hit');
 
     // FAILED records are never replayed by a later sync.
     const after = await ctx.syncNow('test');
@@ -171,14 +171,14 @@ test('transient failures stay PENDING with bounded backoff, then FAILED at the r
     assert.equal(queue.records[0].status, 'FAILED');
 });
 
-test('permanent failures go straight to FAILED and are never queued again', async () => {
+test('permission failures stay blocked until an explicit recovery trigger', async () => {
     const denied = (ref, id) => { const e = new Error('permission denied'); e.code = 'firestore/permission-denied'; return e; };
     const { ctx, queue, capturedTimers, enqueue } = harness({ fail: denied });
     enqueue('SET', 'users', 'u9', { role: 'instructor' });
 
     await ctx.syncNow('test');
     assert.equal(queue.records.length, 1);
-    assert.equal(queue.records[0].status, 'FAILED');
+    assert.equal(queue.records[0].status, 'blocked-permission');
     assert.match(queue.records[0].lastError, /permission/i);
     assert.equal(capturedTimers.length, 0, 'permanent failures never schedule retries');
     const state = await ctx.getSyncState();

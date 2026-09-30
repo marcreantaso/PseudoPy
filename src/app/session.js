@@ -47,6 +47,8 @@ function saveSession(user) {
  * Clear the persisted session and related transient markers.
  */
 function clearSession() {
+    if (typeof resolveSyncNotice === 'function') resolveSyncNotice();
+    if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
     try { localStorage.removeItem(SESSION_KEY); } catch (e) { }
     try { sessionStorage.removeItem(STORAGE_KEYS.SESSION_USER); } catch (e) { }
     try { sessionStorage.removeItem(STORAGE_KEYS.UPDATE_DISMISSED); } catch (e) { }
@@ -132,10 +134,11 @@ function loadCachedProfileFor(snapshot) {
  */
 function scheduleProfileRefresh(docId, fallbackRoute) {
     if (typeof dbGet !== 'function' || typeof checkAccess !== 'function') return;
-    if (profileRefreshAttempts >= 3) return;
+    if (profileRefreshAttempts >= 3 || (typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed())) return;
     profileRefreshAttempts++;
     const backoffMs = [1500, 3000, 6000][profileRefreshAttempts - 1] || 6000;
     setTimeout(async () => {
+        if (typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) return;
         try {
             const fresh = await dbGet(usersRef, docId, { strict: true });
             if (!fresh) { profileRefreshAttempts = 3; return; }
@@ -180,7 +183,7 @@ function renderSessionState(result) {
     if (typeof showApp === 'function') {
         try { showApp(targetPage); } catch (e) { console.warn('[Session] App render failed, session kept:', e && e.message); }
     }
-    if (result.state === BOOT_AUTHENTICATED_DEGRADED) showConnectionBanner();
+    if (result.state === BOOT_AUTHENTICATED_DEGRADED && !result.permanentFailure) showConnectionBanner();
     hideBootSplash();
 }
 
@@ -263,7 +266,7 @@ async function restoreSession() {
             bootState = BOOT_AUTHENTICATED_DEGRADED;
             const route = getPersistedRoute();
             const targetPage = (route && checkAccess(currentUser.role, route)) ? route : '';
-            renderSessionState({ state: BOOT_AUTHENTICATED_DEGRADED, user: currentUser, route: targetPage });
+            renderSessionState({ state: BOOT_AUTHENTICATED_DEGRADED, user: currentUser, route: targetPage, permanentFailure: permanent });
             if (permanent) {
                 // A refusal is not an outage: dismissible status, no retry loop.
                 hideConnectionBanner();

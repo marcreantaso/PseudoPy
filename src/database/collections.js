@@ -29,9 +29,10 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
     let results = [];
 
     // 1. Try Firestore
-    if (firestoreReady()) {
+    if (firestoreReady() && (typeof cloudRequestsAllowed !== 'function' || cloudRequestsAllowed())) {
         try {
             const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
+            if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
             if (snapshot && !snapshot.empty) {
                 results = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
                 // For activity, always merge with full seed demo data so charts are rich
@@ -48,6 +49,7 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
                 setLocalCollection(ref, results);
             }
         } catch (err) {
+            if (typeof recordCloudFailure === 'function') recordCloudFailure(err);
             console.info(`[Database] Firestore fetch error on ${ref}, using local fallback:`, err.message);
         }
     }
@@ -111,12 +113,14 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
  * really gone" from "temporarily offline". Other callers keep the fallback.
  */
 async function dbGet(ref, docId, opts = {}) {
-    if (firestoreReady()) {
+    if (firestoreReady() && (typeof cloudRequestsAllowed !== 'function' || cloudRequestsAllowed())) {
         try {
             const doc = await firestoreRetry(() => firestore.collection(ref).doc(docId).get(), { attempts: opts.attempts || 2, timeoutMs: opts.timeoutMs, backoffMs: opts.backoffMs });
+            if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
             if (doc.exists) return { _docId: doc.id, ...doc.data() };
             return null;
         } catch (err) {
+            if (typeof recordCloudFailure === 'function') recordCloudFailure(err);
             if (opts.strict) {
                 console.warn(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
                 // Keep the original failure reachable: a permission denial
@@ -162,10 +166,15 @@ async function mergePendingMutationsOverSnapshot(ref, results) {
         if (!pending || pending.length === 0) return results;
         const list = (Array.isArray(results) ? results : []).slice();
         for (const mutation of pending) {
-            if (!mutation.documentId || mutation.operation === 'DELETE') continue;
+            if (!mutation.documentId) continue;
+            if (mutation.operation === 'DELETE') {
+                const index = list.findIndex(d => d._docId === mutation.documentId || d.id === mutation.documentId);
+                if (index >= 0) list.splice(index, 1);
+                continue;
+            }
             const payload = Object.assign({}, mutation.payload || {}, { _docId: mutation.documentId });
             const idx = list.findIndex(d => d._docId === mutation.documentId || d.id === mutation.documentId);
-            if (idx >= 0) list[idx] = payload;
+            if (idx >= 0) list[idx] = mutation.operation === 'UPDATE' ? Object.assign({}, list[idx], payload) : payload;
             else list.unshift(payload);
         }
         return list;
@@ -203,54 +212,15 @@ function withCloudOwnership(payload) {
  * mistake a local write for confirmed cloud persistence.
  */
 async function queueFirestoreWrite({ operation, ref, docId, payload }) {
-    if (!firestoreReady()) {
-        if (typeof markFirestoreReachable === 'function') markFirestoreReachable(false);
-        if (typeof enqueueMutation === 'function') await enqueueMutation(operation, ref, docId, payload);
-        if (typeof syncNow === 'function') syncNow('write');
-        throw cloudSaveFailure(ref, docId);
-    }
-    try {
-        const owned = withCloudOwnership(payload);
-        if (operation === 'UPDATE') {
-            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(owned, { merge: true }));
-        } else {
-            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(owned));
-        }
-        if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
-        if (typeof clearPendingForDocument === 'function') await clearPendingForDocument(ref, docId);
-        if (typeof syncNow === 'function') syncNow('write');
-        cloudSaveComplete(ref, docId);
-    } catch (err) {
-        const classification = (typeof classifyDbError === 'function' ? classifyDbError(err) : { transient: false, message: err.message });
-        if (classification.transient) {
-            if (typeof markFirestoreReachable === 'function') markFirestoreReachable(false);
-            if (typeof enqueueMutation === 'function') await enqueueMutation(operation, ref, docId, payload);
-            if (typeof syncNow === 'function') syncNow('write');
-            console.info(`[Database] Firestore ${ref}/${docId} temporarily unavailable; write queued offline.`);
-        } else {
-            // A refusing Firestore is reachable; the request completed and was
-            // refused. Marking it unreachable is what fed the endless
-            // "Reconnecting" banner. The local write already succeeded, so the
-            // user keeps their work and is told why it is not in the cloud.
-            if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
-
-            // Anonymous request against an auth-required ruleset. This is not a
-            // lost write: queue it so it replays the moment a cloud session
-            // exists, instead of stranding it as FAILED.
-            const pendingSignIn = typeof cloudAuthPendingSignIn === 'function' && cloudAuthPendingSignIn();
-            if (pendingSignIn) {
-                if (typeof enqueueMutation === 'function') await enqueueMutation(operation, ref, docId, withCloudOwnership(payload));
-            }
-            console.warn(
-                `[Database] Firestore refused ${operation} ${ref}/${docId}`
-                + ` (code=${(err && err.code) || 'unknown'})`
-                + (pendingSignIn ? ' — deferred until cloud sign-in.' : '.')
-            );
-            if (typeof notifyCloudSaveDenied === 'function') {
-                notifyCloudSaveDenied({ ref, docId, operation, pendingSignIn }, classification);
-            }
-        }
-        throw cloudSaveFailure(ref, docId, err);
+    // Persist before contacting Firestore. A crash or refusal must leave a replayable record.
+    const mutation = await enqueueMutation(operation, ref, docId, withCloudOwnership(payload));
+    await syncNow('write');
+    const remaining = (await listAllMutations()).find(r => r.mutationId === mutation.mutationId);
+    if (remaining) {
+        const cause = Object.assign(new Error(remaining.lastError || 'Cloud synchronization pending'), {
+            code: remaining.status === 'blocked-permission' ? 'permission-denied' : 'unavailable'
+        });
+        throw cloudSaveFailure(ref, docId, cause);
     }
 }
 
@@ -310,7 +280,7 @@ async function dbDelete(ref, docId) {
     const local = getLocalCollection(ref);
     const exists = local.some(item => item._docId === docId || item.id === docId);
 
-    if (firestoreReady()) {
+    if (firestoreReady() && (typeof cloudRequestsAllowed !== 'function' || cloudRequestsAllowed())) {
         try {
             await firestore.collection(ref).doc(docId).delete();
         } catch (err) {

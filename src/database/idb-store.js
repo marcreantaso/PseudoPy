@@ -246,20 +246,17 @@ const offlineStore = {
     },
 
     async putMutation(record) {
-        try {
-            const db = await openOfflineDb();
-            if (!db) return;
-            await offlinePut(db, OFFLINE_STORES.mutations, record);
-        } catch (e) { /* best-effort */ }
+        const db = await openOfflineDb();
+        if (!db) throw new Error('IndexedDB unavailable');
+        await offlinePut(db, OFFLINE_STORES.mutations, record);
     },
 
     async removeMutation(mutationId) {
-        try {
-            const db = await openOfflineDb();
-            if (!db) return;
-            await offlineDelete(db, OFFLINE_STORES.mutations, mutationId);
-        } catch (e) { /* best-effort */ }
+        const db = await openOfflineDb();
+        if (!db) throw new Error('IndexedDB unavailable');
+        await offlineDelete(db, OFFLINE_STORES.mutations, mutationId);
     }
+
 };
 
 /**

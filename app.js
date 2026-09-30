@@ -472,16 +472,30 @@ function ensurePdfJsLoaded() {
 window.addEventListener('pseudopy:sync-error', event => {
     const detail = event.detail || {};
     hideLegacyCloudSaveNotice();
+    const classification = typeof classifyDbError === 'function' ? classifyDbError(detail) : null;
+    if (classification && classification.transient) {
+        if (typeof showReconnectingStatus === 'function') showReconnectingStatus();
+        return;
+    }
+    if (detail.code === 'queue-storage' && typeof showSyncNotice === 'function') {
+        // Storage failure is actionable even if a prior permission notice was dismissed.
+        if (!showSyncNotice(detail.message) && typeof showToast === 'function') showToast(detail.message, 'error');
+        return;
+    }
     if (typeof reportCloudSaveDenied === 'function') {
         reportCloudSaveDenied(
             { ref: detail.ref, docId: detail.docId, operation: 'WRITE' },
-            { category: detail.code === 'permission-denied' ? 'PERMISSION_DENIED' : 'CLOUD_SAVE_FAILED', transient: false, message: detail.message }
+            typeof classifyDbError === 'function' ? classifyDbError({code:detail.code,message:detail.message}) : {category:'CLOUD_SAVE_FAILED',transient:false,message:detail.message}
         );
     }
 });
 window.addEventListener('pseudopy:sync-saved', event => {
     hideLegacyCloudSaveNotice();
-    if (typeof hideOfflineSaveStatus === 'function') hideOfflineSaveStatus();
+    if (typeof listAllMutations === 'function') {
+        listAllMutations().then(records => {
+            if (!records.length && typeof resolveSyncNotice === 'function') resolveSyncNotice();
+        }).catch(() => {});
+    } else if (typeof resolveSyncNotice === 'function') resolveSyncNotice();
     if (typeof cloudAuthReady === 'function' && cloudAuthReady() && typeof cloudUid === 'function') {
         console.info(`[App] Cloud save confirmed for ${event.detail.ref}/${event.detail.docId} (uid ${cloudUid()}).`);
     }
@@ -703,6 +717,10 @@ async function refreshActivity() {
 function showToast(message, type = 'info') {
     const container = $id('toast-container');
     if (!container) return;
+    const layout = $id('app-layout');
+    const region = $id('app-status-region');
+    if (region && layout && !layout.classList.contains('hidden')) region.appendChild(container);
+    else if (container.parentNode !== document.body) document.body.appendChild(container);
     const icons = { success: 'circle-check', error: 'circle-x', info: 'info' };
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
@@ -718,6 +736,14 @@ function showToast(message, type = 'info') {
 }
 
 
+
+// Public sync-notice API reuses the singleton status region.
+function showSyncNotice(message) {
+    return showOfflineSaveStatus(message);
+}
+function resolveSyncNotice() {
+    hideOfflineSaveStatus();
+}
 /* ============================================================
    DEVICE FINGERPRINTING & AUTHORIZATION
    ============================================================ */
@@ -1034,6 +1060,7 @@ async function handleLogin() {
         } catch (e) { /* non-critical */ }
 
         showToast(`Welcome back, ${currentUser.fullName}!`, 'success');
+        if (typeof syncNow === 'function') syncNow('sign-in');
         showApp();
     } catch (err) {
         console.error('[Login] Error:', err);
@@ -1077,6 +1104,8 @@ function checkAccess(role, pageId) {
 }
 
 function showApp(restorePage) {
+    if (showApp.noticeRole && showApp.noticeRole !== currentUser.role && typeof resolveSyncNotice === 'function') resolveSyncNotice();
+    showApp.noticeRole = currentUser.role;
     hide('login-page');
     show('app-layout');
 
@@ -1138,6 +1167,7 @@ function showApp(restorePage) {
 const OFFLINE_SAVE_STATUS_ID = 'offline-save-status';
 const OFFLINE_SAVE_DISMISS_ID = 'offline-save-dismiss';
 const OFFLINE_SAVE_RETRY_ID = 'offline-save-retry';
+const OFFLINE_SAVE_SHOWN_KEY = 'pseudopy.offlineSaveShown';
 const OFFLINE_SAVE_DISMISSED_KEY = 'pseudopy.offlineSaveDismissed';
 
 let offlineSaveStatusShown = false;
@@ -1161,9 +1191,11 @@ function writeOfflineSaveDismissed(value) {
 function resetOfflineSaveStatusForTests() {
     offlineSaveStatusShown = false;
     writeOfflineSaveDismissed(false);
+    try { sessionStorage.setItem(OFFLINE_SAVE_SHOWN_KEY, '0'); } catch (e) {}
 }
 
 function showReconnectingStatus() {
+    if (!isBrowserOffline() && typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) return;
     const banner = typeof $id === 'function' ? $id('connection-status-banner') : null;
     if (banner) banner.hidden = false;
 }
@@ -1171,11 +1203,12 @@ function showReconnectingStatus() {
 function hideReconnectingStatus() {
     const banner = typeof $id === 'function' ? $id('connection-status-banner') : null;
     if (banner) banner.hidden = true;
-    hideOfflineSaveStatus();
 }
 
 function showOfflineSaveStatus(reason) {
-    if (offlineSaveStatusShown || readOfflineSaveDismissed()) return false;
+    let previouslyShown = false;
+    try { previouslyShown = sessionStorage.getItem(OFFLINE_SAVE_SHOWN_KEY) === '1'; } catch (e) {}
+    if (offlineSaveStatusShown || readOfflineSaveDismissed() || previouslyShown) return false;
     offlineSaveStatusShown = true;
     const banner = typeof $id === 'function' ? $id(OFFLINE_SAVE_STATUS_ID) : null;
     if (!banner) return false;
@@ -1184,6 +1217,7 @@ function showOfflineSaveStatus(reason) {
         detail.textContent = reason || 'Changes are saved on this device and will sync when the server allows it.';
     }
     banner.hidden = false;
+    try { sessionStorage.setItem(OFFLINE_SAVE_SHOWN_KEY, '1'); } catch (e) {}
     return true;
 }
 
@@ -1229,7 +1263,7 @@ function reportCloudSaveDenied(context, classification) {
         // soon as this browser has a Firebase Auth session.
         reason = 'Saved on this device. This browser is not signed in to the cloud, so your changes are waiting to sync.';
     } else if (classification.category === 'PERMISSION_DENIED') {
-        reason = 'Your changes are saved on this device, but this account is not permitted to sync them to the server.';
+        reason = 'Working offline - saved on this device. This account is not permitted to sync yet.';
     } else {
         reason = 'Your changes are saved on this device, but the server rejected them (' + (classification.category || 'unknown') + ').';
     }
@@ -1241,12 +1275,13 @@ function retryCloudSyncNow() {
     if (typeof syncNow !== 'function') return Promise.resolve(null);
     // `syncNow` is async in the app, but resolve defensively so this also
     // works with a synchronous stub.
-    return Promise.resolve(syncNow('manual-retry')).then(function (summary) {
-        if (summary && summary.synced > 0) {
+    return Promise.resolve(syncNow('manual-retry')).then(async function (summary) {
+        const remaining = typeof listAllMutations === 'function' ? await listAllMutations() : [];
+        if (summary && summary.synced > 0 && remaining.length === 0) {
             hideOfflineSaveStatus();
             // A successful drain earns a fresh announcement for any later,
             // genuinely new failure.
-            offlineSaveStatusShown = false;
+            // Keep the once-per-session announcement latch after successful recovery.
             if (typeof showToast === 'function') showToast('Synced ' + summary.synced + ' pending change(s) to the cloud.', 'success');
         } else if (typeof showToast === 'function') {
             showToast('Could not sync yet. Your changes are safe on this device.', 'info');
@@ -1278,9 +1313,16 @@ function initConnectionStatus() {
     }
     if (!initConnectionStatus.__bound) {
         initConnectionStatus.__bound = true;
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && isOfflineSaveStatusVisible()) dismissOfflineSaveStatus();
+        });
         window.addEventListener('online', function () {
             hideReconnectingStatus();
-            if (typeof syncNow === 'function') syncNow('online');
+            if (typeof resetCloudCircuit === 'function') resetCloudCircuit();
+        });
+        window.addEventListener('pseudopy:connection-state', function (event) {
+            if (event.detail.reachable) hideReconnectingStatus();
+            else showReconnectingStatus();
         });
         window.addEventListener('offline', function () {
             showReconnectingStatus();
@@ -1345,6 +1387,8 @@ function saveSession(user) {
  * Clear the persisted session and related transient markers.
  */
 function clearSession() {
+    if (typeof resolveSyncNotice === 'function') resolveSyncNotice();
+    if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
     try { localStorage.removeItem(SESSION_KEY); } catch (e) { }
     try { sessionStorage.removeItem(STORAGE_KEYS.SESSION_USER); } catch (e) { }
     try { sessionStorage.removeItem(STORAGE_KEYS.UPDATE_DISMISSED); } catch (e) { }
@@ -1430,10 +1474,11 @@ function loadCachedProfileFor(snapshot) {
  */
 function scheduleProfileRefresh(docId, fallbackRoute) {
     if (typeof dbGet !== 'function' || typeof checkAccess !== 'function') return;
-    if (profileRefreshAttempts >= 3) return;
+    if (profileRefreshAttempts >= 3 || (typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed())) return;
     profileRefreshAttempts++;
     const backoffMs = [1500, 3000, 6000][profileRefreshAttempts - 1] || 6000;
     setTimeout(async () => {
+        if (typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) return;
         try {
             const fresh = await dbGet(usersRef, docId, { strict: true });
             if (!fresh) { profileRefreshAttempts = 3; return; }
@@ -1478,7 +1523,7 @@ function renderSessionState(result) {
     if (typeof showApp === 'function') {
         try { showApp(targetPage); } catch (e) { console.warn('[Session] App render failed, session kept:', e && e.message); }
     }
-    if (result.state === BOOT_AUTHENTICATED_DEGRADED) showConnectionBanner();
+    if (result.state === BOOT_AUTHENTICATED_DEGRADED && !result.permanentFailure) showConnectionBanner();
     hideBootSplash();
 }
 
@@ -1561,7 +1606,7 @@ async function restoreSession() {
             bootState = BOOT_AUTHENTICATED_DEGRADED;
             const route = getPersistedRoute();
             const targetPage = (route && checkAccess(currentUser.role, route)) ? route : '';
-            renderSessionState({ state: BOOT_AUTHENTICATED_DEGRADED, user: currentUser, route: targetPage });
+            renderSessionState({ state: BOOT_AUTHENTICATED_DEGRADED, user: currentUser, route: targetPage, permanentFailure: permanent });
             if (permanent) {
                 // A refusal is not an outage: dismissible status, no retry loop.
                 hideConnectionBanner();

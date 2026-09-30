@@ -5,6 +5,10 @@
 function showToast(message, type = 'info') {
     const container = $id('toast-container');
     if (!container) return;
+    const layout = $id('app-layout');
+    const region = $id('app-status-region');
+    if (region && layout && !layout.classList.contains('hidden')) region.appendChild(container);
+    else if (container.parentNode !== document.body) document.body.appendChild(container);
     const icons = { success: 'circle-check', error: 'circle-x', info: 'info' };
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
@@ -20,3 +24,11 @@ function showToast(message, type = 'info') {
 }
 
 
+
+// Public sync-notice API reuses the singleton status region.
+function showSyncNotice(message) {
+    return showOfflineSaveStatus(message);
+}
+function resolveSyncNotice() {
+    hideOfflineSaveStatus();
+}

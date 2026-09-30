@@ -29,7 +29,7 @@ async function refreshAuditLog() {
 }
 
 function subscribeCollection(ref, onChange, onError) {
-    if (!firestoreReady() || typeof firestore.collection(ref).onSnapshot !== 'function') return () => {};
+    if ((typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) || !firestoreReady() || typeof firestore.collection(ref).onSnapshot !== 'function') return () => {};
     let active = true;
     const unsubscribe = firestore.collection(ref).onSnapshot(async snapshot => {
         if (!active) return;
@@ -42,7 +42,7 @@ function subscribeCollection(ref, onChange, onError) {
             : records;
         setLocalCollection(ref, merged);
         onChange(merged);
-    }, error => { if (active && typeof onError === 'function') onError(error); });
+    }, error => { if (typeof recordCloudFailure === 'function') recordCloudFailure(error); if (active && typeof onError === 'function') onError(error); });
     return () => { active = false; if (typeof unsubscribe === 'function') unsubscribe(); };
 }
 

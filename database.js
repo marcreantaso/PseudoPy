@@ -105,6 +105,9 @@ function isPermanentFirestoreFailure(err) {
 }
 
 async function firestoreRetry(fetchFn, options = {}) {
+    if (typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) {
+        throw cloudCircuitError || Object.assign(new Error('Browser offline'), {code:'unavailable'});
+    }
     const requested = Math.max(1, options.attempts || 2);
     const timeoutMs = options.timeoutMs || 4000;
     const backoffMs = options.backoffMs === undefined ? 600 : Math.max(0, options.backoffMs || 0);
@@ -116,6 +119,7 @@ async function firestoreRetry(fetchFn, options = {}) {
             return await withFirestoreTimeout(fetchFn(), timeoutMs);
         } catch (err) {
             lastErr = err;
+            if (typeof recordCloudFailure === 'function') recordCloudFailure(err);
             performed = i + 1;
             if (isPermanentFirestoreFailure(err)) break;
         }
@@ -1074,20 +1078,17 @@ const offlineStore = {
     },
 
     async putMutation(record) {
-        try {
-            const db = await openOfflineDb();
-            if (!db) return;
-            await offlinePut(db, OFFLINE_STORES.mutations, record);
-        } catch (e) { /* best-effort */ }
+        const db = await openOfflineDb();
+        if (!db) throw new Error('IndexedDB unavailable');
+        await offlinePut(db, OFFLINE_STORES.mutations, record);
     },
 
     async removeMutation(mutationId) {
-        try {
-            const db = await openOfflineDb();
-            if (!db) return;
-            await offlineDelete(db, OFFLINE_STORES.mutations, mutationId);
-        } catch (e) { /* best-effort */ }
+        const db = await openOfflineDb();
+        if (!db) throw new Error('IndexedDB unavailable');
+        await offlineDelete(db, OFFLINE_STORES.mutations, mutationId);
     }
+
 };
 
 /**
@@ -1141,13 +1142,37 @@ async function ensureOfflineDataMigration() {
    - ADD → DELETE ordering  → preserved / collapse to a delete
    ============================================================ */
 
+const MUTATION_QUEUE_LIMIT = 500;
+let mutationQueueLock = Promise.resolve();
+
+// Serialize read/modify/write across callbacks and tabs where Web Locks is available.
+function withMutationQueueLock(work) {
+    const run = () => typeof navigator !== 'undefined' && navigator.locks
+        ? navigator.locks.request('pseudopy-mutation-queue', work) : work();
+    const task = mutationQueueLock.then(run, run);
+    mutationQueueLock = task.catch(() => {});
+    return task;
+}
+
+function queueStorageError(message, cause) {
+    const error = new Error(message);
+    error.code = 'queue-storage';
+    error.localOnly = true;
+    error.cause = cause;
+    if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('pseudopy:sync-error', { detail: { code: error.code, message } }));
+    }
+    return error;
+}
+
 const OFFLINE_QUEUE_FALLBACK_KEY = 'pseudopy_offline_queue';
 
 const MUTATION_STATUS = {
     PENDING: 'PENDING',
     SYNCING: 'SYNCING',
     SYNCED: 'SYNCED',
-    FAILED: 'FAILED'
+    FAILED: 'FAILED',
+    BLOCKED_PERMISSION: 'blocked-permission'
 };
 
 const MUTATION_OP_ADD = 'ADD';
@@ -1191,21 +1216,33 @@ function queueFallbackSave(list) {
     try {
         localStorage.setItem(OFFLINE_QUEUE_FALLBACK_KEY, JSON.stringify(list));
     } catch (e) {
-        console.warn('[Queue] Failed to persist fallback queue:', e);
+        throw queueStorageError('Sync queue could not be saved. Keep this page open and export your work before closing it.', e);
     }
 }
 
 async function queueReadRecords() {
+    const fallback = queueFallbackList();
     if (offlineStore && offlineStore.isAvailable && offlineStore.isAvailable()) {
         const records = await offlineStore.getMutations();
-        if (records) return records;
+        if (records) {
+            const merged = new Map(records.map(r => [r.mutationId, r]));
+            for (const r of fallback) merged.set(r.mutationId, r);
+            return [...merged.values()];
+        }
     }
-    return queueFallbackList();
+    return fallback;
 }
 
 async function queueWriteRecord(record) {
     if (offlineStore && offlineStore.isAvailable && offlineStore.isAvailable()) {
-        return await offlineStore.putMutation(record);
+        try {
+            await offlineStore.putMutation(record);
+            const fallback = queueFallbackList();
+            if (fallback.some(r => r.mutationId === record.mutationId)) {
+                queueFallbackSave(fallback.filter(r => r.mutationId !== record.mutationId));
+            }
+            return;
+        } catch (e) { /* durable fallback below */ }
     }
     const list = queueFallbackList();
     const idx = list.findIndex(r => r.mutationId === record.mutationId);
@@ -1216,10 +1253,10 @@ async function queueWriteRecord(record) {
 
 async function queueRemoveRecord(mutationId) {
     if (offlineStore && offlineStore.isAvailable && offlineStore.isAvailable()) {
-        return await offlineStore.removeMutation(mutationId);
+        await offlineStore.removeMutation(mutationId);
     }
     const list = queueFallbackList();
-    queueFallbackSave(list.filter(r => r.mutationId !== mutationId));
+    if (list.some(r => r.mutationId === mutationId)) queueFallbackSave(list.filter(r => r.mutationId !== mutationId));
 }
 
 function makeMutationRecord(operation, ref, docId, payload) {
@@ -1241,29 +1278,27 @@ function makeMutationRecord(operation, ref, docId, payload) {
  * Enqueue a write to be replayed once Firestore is reachable. Coalesces where
  * order-safe; returns the (possibly folded) mutation record.
  */
-async function enqueueMutation(operation, ref, docId, payload) {
+function enqueueMutation(operation, ref, docId, payload) {
+    return withMutationQueueLock(() => enqueueMutationLocked(operation, ref, docId, payload));
+}
+
+async function enqueueMutationLocked(operation, ref, docId, payload) {
     const op = String(operation).toUpperCase();
-    const prior = await listPendingMutations(ref, docId);
-
-    // DELETE collapses any pending ops for the same document: the net effect
-    // for the document is "gone", and Firestore deletes are idempotent.
-    if (op === MUTATION_OP_DELETE) {
-        for (const p of prior) {
-            if (p.status === MUTATION_STATUS.SYNCING) continue;
-            await queueRemoveRecord(p.mutationId);
-        }
-    }
-
-    if (op === MUTATION_OP_DELETE) {
-        const record = makeMutationRecord('DELETE', ref, docId, null);
-        await queueWriteRecord(record);
-        return record;
-    }
+    const prior = await listPendingMutations(ref, docId, true);
 
     // Fold order-safe consecutive operations for the same document.
-    const pending = prior.filter(p => p.status === MUTATION_STATUS.PENDING && p.operation !== MUTATION_OP_DELETE);
+    // Only fold into the tail: never move an update ahead of a DELETE or an in-flight write.
+    const tail = prior[prior.length - 1];
+    const pending = tail && [MUTATION_STATUS.PENDING, MUTATION_STATUS.BLOCKED_PERMISSION].includes(tail.status) && tail.operation !== MUTATION_OP_DELETE ? [tail] : [];
     if (pending.length === 1) {
-        const existing = pending[0];
+        const existing = Object.assign({}, pending[0]);
+        if (op === MUTATION_OP_DELETE) {
+            existing.operation = MUTATION_OP_DELETE;
+            existing.payload = null;
+            existing.updatedAt = Date.now();
+            await queueWriteRecord(existing);
+            return existing;
+        }
         if (existing.operation === MUTATION_OP_ADD || existing.operation === MUTATION_OP_SET) {
             existing.payload = (op === MUTATION_OP_UPDATE) ? mergeDoc(existing.payload, payload) : (payload || null);
         } else {
@@ -1276,7 +1311,10 @@ async function enqueueMutation(operation, ref, docId, payload) {
         return existing;
     }
 
+    const records = await listAllMutations();
+    if (records.length >= MUTATION_QUEUE_LIMIT) throw queueStorageError('Sync queue is full. Your draft is on this device; export it and retry sync before adding more queued changes.');
     const record = makeMutationRecord(op, ref, docId, payload);
+    record.createdAt = Math.max(record.createdAt, ...records.map(r => (r.createdAt || 0) + 1));
     await queueWriteRecord(record);
     return record;
 }
@@ -1290,7 +1328,7 @@ async function listPendingMutations(ref, docId, includeFailed) {
     const records = await queueReadRecords();
     return records
         .filter(r => r.collection === (ref || r.collection) && r.documentId === (docId || r.documentId))
-        .filter(r => r.status === MUTATION_STATUS.PENDING || r.status === MUTATION_STATUS.SYNCING || (includeFailed && r.status === MUTATION_STATUS.FAILED))
+        .filter(r => r.status === MUTATION_STATUS.PENDING || r.status === MUTATION_STATUS.BLOCKED_PERMISSION || r.status === MUTATION_STATUS.SYNCING || (includeFailed && r.status === MUTATION_STATUS.FAILED))
         .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 }
 
@@ -1359,6 +1397,10 @@ const ONLINE_REQUIRED_MESSAGE = 'This action requires an internet connection.';
 const PERMANENT_DB_CATEGORIES = ['PERMISSION_DENIED', 'INVALID_DATA', 'CONFLICT', 'QUOTA', 'PERMANENT'];
 
 let syncInProgress = false;
+let activeSyncPromise = null;
+let syncRetryTimer = null;
+let syncPermissionBlocked = false;
+const SYNC_RECOVERY_REASONS = ['startup', 'auth', 'sign-in', 'online', 'manual-retry'];
 // Optimistic at boot; only corrected by real Firestore operations (or an
 // explicit navigator.onLine === false hint). Never treated as proof of
 // connectivity on its own.
@@ -1433,8 +1475,28 @@ function isPermanentDbError(err) {
     return PERMANENT_DB_CATEGORIES.indexOf(classifyDbError(err).category) !== -1;
 }
 
+let cloudCircuitError = null;
+function cloudRequestsAllowed() {
+    return !cloudCircuitError && !(typeof navigator !== 'undefined' && navigator.onLine === false);
+}
+function recordCloudFailure(error, context) {
+    const classification = classifyDbError(error);
+    if (isPermanentDbError(error)) {
+        cloudCircuitError = error;
+        syncPermissionBlocked = true;
+        notifyCloudSaveDenied(context || {}, classification);
+    }
+    if (classification.transient) markFirestoreReachable(false);
+}
+function resetCloudCircuit() {
+    cloudCircuitError = null;
+    syncPermissionBlocked = false;
+}
 function markFirestoreReachable(reachable) {
     firestoreReachable = Boolean(reachable);
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('pseudopy:connection-state', {detail:{reachable:firestoreReachable}}));
+    }
 }
 
 function isFirestoreReachable() {
@@ -1470,7 +1532,7 @@ function requireOnline() {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         return { ok: false, blocked: true, reason: 'online', message: ONLINE_REQUIRED_MESSAGE };
     }
-    if (firestoreReachable === false) {
+    if (firestoreReachable === false || !cloudRequestsAllowed()) {
         return { ok: false, blocked: true, reason: 'reachability', message: ONLINE_REQUIRED_MESSAGE };
     }
     return { ok: true };
@@ -1492,9 +1554,10 @@ function syncBackoffDelay(attempt, randomFn) {
 }
 
 function scheduleSyncRetry(mutationId, attempt) {
-    if (typeof setTimeout !== 'function') return;
-    setTimeout(function () {
-        syncOneMutation(mutationId).catch(function () { /* bounded retry, never throws */ });
+    if (typeof setTimeout !== 'function' || syncRetryTimer !== null) return;
+    syncRetryTimer = setTimeout(function () {
+        syncRetryTimer = null;
+        syncNow('backoff').catch(function () {});
     }, syncBackoffDelay(attempt));
 }
 
@@ -1505,7 +1568,18 @@ function scheduleSyncRetry(mutationId, attempt) {
  * Returns true (synced), false (still pending / failed) or null (retired).
  */
 async function trySyncMutation(mutation) {
+    if (!firestoreReady() || (typeof navigator !== 'undefined' && navigator.onLine === false)) return false;
     if (mutation.attempts >= SYNC_MAX_ATTEMPTS) return null;
+    // Claim the latest payload under the same queue lock used by autosave.
+    if (typeof withMutationQueueLock === 'function') {
+        mutation = await withMutationQueueLock(async () => {
+            const fresh = (await listAllMutations()).find(r => r.mutationId === mutation.mutationId);
+            if (!fresh) return null;
+            await updateMutationStatus(fresh.mutationId, MUTATION_STATUS.SYNCING, null, fresh.attempts || 0);
+            return fresh;
+        });
+        if (!mutation) return null;
+    }
     const attempt = (mutation.attempts || 0) + 1;
     const ref = mutation.collection;
     const docId = mutation.documentId;
@@ -1528,35 +1602,17 @@ async function trySyncMutation(mutation) {
         }
         markFirestoreReachable(true);
         await removeSyncedMutation(mutation.mutationId);
+        if (typeof cloudSaveComplete === 'function') cloudSaveComplete(ref, docId);
         return true;
     } catch (err) {
         const classification = classifyDbError(err);
         if (!classification.transient) {
-            // A denying Firestore IS reachable — the request completed and was
-            // refused. Reporting it as an outage is what drove the endless
-            // "Reconnecting" banner.
-            //
-            // Exception: an anonymous request against an auth-required ruleset.
-            // That is not a lost write, it is a write waiting for a session, so
-            // it goes back to PENDING and is drained on sign-in. No backoff
-            // timer is scheduled, which is what keeps this from looping.
-            const pendingSignIn = classification.category === 'PERMISSION_DENIED'
-                && typeof cloudAuthPendingSignIn === 'function'
-                && cloudAuthPendingSignIn();
-            console.warn(
-                `[Sync] Firestore refused ${mutation.operation} ${ref}/${docId}`
-                + ` (code=${(err && err.code) || 'unknown'}, category=${classification.category})`
-                + (pendingSignIn ? ' — deferred until cloud sign-in.' : `: ${classification.message}`)
-            );
-            if (pendingSignIn) {
-                await updateMutationStatus(mutation.mutationId, MUTATION_STATUS.PENDING, classification.message, attempt);
-                markFirestoreReachable(true);
-                notifyCloudSaveDenied({ ref, docId, operation: mutation.operation, pendingSignIn: true }, classification);
-                return false;
-            }
-            await updateMutationStatus(mutation.mutationId, MUTATION_STATUS.FAILED, classification.message, attempt);
+            const permission = classification.category === 'PERMISSION_DENIED';
+            if (permission) syncPermissionBlocked = true;
+            recordCloudFailure(err, { ref, docId, operation: mutation.operation });
+            await updateMutationStatus(mutation.mutationId, permission ? 'blocked-permission' : MUTATION_STATUS.FAILED, classification.message, attempt);
             markFirestoreReachable(true);
-            notifyCloudSaveDenied({ ref, docId, operation: mutation.operation }, classification);
+
             return false;
         }
         markFirestoreReachable(false);
@@ -1571,58 +1627,57 @@ async function trySyncMutation(mutation) {
 }
 
 /** Single-mutation sync used by backoff timers; respects the global lock. */
-async function syncOneMutation(mutationId) {
-    if (!firestoreReady()) return false;
-    if (syncInProgress) {
-        if (typeof setTimeout === 'function') setTimeout(function () {
-            syncOneMutation(mutationId).catch(function () {});
-        }, 150);
-        return false;
-    }
-    const records = await listAllMutations();
-    const mutation = records.find(m => m.mutationId === mutationId);
-    if (!mutation) return false;
-    if (mutation.status !== MUTATION_STATUS.PENDING && mutation.status !== MUTATION_STATUS.SYNCING) return false;
-    if (mutation.attempts >= SYNC_MAX_ATTEMPTS) return false;
-    syncInProgress = true;
-    try {
-        return await trySyncMutation(mutation);
-    } finally {
-        syncInProgress = false;
-    }
+async function syncOneMutation() {
+    // Timers drain from the head, never leapfrog an earlier write to the same document.
+    return syncNow('backoff');
 }
 
-/**
- * Drain the queue. Application-driven (never depends on Background Sync):
- * returns immediately if a sync is already running (lock) or Firestore is not
- * ready; otherwise replays PENDING/SYNCING mutations in createdAt order.
- */
-async function syncNow(reason) {
-    if (syncInProgress) return { started: false, reason };
-    if (typeof firestoreReady !== 'function' || !firestoreReady()) {
-        if (typeof navigator !== 'undefined' && navigator.onLine === false) markFirestoreReachable(false);
+function syncNow(reason) {
+    if (activeSyncPromise) return (reason === 'write' || SYNC_RECOVERY_REASONS.includes(reason))
+        ? activeSyncPromise.then(() => syncNow(reason)) : activeSyncPromise;
+    const run = () => drainSyncQueue(reason);
+    activeSyncPromise = (typeof navigator !== 'undefined' && navigator.locks
+        ? navigator.locks.request('pseudopy-sync-transport', run) : Promise.resolve().then(run))
+        .finally(() => { activeSyncPromise = null; });
+    return activeSyncPromise;
+}
+
+async function drainSyncQueue(reason) {
+    const recovery = SYNC_RECOVERY_REASONS.includes(reason);
+    if (recovery) resetCloudCircuit();
+    if (syncPermissionBlocked || !firestoreReady() || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
         return { started: false, reason };
     }
     syncInProgress = true;
     let synced = 0, failed = 0, skipped = 0;
     try {
         const records = await listAllMutations();
-        const queue = records.filter(m => m.status === MUTATION_STATUS.PENDING || m.status === MUTATION_STATUS.SYNCING);
-        for (const mutation of queue) {
+        const blockedDocuments = new Set();
+        for (const mutation of records) {
+            const key = JSON.stringify([mutation.collection, mutation.documentId]);
+            if (blockedDocuments.has(key)) { skipped++; continue; }
+            if (recovery && (mutation.status === 'blocked-permission' || mutation.status === MUTATION_STATUS.SYNCING ||
+                (mutation.status === MUTATION_STATUS.FAILED && (classifyDbError(new Error(mutation.lastError)).transient || classifyDbError(new Error(mutation.lastError)).category === 'PERMISSION_DENIED')))) {
+                mutation.status = MUTATION_STATUS.PENDING;
+                mutation.attempts = 0;
+                await updateMutationStatus(mutation.mutationId, mutation.status, null, 0);
+            }
+            if (mutation.status !== MUTATION_STATUS.PENDING && mutation.status !== MUTATION_STATUS.SYNCING) {
+                blockedDocuments.add(key); skipped++; continue;
+            }
             const outcome = await trySyncMutation(mutation);
             if (outcome === true) synced++;
-            else if (outcome === false) failed++;
-            else skipped++;
+            else { failed++; blockedDocuments.add(key); }
+            if (syncPermissionBlocked) break;
         }
-    } finally {
-        syncInProgress = false;
-    }
-    if (synced > 0) console.info('[Sync] Processed ' + synced + ' queued mutation(s).');
+    } finally { syncInProgress = false; }
     return { started: true, synced, failed, skipped, reason };
 }
 
 /** Register application-driven sync triggers (registered once at boot). */
 function initSyncCoordinator() {
+    if (initSyncCoordinator.__bound) return;
+    initSyncCoordinator.__bound = true;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) markFirestoreReachable(false);
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
         window.addEventListener('online', function () {
@@ -1700,9 +1755,10 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
     let results = [];
 
     // 1. Try Firestore
-    if (firestoreReady()) {
+    if (firestoreReady() && (typeof cloudRequestsAllowed !== 'function' || cloudRequestsAllowed())) {
         try {
             const snapshot = await withFirestoreTimeout(firestore.collection(ref).get());
+            if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
             if (snapshot && !snapshot.empty) {
                 results = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
                 // For activity, always merge with full seed demo data so charts are rich
@@ -1719,6 +1775,7 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
                 setLocalCollection(ref, results);
             }
         } catch (err) {
+            if (typeof recordCloudFailure === 'function') recordCloudFailure(err);
             console.info(`[Database] Firestore fetch error on ${ref}, using local fallback:`, err.message);
         }
     }
@@ -1782,12 +1839,14 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
  * really gone" from "temporarily offline". Other callers keep the fallback.
  */
 async function dbGet(ref, docId, opts = {}) {
-    if (firestoreReady()) {
+    if (firestoreReady() && (typeof cloudRequestsAllowed !== 'function' || cloudRequestsAllowed())) {
         try {
             const doc = await firestoreRetry(() => firestore.collection(ref).doc(docId).get(), { attempts: opts.attempts || 2, timeoutMs: opts.timeoutMs, backoffMs: opts.backoffMs });
+            if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
             if (doc.exists) return { _docId: doc.id, ...doc.data() };
             return null;
         } catch (err) {
+            if (typeof recordCloudFailure === 'function') recordCloudFailure(err);
             if (opts.strict) {
                 console.warn(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
                 // Keep the original failure reachable: a permission denial
@@ -1833,10 +1892,15 @@ async function mergePendingMutationsOverSnapshot(ref, results) {
         if (!pending || pending.length === 0) return results;
         const list = (Array.isArray(results) ? results : []).slice();
         for (const mutation of pending) {
-            if (!mutation.documentId || mutation.operation === 'DELETE') continue;
+            if (!mutation.documentId) continue;
+            if (mutation.operation === 'DELETE') {
+                const index = list.findIndex(d => d._docId === mutation.documentId || d.id === mutation.documentId);
+                if (index >= 0) list.splice(index, 1);
+                continue;
+            }
             const payload = Object.assign({}, mutation.payload || {}, { _docId: mutation.documentId });
             const idx = list.findIndex(d => d._docId === mutation.documentId || d.id === mutation.documentId);
-            if (idx >= 0) list[idx] = payload;
+            if (idx >= 0) list[idx] = mutation.operation === 'UPDATE' ? Object.assign({}, list[idx], payload) : payload;
             else list.unshift(payload);
         }
         return list;
@@ -1874,54 +1938,15 @@ function withCloudOwnership(payload) {
  * mistake a local write for confirmed cloud persistence.
  */
 async function queueFirestoreWrite({ operation, ref, docId, payload }) {
-    if (!firestoreReady()) {
-        if (typeof markFirestoreReachable === 'function') markFirestoreReachable(false);
-        if (typeof enqueueMutation === 'function') await enqueueMutation(operation, ref, docId, payload);
-        if (typeof syncNow === 'function') syncNow('write');
-        throw cloudSaveFailure(ref, docId);
-    }
-    try {
-        const owned = withCloudOwnership(payload);
-        if (operation === 'UPDATE') {
-            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(owned, { merge: true }));
-        } else {
-            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(owned));
-        }
-        if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
-        if (typeof clearPendingForDocument === 'function') await clearPendingForDocument(ref, docId);
-        if (typeof syncNow === 'function') syncNow('write');
-        cloudSaveComplete(ref, docId);
-    } catch (err) {
-        const classification = (typeof classifyDbError === 'function' ? classifyDbError(err) : { transient: false, message: err.message });
-        if (classification.transient) {
-            if (typeof markFirestoreReachable === 'function') markFirestoreReachable(false);
-            if (typeof enqueueMutation === 'function') await enqueueMutation(operation, ref, docId, payload);
-            if (typeof syncNow === 'function') syncNow('write');
-            console.info(`[Database] Firestore ${ref}/${docId} temporarily unavailable; write queued offline.`);
-        } else {
-            // A refusing Firestore is reachable; the request completed and was
-            // refused. Marking it unreachable is what fed the endless
-            // "Reconnecting" banner. The local write already succeeded, so the
-            // user keeps their work and is told why it is not in the cloud.
-            if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
-
-            // Anonymous request against an auth-required ruleset. This is not a
-            // lost write: queue it so it replays the moment a cloud session
-            // exists, instead of stranding it as FAILED.
-            const pendingSignIn = typeof cloudAuthPendingSignIn === 'function' && cloudAuthPendingSignIn();
-            if (pendingSignIn) {
-                if (typeof enqueueMutation === 'function') await enqueueMutation(operation, ref, docId, withCloudOwnership(payload));
-            }
-            console.warn(
-                `[Database] Firestore refused ${operation} ${ref}/${docId}`
-                + ` (code=${(err && err.code) || 'unknown'})`
-                + (pendingSignIn ? ' — deferred until cloud sign-in.' : '.')
-            );
-            if (typeof notifyCloudSaveDenied === 'function') {
-                notifyCloudSaveDenied({ ref, docId, operation, pendingSignIn }, classification);
-            }
-        }
-        throw cloudSaveFailure(ref, docId, err);
+    // Persist before contacting Firestore. A crash or refusal must leave a replayable record.
+    const mutation = await enqueueMutation(operation, ref, docId, withCloudOwnership(payload));
+    await syncNow('write');
+    const remaining = (await listAllMutations()).find(r => r.mutationId === mutation.mutationId);
+    if (remaining) {
+        const cause = Object.assign(new Error(remaining.lastError || 'Cloud synchronization pending'), {
+            code: remaining.status === 'blocked-permission' ? 'permission-denied' : 'unavailable'
+        });
+        throw cloudSaveFailure(ref, docId, cause);
     }
 }
 
@@ -1981,7 +2006,7 @@ async function dbDelete(ref, docId) {
     const local = getLocalCollection(ref);
     const exists = local.some(item => item._docId === docId || item.id === docId);
 
-    if (firestoreReady()) {
+    if (firestoreReady() && (typeof cloudRequestsAllowed !== 'function' || cloudRequestsAllowed())) {
         try {
             await firestore.collection(ref).doc(docId).delete();
         } catch (err) {
@@ -2265,7 +2290,7 @@ async function refreshAuditLog() {
 }
 
 function subscribeCollection(ref, onChange, onError) {
-    if (!firestoreReady() || typeof firestore.collection(ref).onSnapshot !== 'function') return () => {};
+    if ((typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) || !firestoreReady() || typeof firestore.collection(ref).onSnapshot !== 'function') return () => {};
     let active = true;
     const unsubscribe = firestore.collection(ref).onSnapshot(async snapshot => {
         if (!active) return;
@@ -2278,7 +2303,7 @@ function subscribeCollection(ref, onChange, onError) {
             : records;
         setLocalCollection(ref, merged);
         onChange(merged);
-    }, error => { if (active && typeof onError === 'function') onError(error); });
+    }, error => { if (typeof recordCloudFailure === 'function') recordCloudFailure(error); if (active && typeof onError === 'function') onError(error); });
     return () => { active = false; if (typeof unsubscribe === 'function') unsubscribe(); };
 }
 
