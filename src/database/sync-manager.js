@@ -183,7 +183,12 @@ async function trySyncMutation(mutation) {
         if (mutation.operation === MUTATION_OP_DELETE) {
             if (firestoreReady()) await withFirestoreTimeout(firestore.collection(ref).doc(docId).delete());
         } else {
-            const payload = mutation.payload || {};
+            // Stamp ownership at REPLAY time, not enqueue time: a mutation that
+            // was deferred while signed out only learns its uid later, and the
+            // rules require `uid == request.auth.uid`.
+            const payload = typeof withCloudOwnership === 'function'
+                ? withCloudOwnership(mutation.payload)
+                : (mutation.payload || {});
             if (mutation.operation === MUTATION_OP_UPDATE) {
                 await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(payload, { merge: true }));
             } else {
@@ -199,10 +204,28 @@ async function trySyncMutation(mutation) {
             // A denying Firestore IS reachable — the request completed and was
             // refused. Reporting it as an outage is what drove the endless
             // "Reconnecting" banner.
+            //
+            // Exception: an anonymous request against an auth-required ruleset.
+            // That is not a lost write, it is a write waiting for a session, so
+            // it goes back to PENDING and is drained on sign-in. No backoff
+            // timer is scheduled, which is what keeps this from looping.
+            const pendingSignIn = classification.category === 'PERMISSION_DENIED'
+                && typeof cloudAuthPendingSignIn === 'function'
+                && cloudAuthPendingSignIn();
+            console.warn(
+                `[Sync] Firestore refused ${mutation.operation} ${ref}/${docId}`
+                + ` (code=${(err && err.code) || 'unknown'}, category=${classification.category})`
+                + (pendingSignIn ? ' — deferred until cloud sign-in.' : `: ${classification.message}`)
+            );
+            if (pendingSignIn) {
+                await updateMutationStatus(mutation.mutationId, MUTATION_STATUS.PENDING, classification.message, attempt);
+                markFirestoreReachable(true);
+                notifyCloudSaveDenied({ ref, docId, operation: mutation.operation, pendingSignIn: true }, classification);
+                return false;
+            }
             await updateMutationStatus(mutation.mutationId, MUTATION_STATUS.FAILED, classification.message, attempt);
             markFirestoreReachable(true);
             notifyCloudSaveDenied({ ref, docId, operation: mutation.operation }, classification);
-            console.warn(`[Sync] Permanent failure on ${ref}/${docId}: ${classification.message}`);
             return false;
         }
         markFirestoreReachable(false);
@@ -282,6 +305,16 @@ function initSyncCoordinator() {
     if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
         document.addEventListener('visibilitychange', function () {
             if (!document.hidden && (typeof navigator === 'undefined' || navigator.onLine !== false)) syncNow('visibility');
+        });
+    }
+    // A new cloud session is the one event that can turn previously deferred
+    // (not failed) writes into successes, so drain immediately on sign-in.
+    if (typeof onCloudAuthChanged === 'function' && !initSyncCoordinator.__authBound) {
+        initSyncCoordinator.__authBound = true;
+        onCloudAuthChanged(function (user) {
+            if (!user) return;
+            console.info('[Sync] Cloud session established; draining queued writes.');
+            syncNow('auth');
         });
     }
     syncNow('startup');

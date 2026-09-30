@@ -71,6 +71,7 @@
   "database.js": [
     "src/database/default-admin.js",
     "src/database/firebase.js",
+    "src/database/cloud-auth.js",
     "src/database/passwords.js",
     "src/database/seed-data.js",
     "src/database/local-storage.js",

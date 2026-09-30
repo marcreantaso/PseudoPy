@@ -2,22 +2,35 @@
    INITIALIZATION
    ============================================================ */
 
+/**
+ * A rejected cloud write is a status, not a modal emergency. Routing it through
+ * the connection-status layer keeps ONE dismissible, once-per-session notice
+ * (with a Retry action) instead of an un-dismissable red box that reappeared on
+ * every keystroke-triggered save.
+ */
 window.addEventListener('pseudopy:sync-error', event => {
-    let notice = document.getElementById('cloud-save-status');
-    if (!notice) {
-        notice = document.createElement('div');
-        notice.id = 'cloud-save-status';
-        notice.setAttribute('role', 'alert');
-        notice.style.cssText = 'position:fixed;bottom:1rem;left:1rem;right:1rem;z-index:10000;padding:1rem;border:1px solid var(--danger);background:var(--bg-primary,#171923);color:var(--text-primary,#fff);border-radius:12px;';
-        document.body.appendChild(notice);
+    const detail = event.detail || {};
+    hideLegacyCloudSaveNotice();
+    if (typeof reportCloudSaveDenied === 'function') {
+        reportCloudSaveDenied(
+            { ref: detail.ref, docId: detail.docId, operation: 'WRITE' },
+            { category: detail.code === 'permission-denied' ? 'PERMISSION_DENIED' : 'CLOUD_SAVE_FAILED', transient: false, message: detail.message }
+        );
     }
-    notice.textContent = event.detail.message;
-    notice.dataset.record = JSON.stringify([event.detail.ref, event.detail.docId]);
 });
 window.addEventListener('pseudopy:sync-saved', event => {
-    const notice = document.getElementById('cloud-save-status');
-    if (notice && notice.dataset.record === JSON.stringify([event.detail.ref, event.detail.docId])) notice.remove();
+    hideLegacyCloudSaveNotice();
+    if (typeof hideOfflineSaveStatus === 'function') hideOfflineSaveStatus();
+    if (typeof cloudAuthReady === 'function' && cloudAuthReady() && typeof cloudUid === 'function') {
+        console.info(`[App] Cloud save confirmed for ${event.detail.ref}/${event.detail.docId} (uid ${cloudUid()}).`);
+    }
 });
+
+/** Removes any notice left behind by an earlier session of this page. */
+function hideLegacyCloudSaveNotice() {
+    const notice = document.getElementById('cloud-save-status');
+    if (notice) notice.remove();
+}
 
 const SEED_DONE_KEY = 'pseudopy_seeded';
 
@@ -25,13 +38,28 @@ const SEED_DONE_KEY = 'pseudopy_seeded';
  * Seeding must not run on every normal boot. It runs once per browser (flag),
  * only when Firestore is reachable, and only writes collections that are
  * empty (seedDatabase's per-collection checks keep it duplicate-safe).
+ *
+ * It is also restricted to staff. The seed set spans every user's accounts and
+ * activity, so under least-privilege rules a student cannot write it — and
+ * letting an arbitrary client publish the catalog and other students' records
+ * is a hole in its own right. A student still gets the full local seed data
+ * through the offline fallback, so nothing is lost visually.
  */
+function canSeedFirestore() {
+    if (typeof currentUser === 'undefined' || !currentUser) return false;
+    return currentUser.role === 'admin' || currentUser.role === 'instructor';
+}
+
 async function ensureSeedDatabase() {
     try {
         if (localStorage.getItem(SEED_DONE_KEY) !== null) return;
     } catch (e) { return; }
     if (typeof firestoreReady !== 'function' || !firestoreReady()) return;
     if (typeof seedDatabase !== 'function') return;
+    if (!canSeedFirestore()) {
+        console.info('[App] Skipping Firestore seeding: restricted to admin/instructor sessions.');
+        return;
+    }
     await seedDatabase();
     try { localStorage.setItem(SEED_DONE_KEY, '1'); } catch (e) { /* private browsing */ }
 }

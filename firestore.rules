@@ -1,87 +1,239 @@
 rules_version = '2';
 
 /* ═══════════════════════════════════════════════════════════════════
-   PseudoPy — PROPOSED Cloud Firestore Security Rules
+   PseudoPy — Firestore Security Rules (least privilege, post-migration)
 
-   STATUS:         PROPOSED — requires owner review. Not yet deployed.
-   DEPLOYMENT:     Only the project owner may deploy these via
-                   `firebase deploy --only firestore:rules`.
+   🚨 DO NOT DEPLOY THIS FILE YET.
 
-   ⚠️  **READ BEFORE DEPLOYING ANY RULESET**
+   These rules REQUIRE a Firebase Auth session. PseudoPy's login is still
+   IN-APP (username + client-side salted hash read from `pseudopy_users`),
+   which is fundamentally incompatible with owner-scoped rules: login
+   needs to LIST every user document to resolve a username, and that is
+   exactly what these rules deny.
 
-   1. PseudoPy's frontend currently authenticates users IN-APP (from the
-      `pseudopy_users` collection) and does NOT use Firebase Auth.
-      `request.auth` is therefore always null in the browser today.
+   Deploying this file before login uses Firebase Auth will lock every
+   user out. Deploy `firestore.interim.rules` first (it removes the red
+   toast immediately), then complete the migration and swap this file in.
 
-   2. The rules below are deliberately written to MATCH the app's current
-      client behavior (i.e., equivalent to Firestore's "test" default).
-      They are a *baseline artifact*, not a security boundary.
+   ── Role source ──────────────────────────────────────────────────
+   `isAdmin()` / `isInstructor()` use a ROLE LOOKUP in `pseudopy_users`
+   (`data.role`), NOT a custom claim, because no custom claim is set up
+   in this project yet and a claim cannot be assigned from the client.
+   To switch to claims later, set `admin: true` via the Admin SDK and
+   replace the two functions with:
+       function isAdmin()    { return request.auth.token.admin == true; }
+       function isInstructor(){ return request.auth.token.instructor == true; }
+   A claim is cheaper (no extra read per request) and cannot be edited
+   by the user, so it is the better long-term home for authorisation.
 
-   3. To actually secure the data you MUST complete the migration first:
-      a. Enable Firebase Authentication → Email/Password in the Firebase
-         console (project `pseudopy-e7e74`).
-      b. Sign users in with `firebase.auth().signInWithEmailAndPassword(...)`
-         (credentials are already stored hashed in `pseudopy_users`).
-      c. THEN replace the `allow ... if true` blocks below with:
-            request.auth != null
-         and add role checks (admin/instructor/student) per collection.
-      d. Deploy only after the app is verified end-to-end in a staging env.
+   ── Ownership model ──────────────────────────────────────────────
+   Legacy document IDs are app-generated (`u2`, `u_stu_mdaet`, `act_…`),
+   never Firebase Auth uids, so ownership is resolved through the
+   account document: an app account id is mapped to its auth uid by the
+   `uid` field the client stamps on its own writes. This keeps every
+   existing account id valid and requires no data migration.
 
-   4. Until then: anyone who can reach this Firestore dataset can read and
-      write the collections listed below. This is the known HIGH-severity
-      risk (H1 in the trust audit) and it is being tracked as an owner
-      action item — see docs/COMPLIANCE-CHECKLIST.md.
-
+   `uid` on any document means "the authenticated principal that wrote
+   it". It is NOT always the subject: an instructor creating a
+   notification or reviewing a submission writes documents owned by a
+   student, so ownership is checked through `studentId` / `userId` /
+   `accountId` instead.
    ═══════════════════════════════════════════════════════════════════ */
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── User accounts (admin, instructors, students) ──────────────
-    // baseline: full client access (matches current app behavior)
-    match /pseudopy_users/{doc} {
-      allow read, write: if true;
+    // ── Helpers ──────────────────────────────────────────────────
+    function signedIn() {
+      return request.auth != null;
     }
 
-    // ── Exercise catalog (public learning content) ────────────────
-    match /pseudopy_exercises/{doc} {
-      allow read: if true;
-      allow write: if true;
+    function userDoc(accountId) {
+      return get(/databases/$(database)/documents/pseudopy_users/$(accountId)).data;
     }
 
-    // ── Student activity / submissions ────────────────────────────
+    /** The Firebase Auth uid bound to an app account id, or null. */
+    function accountUid(accountId) {
+      return accountId != null ? userDoc(accountId).uid : null;
+    }
+
+    /** True when the caller is the owner of the given app account id. */
+    function ownsAccount(accountId) {
+      return signedIn()
+        && accountId != null
+        && accountUid(accountId) == request.auth.uid;
+    }
+
+    /** Role of the caller, taken from their own account document. */
+    function roleOf(accountId) {
+      return ownsAccount(accountId) ? userDoc(accountId).role : null;
+    }
+
+    function isAdmin() {
+      return signedIn() && roleOf(request.auth.uid) == 'admin';
+    }
+
+    function isInstructor() {
+      return signedIn() && roleOf(request.auth.uid) == 'instructor';
+    }
+
+    /** Admins and instructors ("teachers") share the elevated surface. */
+    function isStaff() {
+      return isAdmin() || isInstructor();
+    }
+
+    /** Owner of a user document, whether addressed by uid or by app id. */
+    function ownsUserDoc(userId) {
+      return signedIn() && (userId == request.auth.uid || ownsAccount(userId));
+    }
+
+    /**
+     * A user may claim the `uid` field on their own document exactly once
+     * (migration) and may never re-point it at somebody else.
+     */
+    function claimingOwnUid() {
+      return !resource.data.uid || resource.data.uid == request.auth.uid;
+    }
+
+    /** Owners cannot promote or demote themselves; only staff may. */
+    function roleUnchanged() {
+      return request.resource.data.role == resource.data.role;
+    }
+
+    /** Staff may not silently drop ownership metadata. */
+    function keepsOwnership() {
+      return request.resource.data.uid == resource.data.uid;
+    }
+
+    // ── User accounts ────────────────────────────────────────────
+    // Self-service: read and update your own profile, settings and
+    // password hash. Nobody can change their own `role`; only an admin
+    // can change anyone's role, and only an admin can delete accounts.
+    match /pseudopy_users/{userId} {
+      allow get: if ownsUserDoc(userId) || isStaff();
+      allow list: if isStaff();
+      allow create: if signedIn()
+                    && request.resource.data.uid == request.auth.uid;
+      allow update: if isStaff()
+                    || (ownsUserDoc(userId)
+                        && claimingOwnUid()
+                        && request.resource.data.uid == request.auth.uid
+                        && roleUnchanged());
+      allow delete: if isAdmin();
+    }
+
+    // ── Student activity / submissions ───────────────────────────
+    // A student creates and reads their own submissions; instructors and
+    // admins read and review all of them.
     match /pseudopy_activity/{doc} {
-      allow read, write: if true;
+      allow get: if isStaff()
+                 || ownsAccount(resource.data.studentAccountId)
+                 || ownsAccount(resource.data.studentId)
+                 || resource.data.uid == request.auth.uid;
+      allow list: if isStaff();
+      allow create: if signedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && (isStaff()
+                        || ownsAccount(request.resource.data.studentAccountId)
+                        || ownsAccount(request.resource.data.studentId));
+      // Review (feedback / revision request) is staff-only; a student may
+      // still update their own submission (e.g. a resubmission).
+      allow update: if isStaff()
+                    || (resource.data.uid == request.auth.uid
+                        || ownsAccount(resource.data.studentAccountId));
+      allow delete: if isAdmin();
     }
 
-    // ── Password recovery requests (H2: currently readable/overwritable) ──
+    // ── Exercise catalog ─────────────────────────────────────────
+    // Shared learning content: readable by any signed-in user, writable
+    // only by staff.
+    match /pseudopy_exercises/{doc} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isStaff();
+    }
+
+    // ── Password recovery requests ───────────────────────────────
+    // No client may read the queue. A signed-in user may file a request
+    // for their own account; only staff may review or expire one.
     match /pseudopy_passwordRequests/{doc} {
-      allow read, write: if true;
+      allow get: if isStaff() && ownsAccount(resource.data.userId);
+      allow list: if isStaff();
+      allow create: if signedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && ownsAccount(request.resource.data.userId);
+      allow update: if isStaff();
+      allow delete: if isAdmin();
     }
 
-    // ── Audit log (append-only target after hardening) ────────────
-    match /pseudopy_auditLog/{doc} {
-      allow read, write: if true;
-    }
-
-    // ── Notifications ─────────────────────────────────────────────
+    // ── Notifications ────────────────────────────────────────────
+    // Written BY staff FOR a student, so ownership follows `studentId`.
     match /pseudopy_notifications/{doc} {
-      allow read, write: if true;
+      allow get: if isStaff()
+                 || ownsAccount(resource.data.studentId)
+                 || ownsAccount(resource.data.accountId);
+      allow list: if isStaff();
+      allow create: if isStaff();
+      // Only the recipient may flip their own read flag.
+      allow update: if isStaff()
+                    || ownsAccount(resource.data.studentId)
+                    || ownsAccount(resource.data.accountId);
+      allow delete: if isAdmin();
     }
 
-    // ── Instructor device authorization records ───────────────────
+    // ── Instructor device authorization ──────────────────────────
+    // An instructor enrolls their own device; only an admin approves.
     match /pseudopy_devices/{doc} {
-      allow read, write: if true;
+      allow get, list: if isStaff();
+      allow create: if signedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && ownsAccount(request.resource.data.userId);
+      allow update: if isAdmin()
+                    || (signedIn()
+                        && resource.data.uid == request.auth.uid
+                        && keepsOwnership());
+      allow delete: if isAdmin();
     }
 
-    // ── Learning evidence snapshots ───────────────────────────────
+    // ── Audit log (append-only) ──────────────────────────────────
+    // Staff read all; nobody edits or deletes history.
+    match /pseudopy_auditLog/{doc} {
+      allow get, list: if isStaff();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ── Learning evidence snapshots ──────────────────────────────
     match /pseudopy_evidence/{doc} {
-      allow read, write: if true;
+      allow get: if isStaff() || ownsAccount(resource.data.studentId);
+      allow list: if isStaff();
+      allow create: if signedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && (isStaff() || ownsAccount(request.resource.data.studentId));
+      allow update: if isStaff() || resource.data.uid == request.auth.uid;
+      allow delete: if isAdmin();
     }
 
-    // ── Tutorial progress ─────────────────────────────────────────
+    // ── Tutorial progress ────────────────────────────────────────
     match /pseudopy_tutorialProgress/{doc} {
-      allow read, write: if true;
+      allow get: if isStaff() || ownsAccount(resource.data.userId);
+      allow list: if isStaff();
+      allow create: if signedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && (isStaff() || ownsAccount(request.resource.data.userId));
+      allow update: if isStaff()
+                    || resource.data.uid == request.auth.uid
+                    || ownsAccount(resource.data.userId);
+      allow delete: if isAdmin() || resource.data.uid == request.auth.uid;
+    }
+
+    // ── Server-owned counters ────────────────────────────────────
+    match /pseudopy_counters/{doc} {
+      allow read, write: if false;
+    }
+
+    // Default deny: anything not matched above is refused.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -11,6 +11,7 @@
 
 const OFFLINE_SAVE_STATUS_ID = 'offline-save-status';
 const OFFLINE_SAVE_DISMISS_ID = 'offline-save-dismiss';
+const OFFLINE_SAVE_RETRY_ID = 'offline-save-retry';
 const OFFLINE_SAVE_DISMISSED_KEY = 'pseudopy.offlineSaveDismissed';
 
 let offlineSaveStatusShown = false;
@@ -96,10 +97,36 @@ function reportCloudSaveDenied(context, classification) {
     // The server answered, so retire any "Reconnecting…" state first: leaving
     // both on screen is what made the original notice look un-dismissable.
     hideReconnectingStatus();
-    const reason = classification.category === 'PERMISSION_DENIED'
-        ? 'Your changes are saved on this device, but this account is not permitted to sync them to the server.'
-        : 'Your changes are saved on this device, but the server rejected them (' + (classification.category || 'unknown') + ').';
+    let reason;
+    if (context && context.pendingSignIn) {
+        // Not a misconfiguration: the write is queued and will be replayed as
+        // soon as this browser has a Firebase Auth session.
+        reason = 'Saved on this device. This browser is not signed in to the cloud, so your changes are waiting to sync.';
+    } else if (classification.category === 'PERMISSION_DENIED') {
+        reason = 'Your changes are saved on this device, but this account is not permitted to sync them to the server.';
+    } else {
+        reason = 'Your changes are saved on this device, but the server rejected them (' + (classification.category || 'unknown') + ').';
+    }
     return showOfflineSaveStatus(reason);
+}
+
+/** Retry the queue on demand. Bounded by the same sync lock as every other trigger. */
+function retryCloudSyncNow() {
+    if (typeof syncNow !== 'function') return Promise.resolve(null);
+    // `syncNow` is async in the app, but resolve defensively so this also
+    // works with a synchronous stub.
+    return Promise.resolve(syncNow('manual-retry')).then(function (summary) {
+        if (summary && summary.synced > 0) {
+            hideOfflineSaveStatus();
+            // A successful drain earns a fresh announcement for any later,
+            // genuinely new failure.
+            offlineSaveStatusShown = false;
+            if (typeof showToast === 'function') showToast('Synced ' + summary.synced + ' pending change(s) to the cloud.', 'success');
+        } else if (typeof showToast === 'function') {
+            showToast('Could not sync yet. Your changes are safe on this device.', 'info');
+        }
+        return summary;
+    });
 }
 
 function initConnectionStatus() {
@@ -109,6 +136,18 @@ function initConnectionStatus() {
         dismiss.__pseudopyBound = true;
         dismiss.addEventListener('click', function () {
             dismissOfflineSaveStatus();
+        });
+    }
+    const retry = typeof $id === 'function' ? $id(OFFLINE_SAVE_RETRY_ID) : null;
+    if (retry && !retry.__pseudopyBound) {
+        retry.__pseudopyBound = true;
+        retry.addEventListener('click', function () {
+            retry.disabled = true;
+            Promise.resolve(retryCloudSyncNow()).then(function () {
+                retry.disabled = false;
+            }, function () {
+                retry.disabled = false;
+            });
         });
     }
     if (!initConnectionStatus.__bound) {

@@ -285,6 +285,7 @@
         <strong class="offline-save-status-title">Saved on this device only</strong>
         <span class="offline-save-status-detail" id="offline-save-status-detail">Changes are saved on this device and will sync when the server allows it.</span>
       </span>
+      <button type="button" id="offline-save-retry" class="offline-save-retry" aria-label="Retry syncing saved changes to the cloud">Retry</button>
       <button type="button" id="offline-save-dismiss" class="offline-save-dismiss" aria-label="Dismiss offline save notice">Dismiss</button>
     </div>
 
@@ -2948,6 +2949,9 @@
   <!-- Firebase SDK (Compat mode for easy usage) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <!-- Auth is required for `request.auth` in Firestore rules. Without it every
+       read/write/listener is anonymous and any auth-required ruleset refuses it. -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 
   <script>
     window.__FIREBASE_CONFIG__ = {

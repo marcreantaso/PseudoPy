@@ -201,6 +201,21 @@ async function handleLogin() {
         // Persist the session (browser-local) so refreshes never log the user out.
         saveSession(currentUser);
 
+        // Step 4.5: Establish the Firebase Auth session for this account.
+        // Firestore rules see `request.auth`, so without this every write is
+        // anonymous and is refused. Best-effort and non-blocking: an account
+        // with no cloud counterpart yet keeps working exactly as before.
+        if (typeof signInToCloud === 'function') {
+            try {
+                const cloud = await signInToCloud(userByUsername.email, password);
+                if (cloud && cloud.ok) {
+                    console.info(`[Login] Cloud session established for ${userByUsername.username}.`);
+                }
+            } catch (e) {
+                console.warn('[Login] Cloud sign-in attempt failed:', e && e.message);
+            }
+        }
+
         // Record last login timestamp
         try {
             await dbUpdate(usersRef, currentUser._docId || currentUser.id, { lastLogin: new Date().toISOString() });
@@ -229,6 +244,9 @@ function handleLogout() {
     if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
     if (typeof devToolsAbortRun === 'function') devToolsAbortRun();
+    // Release the Firebase Auth session too, so the next account on this device
+    // can never write under the previous user's uid.
+    if (typeof signOutOfCloud === 'function') signOutOfCloud();
     // Invalidate session state
     currentUser = null;
     currentPage = '';

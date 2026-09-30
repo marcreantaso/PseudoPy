@@ -1,0 +1,76 @@
+rules_version = '2';
+
+/* ═══════════════════════════════════════════════════════════════════
+   PseudoPy — INTERIM Firestore Security Rules (auth-free baseline)
+
+   PURPOSE
+     PseudoPy's login is IN-APP (username + client-side salted hash read
+     from `pseudopy_users`). Firebase Auth was not wired up, so every
+     request reached Firestore as anonymous (`request.auth == null`).
+     Deployed rules that require auth therefore refused every read,
+     write and listener with `permission-denied`.
+
+     This file is the *bridge*: it is the same posture as the app's
+     current behaviour and it removes the red toast so students can save
+     again. It is NOT a security boundary.
+
+   🚨 RISK
+     While this ruleset is live, anyone who can reach this Firestore
+     dataset can read and write every collection below, including
+     `pseudopy_passwordRequests` and every `pseudopy_users` document
+     (which stores password hashes and salts).
+
+   EXIT CRITERIA — replace this file with `firestore.rules` as soon as
+     1. Firebase Auth → Email/Password is enabled in the console, AND
+     2. every account has a Firebase Auth user, AND
+     3. you have signed in at least once in the browser so
+        `auth.currentUser.uid` is populated.
+   ═══════════════════════════════════════════════════════════════════ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── User accounts ───────────────────────────────────────────
+    // The in-app login must read this collection to resolve a username,
+    // so it cannot be owner-scoped yet. See firestore.rules for the
+    // post-migration version.
+    match /pseudopy_users/{doc} {
+      allow read, write: if true;
+    }
+
+    // ── Exercise catalog (shared learning content) ───────────────
+    match /pseudopy_exercises/{doc} {
+      allow read, write: if true;
+    }
+
+    // ── Student activity / submissions ───────────────────────────
+    match /pseudopy_activity/{doc} {
+      allow read, write: if true;
+    }
+
+    // ── Password recovery requests ───────────────────────────────
+    match /pseudopy_passwordRequests/{doc} {
+      allow read, write: if true;
+    }
+
+    // ── Supporting collections ───────────────────────────────────
+    match /pseudopy_auditLog/{doc} {
+      allow read, write: if true;
+    }
+    match /pseudopy_notifications/{doc} {
+      allow read, write: if true;
+    }
+    match /pseudopy_devices/{doc} {
+      allow read, write: if true;
+    }
+    match /pseudopy_evidence/{doc} {
+      allow read, write: if true;
+    }
+    match /pseudopy_tutorialProgress/{doc} {
+      allow read, write: if true;
+    }
+    match /pseudopy_counters/{doc} {
+      allow read, write: if true;
+    }
+  }
+}

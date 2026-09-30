@@ -6158,6 +6158,34 @@ select.form-input {
   outline-offset: 2px;
 }
 
+.offline-save-retry {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 0.3rem 0.7rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--primary, currentColor);
+  background: transparent;
+  color: var(--primary, currentColor);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.offline-save-retry:hover:not(:disabled) {
+  background: rgba(127, 127, 127, 0.14);
+}
+
+.offline-save-retry:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.offline-save-retry:focus-visible {
+  outline: 2px solid var(--primary, currentColor);
+  outline-offset: 2px;
+}
+
 @media (max-width: 30rem) {
   .offline-save-status {
     font-size: 0.8rem;

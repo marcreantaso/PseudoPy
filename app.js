@@ -463,22 +463,35 @@ function ensurePdfJsLoaded() {
    INITIALIZATION
    ============================================================ */
 
+/**
+ * A rejected cloud write is a status, not a modal emergency. Routing it through
+ * the connection-status layer keeps ONE dismissible, once-per-session notice
+ * (with a Retry action) instead of an un-dismissable red box that reappeared on
+ * every keystroke-triggered save.
+ */
 window.addEventListener('pseudopy:sync-error', event => {
-    let notice = document.getElementById('cloud-save-status');
-    if (!notice) {
-        notice = document.createElement('div');
-        notice.id = 'cloud-save-status';
-        notice.setAttribute('role', 'alert');
-        notice.style.cssText = 'position:fixed;bottom:1rem;left:1rem;right:1rem;z-index:10000;padding:1rem;border:1px solid var(--danger);background:var(--bg-primary,#171923);color:var(--text-primary,#fff);border-radius:12px;';
-        document.body.appendChild(notice);
+    const detail = event.detail || {};
+    hideLegacyCloudSaveNotice();
+    if (typeof reportCloudSaveDenied === 'function') {
+        reportCloudSaveDenied(
+            { ref: detail.ref, docId: detail.docId, operation: 'WRITE' },
+            { category: detail.code === 'permission-denied' ? 'PERMISSION_DENIED' : 'CLOUD_SAVE_FAILED', transient: false, message: detail.message }
+        );
     }
-    notice.textContent = event.detail.message;
-    notice.dataset.record = JSON.stringify([event.detail.ref, event.detail.docId]);
 });
 window.addEventListener('pseudopy:sync-saved', event => {
-    const notice = document.getElementById('cloud-save-status');
-    if (notice && notice.dataset.record === JSON.stringify([event.detail.ref, event.detail.docId])) notice.remove();
+    hideLegacyCloudSaveNotice();
+    if (typeof hideOfflineSaveStatus === 'function') hideOfflineSaveStatus();
+    if (typeof cloudAuthReady === 'function' && cloudAuthReady() && typeof cloudUid === 'function') {
+        console.info(`[App] Cloud save confirmed for ${event.detail.ref}/${event.detail.docId} (uid ${cloudUid()}).`);
+    }
 });
+
+/** Removes any notice left behind by an earlier session of this page. */
+function hideLegacyCloudSaveNotice() {
+    const notice = document.getElementById('cloud-save-status');
+    if (notice) notice.remove();
+}
 
 const SEED_DONE_KEY = 'pseudopy_seeded';
 
@@ -486,13 +499,28 @@ const SEED_DONE_KEY = 'pseudopy_seeded';
  * Seeding must not run on every normal boot. It runs once per browser (flag),
  * only when Firestore is reachable, and only writes collections that are
  * empty (seedDatabase's per-collection checks keep it duplicate-safe).
+ *
+ * It is also restricted to staff. The seed set spans every user's accounts and
+ * activity, so under least-privilege rules a student cannot write it — and
+ * letting an arbitrary client publish the catalog and other students' records
+ * is a hole in its own right. A student still gets the full local seed data
+ * through the offline fallback, so nothing is lost visually.
  */
+function canSeedFirestore() {
+    if (typeof currentUser === 'undefined' || !currentUser) return false;
+    return currentUser.role === 'admin' || currentUser.role === 'instructor';
+}
+
 async function ensureSeedDatabase() {
     try {
         if (localStorage.getItem(SEED_DONE_KEY) !== null) return;
     } catch (e) { return; }
     if (typeof firestoreReady !== 'function' || !firestoreReady()) return;
     if (typeof seedDatabase !== 'function') return;
+    if (!canSeedFirestore()) {
+        console.info('[App] Skipping Firestore seeding: restricted to admin/instructor sessions.');
+        return;
+    }
     await seedDatabase();
     try { localStorage.setItem(SEED_DONE_KEY, '1'); } catch (e) { /* private browsing */ }
 }
@@ -977,6 +1005,21 @@ async function handleLogin() {
         // Persist the session (browser-local) so refreshes never log the user out.
         saveSession(currentUser);
 
+        // Step 4.5: Establish the Firebase Auth session for this account.
+        // Firestore rules see `request.auth`, so without this every write is
+        // anonymous and is refused. Best-effort and non-blocking: an account
+        // with no cloud counterpart yet keeps working exactly as before.
+        if (typeof signInToCloud === 'function') {
+            try {
+                const cloud = await signInToCloud(userByUsername.email, password);
+                if (cloud && cloud.ok) {
+                    console.info(`[Login] Cloud session established for ${userByUsername.username}.`);
+                }
+            } catch (e) {
+                console.warn('[Login] Cloud sign-in attempt failed:', e && e.message);
+            }
+        }
+
         // Record last login timestamp
         try {
             await dbUpdate(usersRef, currentUser._docId || currentUser.id, { lastLogin: new Date().toISOString() });
@@ -1005,6 +1048,9 @@ function handleLogout() {
     if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
     if (typeof devToolsAbortRun === 'function') devToolsAbortRun();
+    // Release the Firebase Auth session too, so the next account on this device
+    // can never write under the previous user's uid.
+    if (typeof signOutOfCloud === 'function') signOutOfCloud();
     // Invalidate session state
     currentUser = null;
     currentPage = '';
@@ -1091,6 +1137,7 @@ function showApp(restorePage) {
 
 const OFFLINE_SAVE_STATUS_ID = 'offline-save-status';
 const OFFLINE_SAVE_DISMISS_ID = 'offline-save-dismiss';
+const OFFLINE_SAVE_RETRY_ID = 'offline-save-retry';
 const OFFLINE_SAVE_DISMISSED_KEY = 'pseudopy.offlineSaveDismissed';
 
 let offlineSaveStatusShown = false;
@@ -1176,10 +1223,36 @@ function reportCloudSaveDenied(context, classification) {
     // The server answered, so retire any "Reconnecting…" state first: leaving
     // both on screen is what made the original notice look un-dismissable.
     hideReconnectingStatus();
-    const reason = classification.category === 'PERMISSION_DENIED'
-        ? 'Your changes are saved on this device, but this account is not permitted to sync them to the server.'
-        : 'Your changes are saved on this device, but the server rejected them (' + (classification.category || 'unknown') + ').';
+    let reason;
+    if (context && context.pendingSignIn) {
+        // Not a misconfiguration: the write is queued and will be replayed as
+        // soon as this browser has a Firebase Auth session.
+        reason = 'Saved on this device. This browser is not signed in to the cloud, so your changes are waiting to sync.';
+    } else if (classification.category === 'PERMISSION_DENIED') {
+        reason = 'Your changes are saved on this device, but this account is not permitted to sync them to the server.';
+    } else {
+        reason = 'Your changes are saved on this device, but the server rejected them (' + (classification.category || 'unknown') + ').';
+    }
     return showOfflineSaveStatus(reason);
+}
+
+/** Retry the queue on demand. Bounded by the same sync lock as every other trigger. */
+function retryCloudSyncNow() {
+    if (typeof syncNow !== 'function') return Promise.resolve(null);
+    // `syncNow` is async in the app, but resolve defensively so this also
+    // works with a synchronous stub.
+    return Promise.resolve(syncNow('manual-retry')).then(function (summary) {
+        if (summary && summary.synced > 0) {
+            hideOfflineSaveStatus();
+            // A successful drain earns a fresh announcement for any later,
+            // genuinely new failure.
+            offlineSaveStatusShown = false;
+            if (typeof showToast === 'function') showToast('Synced ' + summary.synced + ' pending change(s) to the cloud.', 'success');
+        } else if (typeof showToast === 'function') {
+            showToast('Could not sync yet. Your changes are safe on this device.', 'info');
+        }
+        return summary;
+    });
 }
 
 function initConnectionStatus() {
@@ -1189,6 +1262,18 @@ function initConnectionStatus() {
         dismiss.__pseudopyBound = true;
         dismiss.addEventListener('click', function () {
             dismissOfflineSaveStatus();
+        });
+    }
+    const retry = typeof $id === 'function' ? $id(OFFLINE_SAVE_RETRY_ID) : null;
+    if (retry && !retry.__pseudopyBound) {
+        retry.__pseudopyBound = true;
+        retry.addEventListener('click', function () {
+            retry.disabled = true;
+            Promise.resolve(retryCloudSyncNow()).then(function () {
+                retry.disabled = false;
+            }, function () {
+                retry.disabled = false;
+            });
         });
     }
     if (!initConnectionStatus.__bound) {

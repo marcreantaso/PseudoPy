@@ -175,6 +175,26 @@ async function mergePendingMutationsOverSnapshot(ref, results) {
 }
 
 /**
+ * Stamp the ownership + freshness fields a least-privilege ruleset needs.
+ *
+ * `uid` is the Firebase Auth uid and is the ONLY trusted owner identity; it is
+ * added only when a real cloud session exists, so nothing invents an owner.
+ * `updatedAt` stays an ISO string to match every other timestamp in this app
+ * and to stay JSON-serialisable for the localStorage/IndexedDB fallback — a
+ * `serverTimestamp()` sentinel would leak a non-serialisable object into the
+ * local cache and the UI.
+ */
+function withCloudOwnership(payload) {
+    const next = Object.assign({}, payload || {});
+    if (typeof cloudUid === 'function') {
+        const uid = cloudUid();
+        if (uid && !next.uid) next.uid = uid;
+    }
+    if (!next.updatedAt) next.updatedAt = new Date().toISOString();
+    return next;
+}
+
+/**
  * Write to Firestore with a durable offline queue behind it:
  *  - success        → clear any stale pending mutation, then kick a sync
  *  - transient fail → persist a PENDING mutation (replayed on reconnection)
@@ -190,10 +210,11 @@ async function queueFirestoreWrite({ operation, ref, docId, payload }) {
         throw cloudSaveFailure(ref, docId);
     }
     try {
+        const owned = withCloudOwnership(payload);
         if (operation === 'UPDATE') {
-            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(payload, { merge: true }));
+            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(owned, { merge: true }));
         } else {
-            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(payload));
+            await withFirestoreTimeout(firestore.collection(ref).doc(docId).set(owned));
         }
         if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
         if (typeof clearPendingForDocument === 'function') await clearPendingForDocument(ref, docId);
@@ -212,10 +233,22 @@ async function queueFirestoreWrite({ operation, ref, docId, payload }) {
             // "Reconnecting" banner. The local write already succeeded, so the
             // user keeps their work and is told why it is not in the cloud.
             if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
-            if (typeof notifyCloudSaveDenied === 'function') {
-                notifyCloudSaveDenied({ ref, docId, operation }, classification);
+
+            // Anonymous request against an auth-required ruleset. This is not a
+            // lost write: queue it so it replays the moment a cloud session
+            // exists, instead of stranding it as FAILED.
+            const pendingSignIn = typeof cloudAuthPendingSignIn === 'function' && cloudAuthPendingSignIn();
+            if (pendingSignIn) {
+                if (typeof enqueueMutation === 'function') await enqueueMutation(operation, ref, docId, withCloudOwnership(payload));
             }
-            console.warn(`[Database] Permanent Firestore failure on ${ref}/${docId}:`, classification.message);
+            console.warn(
+                `[Database] Firestore refused ${operation} ${ref}/${docId}`
+                + ` (code=${(err && err.code) || 'unknown'})`
+                + (pendingSignIn ? ' — deferred until cloud sign-in.' : '.')
+            );
+            if (typeof notifyCloudSaveDenied === 'function') {
+                notifyCloudSaveDenied({ ref, docId, operation, pendingSignIn }, classification);
+            }
         }
         throw cloudSaveFailure(ref, docId, err);
     }
