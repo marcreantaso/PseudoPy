@@ -25,3 +25,16 @@ Changes: singleton notice, banner and toasts occupy normal page flow in a shared
 Verification: initial real Chromium run at 320/375/768 px, light/dark, passed notice/toast non-overlap, target size, Tab/Escape, long RTL geometry, and role/tab singleton checks (`after-layout.json`). Before/after PNGs are attached here. Screen-reader speech was not tested with VoiceOver/NVDA; announcement frequency is verified by DOM/unit tests. Applying RTL to the entire existing application exposed unrelated page-level overflow; the checked-in runner now scopes RTL to the notice region. The final screenshot rerun and final lifecycle change browser rerun were blocked after the execution environment resumed: Chromium's local socket was denied, and escalation was rejected because sandbox approvals are disabled. Invalid full-page RTL screenshots were discarded. The final unit suite still covers those lifecycle changes.
 
 Browser reproduction command (with Playwright installed): serve the repository on localhost:8765, then run `node scripts/qa/sync-notice-browser.cjs`; add `--before` to render baseline eae428d. `PLAYWRIGHT_MODULE`, `CHROMIUM_PATH`, and `QA_BASE_URL` select installed tooling and a local server.
+
+## Defect 5: scope alignment
+
+See [scope-alignment.md](scope-alignment.md) for pass/partial/gap evidence and proposed thesis wording. `offline-scope.test.js` adds actual compiler + vendored Skulpt execution with no network API, local service-worker asset existence, TXT/PDF import-path coverage, and DOCX rejection coverage. The real offline browser script is checked in but execution remains blocked, so offline browser certification is explicitly pending.
+
+Owner-only actions are in [firebase-owner-actions.md](firebase-owner-actions.md). No rule files, Firebase deployment selection, or authentication policy were edited.
+
+## Final automated gates
+
+Verified with Node 22.23.3: `npm ci`, `npm run build`, `npm run build:check`,
+`npm test` (513 passed, 0 failed; Unicode operator check passed), and
+`node verify_app_refactor.js` (32 passed, 0 failed). Browser limitations above
+remain open and are not implied to pass by these automated results.

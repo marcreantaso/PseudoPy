@@ -12,10 +12,9 @@ and what is deliberately not allowed to happen while offline.
   `getLocalCollection`/`setLocalCollection`). Every write is mirrored in parallel
   into an IndexedDB `OfflineStore` and, when Firestore is unavailable, recorded
   into a durable offline mutation queue.
-- **Never silently drop a write.** If a write cannot reach Firestore it is
-  persisted as a `PENDING` mutation and replayed automatically when connectivity
-  returns. Permanent (non-transient) failures are surfaced as `FAILED` records,
-  logged, and never fabricated as success.
+- **Never silently drop a write.** Writes are durably queued before contacting Firestore. Network failures remain
+  `PENDING`; permission/authentication denials remain `blocked-permission`.
+  Other permanent failures remain `FAILED`. No unconfirmed cloud save is reported as success.
 - **Never silently clobber an unsynced change.** Snapshots from
   `onSnapshot`/`dbGetAll` overlay locally pending mutations so a reconnect cannot
   erase work that has not reached the cloud.
@@ -54,16 +53,18 @@ flowchart LR
 1. A write calls `dbAdd`/`dbSet`/`dbUpdate`.
 2. `upsertLocalCache` updates `localStorage` synchronously and mirrors the doc
    into `OfflineStore` (best-effort, parallel).
-3. `queueFirestoreWrite` attempts the Firestore write with a timeout:
-   - **success** → clear any stale pending mutation for that doc, then kick `syncNow`.
-   - **transient failure** (`OFFLINE`, `TIMEOUT`, `FIRESTORE_UNAVAILABLE`) → persist a `PENDING`
-     mutation and schedule a backoff retry.
-   - **permanent failure** (`PERMISSION_DENIED`, `INVALID_DATA`, `QUOTA`, `CONFLICT`, `UNKNOWN`)
-     → structured `console.warn`, never queued, never reported as success.
-4. `syncNow` replays `PENDING`/`SYNCING` records in `createdAt` order with a lock,
-   at most `SYNC_MAX_ATTEMPTS = 3` attempts and backoff `[1500, 4000, 10000]ms`.
-   A record that exhausts its attempts becomes `FAILED` and stays visible to the
-   local-first reads so it is never overwritten.
+3. `queueFirestoreWrite` durably queues the payload before contacting Firestore:
+   - **success** → remove the acknowledged record and emit `pseudopy:sync-saved`.
+   - **transient failure** → retain `PENDING`, retry with capped backoff.
+   - **permission-denied / unauthenticated** → retain `blocked-permission`, open the
+     cloud circuit, and wait for startup, sign-in, online, or manual retry.
+   - **other permanent failure** → retain `FAILED` and surface the problem.
+4. The queue serializes enqueue and transport, using Web Locks across supporting
+   browser tabs. It preserves per-document ordering and never folds into an
+   in-flight operation. At most three network attempts run in a retry cycle;
+   exponential backoff is capped at 60 seconds. A 500-record queue cap and
+   storage failures are reported explicitly; the user should export work if
+   both IndexedDB and the localStorage fallback cannot persist new mutations.
 5. Firestore snapshots (`subscribeCollection`, `dbGetAll`,
    `refreshAuthoritativeCaches`) run results through
    `mergePendingMutationsOverSnapshot`, which overlays any locally pending
@@ -102,7 +103,7 @@ wrapped in a `FirestoreUnavailable` is still a denial.
 | `TIMEOUT` | `withFirestoreTimeout` message, `deadline-exceeded` | yes | queue + retry with backoff |
 | `FIRESTORE_UNAVAILABLE` | `Unavailable`, `firestore/unavailable` | yes | queue + retry with backoff |
 | `QUOTA` | `resource-exhausted` | no | `FAILED`, never retried or fabricated |
-| `PERMISSION_DENIED` | `permission-denied`, `unauthenticated`, "Missing or insufficient permissions" | no | `FAILED`, never retried |
+| `PERMISSION_DENIED` | `permission-denied`, `unauthenticated`, "Missing or insufficient permissions" | no | `blocked-permission`; retry only on explicit recovery events |
 | `INVALID_DATA` | `invalid-argument`, `not-found`, `failed-precondition` | no | `FAILED` |
 | `CONFLICT` | `aborted`, `conflict` | no | `FAILED` |
 | `UNKNOWN` | anything else | no | `FAILED` (fail-safe, never silently dropped) |
@@ -135,9 +136,8 @@ thrown, instead of consuming the whole attempt budget.
 
 A permanent refusal hides the reconnecting banner first, so the two are never
 both on screen. The refusal is announced at most once per session and dismissal
-persists in `sessionStorage` under `pseudopy.offlineSaveDismissed`. The local
-write is never rolled back: work stays safe on the device and the user is told
-plainly that it is not in the cloud.
+persists in `sessionStorage` under `pseudopy.offlineSaveDismissed`. A denied cloud write is not rolled back locally. Durable queue storage failures
+are reported explicitly; browser storage eviction remains outside app control.
 
 ## Bundling and the service worker
 
@@ -169,5 +169,15 @@ promise, no duplicate `<script>`/duplicate PDF worker set).
   wrapper, permanent-vs-transient classification, capped backoff, the
   dismissible offline-save status, and the "never both banners at once" rule.
 
-The pre-existing compiler-suite failures (`tests/compiler.test.js`) are expected
-and unrelated to the offline layer.
+The final Node 22 verification passed all 513 tests, including the compiler suite.
+
+## Verification and delivery limits (September 2026)
+
+See `docs/qa/sync-recovery/README.md` for regression evidence and remaining
+browser acceptance checks. Acknowledged queue removal and Firestore writes are
+not one atomic transaction: a crash between them can replay the same fixed-ID
+SET/merge. This is idempotent at-least-once delivery, not a server-enforced
+exactly-once protocol. Storage eviction/clearing cannot be prevented by the app.
+Permission failures retry only at explicit recovery events; pageshow,
+visibility, and autosave cannot reopen the permission circuit. Final live
+Firebase permissions and a first-ever offline launch are not guaranteed.

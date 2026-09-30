@@ -16,10 +16,10 @@ test at tests/sync-recovery.test.js:27:1
 ✖ denied write survives reload, retries once on explicit recovery and emits saved (9.987341ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   + actual - expected
-  
+
   + undefined
   - 'blocked-permission'
-  
+
       at TestContext.<anonymous> (/workspace/scratch/d1179c676b95/PseudoPy-sync-qa/tests/sync-recovery.test.js:30:12)
       at async Test.run (node:internal/test_runner/test:1389:7)
       at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
@@ -41,9 +41,9 @@ test at tests/sync-recovery.test.js:40:1
 test at tests/sync-recovery.test.js:47:1
 ✖ permission-blocked records are protected from stale cloud snapshots (1.171257ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   0 !== 9
-  
+
       at TestContext.<anonymous> (/workspace/scratch/d1179c676b95/PseudoPy-sync-qa/tests/sync-recovery.test.js:51:12)
       at async Test.run (node:internal/test_runner/test:1389:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {

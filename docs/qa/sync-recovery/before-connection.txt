@@ -14,9 +14,9 @@
 test at tests/connection-circuit.test.js:22:1
 ✖ denied collection refresh opens circuit and never shows Reconnecting (5.179827ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   8 !== 1
-  
+
       at TestContext.<anonymous> (/workspace/scratch/d1179c676b95/PseudoPy-sync-qa/tests/connection-circuit.test.js:25:12)
       at async Test.run (node:internal/test_runner/test:1389:7)
       at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
@@ -31,9 +31,9 @@ test at tests/connection-circuit.test.js:22:1
 test at tests/connection-circuit.test.js:30:1
 ✖ network failure shows Reconnecting; online recovery clears it (1.226604ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   true !== false
-  
+
       at TestContext.<anonymous> (/workspace/scratch/d1179c676b95/PseudoPy-sync-qa/tests/connection-circuit.test.js:32:12)
       at async Test.run (node:internal/test_runner/test:1389:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
