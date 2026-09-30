@@ -18,13 +18,37 @@
    - ADD → DELETE ordering  → preserved / collapse to a delete
    ============================================================ */
 
+const MUTATION_QUEUE_LIMIT = 500;
+let mutationQueueLock = Promise.resolve();
+
+// Serialize read/modify/write across callbacks and tabs where Web Locks is available.
+function withMutationQueueLock(work) {
+    const run = () => typeof navigator !== 'undefined' && navigator.locks
+        ? navigator.locks.request('pseudopy-mutation-queue', work) : work();
+    const task = mutationQueueLock.then(run, run);
+    mutationQueueLock = task.catch(() => {});
+    return task;
+}
+
+function queueStorageError(message, cause) {
+    const error = new Error(message);
+    error.code = 'queue-storage';
+    error.localOnly = true;
+    error.cause = cause;
+    if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('pseudopy:sync-error', { detail: { code: error.code, message } }));
+    }
+    return error;
+}
+
 const OFFLINE_QUEUE_FALLBACK_KEY = 'pseudopy_offline_queue';
 
 const MUTATION_STATUS = {
     PENDING: 'PENDING',
     SYNCING: 'SYNCING',
     SYNCED: 'SYNCED',
-    FAILED: 'FAILED'
+    FAILED: 'FAILED',
+    BLOCKED_PERMISSION: 'blocked-permission'
 };
 
 const MUTATION_OP_ADD = 'ADD';
@@ -68,21 +92,33 @@ function queueFallbackSave(list) {
     try {
         localStorage.setItem(OFFLINE_QUEUE_FALLBACK_KEY, JSON.stringify(list));
     } catch (e) {
-        console.warn('[Queue] Failed to persist fallback queue:', e);
+        throw queueStorageError('Sync queue could not be saved. Keep this page open and export your work before closing it.', e);
     }
 }
 
 async function queueReadRecords() {
+    const fallback = queueFallbackList();
     if (offlineStore && offlineStore.isAvailable && offlineStore.isAvailable()) {
         const records = await offlineStore.getMutations();
-        if (records) return records;
+        if (records) {
+            const merged = new Map(records.map(r => [r.mutationId, r]));
+            for (const r of fallback) merged.set(r.mutationId, r);
+            return [...merged.values()];
+        }
     }
-    return queueFallbackList();
+    return fallback;
 }
 
 async function queueWriteRecord(record) {
     if (offlineStore && offlineStore.isAvailable && offlineStore.isAvailable()) {
-        return await offlineStore.putMutation(record);
+        try {
+            await offlineStore.putMutation(record);
+            const fallback = queueFallbackList();
+            if (fallback.some(r => r.mutationId === record.mutationId)) {
+                queueFallbackSave(fallback.filter(r => r.mutationId !== record.mutationId));
+            }
+            return;
+        } catch (e) { /* durable fallback below */ }
     }
     const list = queueFallbackList();
     const idx = list.findIndex(r => r.mutationId === record.mutationId);
@@ -93,10 +129,10 @@ async function queueWriteRecord(record) {
 
 async function queueRemoveRecord(mutationId) {
     if (offlineStore && offlineStore.isAvailable && offlineStore.isAvailable()) {
-        return await offlineStore.removeMutation(mutationId);
+        await offlineStore.removeMutation(mutationId);
     }
     const list = queueFallbackList();
-    queueFallbackSave(list.filter(r => r.mutationId !== mutationId));
+    if (list.some(r => r.mutationId === mutationId)) queueFallbackSave(list.filter(r => r.mutationId !== mutationId));
 }
 
 function makeMutationRecord(operation, ref, docId, payload) {
@@ -118,29 +154,27 @@ function makeMutationRecord(operation, ref, docId, payload) {
  * Enqueue a write to be replayed once Firestore is reachable. Coalesces where
  * order-safe; returns the (possibly folded) mutation record.
  */
-async function enqueueMutation(operation, ref, docId, payload) {
+function enqueueMutation(operation, ref, docId, payload) {
+    return withMutationQueueLock(() => enqueueMutationLocked(operation, ref, docId, payload));
+}
+
+async function enqueueMutationLocked(operation, ref, docId, payload) {
     const op = String(operation).toUpperCase();
-    const prior = await listPendingMutations(ref, docId);
-
-    // DELETE collapses any pending ops for the same document: the net effect
-    // for the document is "gone", and Firestore deletes are idempotent.
-    if (op === MUTATION_OP_DELETE) {
-        for (const p of prior) {
-            if (p.status === MUTATION_STATUS.SYNCING) continue;
-            await queueRemoveRecord(p.mutationId);
-        }
-    }
-
-    if (op === MUTATION_OP_DELETE) {
-        const record = makeMutationRecord('DELETE', ref, docId, null);
-        await queueWriteRecord(record);
-        return record;
-    }
+    const prior = await listPendingMutations(ref, docId, true);
 
     // Fold order-safe consecutive operations for the same document.
-    const pending = prior.filter(p => p.status === MUTATION_STATUS.PENDING && p.operation !== MUTATION_OP_DELETE);
+    // Only fold into the tail: never move an update ahead of a DELETE or an in-flight write.
+    const tail = prior[prior.length - 1];
+    const pending = tail && [MUTATION_STATUS.PENDING, MUTATION_STATUS.BLOCKED_PERMISSION].includes(tail.status) && tail.operation !== MUTATION_OP_DELETE ? [tail] : [];
     if (pending.length === 1) {
-        const existing = pending[0];
+        const existing = Object.assign({}, pending[0]);
+        if (op === MUTATION_OP_DELETE) {
+            existing.operation = MUTATION_OP_DELETE;
+            existing.payload = null;
+            existing.updatedAt = Date.now();
+            await queueWriteRecord(existing);
+            return existing;
+        }
         if (existing.operation === MUTATION_OP_ADD || existing.operation === MUTATION_OP_SET) {
             existing.payload = (op === MUTATION_OP_UPDATE) ? mergeDoc(existing.payload, payload) : (payload || null);
         } else {
@@ -153,7 +187,10 @@ async function enqueueMutation(operation, ref, docId, payload) {
         return existing;
     }
 
+    const records = await listAllMutations();
+    if (records.length >= MUTATION_QUEUE_LIMIT) throw queueStorageError('Sync queue is full. Your draft is on this device; export it and retry sync before adding more queued changes.');
     const record = makeMutationRecord(op, ref, docId, payload);
+    record.createdAt = Math.max(record.createdAt, ...records.map(r => (r.createdAt || 0) + 1));
     await queueWriteRecord(record);
     return record;
 }
@@ -167,7 +204,7 @@ async function listPendingMutations(ref, docId, includeFailed) {
     const records = await queueReadRecords();
     return records
         .filter(r => r.collection === (ref || r.collection) && r.documentId === (docId || r.documentId))
-        .filter(r => r.status === MUTATION_STATUS.PENDING || r.status === MUTATION_STATUS.SYNCING || (includeFailed && r.status === MUTATION_STATUS.FAILED))
+        .filter(r => r.status === MUTATION_STATUS.PENDING || r.status === MUTATION_STATUS.BLOCKED_PERMISSION || r.status === MUTATION_STATUS.SYNCING || (includeFailed && r.status === MUTATION_STATUS.FAILED))
         .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 }
 

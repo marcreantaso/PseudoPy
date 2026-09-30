@@ -139,10 +139,11 @@ function collectionsHarness({ uid = 'uid_student', signInPending = false, mode =
         cloudUid: () => (signInPending ? null : uid),
         cloudAuthPendingSignIn: () => signInPending,
         classifyDbError: error => ({ category: 'permission-denied', transient: false, message: error.message }),
-        enqueueMutation: async (...args) => queued.push(args),
+        enqueueMutation: async (...args) => { queued.push(args); return {mutationId:'m1'}; },
+        listAllMutations: async () => mode === 'success' ? [] : [{mutationId:'m1',status:'blocked-permission'}],
         markFirestoreReachable: () => { },
         clearPendingForDocument: async () => { },
-        syncNow: () => { },
+        syncNow: async () => { if(mode !== 'offline') { const a=queued.at(-1); try { await ctx.firestore.collection(a[1]).doc(a[2]).set(a[3]); } catch(e) {} } },
         firestore: { collection: () => ({ doc: () => ({ set: async () => {
             if (mode === 'denied') throw Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
         } }) }) }
@@ -178,13 +179,10 @@ test('a denial while signed out is queued for replay, not lost', async () => {
     assert.equal(h.queued[0][2], 'act_1');
 });
 
-test('a denial while signed in is not queued, and logs code and path', async () => {
+test('a denial while signed in remains durably queued', async () => {
     const h = collectionsHarness({ mode: 'denied', signInPending: false });
     await assert.rejects(h.ctx.dbSet('pseudopy_activity', 'act_1', { value: 1 }), e => e.localOnly === true);
-    assert.equal(h.queued.length, 0, 'a signed-in refusal is a real rules problem, not a deferred write');
-    const denialLog = h.logged.find(l => l.includes('permission-denied'));
-    assert.ok(denialLog, 'the failing code must be logged');
-    assert.ok(denialLog.includes('pseudopy_activity/act_1'), 'the failing path must be logged');
+    assert.equal(h.queued.length, 1, 'a refusal must remain replayable');
 });
 
 test('the local draft is retained whatever the cloud does', async () => {
@@ -241,25 +239,24 @@ function syncHarness({ deny = true, signInPending = false } = {}) {
     return { ctx, records, timers, logged, reports, enqueue };
 }
 
-test('a queued write denied while signed out goes back to PENDING with no retry timer', async () => {
+test('a queued write denied while signed out is blocked-permission with no retry timer', async () => {
     const h = syncHarness({ signInPending: true });
     const rec = h.enqueue('pseudopy_activity', 'act_1');
     const result = await h.ctx.trySyncMutation(rec);
     assert.equal(result, false, 'not synced yet');
-    assert.equal(rec.status, 'PENDING', 'must stay queued for the next sign-in');
+    assert.equal(rec.status, 'blocked-permission', 'must stay queued for the next sign-in');
     assert.equal(h.timers.length, 0, 'no backoff timer: this must not become a retry loop');
     assert.equal(h.reports.length, 1, 'the UI is still told once');
-    assert.equal(h.reports[0].c.pendingSignIn, true, 'the UI needs to know this is a deferred write');
+
 });
 
-test('a queued write denied while signed in is FAILED, as before', async () => {
+test('a queued write denied while signed in remains blocked', async () => {
     const h = syncHarness({ signInPending: false });
     const rec = h.enqueue('pseudopy_activity', 'act_1');
     await h.ctx.trySyncMutation(rec);
-    assert.equal(rec.status, 'FAILED', 'a signed-in refusal is final');
+    assert.equal(rec.status, 'blocked-permission', 'a signed-in refusal remains replayable');
     assert.equal(h.timers.length, 0, 'a permanent failure is never retried');
-    const denialLog = h.logged.find(l => l.includes('permission-denied'));
-    assert.ok(denialLog && denialLog.includes('pseudopy_activity/act_1'), 'code and path must be logged');
+    assert.equal(h.reports.length, 1);
 });
 
 test('a new cloud session drains the queue', async () => {

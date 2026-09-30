@@ -28,6 +28,10 @@ const ONLINE_REQUIRED_MESSAGE = 'This action requires an internet connection.';
 const PERMANENT_DB_CATEGORIES = ['PERMISSION_DENIED', 'INVALID_DATA', 'CONFLICT', 'QUOTA', 'PERMANENT'];
 
 let syncInProgress = false;
+let activeSyncPromise = null;
+let syncRetryTimer = null;
+let syncPermissionBlocked = false;
+const SYNC_RECOVERY_REASONS = ['startup', 'auth', 'sign-in', 'online', 'manual-retry'];
 // Optimistic at boot; only corrected by real Firestore operations (or an
 // explicit navigator.onLine === false hint). Never treated as proof of
 // connectivity on its own.
@@ -161,9 +165,10 @@ function syncBackoffDelay(attempt, randomFn) {
 }
 
 function scheduleSyncRetry(mutationId, attempt) {
-    if (typeof setTimeout !== 'function') return;
-    setTimeout(function () {
-        syncOneMutation(mutationId).catch(function () { /* bounded retry, never throws */ });
+    if (typeof setTimeout !== 'function' || syncRetryTimer !== null) return;
+    syncRetryTimer = setTimeout(function () {
+        syncRetryTimer = null;
+        syncNow('backoff').catch(function () {});
     }, syncBackoffDelay(attempt));
 }
 
@@ -174,7 +179,18 @@ function scheduleSyncRetry(mutationId, attempt) {
  * Returns true (synced), false (still pending / failed) or null (retired).
  */
 async function trySyncMutation(mutation) {
+    if (!firestoreReady() || (typeof navigator !== 'undefined' && navigator.onLine === false)) return false;
     if (mutation.attempts >= SYNC_MAX_ATTEMPTS) return null;
+    // Claim the latest payload under the same queue lock used by autosave.
+    if (typeof withMutationQueueLock === 'function') {
+        mutation = await withMutationQueueLock(async () => {
+            const fresh = (await listAllMutations()).find(r => r.mutationId === mutation.mutationId);
+            if (!fresh) return null;
+            await updateMutationStatus(fresh.mutationId, MUTATION_STATUS.SYNCING, null, fresh.attempts || 0);
+            return fresh;
+        });
+        if (!mutation) return null;
+    }
     const attempt = (mutation.attempts || 0) + 1;
     const ref = mutation.collection;
     const docId = mutation.documentId;
@@ -197,33 +213,14 @@ async function trySyncMutation(mutation) {
         }
         markFirestoreReachable(true);
         await removeSyncedMutation(mutation.mutationId);
+        if (typeof cloudSaveComplete === 'function') cloudSaveComplete(ref, docId);
         return true;
     } catch (err) {
         const classification = classifyDbError(err);
         if (!classification.transient) {
-            // A denying Firestore IS reachable — the request completed and was
-            // refused. Reporting it as an outage is what drove the endless
-            // "Reconnecting" banner.
-            //
-            // Exception: an anonymous request against an auth-required ruleset.
-            // That is not a lost write, it is a write waiting for a session, so
-            // it goes back to PENDING and is drained on sign-in. No backoff
-            // timer is scheduled, which is what keeps this from looping.
-            const pendingSignIn = classification.category === 'PERMISSION_DENIED'
-                && typeof cloudAuthPendingSignIn === 'function'
-                && cloudAuthPendingSignIn();
-            console.warn(
-                `[Sync] Firestore refused ${mutation.operation} ${ref}/${docId}`
-                + ` (code=${(err && err.code) || 'unknown'}, category=${classification.category})`
-                + (pendingSignIn ? ' — deferred until cloud sign-in.' : `: ${classification.message}`)
-            );
-            if (pendingSignIn) {
-                await updateMutationStatus(mutation.mutationId, MUTATION_STATUS.PENDING, classification.message, attempt);
-                markFirestoreReachable(true);
-                notifyCloudSaveDenied({ ref, docId, operation: mutation.operation, pendingSignIn: true }, classification);
-                return false;
-            }
-            await updateMutationStatus(mutation.mutationId, MUTATION_STATUS.FAILED, classification.message, attempt);
+            const permission = classification.category === 'PERMISSION_DENIED';
+            if (permission) syncPermissionBlocked = true;
+            await updateMutationStatus(mutation.mutationId, permission ? 'blocked-permission' : MUTATION_STATUS.FAILED, classification.message, attempt);
             markFirestoreReachable(true);
             notifyCloudSaveDenied({ ref, docId, operation: mutation.operation }, classification);
             return false;
@@ -240,53 +237,50 @@ async function trySyncMutation(mutation) {
 }
 
 /** Single-mutation sync used by backoff timers; respects the global lock. */
-async function syncOneMutation(mutationId) {
-    if (!firestoreReady()) return false;
-    if (syncInProgress) {
-        if (typeof setTimeout === 'function') setTimeout(function () {
-            syncOneMutation(mutationId).catch(function () {});
-        }, 150);
-        return false;
-    }
-    const records = await listAllMutations();
-    const mutation = records.find(m => m.mutationId === mutationId);
-    if (!mutation) return false;
-    if (mutation.status !== MUTATION_STATUS.PENDING && mutation.status !== MUTATION_STATUS.SYNCING) return false;
-    if (mutation.attempts >= SYNC_MAX_ATTEMPTS) return false;
-    syncInProgress = true;
-    try {
-        return await trySyncMutation(mutation);
-    } finally {
-        syncInProgress = false;
-    }
+async function syncOneMutation() {
+    // Timers drain from the head, never leapfrog an earlier write to the same document.
+    return syncNow('backoff');
 }
 
-/**
- * Drain the queue. Application-driven (never depends on Background Sync):
- * returns immediately if a sync is already running (lock) or Firestore is not
- * ready; otherwise replays PENDING/SYNCING mutations in createdAt order.
- */
-async function syncNow(reason) {
-    if (syncInProgress) return { started: false, reason };
-    if (typeof firestoreReady !== 'function' || !firestoreReady()) {
-        if (typeof navigator !== 'undefined' && navigator.onLine === false) markFirestoreReachable(false);
+function syncNow(reason) {
+    if (activeSyncPromise) return (reason === 'write' || SYNC_RECOVERY_REASONS.includes(reason))
+        ? activeSyncPromise.then(() => syncNow(reason)) : activeSyncPromise;
+    const run = () => drainSyncQueue(reason);
+    activeSyncPromise = (typeof navigator !== 'undefined' && navigator.locks
+        ? navigator.locks.request('pseudopy-sync-transport', run) : Promise.resolve().then(run))
+        .finally(() => { activeSyncPromise = null; });
+    return activeSyncPromise;
+}
+
+async function drainSyncQueue(reason) {
+    const recovery = SYNC_RECOVERY_REASONS.includes(reason);
+    if (recovery) syncPermissionBlocked = false;
+    if (syncPermissionBlocked || !firestoreReady() || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
         return { started: false, reason };
     }
     syncInProgress = true;
     let synced = 0, failed = 0, skipped = 0;
     try {
         const records = await listAllMutations();
-        const queue = records.filter(m => m.status === MUTATION_STATUS.PENDING || m.status === MUTATION_STATUS.SYNCING);
-        for (const mutation of queue) {
+        const blockedDocuments = new Set();
+        for (const mutation of records) {
+            const key = JSON.stringify([mutation.collection, mutation.documentId]);
+            if (blockedDocuments.has(key)) { skipped++; continue; }
+            if (recovery && (mutation.status === 'blocked-permission' || mutation.status === MUTATION_STATUS.SYNCING ||
+                (mutation.status === MUTATION_STATUS.FAILED && (classifyDbError(new Error(mutation.lastError)).transient || classifyDbError(new Error(mutation.lastError)).category === 'PERMISSION_DENIED')))) {
+                mutation.status = MUTATION_STATUS.PENDING;
+                mutation.attempts = 0;
+                await updateMutationStatus(mutation.mutationId, mutation.status, null, 0);
+            }
+            if (mutation.status !== MUTATION_STATUS.PENDING && mutation.status !== MUTATION_STATUS.SYNCING) {
+                blockedDocuments.add(key); skipped++; continue;
+            }
             const outcome = await trySyncMutation(mutation);
             if (outcome === true) synced++;
-            else if (outcome === false) failed++;
-            else skipped++;
+            else { failed++; blockedDocuments.add(key); }
+            if (syncPermissionBlocked) break;
         }
-    } finally {
-        syncInProgress = false;
-    }
-    if (synced > 0) console.info('[Sync] Processed ' + synced + ' queued mutation(s).');
+    } finally { syncInProgress = false; }
     return { started: true, synced, failed, skipped, reason };
 }
 

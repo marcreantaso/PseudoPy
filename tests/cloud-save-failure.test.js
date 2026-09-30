@@ -155,7 +155,7 @@ function syncHarness({ fail, onLine = true, report } = {}) {
             const i = records.findIndex(x => x.mutationId === id);
             if (i >= 0) records.splice(i, 1);
         },
-        MUTATION_STATUS: { PENDING: 'PENDING', SYNCING: 'SYNCING', SYNCED: 'SYNCED', FAILED: 'FAILED' },
+        MUTATION_STATUS: { PENDING: 'PENDING', SYNCING: 'SYNCING', SYNCED: 'SYNCED', FAILED: 'FAILED', BLOCKED_PERMISSION: 'blocked-permission' },
         MUTATION_OP_ADD: 'ADD', MUTATION_OP_SET: 'SET', MUTATION_OP_UPDATE: 'UPDATE', MUTATION_OP_DELETE: 'DELETE',
         reportCloudSaveDenied: report,
         setTimeout: fn => { timers.push(fn); return timers.length; }
@@ -173,7 +173,7 @@ function syncHarness({ fail, onLine = true, report } = {}) {
     return { ctx, records, calls, timers, enqueue };
 }
 
-test('a permission-denied sync is FAILED immediately, not retried, and reported', async () => {
+test('a permission-denied sync is blocked immediately, not retried, and reported', async () => {
     const reports = [];
     const denial = Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
     const h = syncHarness({ fail: () => denial, report: (ctx, cls) => reports.push({ ctx, cls }) });
@@ -183,7 +183,7 @@ test('a permission-denied sync is FAILED immediately, not retried, and reported'
 
     assert.equal(result, false);
     assert.equal(h.calls.length, 1, 'must not retry a permanent refusal');
-    assert.equal(rec.status, 'FAILED');
+    assert.equal(rec.status, 'blocked-permission');
     assert.equal(h.timers.length, 0, 'no retry timer may be scheduled for a permanent failure');
     assert.equal(h.ctx.isFirestoreReachable(), true, 'a denying Firestore IS reachable');
     assert.equal(reports.length, 1, 'the UI must be told once');
@@ -326,30 +326,4 @@ test('the reconnecting banner and the refusal status are never both visible', ()
     assert.equal(h.elements['connection-status-banner'].hidden, true, 'a refusal must retire the reconnecting banner');
     assert.equal(h.ctx.isOfflineSaveStatusVisible(), true);
 });
-for (const mode of ['denied', 'offline', 'transient', 'success']) {
-    for (const operation of ['dbAdd', 'dbSet', 'dbUpdate']) {
-        test(`${operation}: ${mode} reports actual cloud persistence`, async () => {
-            let local = [];
-            const queued = [];
-            const context = vm.createContext({
-                console: { info() {}, warn() {} },
-                getLocalCollection: () => local,
-                setLocalCollection: (_, data) => { local = data; },
-                firestoreReady: () => mode !== 'offline',
-                withFirestoreTimeout: promise => promise,
-                classifyDbError: error => ({ transient: error.code === 'unavailable', message: error.message }),
-                enqueueMutation: async (...args) => queued.push(args),
-                firestore: { collection: () => ({ doc: () => ({ set: async () => {
-                    if (mode === 'transient') throw Object.assign(new Error('Offline'), { code: 'unavailable' });
-                    if (mode === 'denied') throw Object.assign(new Error('Denied'), { code: 'permission-denied' });
-                } }) }) }
-            });
-            vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/database/collections.js'), 'utf8'), context);
-            const args = operation === 'dbAdd' ? ['records', { _docId: 'a', value: 1 }] : ['records', 'a', { value: 1 }];
-            if (mode === 'success') await context[operation](...args);
-            else await assert.rejects(context[operation](...args), error => error.localOnly === true);
-            assert.equal(local[0].value, 1, 'local draft is retained');
-            assert.equal(queued.length, mode === 'offline' || mode === 'transient' ? 1 : 0);
-        });
-    }
-}
+// CRUD persistence is exercised with the real queue/coordinator in sync-recovery.test.js.
