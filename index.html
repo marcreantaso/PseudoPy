@@ -279,15 +279,7 @@
 
 
 
-    <div id="offline-save-status" class="offline-save-status" role="status" hidden>
-      <span class="offline-save-status-icon" aria-hidden="true">{{ui:CloudOff}}</span>
-      <span class="offline-save-status-body">
-        <strong class="offline-save-status-title">Saved on this device only</strong>
-        <span class="offline-save-status-detail" id="offline-save-status-detail">Changes are saved on this device and will sync when the server allows it.</span>
-      </span>
-      <button type="button" id="offline-save-retry" class="offline-save-retry" aria-label="Retry syncing saved changes to the cloud">Retry</button>
-      <button type="button" id="offline-save-dismiss" class="offline-save-dismiss" aria-label="Dismiss offline save notice">Dismiss</button>
-    </div>
+
 
     <!-- ── Sidebar ── -->
     <aside class="sidebar" id="app-sidebar" aria-label="Main navigation">
@@ -439,6 +431,15 @@
     <!-- ── Main Content Area ── -->
       <main class="main-content" id="main-content" tabindex="-1">
         <div id="app-status-region">
+    <div id="offline-save-status" class="offline-save-status sync-notice" role="status" aria-live="polite" aria-atomic="true" hidden>
+      <span class="offline-save-status-icon" aria-hidden="true">{{ui:CloudOff}}</span>
+      <span class="offline-save-status-body">
+        <strong class="offline-save-status-title">Saved on this device only</strong>
+        <span class="offline-save-status-detail" id="offline-save-status-detail">Changes are saved on this device and will sync when the server allows it.</span>
+      </span>
+      <button type="button" id="offline-save-retry" class="offline-save-retry" aria-label="Retry syncing saved changes to the cloud">Retry sync</button>
+      <button type="button" id="offline-save-dismiss" class="offline-save-dismiss" aria-label="Dismiss offline save notice">Dismiss</button>
+    </div>
     <div id="connection-status-banner" class="connection-status-banner" role="status" hidden>{{ui:RefreshCw}} Reconnecting to the server…</div>
         </div>
 

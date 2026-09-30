@@ -47,6 +47,8 @@ function saveSession(user) {
  * Clear the persisted session and related transient markers.
  */
 function clearSession() {
+    if (typeof resolveSyncNotice === 'function') resolveSyncNotice();
+    if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
     try { localStorage.removeItem(SESSION_KEY); } catch (e) { }
     try { sessionStorage.removeItem(STORAGE_KEYS.SESSION_USER); } catch (e) { }
     try { sessionStorage.removeItem(STORAGE_KEYS.UPDATE_DISMISSED); } catch (e) { }

@@ -274,6 +274,8 @@ function checkAccess(role, pageId) {
 }
 
 function showApp(restorePage) {
+    if (showApp.noticeRole && showApp.noticeRole !== currentUser.role && typeof resolveSyncNotice === 'function') resolveSyncNotice();
+    showApp.noticeRole = currentUser.role;
     hide('login-page');
     show('app-layout');
 

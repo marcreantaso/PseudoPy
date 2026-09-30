@@ -372,7 +372,7 @@ test('a genuine refusal still keeps the permission wording', () => {
     assert.match(h.elements['offline-save-status-detail'].textContent, /not permitted to sync/);
 });
 
-test('Retry drains the queue, reports success and re-arms the notice', async () => {
+test('Retry drains the queue without re-announcing the notice in the same session', async () => {
     const h = uiHarness();
     h.ctx.reportCloudSaveDenied({ ref: 'r', pendingSignIn: true }, { category: 'PERMISSION_DENIED', transient: false });
     assert.equal(h.ctx.isOfflineSaveStatusVisible(), true);
@@ -383,8 +383,8 @@ test('Retry drains the queue, reports success and re-arms the notice', async () 
     assert.equal(h.ctx.isOfflineSaveStatusVisible(), false, 'a successful sync clears the notice');
     assert.equal(h.toasts.length, 1);
     assert.match(h.toasts[0].m, /Synced 2 pending change/);
-    // Re-armed: a later genuine failure may be announced again.
-    assert.equal(h.ctx.reportCloudSaveDenied({ ref: 'r' }, { category: 'PERMISSION_DENIED', transient: false }), true);
+    // A successful drain must not reset the once-per-session announcement latch.
+    assert.equal(h.ctx.reportCloudSaveDenied({ ref: 'r' }, { category: 'PERMISSION_DENIED', transient: false }), false);
 });
 
 test('Retry says so plainly when nothing could be synced', async () => {

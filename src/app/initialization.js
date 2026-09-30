@@ -16,6 +16,11 @@ window.addEventListener('pseudopy:sync-error', event => {
         if (typeof showReconnectingStatus === 'function') showReconnectingStatus();
         return;
     }
+    if (detail.code === 'queue-storage' && typeof showSyncNotice === 'function') {
+        // Storage failure is actionable even if a prior permission notice was dismissed.
+        if (!showSyncNotice(detail.message) && typeof showToast === 'function') showToast(detail.message, 'error');
+        return;
+    }
     if (typeof reportCloudSaveDenied === 'function') {
         reportCloudSaveDenied(
             { ref: detail.ref, docId: detail.docId, operation: 'WRITE' },
@@ -25,7 +30,11 @@ window.addEventListener('pseudopy:sync-error', event => {
 });
 window.addEventListener('pseudopy:sync-saved', event => {
     hideLegacyCloudSaveNotice();
-    if (typeof hideOfflineSaveStatus === 'function') hideOfflineSaveStatus();
+    if (typeof listAllMutations === 'function') {
+        listAllMutations().then(records => {
+            if (!records.length && typeof resolveSyncNotice === 'function') resolveSyncNotice();
+        }).catch(() => {});
+    } else if (typeof resolveSyncNotice === 'function') resolveSyncNotice();
     if (typeof cloudAuthReady === 'function' && cloudAuthReady() && typeof cloudUid === 'function') {
         console.info(`[App] Cloud save confirmed for ${event.detail.ref}/${event.detail.docId} (uid ${cloudUid()}).`);
     }

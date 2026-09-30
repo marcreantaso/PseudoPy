@@ -12,6 +12,7 @@
 const OFFLINE_SAVE_STATUS_ID = 'offline-save-status';
 const OFFLINE_SAVE_DISMISS_ID = 'offline-save-dismiss';
 const OFFLINE_SAVE_RETRY_ID = 'offline-save-retry';
+const OFFLINE_SAVE_SHOWN_KEY = 'pseudopy.offlineSaveShown';
 const OFFLINE_SAVE_DISMISSED_KEY = 'pseudopy.offlineSaveDismissed';
 
 let offlineSaveStatusShown = false;
@@ -35,6 +36,7 @@ function writeOfflineSaveDismissed(value) {
 function resetOfflineSaveStatusForTests() {
     offlineSaveStatusShown = false;
     writeOfflineSaveDismissed(false);
+    try { sessionStorage.setItem(OFFLINE_SAVE_SHOWN_KEY, '0'); } catch (e) {}
 }
 
 function showReconnectingStatus() {
@@ -49,7 +51,9 @@ function hideReconnectingStatus() {
 }
 
 function showOfflineSaveStatus(reason) {
-    if (offlineSaveStatusShown || readOfflineSaveDismissed()) return false;
+    let previouslyShown = false;
+    try { previouslyShown = sessionStorage.getItem(OFFLINE_SAVE_SHOWN_KEY) === '1'; } catch (e) {}
+    if (offlineSaveStatusShown || readOfflineSaveDismissed() || previouslyShown) return false;
     offlineSaveStatusShown = true;
     const banner = typeof $id === 'function' ? $id(OFFLINE_SAVE_STATUS_ID) : null;
     if (!banner) return false;
@@ -58,6 +62,7 @@ function showOfflineSaveStatus(reason) {
         detail.textContent = reason || 'Changes are saved on this device and will sync when the server allows it.';
     }
     banner.hidden = false;
+    try { sessionStorage.setItem(OFFLINE_SAVE_SHOWN_KEY, '1'); } catch (e) {}
     return true;
 }
 
@@ -115,12 +120,13 @@ function retryCloudSyncNow() {
     if (typeof syncNow !== 'function') return Promise.resolve(null);
     // `syncNow` is async in the app, but resolve defensively so this also
     // works with a synchronous stub.
-    return Promise.resolve(syncNow('manual-retry')).then(function (summary) {
-        if (summary && summary.synced > 0) {
+    return Promise.resolve(syncNow('manual-retry')).then(async function (summary) {
+        const remaining = typeof listAllMutations === 'function' ? await listAllMutations() : [];
+        if (summary && summary.synced > 0 && remaining.length === 0) {
             hideOfflineSaveStatus();
             // A successful drain earns a fresh announcement for any later,
             // genuinely new failure.
-            offlineSaveStatusShown = false;
+            // Keep the once-per-session announcement latch after successful recovery.
             if (typeof showToast === 'function') showToast('Synced ' + summary.synced + ' pending change(s) to the cloud.', 'success');
         } else if (typeof showToast === 'function') {
             showToast('Could not sync yet. Your changes are safe on this device.', 'info');
@@ -152,6 +158,9 @@ function initConnectionStatus() {
     }
     if (!initConnectionStatus.__bound) {
         initConnectionStatus.__bound = true;
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && isOfflineSaveStatusVisible()) dismissOfflineSaveStatus();
+        });
         window.addEventListener('online', function () {
             hideReconnectingStatus();
             if (typeof resetCloudCircuit === 'function') resetCloudCircuit();
