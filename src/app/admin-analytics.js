@@ -216,7 +216,12 @@ function renderSystemActivityChart(records) {
     if (totalElement) totalElement.textContent = total + ' activity events in the charted period';
 
     if (total === 0) {
-        plot.innerHTML = '<div class="an-chart-empty"><p class="an-chart-empty-title">No activity in this period.</p><p class="an-chart-empty-hint">Activity appears once students translate or execute pseudocode.</p></div>';
+        plot.innerHTML = `
+            <div class="an-chart-empty">
+                <i data-lucide="chart-column" style="width:48px;height:48px;opacity:0.3;margin-bottom:0.75rem;"></i>
+                <p class="an-chart-empty-title">No activity in this period</p>
+                <p class="an-chart-empty-hint">Activity appears once students translate or execute pseudocode.</p>
+            </div>`;
         return;
     }
 
@@ -280,7 +285,12 @@ function renderSystemErrorChart(records) {
     if (totalElement) totalElement.textContent = String(distribution.total) + ' recorded error(s)';
 
     if (distribution.total === 0) {
-        plot.innerHTML = '<div class="an-chart-empty"><p class="an-chart-empty-title">No errors in this period.</p><p class="an-chart-empty-hint">Recorded error types appear once activity contains failures.</p></div>';
+        plot.innerHTML = `
+            <div class="an-chart-empty">
+                <i data-lucide="pie-chart" style="width:48px;height:48px;opacity:0.3;margin-bottom:0.75rem;"></i>
+                <p class="an-chart-empty-title">No errors in this period</p>
+                <p class="an-chart-empty-hint">Recorded error types appear once activity contains failures.</p>
+            </div>`;
         const legend = $id('system-error-legend');
         if (legend) legend.innerHTML = '<div class="an-legend-note">Clean code — no errors recorded.</div>';
         return;

@@ -243,7 +243,10 @@ function renderPipelineTimingChart(timing) {
     if (!container) return;
 
     if (timing.count === 0) {
-        container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:2rem;">No timing data yet. Translate some pseudocode first.</div>';
+        container.innerHTML = '<div class="an-chart-empty">' +
+            '<p class="an-chart-empty-title">No timing data yet</p>' +
+            '<p class="an-chart-empty-hint">Translate some pseudocode to see average milliseconds spent in each compiler stage.</p>' +
+            '</div>';
         return;
     }
 
@@ -255,7 +258,20 @@ function renderPipelineTimingChart(timing) {
     ];
 
     const max = Math.max(...stages.map(s => s.value), 0.001);
-    container.innerHTML = '<div class="chart-bars-wrap">' + stages.map(s =>
+    const slowest = stages.reduce((a, b) => (b.value > a.value ? b : a));
+
+    // Headline: the end-to-end total that was measured but previously never shown.
+    const headline = timing.count > 1
+        ? 'Averaged over ' + timing.count + ' translations'
+        : 'From 1 translation';
+
+    container.innerHTML =
+        '<div class="pipeline-timing-summary">' +
+        '<span class="pipeline-timing-total"><strong>' + timing.avgTotalTime + 'ms</strong> average total pipeline time</span>' +
+        '<span class="pipeline-timing-meta">' + headline + ' &middot; slowest stage: ' +
+        '<strong style="color:' + slowest.color + '">' + slowest.name + '</strong> (' + slowest.value + 'ms)</span>' +
+        '</div>' +
+        '<div class="chart-bars-wrap">' + stages.map(s =>
         '<div class="chart-bar" tabindex="0" aria-label="' + s.name + ': ' + s.value + 'ms average" title="' + s.name + ' average: ' + s.value + 'ms" style="height:' + Math.max((s.value / max) * 180, 20) + 'px;background:' + s.color + '">' +
         '<span class="bar-value">' + s.value + 'ms</span>' +
         '<span class="bar-label">' + s.name + '</span>' +
