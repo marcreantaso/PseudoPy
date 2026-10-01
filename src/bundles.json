@@ -62,6 +62,7 @@
     "src/app/legal-pages.js"
   ],
   "compiler.js": [
+    "src/compiler/simulation-tracer.js",
     "src/compiler/tokens-and-trace.js",
     "src/compiler/lexer.js",
     "src/compiler/expressions.js",

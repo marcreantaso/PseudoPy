@@ -1,4 +1,208 @@
 /* ============================================================
+   ALGORITHM SIMULATION TRACE — SINGLE SOURCE OF TRUTH
+   ────────────────────────────────────────────────────────────
+   One ordered event log for the Developer Options simulator.
+
+   Design constraints:
+     • The real compiler stages are the only producers. Nothing
+       here re-implements compiler behaviour.
+     • Disabled by default. Every call site guards on
+       `simulationTracer.enabled`, so no payload object, snapshot
+       or timestamp is allocated while the simulator is off.
+     • Events never retain live compiler objects. Payloads and
+       snapshots are detached copies, so replaying an old event
+       cannot show mutated state.
+     • Missing positions are reported as null. A coordinate is
+       never invented.
+     • Storage is bounded. Overflow is reported, not hidden.
+
+   Event schema (the contract every consumer relies on):
+     {
+       seq,        // monotonic, gap-free within one trace
+       stage,      // PREPROCESSING | NLP_MAPPING | LEXICAL_ANALYSIS |
+                   // SYNTAX_ANALYSIS | SEMANTIC_ANALYSIS |
+                   // CODE_GENERATION | PIPELINE | EXECUTION
+       type,       // one of SIMULATION_TRACE_TYPES
+       ts,         // monotonic milliseconds
+       line,       // 1-based, or null when unavailable
+       column,     // 1-based, or null when unavailable
+       payload,    // detached plain data
+       snapshot?   // present only on SIMULATION_TRACE_TYPES.SNAPSHOT
+     }
+   ============================================================ */
+
+const SIMULATION_TRACE_TYPES = {
+    STAGE_START: 'STAGE_START',
+    STAGE_END: 'STAGE_END',
+    PREPROCESS_APPLIED: 'PREPROCESS_APPLIED',
+    NLP_MAPPING_APPLIED: 'NLP_MAPPING_APPLIED',
+    TOKEN_EMITTED: 'TOKEN_EMITTED',
+    TOKEN_REJECTED: 'TOKEN_REJECTED',
+    BLOCK_PUSH: 'BLOCK_PUSH',
+    BLOCK_POP: 'BLOCK_POP',
+    BLOCK_MISMATCH: 'BLOCK_MISMATCH',
+    NODE_CREATED: 'NODE_CREATED',
+    SYMBOL_DECLARED: 'SYMBOL_DECLARED',
+    SYMBOL_LOOKUP: 'SYMBOL_LOOKUP',
+    SYMBOL_UPDATED: 'SYMBOL_UPDATED',
+    TYPE_WARNING: 'TYPE_WARNING',
+    DIAGNOSTIC_EMITTED: 'DIAGNOSTIC_EMITTED',
+    CODE_EMITTED: 'CODE_EMITTED',
+    SOURCE_MAPPED: 'SOURCE_MAPPED',
+    SNAPSHOT: 'SNAPSHOT',
+    TRACE_TRUNCATED: 'TRACE_TRUNCATED'
+};
+
+const SIMULATION_TRACE_LIMITS = {
+    maxEvents: 50000,
+    snapshotEvery: 50
+};
+
+// performance.now() is absent in some bare harnesses.
+function simulationNow() {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') return performance.now();
+    return Date.now();
+}
+
+// Detach from live compiler state. JSON cloning is deliberate: it drops
+// prototypes, cycles and non-JSON Skulpt handles, which is exactly what a
+// recorded event must not retain.
+function simulationDetach(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value !== 'object') return value;
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch (e) {
+        return null;
+    }
+}
+
+class SimulationTracer {
+    constructor(limits) {
+        const merged = Object.assign({}, SIMULATION_TRACE_LIMITS, limits || {});
+        this.maxEvents = merged.maxEvents;
+        this.snapshotEvery = merged.snapshotEvery;
+        this.reset();
+    }
+
+    reset() {
+        this.enabled = false;
+        this.events = [];
+        this.seq = 0;
+        this.truncated = false;
+        this.snapshotProvider = null;
+        this.sinceSnapshot = 0;
+    }
+
+    enable() {
+        this.enabled = true;
+        return this;
+    }
+
+    disable() {
+        this.enabled = false;
+        return this;
+    }
+
+    isEnabled() {
+        return this.enabled === true;
+    }
+
+    // The compiler registers one reader for the live state that is not owned
+    // by the tracer (block stack, symbol table, counters).
+    setSnapshotProvider(fn) {
+        this.snapshotProvider = typeof fn === 'function' ? fn : null;
+        return this;
+    }
+
+    emit(type, opts) {
+        if (!this.enabled) return null;
+        if (this.events.length >= this.maxEvents) {
+            if (!this.truncated) {
+                this.truncated = true;
+                this.events.push({
+                    seq: this.seq++,
+                    stage: 'PIPELINE',
+                    type: SIMULATION_TRACE_TYPES.TRACE_TRUNCATED,
+                    ts: simulationNow(),
+                    line: null,
+                    column: null,
+                    payload: { maxEvents: this.maxEvents }
+                });
+            }
+            return null;
+        }
+
+        const options = opts || {};
+        const event = {
+            seq: this.seq++,
+            stage: options.stage || 'PIPELINE',
+            type: type,
+            ts: simulationNow(),
+            line: typeof options.line === 'number' && isFinite(options.line) ? options.line : null,
+            column: typeof options.column === 'number' && isFinite(options.column) ? options.column : null,
+            // Detached so a later compiler mutation cannot rewrite history.
+            payload: options.payload === undefined ? null : simulationDetach(options.payload)
+        };
+        // Only checkpoints carry state. The key is omitted entirely otherwise,
+        // so consumers can test for `snapshot` rather than for a null.
+        if (options.snapshot !== undefined) event.snapshot = simulationDetach(options.snapshot);
+        this.events.push(event);
+
+        if (++this.sinceSnapshot >= this.snapshotEvery) {
+            this.sinceSnapshot = 0;
+            this.captureSnapshot();
+        }
+        return event;
+    }
+
+    // A checkpoint holds the full compiler state at that point in the log.
+    // Only periodic full snapshots are stored; the simulator reconstructs
+    // intermediate state by replaying deltas forward from the checkpoint.
+    captureSnapshot() {
+        if (!this.enabled || !this.snapshotProvider) return null;
+        let state;
+        try {
+            state = this.snapshotProvider();
+        } catch (e) {
+            state = null;
+        }
+        if (!state) return null;
+        return this.emit(SIMULATION_TRACE_TYPES.SNAPSHOT, {
+            stage: state.stage || 'PIPELINE',
+            line: null,
+            column: null,
+            payload: { reason: 'interval' },
+            snapshot: state
+        });
+    }
+
+    // Finish a trace and return the envelope the simulator consumes.
+    finalize(extra) {
+        this.enabled = false;
+        const envelope = {
+            events: this.events.slice(),
+            truncated: this.truncated,
+            maxEvents: this.maxEvents,
+            snapshotEvery: this.snapshotEvery
+        };
+        if (extra) {
+            for (const key of Object.keys(extra)) envelope[key] = extra[key];
+        }
+        return envelope;
+    }
+
+    getEvents() {
+        return this.events.slice();
+    }
+}
+
+// Global singleton — shared across compiler stages exactly like compilerTrace.
+const simulationTracer = new SimulationTracer();
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { SimulationTracer, simulationTracer, SIMULATION_TRACE_TYPES, SIMULATION_TRACE_LIMITS, simulationDetach };
+}/* ============================================================
    Pseudocode-to-Python Compiler Engine
    ────────────────────────────────────────────────────────────
    4-Stage Syntax-Directed Translation (SDT) Pipeline:
@@ -156,8 +360,52 @@ class Lexer {
         this.input = input;
         this.pos = 0;
         this.line = 1;
+        this.column = 1;
         this.tokens = [];
         this.errors = [];
+    }
+
+    // Central token sink: keeps the emitted token and, when the simulator is
+    // running, records it. One place to instrument so token positions cannot
+    // drift apart from the token objects the parser consumes.
+    push(type, value, line, column) {
+        const token = { type: type, value: value, line: line, column: column };
+        this.tokens.push(token);
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.TOKEN_EMITTED, {
+                stage: 'LEXICAL_ANALYSIS',
+                line: line,
+                column: column,
+                payload: { tokenType: type, value: value, index: this.tokens.length - 1 }
+            });
+        }
+        return token;
+    }
+
+    // Errors share one shape so the trace and the UI agree on line/column.
+    fail(message, suggestion, line, column) {
+        const entry = { line: line === undefined ? this.line : line, column: column === undefined ? this.column : column, message: message, suggestion: suggestion };
+        this.errors.push(entry);
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.TOKEN_REJECTED, {
+                stage: 'LEXICAL_ANALYSIS',
+                line: entry.line,
+                column: entry.column,
+                payload: { message: message, suggestion: suggestion || null }
+            });
+        }
+        return entry;
+    }
+
+    advance() {
+        const ch = this.input[this.pos++];
+        if (ch === '\n') {
+            this.line++;
+            this.column = 1;
+        } else {
+            this.column++;
+        }
+        return ch;
     }
 
     // ── Unicode → ASCII Operator Normalization Map ──
@@ -186,19 +434,17 @@ class Lexer {
         return this.pos < this.input.length ? this.input[this.pos] : null;
     }
 
-    advance() {
-        return this.input[this.pos++];
-    }
-
     tokenize() {
         compilerTrace.emit({ type: 'LEXER_START', stage: 'LEXICAL_ANALYSIS', status: 'RUNNING', data: { inputLength: this.input.length } });
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_START, { stage: 'LEXICAL_ANALYSIS', line: null, column: null, payload: { inputLength: this.input.length } });
+        }
         while (this.pos < this.input.length) {
             const ch = this.peek();
 
             // ── Newlines ──
             if (ch === '\n') {
-                this.tokens.push({ type: TOKEN_TYPES.NEWLINE, value: '\n', line: this.line });
-                this.line++;
+                this.push(TOKEN_TYPES.NEWLINE, '\n', this.line, this.column);
                 this.advance();
                 continue;
             }
@@ -222,14 +468,15 @@ class Lexer {
             if (/[a-zA-Z_]/.test(ch)) {
                 let word = '';
                 const startLine = this.line;
+                const startColumn = this.column;
                 while (this.pos < this.input.length && /[a-zA-Z0-9_]/.test(this.input[this.pos])) {
                     word += this.advance();
                 }
                 const upper = word.toUpperCase();
                 if (COMPILER_KEYWORDS.has(upper)) {
-                    this.tokens.push({ type: TOKEN_TYPES.KEYWORD, value: upper, line: startLine });
+                    this.push(TOKEN_TYPES.KEYWORD, upper, startLine, startColumn);
                 } else {
-                    this.tokens.push({ type: TOKEN_TYPES.IDENTIFIER, value: word, line: startLine });
+                    this.push(TOKEN_TYPES.IDENTIFIER, word, startLine, startColumn);
                 }
                 continue;
             }
@@ -237,16 +484,20 @@ class Lexer {
             // Decimal/scientific literals; malformed numbers are rejected by expression parsing.
             if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(this.input[this.pos + 1] || ''))) {
                 const match = this.input.slice(this.pos).match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
-                this.tokens.push({ type: TOKEN_TYPES.NUMBER, value: match[0], line: this.line });
+                const startLine = this.line;
+                const startColumn = this.column;
+                this.push(TOKEN_TYPES.NUMBER, match[0], startLine, startColumn);
                 this.pos += match[0].length;
+                this.column += match[0].length;
                 continue;
             }
 
             // Preserve quotes and escapes exactly. Never rewrite the contents of a literal.
             if (ch === '"' || ch === "'") {
+                const startLine = this.line;
+                const startColumn = this.column;
                 const quote = this.advance();
                 let value = quote;
-                const startLine = this.line;
                 let closed = false;
                 while (this.pos < this.input.length && this.peek() !== '\n') {
                     const c = this.advance();
@@ -254,20 +505,21 @@ class Lexer {
                     if (c === quote) { closed = true; break; }
                     if (c === '\\' && this.pos < this.input.length && this.peek() !== '\n') value += this.advance();
                 }
-                if (!closed) this.errors.push({ line: startLine, message: 'Unterminated string literal.', suggestion: 'Close the string with a matching quote on the same line.' });
-                this.tokens.push({ type: TOKEN_TYPES.STRING, value, line: startLine });
+                if (!closed) this.fail('Unterminated string literal.', 'Close the string with a matching quote on the same line.', startLine, startColumn);
+                this.push(TOKEN_TYPES.STRING, value, startLine, startColumn);
                 continue;
             }
 
             // Longest match keeps **, // and shifts atomic.
             const pair = this.input.slice(this.pos, this.pos + 2);
             if (['**', '//', '<<', '>>', '==', '!=', '<=', '>=', '<>', ':=', '<-'].includes(pair)) {
-                this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: [':=', '<-'].includes(pair) ? '=' : pair, line: this.line });
+                this.push(TOKEN_TYPES.OPERATOR, [':=', '<-'].includes(pair) ? '=' : pair, this.line, this.column);
                 this.pos += 2;
+                this.column += 2;
                 continue;
             }
             if ('+-*/%,()[]:.<>=&|^~'.includes(ch)) {
-                this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: this.advance(), line: this.line });
+                this.push(TOKEN_TYPES.OPERATOR, this.advance(), this.line, this.column - 1);
                 continue;
             }
 
@@ -277,17 +529,25 @@ class Lexer {
             // never encounters raw Unicode operators.
             if (Lexer.UNICODE_OPERATOR_MAP[ch]) {
                 const normalized = Lexer.UNICODE_OPERATOR_MAP[ch];
-                this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: normalized, line: this.line });
+                this.push(TOKEN_TYPES.OPERATOR, normalized, this.line, this.column);
                 this.advance();
                 continue;
             }
 
-            this.errors.push({ line: this.line, message: 'Unsupported character: ' + ch, suggestion: 'Use a supported Python operator; exponentiation is ** and XOR is ^.' });
+            this.fail('Unsupported character: ' + ch, 'Use a supported Python operator; exponentiation is ** and XOR is ^.');
             this.advance();
         }
 
-        this.tokens.push({ type: TOKEN_TYPES.EOF, value: '', line: this.line });
+        this.push(TOKEN_TYPES.EOF, '', this.line, this.column);
         compilerTrace.emit({ type: 'LEXER_COMPLETE', stage: 'LEXICAL_ANALYSIS', status: this.errors.length ? 'ERROR' : 'SUCCESS', data: { tokenCount: this.tokens.length, tokens: this.tokens, errors: this.errors } });
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_END, {
+                stage: 'LEXICAL_ANALYSIS',
+                line: null,
+                column: null,
+                payload: { tokenCount: this.tokens.length, errorCount: this.errors.length }
+            });
+        }
         return this.tokens;
     }
 }
@@ -493,17 +753,92 @@ function validateExpressionTree(ast) {
     walk(ast.body);
 }
 
+// Parser diagnostics are collected through this array so that every error the
+// parser reports is also visible to the simulator, without duplicating each
+// push site.
+//
+// The wrapper is a non-enumerable own property on a real Array rather than an
+// Array subclass: subclassing would make `errors.map(...)` re-enter this
+// method (Array species), and would break structural comparisons between a
+// traced and an untraced compile.
+function instrumentErrorList(list) {
+    if (!Array.isArray(list)) return list;
+    const originalPush = Array.prototype.push;
+    Object.defineProperty(list, 'push', {
+        value: function (...entries) {
+            if (simulationTracer.enabled) {
+                for (const entry of entries) {
+                    if (entry && typeof entry === 'object') {
+                        simulationTracer.emit(SIMULATION_TRACE_TYPES.DIAGNOSTIC_EMITTED, {
+                            stage: 'SYNTAX_ANALYSIS',
+                            line: typeof entry.line === 'number' ? entry.line : null,
+                            column: typeof entry.column === 'number' ? entry.column : null,
+                            payload: {
+                                message: entry.message,
+                                suggestion: entry.suggestion || null,
+                                severity: entry.severity || 'error',
+                                code: entry.code || null
+                            }
+                        });
+                    }
+                }
+            }
+            return originalPush.apply(this, entries);
+        },
+        enumerable: false,
+        writable: true,
+        configurable: true
+    });
+    return list;
+}
+
 class Parser {
     constructor(tokens) {
         this.tokens = tokens;
         this.pos = 0;
-        this.errors = [];
+        this.errors = instrumentErrorList([]);
         this.blockStack = [];  // LIFO stack for block validation
+        this.tracedLines = 0;
+    }
+
+    // ── Simulation instrumentation ─────────────────────────────
+    // Every helper below is guarded on simulationTracer.enabled so that an
+    // untraced compile allocates nothing beyond the AST itself.
+
+    emit(type, line, column, payload) {
+        simulationTracer.emit(type, {
+            stage: 'SYNTAX_ANALYSIS',
+            line: line,
+            column: column,
+            payload: payload
+        });
+    }
+
+    // Statement nodes are recorded exactly once, where they are built.
+    traced(node) {
+        if (simulationTracer.enabled && node) {
+            this.emit(SIMULATION_TRACE_TYPES.NODE_CREATED, node.line, node.column === undefined ? null : node.column, {
+                nodeType: node.type,
+                line: node.line,
+                bodySize: node.body ? node.body.length : undefined,
+                depth: this.blockStack.length
+            });
+        }
+        return node;
+    }
+
+    openBlock(type, line, column) {
+        const frame = { type: type, line: line, column: column === undefined ? null : column };
+        this.blockStack.push(frame);
+        if (simulationTracer.enabled) {
+            this.emit(SIMULATION_TRACE_TYPES.BLOCK_PUSH, line, frame.column, { blockType: type, depth: this.blockStack.length });
+        }
+        return frame;
     }
 
     peek(offset) {
         const idx = this.pos + (offset || 0);
-        return idx < this.tokens.length ? this.tokens[idx] : { type: TOKEN_TYPES.EOF, value: '', line: -1 };
+        return idx < this.tokens.length ? this.tokens[idx] : { type: TOKEN_TYPES.EOF, value: '', line: -1, column: null };
     }
 
     consume() {
@@ -542,6 +877,9 @@ class Parser {
     // ── CFG Rule: Program → BEGIN StatementList END ──
     parse() {
         compilerTrace.emit({ type: 'PARSER_START', stage: 'SYNTAX_ANALYSIS', status: 'RUNNING', data: { tokenCount: this.tokens.length } });
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_START, { stage: 'SYNTAX_ANALYSIS', line: null, column: null, payload: { tokenCount: this.tokens.length } });
+        }
         const body = [];
         this.skipNewlines();
 
@@ -554,7 +892,7 @@ class Parser {
                 const hint = suggestSentinel(firstNonNewline.value, ['BEGIN']);
                 if (hint) suggestion = 'Did you mean "' + hint + '"? ' + suggestion;
             }
-            this.errors.push({ line: firstNonNewline.line || 1, message: 'Missing BEGIN statement.', suggestion: suggestion });
+            this.errors.push({ line: firstNonNewline.line || 1, column: firstNonNewline.column === undefined ? null : firstNonNewline.column, message: 'Missing BEGIN statement.', suggestion: suggestion });
         }
         this.skipNewlines();
 
@@ -578,6 +916,7 @@ class Parser {
 
             const stmt = this.parseStatement();
             if (stmt) {
+                this.traced(stmt);
                 body.push(stmt);
             } else {
                 // Skip unrecognized token
@@ -590,7 +929,7 @@ class Parser {
 
         this.skipNewlines();
         if (foundEnd && this.peek().type !== TOKEN_TYPES.EOF) {
-            this.errors.push({ line: this.peek().line, message: 'Unexpected code after END.', suggestion: 'END must be the last statement.' });
+            this.errors.push({ line: this.peek().line, column: this.peek().column, message: 'Unexpected code after END.', suggestion: 'END must be the last statement.' });
         }
 
         // ▸ MANDATORY BOOKEND: Reject if END is missing
@@ -602,8 +941,16 @@ class Parser {
         // ▸ LIFO STACK VALIDATION: Report any unclosed blocks
         while (this.blockStack.length > 0) {
             const unclosed = this.blockStack.pop();
+            if (simulationTracer.enabled) {
+                this.emit(SIMULATION_TRACE_TYPES.BLOCK_MISMATCH, unclosed.line, unclosed.column, {
+                    blockType: unclosed.type,
+                    reason: 'unclosed',
+                    depth: this.blockStack.length
+                });
+            }
             this.errors.push({
                 line: unclosed.line,
+                column: unclosed.column,
                 message: 'Unclosed ' + unclosed.type + ' block (opened on line ' + unclosed.line + ').',
                 suggestion: 'Add END ' + unclosed.type + ' to close this block.'
             });
@@ -612,6 +959,14 @@ class Parser {
         const astResult = { type: 'Program', body: body, errors: this.errors };
         validateExpressionTree(astResult);
         compilerTrace.emit({ type: 'AST_CREATED', stage: 'SYNTAX_ANALYSIS', status: this.errors.length > 0 ? 'ERROR' : 'SUCCESS', data: { nodeCount: countAstNodes(astResult), errorCount: this.errors.length, errors: this.errors, blockStack: this.blockStack.slice() } });
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_END, {
+                stage: 'SYNTAX_ANALYSIS',
+                line: null,
+                column: null,
+                payload: { nodeCount: countAstNodes(astResult), errorCount: this.errors.length, depth: this.blockStack.length }
+            });
+        }
         return astResult;
     }
 
@@ -653,7 +1008,7 @@ class Parser {
         }
 
         if (t.type !== TOKEN_TYPES.NEWLINE && t.type !== TOKEN_TYPES.EOF) {
-            this.errors.push({ line: t.line, message: 'Unrecognized statement: ' + t.value, suggestion: 'Use a supported statement such as SET, DISPLAY, IF, FOR or WHILE.' });
+            this.errors.push({ line: t.line, column: t.column, message: 'Unrecognized statement: ' + t.value, suggestion: 'Use a supported statement such as SET, DISPLAY, IF, FOR or WHILE.' });
             // Recover at the statement boundary instead of reporting every token.
             while (this.peek().type !== TOKEN_TYPES.NEWLINE && this.peek().type !== TOKEN_TYPES.EOF) this.consume();
         }
@@ -665,15 +1020,15 @@ class Parser {
         const kw = this.consume();
         const id = this.match(TOKEN_TYPES.IDENTIFIER);
         if (!id) {
-            this.errors.push({ line: kw.line, message: 'Expected variable name after DECLARE.', suggestion: 'Example: DECLARE x AS INTEGER' });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'Expected variable name after DECLARE.', suggestion: 'Example: DECLARE x AS INTEGER' });
             return null;
         }
         if (!this.match(TOKEN_TYPES.KEYWORD, 'AS')) {
-            this.errors.push({ line: kw.line, message: 'Expected AS after variable name in DECLARE.', suggestion: 'Example: DECLARE ' + id.value + ' AS INTEGER' });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'Expected AS after variable name in DECLARE.', suggestion: 'Example: DECLARE ' + id.value + ' AS INTEGER' });
         }
         const typeToken = this.peek();
         if (['INTEGER', 'FLOAT', 'REAL', 'STRING', 'CHAR', 'CHARACTER', 'BOOLEAN', 'BOOL', 'ARRAY'].includes(typeToken.value)) this.consume();
-        else this.errors.push({ line: kw.line, message: 'Unsupported or missing declaration type.', suggestion: 'Use INTEGER, FLOAT, REAL, STRING, BOOLEAN or ARRAY.' });
+        else this.errors.push({ line: kw.line, column: kw.column, message: 'Unsupported or missing declaration type.', suggestion: 'Use INTEGER, FLOAT, REAL, STRING, BOOLEAN or ARRAY.' });
         return { type: 'DeclareStatement', id: id.value, varType: typeToken ? typeToken.value : 'UNKNOWN', line: kw.line };
     }
 
@@ -683,7 +1038,7 @@ class Parser {
         const kw = this.consume();
         const id = this.match(TOKEN_TYPES.IDENTIFIER);
         if (!id) {
-            this.errors.push({ line: kw.line, message: 'Expected variable name after SET.', suggestion: 'Example: SET x TO 5' });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'Expected variable name after SET.', suggestion: 'Example: SET x TO 5' });
             return null;
         }
 
@@ -698,15 +1053,15 @@ class Parser {
                 // Levenshtein: did they misspell TO?
                 const nextTok = this.peek();
                 if (nextTok.type !== TOKEN_TYPES.KEYWORD && nextTok.type !== TOKEN_TYPES.IDENTIFIER) {
-                    this.errors.push({ line: kw.line, message: 'Expected TO or = after variable name.' });
+                    this.errors.push({ line: kw.line, column: kw.column, message: 'Expected TO or = after variable name.' });
                 }
                 if (nextTok.type === TOKEN_TYPES.KEYWORD || nextTok.type === TOKEN_TYPES.IDENTIFIER) {
                     const hint = suggestSentinel(nextTok.value, ['TO']);
                     if (hint) {
-                        this.errors.push({ line: kw.line, message: 'Expected TO in SET assignment.', suggestion: 'Did you mean "' + hint + '"? Use: SET ' + id.value + ' TO value' });
+                        this.errors.push({ line: kw.line, column: kw.column, message: 'Expected TO in SET assignment.', suggestion: 'Did you mean "' + hint + '"? Use: SET ' + id.value + ' TO value' });
                         this.consume(); // skip the misspelled word
                     } else {
-                        this.errors.push({ line: kw.line, message: 'Expected TO after variable name.', suggestion: 'Use: SET ' + id.value + ' TO value' });
+                        this.errors.push({ line: kw.line, column: kw.column, message: 'Expected TO after variable name.', suggestion: 'Use: SET ' + id.value + ' TO value' });
                     }
                 }
             }
@@ -731,7 +1086,7 @@ class Parser {
         this.consume(); // [
         const indexExpr = this.collectLineTokens([']']);
         if (this.peek().value === ']') this.consume();
-        else this.errors.push({ line: id.line, message: 'Missing closing ] in assignment.' });
+        else this.errors.push({ line: id.line, column: id.column, message: 'Missing closing ] in assignment.' });
 
         // Support either '=' or 'TO' as the assignment operator
         const assignOp = this.peek();
@@ -775,7 +1130,7 @@ class Parser {
         }
         const id = this.match(TOKEN_TYPES.IDENTIFIER);
         if (!id) {
-            this.errors.push({ line: kw.line, message: 'Expected variable name after INPUT.', suggestion: 'Example: INPUT x' });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'Expected variable name after INPUT.', suggestion: 'Example: INPUT x' });
             return null;
         }
         return { type: 'InputStatement', id: id.value, prompt: null, line: kw.line };
@@ -785,7 +1140,7 @@ class Parser {
     // Sentinel enforcement: THEN is mandatory.
     parseIf() {
         const kw = this.consume(); // IF
-        this.blockStack.push({ type: 'IF', line: kw.line }); // LIFO push
+        this.openBlock('IF', kw.line, kw.column); // LIFO push
 
         const cond = this.collectLineTokens(['THEN']);
 
@@ -801,7 +1156,7 @@ class Parser {
                     this.consume(); // skip the misspelled sentinel
                 }
             }
-            this.errors.push({ line: kw.line, message: 'IF statement missing sentinel keyword THEN.', suggestion: suggestion });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'IF statement missing sentinel keyword THEN.', suggestion: suggestion });
         }
         this.skipNewlines();
 
@@ -813,11 +1168,11 @@ class Parser {
             const kwIf = this.consume(); // IF
             const cond = this.collectLineTokens(['THEN']);
             if (!this.match(TOKEN_TYPES.KEYWORD, 'THEN')) {
-                this.errors.push({ line: kwIf.line, message: 'ELSE IF statement missing sentinel keyword THEN.', suggestion: 'Use: ELSE IF condition THEN' });
+                this.errors.push({ line: kwIf.line, column: kwIf.column, message: 'ELSE IF statement missing sentinel keyword THEN.', suggestion: 'Use: ELSE IF condition THEN' });
             }
             this.skipNewlines();
             const elifBody = this.parseBlock(['ELSE', 'ENDIF', 'END']);
-            elseIfs.push({ condition: cond, body: elifBody, line: kwIf.line });
+            elseIfs.push({ condition: cond, body: elifBody, line: kwIf.line, column: kwIf.column === undefined ? null : kwIf.column });
         }
 
         let elseBody = null;
@@ -838,10 +1193,10 @@ class Parser {
                 this.consume(); this.consume();
                 this.popBlock('IF', kw.line);
             } else {
-                this.errors.push({ line: kw.line, message: 'Unclosed IF block (opened on line ' + kw.line + ').', suggestion: 'Add END IF to close this block.' });
+                this.errors.push({ line: kw.line, column: kw.column, message: 'Unclosed IF block (opened on line ' + kw.line + ').', suggestion: 'Add END IF to close this block.' });
             }
         } else {
-            this.errors.push({ line: kw.line, message: 'Unclosed IF block (opened on line ' + kw.line + ').', suggestion: 'Add END IF to close this block.' });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'Unclosed IF block (opened on line ' + kw.line + ').', suggestion: 'Add END IF to close this block.' });
         }
 
         return { type: 'IfStatement', condition: cond, body: body, elseIfs: elseIfs, elseBody: elseBody, line: kw.line };
@@ -851,7 +1206,7 @@ class Parser {
     // Sentinel enforcement: DO is mandatory.
     parseWhile() {
         const kw = this.consume(); // WHILE
-        this.blockStack.push({ type: 'WHILE', line: kw.line }); // LIFO push
+        this.openBlock('WHILE', kw.line, kw.column); // LIFO push
 
         const cond = this.collectLineTokens(['DO']);
 
@@ -866,7 +1221,7 @@ class Parser {
                     this.consume();
                 }
             }
-            this.errors.push({ line: kw.line, message: 'WHILE statement missing sentinel keyword DO.', suggestion: suggestion });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'WHILE statement missing sentinel keyword DO.', suggestion: suggestion });
         }
         this.skipNewlines();
 
@@ -882,10 +1237,10 @@ class Parser {
                 this.consume(); this.consume();
                 this.popBlock('WHILE', kw.line);
             } else {
-                this.errors.push({ line: kw.line, message: 'Unclosed WHILE block (opened on line ' + kw.line + ').', suggestion: 'Add END WHILE to close this block.' });
+                this.errors.push({ line: kw.line, column: kw.column, message: 'Unclosed WHILE block (opened on line ' + kw.line + ').', suggestion: 'Add END WHILE to close this block.' });
             }
         } else {
-            this.errors.push({ line: kw.line, message: 'Unclosed WHILE block (opened on line ' + kw.line + ').', suggestion: 'Add END WHILE to close this block.' });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'Unclosed WHILE block (opened on line ' + kw.line + ').', suggestion: 'Add END WHILE to close this block.' });
         }
 
         return { type: 'WhileStatement', condition: cond, body: body, line: kw.line };
@@ -894,44 +1249,44 @@ class Parser {
     // ── CFG Rule: ForStmt → FOR id FROM expr TO expr DO Block END FOR ──
     parseFor() {
         const kw = this.consume(); // FOR
-        this.blockStack.push({ type: 'FOR', line: kw.line }); // LIFO push
+        this.openBlock('FOR', kw.line, kw.column); // LIFO push
 
         if (this.peek().value === 'EACH') {
             this.consume();
             const id = this.match(TOKEN_TYPES.IDENTIFIER);
-            if (!id) this.errors.push({ line: kw.line, message: 'FOR EACH requires an iterator name.' });
-            if (!this.match(TOKEN_TYPES.KEYWORD, 'IN')) this.errors.push({ line: kw.line, message: 'FOR EACH requires IN.' });
+            if (!id) this.errors.push({ line: kw.line, column: kw.column, message: 'FOR EACH requires an iterator name.' });
+            if (!this.match(TOKEN_TYPES.KEYWORD, 'IN')) this.errors.push({ line: kw.line, column: kw.column, message: 'FOR EACH requires IN.' });
             const iterable = this.collectLineTokens(['DO']);
             if (!this.match(TOKEN_TYPES.KEYWORD, 'DO')) {
-                this.errors.push({ line: kw.line, message: 'FOR EACH missing sentinel keyword DO.', suggestion: 'Use: FOR EACH item IN list DO' });
+                this.errors.push({ line: kw.line, column: kw.column, message: 'FOR EACH missing sentinel keyword DO.', suggestion: 'Use: FOR EACH item IN list DO' });
             }
             this.skipNewlines();
             const body = this.parseBlock(['ENDFOR', 'END']);
-            this.consumeEndBlock('FOR', kw.line);
+            this.consumeEndBlock('FOR', kw.line, kw.column);
             return { type: 'ForEachStatement', iterator: id ? id.value : '_', iterable: iterable, body: body, line: kw.line };
         }
 
         // FOR i FROM start TO end DO
         const id = this.match(TOKEN_TYPES.IDENTIFIER);
-        if (!id) this.errors.push({ line: kw.line, message: 'FOR requires an iterator name.' });
+        if (!id) this.errors.push({ line: kw.line, column: kw.column, message: 'FOR requires an iterator name.' });
         if (!this.match(TOKEN_TYPES.KEYWORD, 'FROM')) {
-            this.errors.push({ line: kw.line, message: 'Invalid FOR header: expected FROM after the iterator.', suggestion: 'Use FOR x FROM 1 TO 10 DO, or WHILE x <= 10 DO with END WHILE for a condition.' });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'Invalid FOR header: expected FROM after the iterator.', suggestion: 'Use FOR x FROM 1 TO 10 DO, or WHILE x <= 10 DO with END WHILE for a condition.' });
             this.collectLineTokens();
             this.skipNewlines();
             this.parseBlock(['ENDFOR', 'END']);
-            this.consumeEndBlock('FOR', kw.line);
+            this.consumeEndBlock('FOR', kw.line, kw.column);
             return null;
         }
         const startExpr = this.collectLineTokens(['TO']);
-        if (!this.match(TOKEN_TYPES.KEYWORD, 'TO')) this.errors.push({ line: kw.line, message: 'FOR requires TO.' });
+        if (!this.match(TOKEN_TYPES.KEYWORD, 'TO')) this.errors.push({ line: kw.line, column: kw.column, message: 'FOR requires TO.' });
         const endExpr = this.collectLineTokens(['STEP', 'DO']);
         const stepExpr = this.match(TOKEN_TYPES.KEYWORD, 'STEP') ? this.collectLineTokens(['DO']) : null;
         if (!this.match(TOKEN_TYPES.KEYWORD, 'DO')) {
-            this.errors.push({ line: kw.line, message: 'FOR statement missing sentinel keyword DO.', suggestion: 'Use: FOR i FROM 1 TO 10 DO' });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'FOR statement missing sentinel keyword DO.', suggestion: 'Use: FOR i FROM 1 TO 10 DO' });
         }
         this.skipNewlines();
         const body = this.parseBlock(['ENDFOR', 'END']);
-        this.consumeEndBlock('FOR', kw.line);
+        this.consumeEndBlock('FOR', kw.line, kw.column);
 
         return { type: 'ForStatement', iterator: id ? id.value : '_', startExpr: startExpr, endExpr: endExpr, stepExpr: stepExpr, body: body, line: kw.line };
     }
@@ -970,7 +1325,7 @@ class Parser {
     // ── FUNCTION/PROCEDURE name(params) ... END FUNCTION ──
     parseFuncDef() {
         const kw = this.consume();
-        this.blockStack.push({ type: kw.value, line: kw.line });
+        this.openBlock(kw.value, kw.line, kw.column);
         const name = this.match(TOKEN_TYPES.IDENTIFIER);
         const params = this.collectLineTokens();
 
@@ -984,7 +1339,7 @@ class Parser {
 
         this.skipNewlines();
         const body = this.parseBlock(['END']);
-        this.consumeEndBlock(kw.value, kw.line);
+        this.consumeEndBlock(kw.value, kw.line, kw.column);
         return { type: 'FunctionDef', name: name ? name.value : '', params: params, body: body, line: kw.line };
     }
 
@@ -1015,6 +1370,7 @@ class Parser {
 
             const stmt = this.parseStatement();
             if (stmt) {
+                this.traced(stmt);
                 body.push(stmt);
             } else {
                 if (this.peek().type !== TOKEN_TYPES.EOF && this.peek().type !== TOKEN_TYPES.NEWLINE) {
@@ -1026,7 +1382,7 @@ class Parser {
     }
 
     // ── Consume END FOR / END WHILE / ENDFOR / ENDWHILE + LIFO pop ──
-    consumeEndBlock(type, openLine) {
+    consumeEndBlock(type, openLine, openColumn) {
         const endWord = 'END' + type;
         if (this.peek().value === endWord) {
             this.consume();
@@ -1037,26 +1393,40 @@ class Parser {
                 this.consume(); this.consume();
                 this.popBlock(type, openLine);
             } else {
-                this.errors.push({ line: openLine, message: 'Unclosed ' + type + ' block (opened on line ' + openLine + ').', suggestion: 'Add END ' + type + ' to close this block.' });
+                this.errors.push({ line: openLine, column: openColumn === undefined ? null : openColumn, message: 'Unclosed ' + type + ' block (opened on line ' + openLine + ').', suggestion: 'Add END ' + type + ' to close this block.' });
             }
         } else {
-            this.errors.push({ line: openLine, message: 'Unclosed ' + type + ' block (opened on line ' + openLine + ').', suggestion: 'Add END ' + type + ' to close this block.' });
+            this.errors.push({ line: openLine, column: openColumn === undefined ? null : openColumn, message: 'Unclosed ' + type + ' block (opened on line ' + openLine + ').', suggestion: 'Add END ' + type + ' to close this block.' });
         }
     }
 
     // ── LIFO stack pop with mismatch detection ──
-    popBlock(expectedType, openLine) {
+    popBlock(expectedType, openLine, openColumn) {
         if (this.blockStack.length === 0) {
-            this.errors.push({ line: openLine, message: 'Unexpected END ' + expectedType + '. No matching ' + expectedType + ' block to close.' });
+            const line = openLine === undefined ? 1 : openLine;
+            const column = openColumn === undefined ? null : openColumn;
+            if (simulationTracer.enabled) {
+                this.emit(SIMULATION_TRACE_TYPES.BLOCK_MISMATCH, line, column, { blockType: expectedType, reason: 'orphan_end' });
+            }
+            this.errors.push({ line: line, column: column, message: 'Unexpected END ' + expectedType + '. No matching ' + expectedType + ' block to close.' });
             return;
         }
         const top = this.blockStack[this.blockStack.length - 1];
         if (top.type === expectedType) {
-            this.blockStack.pop();
+            const popped = this.blockStack.pop();
+            if (simulationTracer.enabled) {
+                this.emit(SIMULATION_TRACE_TYPES.BLOCK_POP, popped.line, popped.column, { blockType: popped.type, depth: this.blockStack.length });
+            }
         } else {
             // Mismatch: e.g., opened FOR but closing IF
+            const line = openLine === undefined ? 1 : openLine;
+            const column = openColumn === undefined ? null : openColumn;
+            if (simulationTracer.enabled) {
+                this.emit(SIMULATION_TRACE_TYPES.BLOCK_MISMATCH, line, column, { blockType: expectedType, expected: top.type, openedLine: top.line, reason: 'type_mismatch' });
+            }
             this.errors.push({
-                line: openLine,
+                line: line,
+                column: column,
                 message: 'Block mismatch: Expected END ' + top.type + ' (opened on line ' + top.line + ') but found END ' + expectedType + '.',
                 suggestion: 'Close the innermost block first with END ' + top.type + '.'
             });
@@ -1117,6 +1487,76 @@ class SemanticAnalyzer {
     constructor() {
         this.symbolTable = new Map(); // id -> { type, declaredType?, declaredKind?, elementType?, inferredType?, assigned, strict, implicit? }
         this.warnings = [];
+        this.scopeDepth = 0;
+    }
+
+    // ── Simulation instrumentation ─────────────────────────────
+    // All four helpers are no-ops unless the simulator is running.
+
+    emit(type, line, payload) {
+        simulationTracer.emit(type, {
+            stage: 'SEMANTIC_ANALYSIS',
+            line: line === undefined ? null : line,
+            column: null,
+            payload: payload
+        });
+    }
+
+    // Symbol writes go through one sink so declared/implicit/parameter and
+    // inferred entries are all visible to the simulator with a reason.
+    declare(id, entry, reason, line) {
+        this.symbolTable.set(id, entry);
+        if (simulationTracer.enabled) {
+            this.emit(SIMULATION_TRACE_TYPES.SYMBOL_DECLARED, line, {
+                name: id,
+                reason: reason,
+                symbolType: entry.type,
+                declaredType: entry.declaredType === undefined ? null : entry.declaredType,
+                inferredType: entry.inferredType === undefined ? null : entry.inferredType,
+                assigned: entry.assigned === true,
+                implicit: entry.implicit === true,
+                scopeDepth: this.scopeDepth
+            });
+        }
+        return entry;
+    }
+
+    // Every read is recorded with whether it resolved, which is what makes
+    // "used before it exists" visible rather than merely warned about.
+    lookup(id, line) {
+        const entry = this.symbolTable.get(id);
+        if (simulationTracer.enabled) {
+            this.emit(SIMULATION_TRACE_TYPES.SYMBOL_LOOKUP, line, {
+                name: id,
+                found: entry !== undefined,
+                symbolType: entry ? entry.type : null,
+                scopeDepth: this.scopeDepth
+            });
+        }
+        return entry;
+    }
+
+    // Assignment updates the existing entry in place; record the change
+    // rather than re-emitting a declaration.
+    assign(id, mutate, line) {
+        const entry = this.symbolTable.get(id);
+        if (!entry) return undefined;
+        const before = { type: entry.type, inferredType: entry.inferredType, assigned: entry.assigned };
+        mutate(entry);
+        if (simulationTracer.enabled) {
+            this.emit(SIMULATION_TRACE_TYPES.SYMBOL_UPDATED, line, {
+                name: id,
+                before: before,
+                after: { type: entry.type, inferredType: entry.inferredType, assigned: entry.assigned },
+                scopeDepth: this.scopeDepth
+            });
+        }
+        return entry;
+    }
+
+    // Detached symbol view for periodic checkpoints and for the inspector.
+    symbolSnapshot() {
+        return Object.fromEntries(this.symbolTable);
     }
 
 analyze(ast) {
@@ -1124,9 +1564,20 @@ analyze(ast) {
         this.warnings = [];
         this.semanticErrorCount = 0;
         compilerTrace.emit({ type: 'SEMANTIC_START', stage: 'SEMANTIC_ANALYSIS', status: 'RUNNING', data: {} });
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_START, { stage: 'SEMANTIC_ANALYSIS', line: null, column: null, payload: { nodeCount: 0 } });
+        }
         this.visitNode(ast);
         const status = this.semanticErrorCount > 0 ? 'ERROR' : (this.warnings.length > 0 ? 'WARNING' : 'SUCCESS');
         compilerTrace.emit({ type: 'SEMANTIC_COMPLETE', stage: 'SEMANTIC_ANALYSIS', status: status, data: { errorCount: this.semanticErrorCount, warningCount: this.warnings.length, warnings: this.warnings, symbolTable: Object.fromEntries(this.symbolTable) } });
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_END, {
+                stage: 'SEMANTIC_ANALYSIS',
+                line: null,
+                column: null,
+                payload: { errorCount: this.semanticErrorCount, warningCount: this.warnings.length, symbolCount: this.symbolTable.size }
+            });
+        }
         return this.warnings;
     }
 
@@ -1151,9 +1602,14 @@ analyze(ast) {
     typeWarn(node, code, problem, suggestion) {
         const line = (node && node.line) || 1;
         this.warnings.push({ line, code, severity: 'warning', stage: 'Semantic Analysis', message: problem, problem, suggestion });
+        if (simulationTracer.enabled) {
+            this.emit(SIMULATION_TRACE_TYPES.TYPE_WARNING, line, { code: code, message: problem, suggestion: suggestion || null, symbol: node && node.id ? node.id : null });
+        }
     }
 
-    sym(id) { return this.symbolTable.get(id); }
+    sym(id, line) {
+        return this.lookup(id, line === undefined ? null : line);
+    }
 
     // ── Static type inference (strict only for DECLAREd symbols) ──
     typeOf(node) {
@@ -1370,7 +1826,7 @@ analyze(ast) {
 
             case 'DeclareStatement': {
                 const declaredKind = semanticKindOf(node.varType);
-                this.symbolTable.set(node.id, {
+                this.declare(node.id, {
                     name: node.id,
                     type: declaredKind,
                     declaredType: node.varType,
@@ -1379,30 +1835,32 @@ analyze(ast) {
                     inferredType: 'unknown',
                     assigned: false,
                     strict: true
-                });
+                }, 'declare', node.line);
                 break;
             }
 
             case 'AssignmentStatement': {
-                const entry = this.sym(node.id);
+                const entry = this.sym(node.id, node.line);
                 const inferred = this.typeOf(node.expr && node.expr.ast);
                 if (!entry) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Variable '" + node.id + "' used without DECLARE.",
                         'Add: DECLARE ' + node.id + ' AS INTEGER (or appropriate type)'
                     );
-                    this.symbolTable.set(node.id, {
+                    this.declare(node.id, {
                         name: node.id,
                         type: inferred.kind === 'none' ? 'unknown' : inferred.kind,
                         inferredType: inferred.kind,
                         assigned: true,
                         strict: false
-                    });
+                    }, 'implicit_from_assignment', node.line);
                 } else {
-                    this.checkAssignment(node, entry, inferred);
-                    entry.inferredType = inferred.kind;
-                    entry.assigned = true;
-                    if (entry.type === 'unknown' && inferred.kind !== 'none' && inferred.kind !== 'unknown') entry.type = inferred.kind;
+                    this.assign(node.id, target => {
+                        this.checkAssignment(node, target, inferred);
+                        target.inferredType = inferred.kind;
+                        target.assigned = true;
+                        if (target.type === 'unknown' && inferred.kind !== 'none' && inferred.kind !== 'unknown') target.type = inferred.kind;
+                    }, node.line);
                 }
                 this.checkExpr(node.expr);
                 this.validateExpressionTypes(node.expr);
@@ -1414,13 +1872,13 @@ analyze(ast) {
                 this.checkExpr(node.expr);
                 this.validateExpressionTypes(node.index);
                 this.validateExpressionTypes(node.expr);
-                const entry = this.sym(node.id);
+                const entry = this.sym(node.id, node.line);
                 if (!entry) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Array '" + node.id + "' not declared.",
                         'Add: DECLARE ' + node.id + ' AS ARRAY'
                     );
-                    this.symbolTable.set(node.id, { name: node.id, type: 'array', inferredType: 'array', assigned: true, strict: false });
+                    this.declare(node.id, { name: node.id, type: 'array', inferredType: 'array', assigned: true, strict: false }, 'implicit_from_index_assignment', node.line);
                     break;
                 }
                 if (entry.declaredKind && entry.declaredKind !== 'unknown' && entry.declaredKind !== 'array') {
@@ -1441,12 +1899,12 @@ analyze(ast) {
                 break;
 
             case 'InputStatement': {
-                const entry = this.sym(node.id);
+                const entry = this.sym(node.id, node.line);
                 if (entry) {
                     node.inputType = entry.declaredType || '';
                 } else {
                     node.inputType = '';
-                    this.symbolTable.set(node.id, { name: node.id, type: 'string', inferredType: 'string', assigned: true, strict: false });
+                    this.declare(node.id, { name: node.id, type: 'string', inferredType: 'string', assigned: true, strict: false }, 'implicit_from_input', node.line);
                 }
                 break;
             }
@@ -1476,7 +1934,7 @@ analyze(ast) {
                 break;
 
             case 'ForStatement':
-                this.symbolTable.set(node.iterator, { name: node.iterator, type: 'numeric', inferredType: 'numeric', assigned: true, strict: false, implicit: true });
+                this.declare(node.iterator, { name: node.iterator, type: 'numeric', inferredType: 'numeric', assigned: true, strict: false, implicit: true }, 'loop_iterator', node.line);
                 this.checkExpr(node.startExpr);
                 this.checkExpr(node.endExpr);
                 this.checkExpr(node.stepExpr);
@@ -1491,19 +1949,21 @@ analyze(ast) {
                 this.validateExpressionTypes(node.iterable);
                 const iterKind = this.typeOf(node.iterable && node.iterable.ast);
                 const elementKind = iterKind.kind === 'array' && iterKind.element !== 'mixed' && iterKind.element !== 'unknown' ? iterKind.element : 'unknown';
-                this.symbolTable.set(node.iterator, { name: node.iterator, type: elementKind === 'unknown' ? 'unknown' : elementKind, inferredType: elementKind, assigned: true, strict: false, implicit: true });
+                this.declare(node.iterator, { name: node.iterator, type: elementKind === 'unknown' ? 'unknown' : elementKind, inferredType: elementKind, assigned: true, strict: false, implicit: true }, 'for_each_iterator', node.line);
                 node.body.forEach(n => this.visitNode(n));
                 break;
             }
 
             case 'FunctionDef': {
-                this.symbolTable.set(node.name, { name: node.name, type: 'function', strict: false });
+                this.declare(node.name, { name: node.name, type: 'function', strict: false }, 'function', node.line);
                 const outerScope = this.symbolTable;
                 this.symbolTable = new Map(outerScope);
+                this.scopeDepth++;
                 for (const token of node.params.tokens) {
-                    if (token.type === TOKEN_TYPES.IDENTIFIER) this.symbolTable.set(token.value, { name: token.value, type: 'unknown', strict: false });
+                    if (token.type === TOKEN_TYPES.IDENTIFIER) this.declare(token.value, { name: token.value, type: 'unknown', strict: false }, 'parameter', node.line);
                 }
                 node.body.forEach(n => this.visitNode(n));
+                this.scopeDepth--;
                 this.symbolTable = outerScope;
                 break;
             }
@@ -1520,7 +1980,7 @@ analyze(ast) {
             }
 
             case 'IncDecStatement':
-                if (!this.sym(node.id)) {
+                if (!this.sym(node.id, node.line)) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Variable '" + node.id + "' not declared before increment/decrement.",
                         'Add: DECLARE ' + node.id + ' AS INTEGER'
@@ -1531,7 +1991,7 @@ analyze(ast) {
             case 'AppendStatement':
                 this.checkExpr(node.value);
                 this.validateExpressionTypes(node.value);
-                if (!this.sym(node.target)) {
+                if (!this.sym(node.target, node.line)) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Array '" + node.target + "' not declared.",
                         'Add: DECLARE ' + node.target + ' AS ARRAY'
@@ -1551,7 +2011,7 @@ analyze(ast) {
             if (t.type !== TOKEN_TYPES.IDENTIFIER || tokens[i - 1]?.value === '.' || builtins.has(t.value)) continue;
             // Natural-language predicate words are grammar, not variable references.
             if (['A', 'NUMBER', 'NUMERIC'].includes(t.value.toUpperCase()) && tokens.some(t => t.value === 'IS')) continue;
-            if (!this.sym(t.value)) this.typeWarn({ line: exprNode.line },
+            if (!this.sym(t.value, exprNode.line)) this.typeWarn({ line: exprNode.line },
                 SEM__ERROR_CODES.undeclared,
                 "Undeclared variable '" + t.value + "' in expression.",
                 'Assign or declare ' + t.value + ' before using it.'
@@ -1594,10 +2054,57 @@ class CodeGenerator {
         this.indentLevel = 0;   // Global indent_level
         this.lines = [];
         this.symbolTable = symbolTable || new Map();
+        // Python line number -> { nodeType, sourceLine, synthetic }.
+        // Populated only while the simulator is enabled.
+        this.sourceMap = null;
+        this.currentNode = null;
     }
 
     ind() {
         return '    '.repeat(this.indentLevel);
+    }
+
+    // ── Source mapping ────────────────────────────────────────
+    // Every emitted line is attributed to the AST node responsible for it, so
+    // a runtime step on Python line N can name the pseudocode statement it came
+    // from. Synthetic lines (helper preambles, empty-block `pass`) are marked
+    // as such and are never attributed to a user statement.
+    emit(text, node, synthetic) {
+        this.lines.push(text);
+        if (!this.sourceMap) return text;
+        const owner = node === undefined ? this.currentNode : node;
+        this.sourceMap.push({
+            pythonLine: this.lines.length,
+            nodeType: owner ? owner.type : null,
+            sourceLine: owner && owner.line !== undefined ? owner.line : null,
+            indent: this.indentLevel,
+            synthetic: synthetic === true,
+            text: text
+        });
+        return text;
+    }
+
+    // Preamble lines are compiler helpers, not translations of any statement.
+    emitHelper(lines) {
+        for (const line of lines) this.emit(line, null, true);
+    }
+
+    // Push helper lines to the front, then shift every recorded mapping so it
+    // still matches its final line number.
+    prependHelpers(lines) {
+        if (!lines.length) return;
+        this.lines.unshift.apply(this.lines, lines);
+        if (!this.sourceMap) return;
+        const offset = lines.length;
+        for (const entry of this.sourceMap) entry.pythonLine += offset;
+        this.sourceMap.unshift.apply(this.sourceMap, lines.map((text, index) => ({
+            pythonLine: index + 1,
+            nodeType: null,
+            sourceLine: null,
+            indent: 0,
+            synthetic: true,
+            text: text
+        })));
     }
 
     normalizeOperator(rawOperator) {
@@ -1620,19 +2127,32 @@ class CodeGenerator {
         compilerTrace.emit({ type: 'CODEGEN_START', stage: 'CODE_GENERATION', status: 'RUNNING', data: { nodeCount: ast.body ? ast.body.length : 0 } });
         this.lines = [];
         this.indentLevel = 0;
+        this.currentNode = null;
+        this.sourceMap = simulationTracer.enabled ? [] : null;
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_START, { stage: 'CODE_GENERATION', line: null, column: null, payload: { nodeCount: ast.body ? ast.body.length : 0 } });
+        }
         for (const node of ast.body) {
             compilerTrace.emit({ type: 'CODEGEN_VISIT', stage: 'CODE_GENERATION', status: 'RUNNING', data: { nodeType: node.type, line: node.line } });
+            if (simulationTracer.enabled) {
+                simulationTracer.emit(SIMULATION_TRACE_TYPES.CODE_EMITTED, {
+                    stage: 'CODE_GENERATION',
+                    line: node.line,
+                    column: node.column === undefined ? null : node.column,
+                    payload: { nodeType: node.type, phase: 'visit' }
+                });
+            }
             this.visitNode(node);
         }
         if (this.lines.some(line => line.includes(' in _pseudopy_range('))) {
-            this.lines.unshift('def _pseudopy_range(start, stop, step):',
+            this.prependHelpers(['def _pseudopy_range(start, stop, step):',
                 '    if not all(isinstance(value, int) for value in (start, stop, step)):',
                 '        raise TypeError("FOR bounds and STEP must be integers")',
                 '    if step == 0:', '        raise ValueError("FOR STEP must not be zero")',
-                '    return range(start, stop + (1 if step > 0 else -1), step)', '');
+                '    return range(start, stop + (1 if step > 0 else -1), step)', '']);
         }
         if (this.lines.some(line => line.includes('_pseudopy_input_cast(') || line.includes('_pseudopy_input_int(') || line.includes('_pseudopy_input_float('))) {
-            this.lines.unshift('def _pseudopy_input_cast(prompt):',
+            this.prependHelpers(['def _pseudopy_input_cast(prompt):',
                 '    val = input(prompt)',
                 '    try:',
                 '        return int(val)',
@@ -1654,15 +2174,33 @@ class CodeGenerator {
                 '        try:',
                 '            return float(input(prompt))',
                 '        except ValueError:',
-                "            print('Please enter a number (REAL).')", '');
+                "            print('Please enter a number (REAL).')", '']);
         }
         const result = this.lines.join('\n');
         compilerTrace.emit({ type: 'CODEGEN_COMPLETE', stage: 'CODE_GENERATION', status: 'SUCCESS', data: { lineCount: this.lines.length, python: result } });
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_END, {
+                stage: 'CODE_GENERATION',
+                line: null,
+                column: null,
+                payload: { lineCount: this.lines.length, syntheticCount: this.sourceMap ? this.sourceMap.filter(e => e.synthetic).length : 0 }
+            });
+        }
         return result;
     }
 
     visitNode(node) {
         if (!node) return;
+        const previousNode = this.currentNode;
+        this.currentNode = node;
+        try {
+            this.visitNodeInner(node);
+        } finally {
+            this.currentNode = previousNode;
+        }
+    }
+
+    visitNodeInner(node) {
         switch (node.type) {
             case 'DeclareStatement': {
                 // Emit a comment + a real Python initializer so the variable exists in scope
@@ -1671,22 +2209,22 @@ class CodeGenerator {
                 if (['STRING', 'CHAR', 'CHARACTER'].includes(typeUpper)) initVal = '""';
                 else if (['BOOLEAN', 'BOOL'].includes(typeUpper)) initVal = 'False';
                 else if (['ARRAY'].includes(typeUpper)) initVal = '[]';
-                this.lines.push(this.ind() + '# DECLARE ' + node.id + ' AS ' + node.varType);
-                this.lines.push(this.ind() + node.id + ' = ' + initVal);
+                this.emit(this.ind() + '# DECLARE ' + node.id + ' AS ' + node.varType);
+                this.emit(this.ind() + node.id + ' = ' + initVal);
                 break;
             }
 
             case 'AssignmentStatement':
-                this.lines.push(this.ind() + node.id + ' = ' + this.exprToStr(node.expr.tokens));
+                this.emit(this.ind() + node.id + ' = ' + this.exprToStr(node.expr.tokens));
                 break;
 
             case 'ArrayAssignStatement':
-                this.lines.push(this.ind() + node.id + '[' + this.exprToStr(node.index.tokens) + '] = ' + this.exprToStr(node.expr.tokens));
+                this.emit(this.ind() + node.id + '[' + this.exprToStr(node.index.tokens) + '] = ' + this.exprToStr(node.expr.tokens));
                 break;
 
             case 'PrintStatement': {
                 const s = this.smartPrintExpr(node.expr.tokens);
-                this.lines.push(this.ind() + 'print(' + s + ')');
+                this.emit(this.ind() + 'print(' + s + ')');
                 break;
             }
 
@@ -1705,12 +2243,12 @@ class CodeGenerator {
 
                 if (isExplicitNumeric) {
                     // Strict INPUT: keep asking until the user types a valid number.
-                    this.lines.push(this.ind() + node.id + ' = ' + (inputType === 'INTEGER' ? '_pseudopy_input_int' : '_pseudopy_input_float') + '(' + promptStr + ')');
+                    this.emit(this.ind() + node.id + ' = ' + (inputType === 'INTEGER' ? '_pseudopy_input_int' : '_pseudopy_input_float') + '(' + promptStr + ')');
                 } else if (isStringNode) {
-                    this.lines.push(this.ind() + node.id + ' = input(' + promptStr + ')');
+                    this.emit(this.ind() + node.id + ' = input(' + promptStr + ')');
                 } else {
                     // Undeclared type: attempt to cast to int/float if possible, otherwise string
-                    this.lines.push(this.ind() + node.id + ' = _pseudopy_input_cast(' + promptStr + ')');
+                    this.emit(this.ind() + node.id + ' = _pseudopy_input_cast(' + promptStr + ')');
                 }
                 break;
             }
@@ -1719,26 +2257,26 @@ class CodeGenerator {
 
             case 'IfStatement':
                 // indent_level increases after THEN
-                this.lines.push(this.ind() + 'if ' + this.exprToStr(node.condition.tokens) + ':');
+                this.emit(this.ind() + 'if ' + this.exprToStr(node.condition.tokens) + ':');
                 this.indentLevel++;
-                if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
+                if (this.isBodyEffectivelyEmpty(node.body)) this.emit(this.ind() + 'pass', null, true);
                 else node.body.forEach(n => this.visitNode(n));
                 this.indentLevel--;
 
                 if (node.elseIfs) {
                     node.elseIfs.forEach(eif => {
-                        this.lines.push(this.ind() + 'elif ' + this.exprToStr(eif.condition.tokens) + ':');
+                        this.emit(this.ind() + 'elif ' + this.exprToStr(eif.condition.tokens) + ':', eif);
                         this.indentLevel++;
-                        if (this.isBodyEffectivelyEmpty(eif.body)) this.lines.push(this.ind() + 'pass');
+                        if (this.isBodyEffectivelyEmpty(eif.body)) this.emit(this.ind() + 'pass', null, true);
                         else eif.body.forEach(n => this.visitNode(n));
                         this.indentLevel--;
                     });
                 }
 
                 if (node.elseBody) {
-                    this.lines.push(this.ind() + 'else:');
+                    this.emit(this.ind() + 'else:');
                     this.indentLevel++;
-                    if (node.elseBody.length === 0) this.lines.push(this.ind() + 'pass');
+                    if (node.elseBody.length === 0) this.emit(this.ind() + 'pass', null, true);
                     else node.elseBody.forEach(n => this.visitNode(n));
                     this.indentLevel--;
                 }
@@ -1746,9 +2284,9 @@ class CodeGenerator {
 
             case 'WhileStatement':
                 // indent_level increases after DO
-                this.lines.push(this.ind() + 'while ' + this.exprToStr(node.condition.tokens) + ':');
+                this.emit(this.ind() + 'while ' + this.exprToStr(node.condition.tokens) + ':');
                 this.indentLevel++;
-                if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
+                if (this.isBodyEffectivelyEmpty(node.body)) this.emit(this.ind() + 'pass', null, true);
                 else node.body.forEach(n => this.visitNode(n));
 
                 this.indentLevel--;  // indent_level decreases after END WHILE
@@ -1759,9 +2297,9 @@ class CodeGenerator {
                 const eStr = this.exprToStr(node.endExpr.tokens);
                 const step = node.stepExpr ? this.exprToStr(node.stepExpr.tokens) : '1';
                 // Bind bounds once: inclusive stop for either direction, without truncating floats.
-                this.lines.push(this.ind() + `for ${node.iterator} in _pseudopy_range(${sStr}, ${eStr}, ${step}):`);
+                this.emit(this.ind() + `for ${node.iterator} in _pseudopy_range(${sStr}, ${eStr}, ${step}):`);
                 this.indentLevel++;
-                if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
+                if (this.isBodyEffectivelyEmpty(node.body)) this.emit(this.ind() + 'pass', null, true);
                 else node.body.forEach(n => this.visitNode(n));
 
                 this.indentLevel--;
@@ -1769,36 +2307,36 @@ class CodeGenerator {
             }
 
             case 'ForEachStatement':
-                this.lines.push(this.ind() + 'for ' + node.iterator + ' in ' + this.exprToStr(node.iterable.tokens) + ':');
+                this.emit(this.ind() + 'for ' + node.iterator + ' in ' + this.exprToStr(node.iterable.tokens) + ':');
                 this.indentLevel++;
-                if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
+                if (this.isBodyEffectivelyEmpty(node.body)) this.emit(this.ind() + 'pass', null, true);
                 else node.body.forEach(n => this.visitNode(n));
 
                 this.indentLevel--;
                 break;
 
             case 'ReturnStatement':
-                this.lines.push(this.ind() + 'return ' + this.exprToStr(node.expr.tokens));
+                this.emit(this.ind() + 'return ' + this.exprToStr(node.expr.tokens));
                 break;
 
             case 'CallStatement':
-                this.lines.push(this.ind() + node.name + '(' + node.arguments.map(arg => emitExpression(arg, false)).join(', ') + ')');
+                this.emit(this.ind() + node.name + '(' + node.arguments.map(arg => emitExpression(arg, false)).join(', ') + ')');
                 break;
 
             case 'IncDecStatement':
-                this.lines.push(this.ind() + node.id + (node.direction > 0 ? ' += 1' : ' -= 1'));
+                this.emit(this.ind() + node.id + (node.direction > 0 ? ' += 1' : ' -= 1'));
                 break;
 
             case 'AppendStatement':
-                this.lines.push(this.ind() + node.target + '.append(' + this.exprToStr(node.value.tokens) + ')');
+                this.emit(this.ind() + node.target + '.append(' + this.exprToStr(node.value.tokens) + ')');
                 break;
 
             case 'FunctionDef': {
                 // Build param list: identifiers joined by ', ' (commas from tokens are preserved by exprToStr)
                 const paramStr = node.params.tokens.map(t => t.value).join(' ');
-                this.lines.push(this.ind() + 'def ' + node.name + '(' + paramStr + '):');
+                this.emit(this.ind() + 'def ' + node.name + '(' + paramStr + '):');
                 this.indentLevel++;
-                if (this.isBodyEffectivelyEmpty(node.body)) this.lines.push(this.ind() + 'pass');
+                if (this.isBodyEffectivelyEmpty(node.body)) this.emit(this.ind() + 'pass', null, true);
                 else node.body.forEach(n => this.visitNode(n));
                 this.indentLevel--;
                 break;
@@ -1837,13 +2375,38 @@ class PseudocodeCompiler {
     compile(rawCode) {
         const pipelineStart = performance.now();
         const autoFixes = [];
+        // Live references used only for periodic trace checkpoints. These are
+        // filled in as the pipeline advances and stay null for ordinary
+        // student-facing translations.
+        const traceRefs = { parser: null, semantic: null, tokenCount: 0 };
 
         compilerTrace.emit({ type: 'COMPILER_START', stage: 'PIPELINE', status: 'RUNNING', data: { rawCodeLength: rawCode.length } });
+
+        // ── Algorithm Simulation ──
+        // Opt-in only. When the caller did not enable the tracer, nothing below
+        // allocates a payload, snapshot or mapping entry.
+        const traceEnv = this.beginSimulationTrace(traceRefs);
+        if (traceEnv) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_START, {
+                stage: 'PIPELINE',
+                line: null,
+                column: null,
+                payload: { rawCodeLength: rawCode.length }
+            });
+        }
 
         // Preprocess to strip leading line numbers
         compilerTrace.emit({ type: 'PREPROCESS_START', stage: 'PREPROCESSING', status: 'RUNNING', data: {} });
         const cleanRawCode = preprocessPseudocode(rawCode);
         compilerTrace.emit({ type: 'PREPROCESS_COMPLETE', stage: 'PREPROCESSING', status: 'SUCCESS', data: { input: rawCode, output: cleanRawCode } });
+        if (traceEnv && cleanRawCode !== rawCode) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.PREPROCESS_APPLIED, {
+                stage: 'PREPROCESSING',
+                line: null,
+                column: null,
+                payload: { input: rawCode, output: cleanRawCode, strippedLineNumbers: true }
+            });
+        }
 
         // ── Stage 0: Natural Language Mapping ──
         let code = cleanRawCode;
@@ -1851,6 +2414,14 @@ class PseudocodeCompiler {
             compilerTrace.emit({ type: 'NLP_MAP_START', stage: 'NLP_MAPPING', status: 'RUNNING', data: {} });
             code = nlpMapper.map(cleanRawCode);
             compilerTrace.emit({ type: 'NLP_MAP_COMPLETE', stage: 'NLP_MAPPING', status: 'SUCCESS', data: { input: cleanRawCode, output: code, changed: code !== cleanRawCode } });
+            if (traceEnv && code !== cleanRawCode) {
+                simulationTracer.emit(SIMULATION_TRACE_TYPES.NLP_MAPPING_APPLIED, {
+                    stage: 'NLP_MAPPING',
+                    line: null,
+                    column: null,
+                    payload: { input: cleanRawCode, output: code }
+                });
+            }
         } else {
             compilerTrace.emit({ type: 'NLP_MAP_SKIPPED', stage: 'NLP_MAPPING', status: 'SKIPPED', data: { reason: 'nlpMapper not available' } });
         }
@@ -1859,11 +2430,13 @@ class PseudocodeCompiler {
         const t1 = performance.now();
         const lexer = new Lexer(code);
         const tokens = lexer.tokenize();
+        traceRefs.tokenCount = tokens.length;
         const lexTime = performance.now() - t1;
 
         // ── Stage 2: Syntax Analysis (CFG + LIFO stack validation) ──
         const t2 = performance.now();
         const parser = new Parser(tokens);
+        traceRefs.parser = parser;
         parser.errors.push(...lexer.errors);
         let ast = parser.parse();
         const parseTime = performance.now() - t2;
@@ -1871,6 +2444,7 @@ class PseudocodeCompiler {
         // ── Stage 3: Semantic Analysis (pre-execution variable check) ──
         const t3 = performance.now();
         let semanticAnalyzer = new SemanticAnalyzer();
+        traceRefs.semantic = semanticAnalyzer;
         let warnings = semanticAnalyzer.analyze(ast);
         const semanticTime = performance.now() - t3;
 
@@ -1889,7 +2463,9 @@ class PseudocodeCompiler {
         if (ast.errors.length > 0) {
             metrics.totalTime = parseFloat((performance.now() - pipelineStart).toFixed(3));
             compilerTrace.emit({ type: 'COMPILATION_FAILURE', stage: 'PIPELINE', status: 'ERROR', data: { errorCount: ast.errors.length, errors: ast.errors } });
-            return { valid: false, python: '', errors: ast.errors, warnings: warnings, metrics: metrics, mappedCode: code, tokens: tokens, ast: ast, symbolTable: Object.fromEntries(semanticAnalyzer.symbolTable), autoFixes: autoFixes };
+            return this.finishSimulationTrace(traceEnv, {
+                valid: false, python: '', errors: ast.errors, warnings: warnings, metrics: metrics, mappedCode: code, tokens: tokens, ast: ast, symbolTable: Object.fromEntries(semanticAnalyzer.symbolTable), autoFixes: autoFixes
+            });
         }
 
         // ── Stage 4: Code Generation (SDT tree-walk) ──
@@ -1902,7 +2478,50 @@ class PseudocodeCompiler {
 
         compilerTrace.emit({ type: 'COMPILATION_SUCCESS', stage: 'PIPELINE', status: 'SUCCESS', data: { totalTime: metrics.totalTime } });
 
-        return { valid: true, python: pythonCode, errors: [], warnings: warnings, metrics: metrics, mappedCode: code, tokens: tokens, ast: ast, symbolTable: Object.fromEntries(semanticAnalyzer.symbolTable), autoFixes: autoFixes };
+        return this.finishSimulationTrace(traceEnv, {
+            valid: true, python: pythonCode, errors: [], warnings: warnings, metrics: metrics, mappedCode: code, tokens: tokens, ast: ast, symbolTable: Object.fromEntries(semanticAnalyzer.symbolTable), autoFixes: autoFixes
+        }, generator.sourceMap);
+    }
+
+    // ── Algorithm Simulation plumbing ───────────────────────────
+    // Both helpers are inert unless a caller explicitly enabled the tracer, so
+    // ordinary translations keep their existing shape and cost.
+
+    beginSimulationTrace(traceRefs) {
+        // Inert unless a caller opted in. Ordinary translations never reach
+        // the tracer, so no event, snapshot or source map is produced.
+        if (!simulationTracer.enabled) return null;
+        simulationTracer.reset();
+        simulationTracer.enable();
+        // Read live compiler state only while a checkpoint is being taken.
+        simulationTracer.setSnapshotProvider(() => ({
+            stage: 'PIPELINE',
+            tokenCount: traceRefs.tokenCount,
+            blockStack: traceRefs.parser && traceRefs.parser.blockStack ? traceRefs.parser.blockStack.slice() : [],
+            symbolTable: traceRefs.semantic ? traceRefs.semantic.symbolSnapshot() : {}
+        }));
+        return { startedAt: performance.now() };
+    }
+
+    finishSimulationTrace(traceEnv, result, sourceMap) {
+        if (!traceEnv) return result;
+
+        simulationTracer.captureSnapshot();
+        simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_END, {
+            stage: 'PIPELINE',
+            line: null,
+            column: null,
+            payload: { valid: result.valid === true, errorCount: result.errors.length, warningCount: result.warnings.length, totalTime: result.metrics.totalTime }
+        });
+        simulationTracer.setSnapshotProvider(null);
+
+        const envelope = simulationTracer.finalize({
+            sourceMap: sourceMap || [],
+            valid: result.valid === true,
+            metrics: result.metrics
+        });
+        result.simulation = envelope;
+        return result;
     }
 
     /**

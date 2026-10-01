@@ -3,8 +3,52 @@ class Lexer {
         this.input = input;
         this.pos = 0;
         this.line = 1;
+        this.column = 1;
         this.tokens = [];
         this.errors = [];
+    }
+
+    // Central token sink: keeps the emitted token and, when the simulator is
+    // running, records it. One place to instrument so token positions cannot
+    // drift apart from the token objects the parser consumes.
+    push(type, value, line, column) {
+        const token = { type: type, value: value, line: line, column: column };
+        this.tokens.push(token);
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.TOKEN_EMITTED, {
+                stage: 'LEXICAL_ANALYSIS',
+                line: line,
+                column: column,
+                payload: { tokenType: type, value: value, index: this.tokens.length - 1 }
+            });
+        }
+        return token;
+    }
+
+    // Errors share one shape so the trace and the UI agree on line/column.
+    fail(message, suggestion, line, column) {
+        const entry = { line: line === undefined ? this.line : line, column: column === undefined ? this.column : column, message: message, suggestion: suggestion };
+        this.errors.push(entry);
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.TOKEN_REJECTED, {
+                stage: 'LEXICAL_ANALYSIS',
+                line: entry.line,
+                column: entry.column,
+                payload: { message: message, suggestion: suggestion || null }
+            });
+        }
+        return entry;
+    }
+
+    advance() {
+        const ch = this.input[this.pos++];
+        if (ch === '\n') {
+            this.line++;
+            this.column = 1;
+        } else {
+            this.column++;
+        }
+        return ch;
     }
 
     // ── Unicode → ASCII Operator Normalization Map ──
@@ -33,19 +77,17 @@ class Lexer {
         return this.pos < this.input.length ? this.input[this.pos] : null;
     }
 
-    advance() {
-        return this.input[this.pos++];
-    }
-
     tokenize() {
         compilerTrace.emit({ type: 'LEXER_START', stage: 'LEXICAL_ANALYSIS', status: 'RUNNING', data: { inputLength: this.input.length } });
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_START, { stage: 'LEXICAL_ANALYSIS', line: null, column: null, payload: { inputLength: this.input.length } });
+        }
         while (this.pos < this.input.length) {
             const ch = this.peek();
 
             // ── Newlines ──
             if (ch === '\n') {
-                this.tokens.push({ type: TOKEN_TYPES.NEWLINE, value: '\n', line: this.line });
-                this.line++;
+                this.push(TOKEN_TYPES.NEWLINE, '\n', this.line, this.column);
                 this.advance();
                 continue;
             }
@@ -69,14 +111,15 @@ class Lexer {
             if (/[a-zA-Z_]/.test(ch)) {
                 let word = '';
                 const startLine = this.line;
+                const startColumn = this.column;
                 while (this.pos < this.input.length && /[a-zA-Z0-9_]/.test(this.input[this.pos])) {
                     word += this.advance();
                 }
                 const upper = word.toUpperCase();
                 if (COMPILER_KEYWORDS.has(upper)) {
-                    this.tokens.push({ type: TOKEN_TYPES.KEYWORD, value: upper, line: startLine });
+                    this.push(TOKEN_TYPES.KEYWORD, upper, startLine, startColumn);
                 } else {
-                    this.tokens.push({ type: TOKEN_TYPES.IDENTIFIER, value: word, line: startLine });
+                    this.push(TOKEN_TYPES.IDENTIFIER, word, startLine, startColumn);
                 }
                 continue;
             }
@@ -84,16 +127,20 @@ class Lexer {
             // Decimal/scientific literals; malformed numbers are rejected by expression parsing.
             if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(this.input[this.pos + 1] || ''))) {
                 const match = this.input.slice(this.pos).match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
-                this.tokens.push({ type: TOKEN_TYPES.NUMBER, value: match[0], line: this.line });
+                const startLine = this.line;
+                const startColumn = this.column;
+                this.push(TOKEN_TYPES.NUMBER, match[0], startLine, startColumn);
                 this.pos += match[0].length;
+                this.column += match[0].length;
                 continue;
             }
 
             // Preserve quotes and escapes exactly. Never rewrite the contents of a literal.
             if (ch === '"' || ch === "'") {
+                const startLine = this.line;
+                const startColumn = this.column;
                 const quote = this.advance();
                 let value = quote;
-                const startLine = this.line;
                 let closed = false;
                 while (this.pos < this.input.length && this.peek() !== '\n') {
                     const c = this.advance();
@@ -101,20 +148,21 @@ class Lexer {
                     if (c === quote) { closed = true; break; }
                     if (c === '\\' && this.pos < this.input.length && this.peek() !== '\n') value += this.advance();
                 }
-                if (!closed) this.errors.push({ line: startLine, message: 'Unterminated string literal.', suggestion: 'Close the string with a matching quote on the same line.' });
-                this.tokens.push({ type: TOKEN_TYPES.STRING, value, line: startLine });
+                if (!closed) this.fail('Unterminated string literal.', 'Close the string with a matching quote on the same line.', startLine, startColumn);
+                this.push(TOKEN_TYPES.STRING, value, startLine, startColumn);
                 continue;
             }
 
             // Longest match keeps **, // and shifts atomic.
             const pair = this.input.slice(this.pos, this.pos + 2);
             if (['**', '//', '<<', '>>', '==', '!=', '<=', '>=', '<>', ':=', '<-'].includes(pair)) {
-                this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: [':=', '<-'].includes(pair) ? '=' : pair, line: this.line });
+                this.push(TOKEN_TYPES.OPERATOR, [':=', '<-'].includes(pair) ? '=' : pair, this.line, this.column);
                 this.pos += 2;
+                this.column += 2;
                 continue;
             }
             if ('+-*/%,()[]:.<>=&|^~'.includes(ch)) {
-                this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: this.advance(), line: this.line });
+                this.push(TOKEN_TYPES.OPERATOR, this.advance(), this.line, this.column - 1);
                 continue;
             }
 
@@ -124,17 +172,25 @@ class Lexer {
             // never encounters raw Unicode operators.
             if (Lexer.UNICODE_OPERATOR_MAP[ch]) {
                 const normalized = Lexer.UNICODE_OPERATOR_MAP[ch];
-                this.tokens.push({ type: TOKEN_TYPES.OPERATOR, value: normalized, line: this.line });
+                this.push(TOKEN_TYPES.OPERATOR, normalized, this.line, this.column);
                 this.advance();
                 continue;
             }
 
-            this.errors.push({ line: this.line, message: 'Unsupported character: ' + ch, suggestion: 'Use a supported Python operator; exponentiation is ** and XOR is ^.' });
+            this.fail('Unsupported character: ' + ch, 'Use a supported Python operator; exponentiation is ** and XOR is ^.');
             this.advance();
         }
 
-        this.tokens.push({ type: TOKEN_TYPES.EOF, value: '', line: this.line });
+        this.push(TOKEN_TYPES.EOF, '', this.line, this.column);
         compilerTrace.emit({ type: 'LEXER_COMPLETE', stage: 'LEXICAL_ANALYSIS', status: this.errors.length ? 'ERROR' : 'SUCCESS', data: { tokenCount: this.tokens.length, tokens: this.tokens, errors: this.errors } });
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_END, {
+                stage: 'LEXICAL_ANALYSIS',
+                line: null,
+                column: null,
+                payload: { tokenCount: this.tokens.length, errorCount: this.errors.length }
+            });
+        }
         return this.tokens;
     }
 }

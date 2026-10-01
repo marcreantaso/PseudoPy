@@ -42,6 +42,76 @@ class SemanticAnalyzer {
     constructor() {
         this.symbolTable = new Map(); // id -> { type, declaredType?, declaredKind?, elementType?, inferredType?, assigned, strict, implicit? }
         this.warnings = [];
+        this.scopeDepth = 0;
+    }
+
+    // ── Simulation instrumentation ─────────────────────────────
+    // All four helpers are no-ops unless the simulator is running.
+
+    emit(type, line, payload) {
+        simulationTracer.emit(type, {
+            stage: 'SEMANTIC_ANALYSIS',
+            line: line === undefined ? null : line,
+            column: null,
+            payload: payload
+        });
+    }
+
+    // Symbol writes go through one sink so declared/implicit/parameter and
+    // inferred entries are all visible to the simulator with a reason.
+    declare(id, entry, reason, line) {
+        this.symbolTable.set(id, entry);
+        if (simulationTracer.enabled) {
+            this.emit(SIMULATION_TRACE_TYPES.SYMBOL_DECLARED, line, {
+                name: id,
+                reason: reason,
+                symbolType: entry.type,
+                declaredType: entry.declaredType === undefined ? null : entry.declaredType,
+                inferredType: entry.inferredType === undefined ? null : entry.inferredType,
+                assigned: entry.assigned === true,
+                implicit: entry.implicit === true,
+                scopeDepth: this.scopeDepth
+            });
+        }
+        return entry;
+    }
+
+    // Every read is recorded with whether it resolved, which is what makes
+    // "used before it exists" visible rather than merely warned about.
+    lookup(id, line) {
+        const entry = this.symbolTable.get(id);
+        if (simulationTracer.enabled) {
+            this.emit(SIMULATION_TRACE_TYPES.SYMBOL_LOOKUP, line, {
+                name: id,
+                found: entry !== undefined,
+                symbolType: entry ? entry.type : null,
+                scopeDepth: this.scopeDepth
+            });
+        }
+        return entry;
+    }
+
+    // Assignment updates the existing entry in place; record the change
+    // rather than re-emitting a declaration.
+    assign(id, mutate, line) {
+        const entry = this.symbolTable.get(id);
+        if (!entry) return undefined;
+        const before = { type: entry.type, inferredType: entry.inferredType, assigned: entry.assigned };
+        mutate(entry);
+        if (simulationTracer.enabled) {
+            this.emit(SIMULATION_TRACE_TYPES.SYMBOL_UPDATED, line, {
+                name: id,
+                before: before,
+                after: { type: entry.type, inferredType: entry.inferredType, assigned: entry.assigned },
+                scopeDepth: this.scopeDepth
+            });
+        }
+        return entry;
+    }
+
+    // Detached symbol view for periodic checkpoints and for the inspector.
+    symbolSnapshot() {
+        return Object.fromEntries(this.symbolTable);
     }
 
 analyze(ast) {
@@ -49,9 +119,20 @@ analyze(ast) {
         this.warnings = [];
         this.semanticErrorCount = 0;
         compilerTrace.emit({ type: 'SEMANTIC_START', stage: 'SEMANTIC_ANALYSIS', status: 'RUNNING', data: {} });
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_START, { stage: 'SEMANTIC_ANALYSIS', line: null, column: null, payload: { nodeCount: 0 } });
+        }
         this.visitNode(ast);
         const status = this.semanticErrorCount > 0 ? 'ERROR' : (this.warnings.length > 0 ? 'WARNING' : 'SUCCESS');
         compilerTrace.emit({ type: 'SEMANTIC_COMPLETE', stage: 'SEMANTIC_ANALYSIS', status: status, data: { errorCount: this.semanticErrorCount, warningCount: this.warnings.length, warnings: this.warnings, symbolTable: Object.fromEntries(this.symbolTable) } });
+        if (simulationTracer.enabled) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_END, {
+                stage: 'SEMANTIC_ANALYSIS',
+                line: null,
+                column: null,
+                payload: { errorCount: this.semanticErrorCount, warningCount: this.warnings.length, symbolCount: this.symbolTable.size }
+            });
+        }
         return this.warnings;
     }
 
@@ -76,9 +157,14 @@ analyze(ast) {
     typeWarn(node, code, problem, suggestion) {
         const line = (node && node.line) || 1;
         this.warnings.push({ line, code, severity: 'warning', stage: 'Semantic Analysis', message: problem, problem, suggestion });
+        if (simulationTracer.enabled) {
+            this.emit(SIMULATION_TRACE_TYPES.TYPE_WARNING, line, { code: code, message: problem, suggestion: suggestion || null, symbol: node && node.id ? node.id : null });
+        }
     }
 
-    sym(id) { return this.symbolTable.get(id); }
+    sym(id, line) {
+        return this.lookup(id, line === undefined ? null : line);
+    }
 
     // ── Static type inference (strict only for DECLAREd symbols) ──
     typeOf(node) {
@@ -295,7 +381,7 @@ analyze(ast) {
 
             case 'DeclareStatement': {
                 const declaredKind = semanticKindOf(node.varType);
-                this.symbolTable.set(node.id, {
+                this.declare(node.id, {
                     name: node.id,
                     type: declaredKind,
                     declaredType: node.varType,
@@ -304,30 +390,32 @@ analyze(ast) {
                     inferredType: 'unknown',
                     assigned: false,
                     strict: true
-                });
+                }, 'declare', node.line);
                 break;
             }
 
             case 'AssignmentStatement': {
-                const entry = this.sym(node.id);
+                const entry = this.sym(node.id, node.line);
                 const inferred = this.typeOf(node.expr && node.expr.ast);
                 if (!entry) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Variable '" + node.id + "' used without DECLARE.",
                         'Add: DECLARE ' + node.id + ' AS INTEGER (or appropriate type)'
                     );
-                    this.symbolTable.set(node.id, {
+                    this.declare(node.id, {
                         name: node.id,
                         type: inferred.kind === 'none' ? 'unknown' : inferred.kind,
                         inferredType: inferred.kind,
                         assigned: true,
                         strict: false
-                    });
+                    }, 'implicit_from_assignment', node.line);
                 } else {
-                    this.checkAssignment(node, entry, inferred);
-                    entry.inferredType = inferred.kind;
-                    entry.assigned = true;
-                    if (entry.type === 'unknown' && inferred.kind !== 'none' && inferred.kind !== 'unknown') entry.type = inferred.kind;
+                    this.assign(node.id, target => {
+                        this.checkAssignment(node, target, inferred);
+                        target.inferredType = inferred.kind;
+                        target.assigned = true;
+                        if (target.type === 'unknown' && inferred.kind !== 'none' && inferred.kind !== 'unknown') target.type = inferred.kind;
+                    }, node.line);
                 }
                 this.checkExpr(node.expr);
                 this.validateExpressionTypes(node.expr);
@@ -339,13 +427,13 @@ analyze(ast) {
                 this.checkExpr(node.expr);
                 this.validateExpressionTypes(node.index);
                 this.validateExpressionTypes(node.expr);
-                const entry = this.sym(node.id);
+                const entry = this.sym(node.id, node.line);
                 if (!entry) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Array '" + node.id + "' not declared.",
                         'Add: DECLARE ' + node.id + ' AS ARRAY'
                     );
-                    this.symbolTable.set(node.id, { name: node.id, type: 'array', inferredType: 'array', assigned: true, strict: false });
+                    this.declare(node.id, { name: node.id, type: 'array', inferredType: 'array', assigned: true, strict: false }, 'implicit_from_index_assignment', node.line);
                     break;
                 }
                 if (entry.declaredKind && entry.declaredKind !== 'unknown' && entry.declaredKind !== 'array') {
@@ -366,12 +454,12 @@ analyze(ast) {
                 break;
 
             case 'InputStatement': {
-                const entry = this.sym(node.id);
+                const entry = this.sym(node.id, node.line);
                 if (entry) {
                     node.inputType = entry.declaredType || '';
                 } else {
                     node.inputType = '';
-                    this.symbolTable.set(node.id, { name: node.id, type: 'string', inferredType: 'string', assigned: true, strict: false });
+                    this.declare(node.id, { name: node.id, type: 'string', inferredType: 'string', assigned: true, strict: false }, 'implicit_from_input', node.line);
                 }
                 break;
             }
@@ -401,7 +489,7 @@ analyze(ast) {
                 break;
 
             case 'ForStatement':
-                this.symbolTable.set(node.iterator, { name: node.iterator, type: 'numeric', inferredType: 'numeric', assigned: true, strict: false, implicit: true });
+                this.declare(node.iterator, { name: node.iterator, type: 'numeric', inferredType: 'numeric', assigned: true, strict: false, implicit: true }, 'loop_iterator', node.line);
                 this.checkExpr(node.startExpr);
                 this.checkExpr(node.endExpr);
                 this.checkExpr(node.stepExpr);
@@ -416,19 +504,21 @@ analyze(ast) {
                 this.validateExpressionTypes(node.iterable);
                 const iterKind = this.typeOf(node.iterable && node.iterable.ast);
                 const elementKind = iterKind.kind === 'array' && iterKind.element !== 'mixed' && iterKind.element !== 'unknown' ? iterKind.element : 'unknown';
-                this.symbolTable.set(node.iterator, { name: node.iterator, type: elementKind === 'unknown' ? 'unknown' : elementKind, inferredType: elementKind, assigned: true, strict: false, implicit: true });
+                this.declare(node.iterator, { name: node.iterator, type: elementKind === 'unknown' ? 'unknown' : elementKind, inferredType: elementKind, assigned: true, strict: false, implicit: true }, 'for_each_iterator', node.line);
                 node.body.forEach(n => this.visitNode(n));
                 break;
             }
 
             case 'FunctionDef': {
-                this.symbolTable.set(node.name, { name: node.name, type: 'function', strict: false });
+                this.declare(node.name, { name: node.name, type: 'function', strict: false }, 'function', node.line);
                 const outerScope = this.symbolTable;
                 this.symbolTable = new Map(outerScope);
+                this.scopeDepth++;
                 for (const token of node.params.tokens) {
-                    if (token.type === TOKEN_TYPES.IDENTIFIER) this.symbolTable.set(token.value, { name: token.value, type: 'unknown', strict: false });
+                    if (token.type === TOKEN_TYPES.IDENTIFIER) this.declare(token.value, { name: token.value, type: 'unknown', strict: false }, 'parameter', node.line);
                 }
                 node.body.forEach(n => this.visitNode(n));
+                this.scopeDepth--;
                 this.symbolTable = outerScope;
                 break;
             }
@@ -445,7 +535,7 @@ analyze(ast) {
             }
 
             case 'IncDecStatement':
-                if (!this.sym(node.id)) {
+                if (!this.sym(node.id, node.line)) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Variable '" + node.id + "' not declared before increment/decrement.",
                         'Add: DECLARE ' + node.id + ' AS INTEGER'
@@ -456,7 +546,7 @@ analyze(ast) {
             case 'AppendStatement':
                 this.checkExpr(node.value);
                 this.validateExpressionTypes(node.value);
-                if (!this.sym(node.target)) {
+                if (!this.sym(node.target, node.line)) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Array '" + node.target + "' not declared.",
                         'Add: DECLARE ' + node.target + ' AS ARRAY'
@@ -476,7 +566,7 @@ analyze(ast) {
             if (t.type !== TOKEN_TYPES.IDENTIFIER || tokens[i - 1]?.value === '.' || builtins.has(t.value)) continue;
             // Natural-language predicate words are grammar, not variable references.
             if (['A', 'NUMBER', 'NUMERIC'].includes(t.value.toUpperCase()) && tokens.some(t => t.value === 'IS')) continue;
-            if (!this.sym(t.value)) this.typeWarn({ line: exprNode.line },
+            if (!this.sym(t.value, exprNode.line)) this.typeWarn({ line: exprNode.line },
                 SEM__ERROR_CODES.undeclared,
                 "Undeclared variable '" + t.value + "' in expression.",
                 'Assign or declare ' + t.value + ' before using it.'

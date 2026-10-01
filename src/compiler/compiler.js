@@ -11,13 +11,38 @@ class PseudocodeCompiler {
     compile(rawCode) {
         const pipelineStart = performance.now();
         const autoFixes = [];
+        // Live references used only for periodic trace checkpoints. These are
+        // filled in as the pipeline advances and stay null for ordinary
+        // student-facing translations.
+        const traceRefs = { parser: null, semantic: null, tokenCount: 0 };
 
         compilerTrace.emit({ type: 'COMPILER_START', stage: 'PIPELINE', status: 'RUNNING', data: { rawCodeLength: rawCode.length } });
+
+        // ── Algorithm Simulation ──
+        // Opt-in only. When the caller did not enable the tracer, nothing below
+        // allocates a payload, snapshot or mapping entry.
+        const traceEnv = this.beginSimulationTrace(traceRefs);
+        if (traceEnv) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_START, {
+                stage: 'PIPELINE',
+                line: null,
+                column: null,
+                payload: { rawCodeLength: rawCode.length }
+            });
+        }
 
         // Preprocess to strip leading line numbers
         compilerTrace.emit({ type: 'PREPROCESS_START', stage: 'PREPROCESSING', status: 'RUNNING', data: {} });
         const cleanRawCode = preprocessPseudocode(rawCode);
         compilerTrace.emit({ type: 'PREPROCESS_COMPLETE', stage: 'PREPROCESSING', status: 'SUCCESS', data: { input: rawCode, output: cleanRawCode } });
+        if (traceEnv && cleanRawCode !== rawCode) {
+            simulationTracer.emit(SIMULATION_TRACE_TYPES.PREPROCESS_APPLIED, {
+                stage: 'PREPROCESSING',
+                line: null,
+                column: null,
+                payload: { input: rawCode, output: cleanRawCode, strippedLineNumbers: true }
+            });
+        }
 
         // ── Stage 0: Natural Language Mapping ──
         let code = cleanRawCode;
@@ -25,6 +50,14 @@ class PseudocodeCompiler {
             compilerTrace.emit({ type: 'NLP_MAP_START', stage: 'NLP_MAPPING', status: 'RUNNING', data: {} });
             code = nlpMapper.map(cleanRawCode);
             compilerTrace.emit({ type: 'NLP_MAP_COMPLETE', stage: 'NLP_MAPPING', status: 'SUCCESS', data: { input: cleanRawCode, output: code, changed: code !== cleanRawCode } });
+            if (traceEnv && code !== cleanRawCode) {
+                simulationTracer.emit(SIMULATION_TRACE_TYPES.NLP_MAPPING_APPLIED, {
+                    stage: 'NLP_MAPPING',
+                    line: null,
+                    column: null,
+                    payload: { input: cleanRawCode, output: code }
+                });
+            }
         } else {
             compilerTrace.emit({ type: 'NLP_MAP_SKIPPED', stage: 'NLP_MAPPING', status: 'SKIPPED', data: { reason: 'nlpMapper not available' } });
         }
@@ -33,11 +66,13 @@ class PseudocodeCompiler {
         const t1 = performance.now();
         const lexer = new Lexer(code);
         const tokens = lexer.tokenize();
+        traceRefs.tokenCount = tokens.length;
         const lexTime = performance.now() - t1;
 
         // ── Stage 2: Syntax Analysis (CFG + LIFO stack validation) ──
         const t2 = performance.now();
         const parser = new Parser(tokens);
+        traceRefs.parser = parser;
         parser.errors.push(...lexer.errors);
         let ast = parser.parse();
         const parseTime = performance.now() - t2;
@@ -45,6 +80,7 @@ class PseudocodeCompiler {
         // ── Stage 3: Semantic Analysis (pre-execution variable check) ──
         const t3 = performance.now();
         let semanticAnalyzer = new SemanticAnalyzer();
+        traceRefs.semantic = semanticAnalyzer;
         let warnings = semanticAnalyzer.analyze(ast);
         const semanticTime = performance.now() - t3;
 
@@ -63,7 +99,9 @@ class PseudocodeCompiler {
         if (ast.errors.length > 0) {
             metrics.totalTime = parseFloat((performance.now() - pipelineStart).toFixed(3));
             compilerTrace.emit({ type: 'COMPILATION_FAILURE', stage: 'PIPELINE', status: 'ERROR', data: { errorCount: ast.errors.length, errors: ast.errors } });
-            return { valid: false, python: '', errors: ast.errors, warnings: warnings, metrics: metrics, mappedCode: code, tokens: tokens, ast: ast, symbolTable: Object.fromEntries(semanticAnalyzer.symbolTable), autoFixes: autoFixes };
+            return this.finishSimulationTrace(traceEnv, {
+                valid: false, python: '', errors: ast.errors, warnings: warnings, metrics: metrics, mappedCode: code, tokens: tokens, ast: ast, symbolTable: Object.fromEntries(semanticAnalyzer.symbolTable), autoFixes: autoFixes
+            });
         }
 
         // ── Stage 4: Code Generation (SDT tree-walk) ──
@@ -76,7 +114,50 @@ class PseudocodeCompiler {
 
         compilerTrace.emit({ type: 'COMPILATION_SUCCESS', stage: 'PIPELINE', status: 'SUCCESS', data: { totalTime: metrics.totalTime } });
 
-        return { valid: true, python: pythonCode, errors: [], warnings: warnings, metrics: metrics, mappedCode: code, tokens: tokens, ast: ast, symbolTable: Object.fromEntries(semanticAnalyzer.symbolTable), autoFixes: autoFixes };
+        return this.finishSimulationTrace(traceEnv, {
+            valid: true, python: pythonCode, errors: [], warnings: warnings, metrics: metrics, mappedCode: code, tokens: tokens, ast: ast, symbolTable: Object.fromEntries(semanticAnalyzer.symbolTable), autoFixes: autoFixes
+        }, generator.sourceMap);
+    }
+
+    // ── Algorithm Simulation plumbing ───────────────────────────
+    // Both helpers are inert unless a caller explicitly enabled the tracer, so
+    // ordinary translations keep their existing shape and cost.
+
+    beginSimulationTrace(traceRefs) {
+        // Inert unless a caller opted in. Ordinary translations never reach
+        // the tracer, so no event, snapshot or source map is produced.
+        if (!simulationTracer.enabled) return null;
+        simulationTracer.reset();
+        simulationTracer.enable();
+        // Read live compiler state only while a checkpoint is being taken.
+        simulationTracer.setSnapshotProvider(() => ({
+            stage: 'PIPELINE',
+            tokenCount: traceRefs.tokenCount,
+            blockStack: traceRefs.parser && traceRefs.parser.blockStack ? traceRefs.parser.blockStack.slice() : [],
+            symbolTable: traceRefs.semantic ? traceRefs.semantic.symbolSnapshot() : {}
+        }));
+        return { startedAt: performance.now() };
+    }
+
+    finishSimulationTrace(traceEnv, result, sourceMap) {
+        if (!traceEnv) return result;
+
+        simulationTracer.captureSnapshot();
+        simulationTracer.emit(SIMULATION_TRACE_TYPES.STAGE_END, {
+            stage: 'PIPELINE',
+            line: null,
+            column: null,
+            payload: { valid: result.valid === true, errorCount: result.errors.length, warningCount: result.warnings.length, totalTime: result.metrics.totalTime }
+        });
+        simulationTracer.setSnapshotProvider(null);
+
+        const envelope = simulationTracer.finalize({
+            sourceMap: sourceMap || [],
+            valid: result.valid === true,
+            metrics: result.metrics
+        });
+        result.simulation = envelope;
+        return result;
     }
 
     /**
