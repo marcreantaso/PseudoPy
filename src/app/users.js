@@ -410,7 +410,7 @@ async function revokeDevice(deviceDocId) {
 async function deleteDeviceRecord(deviceDocId) {
     if (!confirm('Are you sure you want to remove this device record?')) return;
     await _runDeviceAction(deviceDocId, async () => {
-        await dbDelete(devicesRef, deviceDocId);
+        await dbRemoveLocalRecord(devicesRef, deviceDocId);
         showToast('Device record removed.', 'info');
         await renderDeviceModalTable();
         await loadUsers();
@@ -638,7 +638,7 @@ async function viewInstructor(id) {
     setText('idm-last-login', user.lastLogin ? _fmtDate(user.lastLogin) : 'N/A');
 
     // Compute totals from live data
-    const students = (cachedUsers.length ? cachedUsers : await refreshUsers()).filter(u => u.role === 'student' && u.instructorId === id);
+    const students = (cachedUsers.length ? cachedUsers : await refreshUsers()).filter(u => u.role === 'student' && !isDeletedProfile(u) && u.instructorId === id);
     const exercises = await refreshExercises();
     const activity = cachedActivity.length ? cachedActivity : await dbGetAll(activityRef);
 
@@ -786,7 +786,9 @@ async function executeRestoreInstructor() {
 async function loadStudents() {
     const users = await refreshUsers();
     const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
-    const students = users.filter(u => u.role === 'student' && (
+    // Soft-deleted accounts stay in Firestore for the undo window, so they
+    // must be filtered out here or they keep showing up as live students.
+    const students = users.filter(u => u.role === 'student' && !isDeletedProfile(u) && (
         u.instructorId === currentUser?.id ||
         u.instructorId === currentUser?._docId ||
         (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
@@ -804,14 +806,14 @@ async function loadStudents() {
     }
 
     tbody.innerHTML = students.map(u => `
-    <tr>
+    <tr data-doc-id="${u._docId || u.id}">
       <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
       <td>${readStudentNumber(u)}</td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">
         <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit" aria-label="Edit user">{{ui:Pencil}}</button>
 <button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" aria-label="${u.status === 'active' ? 'Deactivate user' : 'Activate user'}">${u.status === 'active' ? '{{ui:LockKeyhole}}' : '{{ui:LockKeyholeOpen}}'}</button>
-      <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" title="Delete" aria-label="Delete user">{{ui:Trash2}}</button>
+      <button class="btn btn-ghost btn-sm" data-action="delete-student" data-id="${u._docId || u.id}" title="Delete" aria-label="Delete ${u.fullName}">{{ui:Trash2}}</button>
       </div></td>
     </tr>`).join('');
 }
@@ -976,22 +978,8 @@ async function saveUser() {
 
 function editUser(id) { openUserModal(id); }
 
-async function deleteUser(id) {
-    if (!confirm('Delete this user?')) return;
-    if (id === currentUser?.id) { showToast('You cannot delete your own account!', 'error'); return; }
-    try {
-        const user = cachedUsers.find(u => u.id === id);
-        if (user) await dbDelete(usersRef, user._docId);
-        showToast('User deleted.', 'info');
-        if (currentUser.role === 'admin') {
-            await loadUsers();
-        } else if (currentUser.role === 'instructor') {
-            await loadStudents();
-        }
-    } catch (err) {
-        console.error('[Offline Database] Delete user error:', err);
-        showToast('Failed to delete user.', 'error');
-    }
-}
+// Deletion lives in src/app/student-deletion-ui.js. It is delegated, confirmed
+// by typed username and routed through deleteStudentProfile(), which refuses to
+// report success for a deletion it could not confirm.
 
 

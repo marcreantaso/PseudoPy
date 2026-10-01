@@ -84,6 +84,54 @@ service cloud.firestore {
       return isAdmin() || isInstructor();
     }
 
+    // ── Trusted role claims (deletion path) ──────────────────────
+    // The deletion callable in `functions/index.js` runs with the Admin SDK
+    // and therefore bypasses these rules, so it re-implements the same checks
+    // server-side (functions/lib/deletion.js). These helpers exist so a client
+    // CANNOT reach the same outcome by writing directly: only a claim set by a
+    // trusted process can grant them, and a client can never write its own
+    // token.
+    function claimRole() {
+      return signedIn() && request.auth.token.role != null
+        ? request.auth.token.role : null;
+    }
+
+    function hasClaimRole(role) {
+      return claimRole() == role;
+    }
+
+    function isStaffByClaim() {
+      return hasClaimRole('admin') || hasClaimRole('instructor');
+    }
+
+    /** True when `data` proves the document belongs to `studentId`. */
+    function ownedByStudent(data, studentId) {
+      return data.studentAccountId == studentId
+        || data.userId == studentId
+        || data.accountId == studentId
+        || (data.studentId != null && data.studentId == studentId
+            && data.studentId == data.studentAccountId);
+    }
+
+    /**
+     * True once the deletion callable has erased an account. The tombstone is
+     * written by the Admin SDK, so no client can forge or clear it, and it is
+     * what stops an offline queue that still holds the student's last write
+     * from recreating the profile document. Records are kept, never deleted,
+     * because this guard has to outlive the deletion itself.
+     */
+    function hasTombstone(accountId) {
+      return accountId != null
+        && exists(/databases/$(database)/documents/pseudopy_deletedProfiles/$(accountId));
+    }
+
+    /** The account id a create is trying to bring back. */
+    function createdAccountId() {
+      return request.resource.data._docId != null
+        ? request.resource.data._docId
+        : request.resource.data.id;
+    }
+
     /** Owner of a user document, whether addressed by uid or by app id. */
     function ownsUserDoc(userId) {
       return signedIn() && (userId == request.auth.uid || ownsAccount(userId));
@@ -115,13 +163,38 @@ service cloud.firestore {
       allow get: if ownsUserDoc(userId) || isStaff();
       allow list: if isStaff();
       allow create: if signedIn()
-                    && request.resource.data.uid == request.auth.uid;
+                    && request.resource.data.uid == request.auth.uid
+                    && !hasTombstone(createdAccountId());
       allow update: if isStaff()
                     || (ownsUserDoc(userId)
                         && claimingOwnUid()
                         && request.resource.data.uid == request.auth.uid
                         && roleUnchanged());
-      allow delete: if isAdmin();
+      // A client may delete a STUDENT it is responsible for, never staff and
+      // never itself. The permanent, cascaded deletion still goes through the
+      // `deleteStudentAccount` callable (Admin SDK), which re-checks all of this
+      // server-side; this clause exists so a direct client delete cannot exceed
+      // what that function would allow.
+      allow delete: if staffDeletesStudent(userId);
+    }
+
+    /**
+     * An instructor may delete a student enrolled under them; an admin may
+     * delete any student. Staff accounts and self-deletion are always refused.
+     *
+     * `resource.data.instructorId` is an app account id (`u2`), not an auth
+     * uid, so it is resolved through the account document. Comparing it to
+     * `request.auth.uid` would silently deny every instructor.
+     */
+    function staffDeletesStudent(targetId) {
+      return resource.data.role == 'student'
+        && targetId != request.auth.uid
+        && (isAdmin()
+            || (isInstructor()
+                && ownsAccount(resource.data.instructorId))
+            || (isStaffByClaim()
+                && (request.auth.token.role == 'admin'
+                    || ownsAccount(resource.data.instructorId))));
     }
 
     // ── Student activity / submissions ───────────────────────────
@@ -197,11 +270,32 @@ service cloud.firestore {
     }
 
     // ── Audit log (append-only) ──────────────────────────────────
-    // Staff read all; nobody edits or deletes history.
+    // Staff read all; nobody edits or deletes history. DELETION events are
+    // server-only: a client must not be able to author the record that claims
+    // it performed a deletion. The `deleteStudentAccount` callable writes those
+    // with the Admin SDK, which bypasses this rule.
     match /pseudopy_auditLog/{doc} {
       allow get, list: if isStaff();
-      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow create: if signedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.action != 'student.delete'
+                    && request.resource.data.action != 'student.soft-delete';
       allow update, delete: if false;
+    }
+
+    // ── Deletion operation journal ──────────────────────────────
+    // Idempotency keys for the deletion callable. Server-owned.
+    match /pseudopy_deletionOps/{doc} {
+      allow read, write: if false;
+    }
+
+    // ── Hard-deletion tombstones ─────────────────────────────────
+    // Written by the Admin SDK after erasing an account, to fence
+    // offline writes from resurrecting it. They are immutable to
+    // the client and never deleted.
+    match /pseudopy_deletedProfiles/{doc} {
+      allow read: if isStaff();
+      allow write: if false;
     }
 
     // ── Learning evidence snapshots ──────────────────────────────

@@ -1,5 +1,9 @@
 {
   "firestore": {
     "rules": "firestore.interim.rules"
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs22"
   }
 }

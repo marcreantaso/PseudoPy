@@ -43,6 +43,11 @@ async function submitRecoveryRequest() {
         return;
     }
 
+    if (isDeletedProfile(targetUser)) {
+        showToast('That account has been deleted. Contact an administrator if this is unexpected.', 'error');
+        return;
+    }
+
     if (targetUser.status === 'inactive' || targetUser.status === 'archived') {
         const contactRole = targetUser.role === 'instructor' ? 'administrator' : 'instructor';
         showToast(`Your account is ${targetUser.status}. Please contact your ${contactRole}.`, 'error');
@@ -135,6 +140,11 @@ async function checkRecoveryStatus() {
 
     if (!targetUser) {
         showToast('Account not found.', 'error');
+        return;
+    }
+
+    if (isDeletedProfile(targetUser)) {
+        showToast('That account has been deleted. Contact an administrator if this is unexpected.', 'error');
         return;
     }
 

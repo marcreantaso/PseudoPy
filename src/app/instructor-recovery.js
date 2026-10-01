@@ -81,6 +81,13 @@ async function openRecoveryReview(requestId) {
     const student = cachedUsers.find(u => u._docId === req.studentId) ||
         (await refreshUsers()).find(u => u._docId === req.studentId);
 
+    // A student deleted since the request was filed must not be revivable
+    // through the recovery flow.
+    if (student && isDeletedProfile(student)) {
+        showToast('This student account has been deleted. The request can be rejected but not approved.', 'error');
+        return;
+    }
+
     const dt = req.requestedAt
         ? new Date(req.requestedAt).toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short' })
         : '—';

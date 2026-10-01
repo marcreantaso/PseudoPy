@@ -6,6 +6,9 @@ const vm = require('node:vm');
 const aggregation = require('../src/analytics/aggregation');
 const geometry = require('../src/analytics/geometry');
 
+/** Real helper from the database bundle; analytics scopes by live students. */
+const { isDeletedProfile } = require('../src/database/student-deletion');
+
 function harness() {
     const subscriptions = [];
     const context = vm.createContext({
@@ -18,6 +21,7 @@ function harness() {
             subscriptions.push(entry);
             return () => { entry.stopped = true; };
         },
+        isDeletedProfile,
         ...aggregation
     });
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/app/analytics.js'), 'utf8'), context);

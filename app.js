@@ -935,6 +935,11 @@ async function handleLogin() {
         }
 
         // Step 3: Check account status
+        if (typeof isDeletedProfile === 'function' && isDeletedProfile(userByUsername)) {
+            showToast('This account has been deleted. Please contact your administrator.', 'error');
+            return;
+        }
+
         if (userByUsername.status === 'archived') {
             showToast('This account has been archived. Please contact your administrator.', 'error');
             return;
@@ -1458,7 +1463,8 @@ function loadCachedProfileFor(snapshot) {
         if (!found) return null;
         const role = String(found.role || '').toLowerCase();
         const status = String(found.status || 'active').toLowerCase();
-        if (['student', 'instructor', 'admin'].includes(role) && status !== 'archived' && status !== 'inactive') return sanitizeUser(found);
+        if (['student', 'instructor', 'admin'].includes(role)
+            && status !== 'archived' && status !== 'inactive' && status !== 'deleted') return sanitizeUser(found);
     } catch (e) { /* fall through to the persisted snapshot */ }
     return null;
 }
@@ -1568,7 +1574,7 @@ async function restoreSession() {
         }
 
         const status = (fresh.status || 'active').toLowerCase();
-        if (status === 'archived' || status === 'inactive') {
+        if (status === 'archived' || status === 'inactive' || status === 'deleted') {
             clearSession();
             bootState = BOOT_UNAUTHENTICATED;
             hideBootSplash();
@@ -3555,17 +3561,314 @@ async function deleteExercise(id) {
         }
     }
 
-    dbDelete(exercisesRef, id)
-        .then(() => showToast('Exercise deleted.', 'info'))
+    // Exercise deletion is archive-only: the catalog is shared learning
+    // content, so a removed exercise is flagged instead of erased.
+    dbUpdate(exercisesRef, id, { status: 'archived', archivedAt: new Date().toISOString() })
+        .then(() => showToast('Exercise archived.', 'info'))
         .catch(err => {
-            console.error('[Offline Database] Delete exercise error:', err);
-            showToast('Failed to delete exercise. Please refresh.', 'error');
+            console.error('[Offline Database] Archive exercise error:', err);
+            showToast('Failed to archive exercise. Please refresh.', 'error');
             loadExercises();
         });
 }
 
 
 /* ============================================================
+   STUDENT DELETION — Manage Students
+   Delegated row actions, typed-username confirmation, pending
+   state, error mapping and the soft-delete undo window.
+
+   The click handler is bound ONCE to the table body. Every
+   loadStudents() re-render replaces the rows, so a handler bound
+   to the rows themselves would be lost on every refresh; delegation
+   from the stable container is what keeps the button working.
+   ============================================================ */
+
+let pendingDeleteStudentId = null;
+let pendingDeleteStudentProfile = null;
+let studentDeletionBusy = false;
+let studentDeletionPending = false;
+let studentDeletionUndoTimer = null;
+let studentDeletionUndoDeadline = 0;
+
+/** Resolve the stable container that survives every table re-render. */
+function studentsTableBody() {
+    return $id('students-table-body');
+}
+
+function closeStudentDeletionModal() {
+    const modal = $id('delete-student-modal');
+    if (modal) modal.classList.add('hidden');
+    const input = $id('delete-student-confirm-input');
+    if (input) input.value = '';
+    setStudentDeletionError('');
+    pendingDeleteStudentId = null;
+    pendingDeleteStudentProfile = null;
+}
+
+/** Inline, non-blocking error text inside the modal. */
+function setStudentDeletionError(message) {
+    const el = $id('delete-student-error');
+    if (!el) return;
+    el.textContent = message || '';
+    // The element starts with `display:none` in the markup, so the message is
+    // announced without depending on a utility class that also sets display.
+    el.style.display = message ? 'block' : 'none';
+}
+
+/**
+ * Open the confirmation modal for one student.
+ * `targetId` may be the profile document id or the app account id; both are
+ * resolved against the cached profiles so the wrong row can never be targeted.
+ */
+async function openDeleteStudentModal(targetId) {
+    if (studentDeletionBusy) return;
+    const id = String(targetId || '');
+    if (!id) {
+        showToast('That student row is missing its account id. Refresh and try again.', 'error');
+        return;
+    }
+    const users = (typeof cachedUsers !== 'undefined' && cachedUsers.length) ? cachedUsers : await refreshUsers();
+    const profile = (users || []).find(u => String(u._docId || u.id) === id || String(u.id) === id) || null;
+
+    const verdict = typeof authorizeStudentDeletion === 'function'
+        ? authorizeStudentDeletion({
+            callerRole: currentUser && currentUser.role,
+            callerDocId: (currentUser && (currentUser._docId || currentUser.id)) || '',
+            target: profile,
+            targetDocId: (profile && (profile._docId || profile.id)) || id
+        })
+        : { ok: false, code: 'not-found', message: 'Student not found. Refresh the list and try again.' };
+
+    if (!verdict.ok) {
+        showToast(verdict.message, 'error');
+        console.warn('[Deletion] modal refused:', verdict.code);
+        return;
+    }
+
+    pendingDeleteStudentId = profile._docId || profile.id;
+    pendingDeleteStudentProfile = profile;
+
+    setText('delete-student-name', profile.fullName || 'this student');
+    setText('delete-student-username', '@' + (profile.username || '—'));
+    setText('delete-student-number', (typeof readStudentNumber === 'function' ? readStudentNumber(profile) : profile.studentNumber) || '—');
+
+    const modal = $id('delete-student-modal');
+    if (modal) modal.classList.remove('hidden');
+    setStudentDeletionError('');
+    // The undo bar must name this exact profile before the window starts.
+    pendingUndoDocId = pendingDeleteStudentId;
+    await renderStudentDeletionImpact(profile);
+}
+
+/** Show how many related records a permanent deletion would remove. */
+async function renderStudentDeletionImpact(profile) {
+    const el = $id('delete-student-related');
+    if (!el) return;
+    if (typeof collectStudentRelatedRecords !== 'function') return;
+    el.textContent = 'Checking related records…';
+    try {
+        const summary = await collectStudentRelatedRecords(profile);
+        const parts = [];
+        if (summary.ownedTotal > 0) {
+            parts.push(`${summary.ownedTotal} record${summary.ownedTotal === 1 ? '' : 's'} owned by this student will also be erased.`);
+        } else {
+            parts.push('No related submissions or requests were found for this student.');
+        }
+        if (summary.ambiguousTotal > 0) {
+            parts.push(`${summary.ambiguousTotal} record${summary.ambiguousTotal === 1 ? '' : 's'} match this student only by name or number and will be kept for manual review.`);
+        }
+        el.textContent = parts.join(' ');
+    } catch (e) {
+        console.info('[Deletion] impact summary unavailable:', e && e.message);
+        el.textContent = 'Related records could not be counted. Deletion will still verify ownership on the server.';
+    }
+}
+
+/** Disable the confirm button and show a spinner for the duration of the call. */
+function setStudentDeletionBusy(busy, pending) {
+    studentDeletionBusy = !!busy;
+    const btn = $id('btn-confirm-delete-student');
+    if (!btn) return;
+    btn.disabled = !!busy;
+    if (typeof btn.setAttribute === 'function') btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+    if (btn.classList && typeof btn.classList.toggle === 'function') btn.classList.toggle('is-loading-text', !!busy);
+    const label = $id('delete-student-confirm-label');
+    if (label) label.textContent = busy ? 'Deleting…' : 'Delete student';
+    if (!busy) studentDeletionPending = false;
+}
+
+/** Run the deletion, then refresh every list the student appeared in. */
+async function executeDeleteStudent() {
+    if (studentDeletionBusy || studentDeletionPending) return;
+    if (!pendingDeleteStudentId || !pendingDeleteStudentProfile) {
+        closeStudentDeletionModal();
+        return;
+    }
+    const typed = getValue('delete-student-confirm-input').trim();
+    const profile = pendingDeleteStudentProfile;
+    const docId = pendingDeleteStudentId;
+
+    if (!typed) {
+        setStudentDeletionError('Type the username to confirm.');
+        return;
+    }
+    if (typed !== String(profile.username || '')) {
+        setStudentDeletionError('That username does not match. Type it exactly as shown.');
+        return;
+    }
+
+    studentDeletionPending = true;
+    setStudentDeletionBusy(true);
+    setStudentDeletionError('');
+
+    let result;
+    try {
+        result = await deleteStudentProfile(docId, { confirmUsername: typed });
+    } catch (err) {
+        console.error('[Deletion] unexpected failure:', err);
+        const described = describeDeletionError(err);
+        result = { ok: false, code: described.code, message: described.message };
+    }
+
+    setStudentDeletionBusy(false);
+
+    if (!result || result.ok !== true) {
+        const message = (result && result.message) || 'The student could not be deleted.';
+        console.warn('[Deletion] failed', { docId, code: result && result.code });
+        setStudentDeletionError(message);
+        showToast(message, 'error');
+        return;
+    }
+
+    animateStudentRowRemoval(docId);
+    closeStudentDeletionModal();
+
+    if (result.mode === 'soft') {
+        showToast(`${profile.fullName} was deactivated. The sign-in account was not revoked.`, 'info');
+        openStudentDeletionUndo(docId, profile);
+    } else {
+        showToast(`${profile.fullName} and all related records were permanently deleted.`, 'success');
+        clearStudentDeletionUndo();
+    }
+
+    await refreshAfterStudentDeletion();
+}
+
+/** Fade the row out before the table is re-rendered. */
+function animateStudentRowRemoval(docId) {
+    const tbody = studentsTableBody();
+    if (!tbody || !tbody.querySelector) return;
+    const row = tbody.querySelector('tr[data-doc-id="' + String(docId).replace(/"/g, '\\"') + '"]');
+    if (!row) return;
+    row.classList.add('row-removing');
+    if (typeof refreshIcons === 'function') refreshIcons(row);
+}
+
+/** Refresh the student list plus the analytics/instructor aggregates. */
+async function refreshAfterStudentDeletion() {
+    try {
+        if (currentUser && currentUser.role === 'admin' && typeof loadUsers === 'function') await loadUsers();
+        if (typeof loadStudents === 'function') await loadStudents();
+    } catch (e) {
+        console.warn('[Deletion] list refresh failed:', e && e.message);
+    }
+    try {
+        cachedActivity = await dbGetAll(activityRef);
+    } catch (e) {
+        console.info('[Deletion] activity refresh skipped:', e && e.message);
+    }
+    try {
+        if (currentUser && currentUser.role === 'admin' && typeof loadAdminAnalytics === 'function') await loadAdminAnalytics();
+        else if (typeof loadAnalytics === 'function' && currentUser && currentUser.role === 'instructor') await loadAnalytics();
+    } catch (e) {
+        console.info('[Deletion] analytics refresh skipped:', e && e.message);
+    }
+}
+
+// ── Undo window (soft delete only) ───────────────────────────────
+
+function openStudentDeletionUndo(docId, profile) {
+    const bar = $id('student-deletion-undo');
+    if (!bar) return;
+    pendingUndoDocId = docId;
+    setText('student-deletion-undo-message', `${profile.fullName} · @${profile.username} is deactivated.`);
+    bar.classList.remove('hidden');
+    studentDeletionUndoDeadline = Date.now() + STUDENT_DELETION.UNDO_WINDOW_MS;
+    if (studentDeletionUndoTimer) clearInterval(studentDeletionUndoTimer);
+    const tick = () => {
+        const left = Math.max(0, studentDeletionUndoDeadline - Date.now());
+        const seconds = Math.ceil(left / 1000);
+        setText('student-deletion-undo-countdown', `${seconds}s`);
+        if (left <= 0) clearStudentDeletionUndo();
+    };
+    tick();
+    studentDeletionUndoTimer = setInterval(tick, 250);
+}
+
+function clearStudentDeletionUndo() {
+    if (studentDeletionUndoTimer) {
+        clearInterval(studentDeletionUndoTimer);
+        studentDeletionUndoTimer = null;
+    }
+    const bar = $id('student-deletion-undo');
+    if (bar) bar.classList.add('hidden');
+}
+
+async function undoStudentDeletionFromUi() {
+    if (!pendingUndoDocId) return;
+    const docId = pendingUndoDocId;
+    clearStudentDeletionUndo();
+    pendingUndoDocId = null;
+    const result = await undoStudentDeletion(docId);
+    showToast(result.message, result.ok ? 'success' : 'error');
+    if (result.ok) await refreshAfterStudentDeletion();
+}
+
+let pendingUndoDocId = null;
+
+// ── Wiring ────────────────────────────────────────────────────────
+
+function initStudentDeletionUi() {
+    const tbody = studentsTableBody();
+    if (!tbody || tbody.dataset.deletionBound === 'true') return;
+    tbody.dataset.deletionBound = 'true';
+
+    tbody.addEventListener('click', (event) => {
+        const trigger = event.target.closest ? event.target.closest('[data-action="delete-student"]') : null;
+        if (!trigger || !tbody.contains(trigger)) return;
+        event.preventDefault();
+        openDeleteStudentModal(trigger.getAttribute('data-id'));
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        const modal = $id('delete-student-modal');
+        if (modal && !modal.classList.contains('hidden') && !studentDeletionBusy) closeStudentDeletionModal();
+    });
+
+    const undoBtn = $id('btn-undo-delete-student');
+    if (undoBtn && undoBtn.dataset.bound !== 'true') {
+        undoBtn.dataset.bound = 'true';
+        undoBtn.addEventListener('click', () => { undoStudentDeletionFromUi(); });
+    }
+}
+
+/**
+ * Legacy entry point kept so any older inline handler still opens the modal
+ * instead of deleting immediately.
+ */
+function deleteUser(id) {
+    return openDeleteStudentModal(id);
+}
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initStudentDeletionUi);
+    } else {
+        initStudentDeletionUi();
+    }
+}/* ============================================================
    USER MANAGEMENT (Admin) — Manage Instructors
    ============================================================ */
 
@@ -3977,7 +4280,7 @@ async function revokeDevice(deviceDocId) {
 async function deleteDeviceRecord(deviceDocId) {
     if (!confirm('Are you sure you want to remove this device record?')) return;
     await _runDeviceAction(deviceDocId, async () => {
-        await dbDelete(devicesRef, deviceDocId);
+        await dbRemoveLocalRecord(devicesRef, deviceDocId);
         showToast('Device record removed.', 'info');
         await renderDeviceModalTable();
         await loadUsers();
@@ -4205,7 +4508,7 @@ async function viewInstructor(id) {
     setText('idm-last-login', user.lastLogin ? _fmtDate(user.lastLogin) : 'N/A');
 
     // Compute totals from live data
-    const students = (cachedUsers.length ? cachedUsers : await refreshUsers()).filter(u => u.role === 'student' && u.instructorId === id);
+    const students = (cachedUsers.length ? cachedUsers : await refreshUsers()).filter(u => u.role === 'student' && !isDeletedProfile(u) && u.instructorId === id);
     const exercises = await refreshExercises();
     const activity = cachedActivity.length ? cachedActivity : await dbGetAll(activityRef);
 
@@ -4353,7 +4656,9 @@ async function executeRestoreInstructor() {
 async function loadStudents() {
     const users = await refreshUsers();
     const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
-    const students = users.filter(u => u.role === 'student' && (
+    // Soft-deleted accounts stay in Firestore for the undo window, so they
+    // must be filtered out here or they keep showing up as live students.
+    const students = users.filter(u => u.role === 'student' && !isDeletedProfile(u) && (
         u.instructorId === currentUser?.id ||
         u.instructorId === currentUser?._docId ||
         (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
@@ -4371,14 +4676,14 @@ async function loadStudents() {
     }
 
     tbody.innerHTML = students.map(u => `
-    <tr>
+    <tr data-doc-id="${u._docId || u.id}">
       <td><div class="user-cell"><div class="avatar-sm">{{ui:UserRound}}</div><div><div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div><div style="font-size:0.75rem;color:var(--text-muted)">@${u.username}</div></div></div></td>
       <td>${readStudentNumber(u)}</td>
       <td><span class="badge ${u.status === 'active' ? 'badge-active' : 'badge-inactive'}">${u.status}</span></td>
       <td><div style="display:flex;gap:0.5rem">
         <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" title="Edit" aria-label="Edit user">{{ui:Pencil}}</button>
 <button class="btn btn-ghost btn-sm" onclick="toggleUserStatus('${u.id}')" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}" aria-label="${u.status === 'active' ? 'Deactivate user' : 'Activate user'}">${u.status === 'active' ? '{{ui:LockKeyhole}}' : '{{ui:LockKeyholeOpen}}'}</button>
-      <button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}')" title="Delete" aria-label="Delete user">{{ui:Trash2}}</button>
+      <button class="btn btn-ghost btn-sm" data-action="delete-student" data-id="${u._docId || u.id}" title="Delete" aria-label="Delete ${u.fullName}">{{ui:Trash2}}</button>
       </div></td>
     </tr>`).join('');
 }
@@ -4543,23 +4848,9 @@ async function saveUser() {
 
 function editUser(id) { openUserModal(id); }
 
-async function deleteUser(id) {
-    if (!confirm('Delete this user?')) return;
-    if (id === currentUser?.id) { showToast('You cannot delete your own account!', 'error'); return; }
-    try {
-        const user = cachedUsers.find(u => u.id === id);
-        if (user) await dbDelete(usersRef, user._docId);
-        showToast('User deleted.', 'info');
-        if (currentUser.role === 'admin') {
-            await loadUsers();
-        } else if (currentUser.role === 'instructor') {
-            await loadStudents();
-        }
-    } catch (err) {
-        console.error('[Offline Database] Delete user error:', err);
-        showToast('Failed to delete user.', 'error');
-    }
-}
+// Deletion lives in src/app/student-deletion-ui.js. It is delegated, confirmed
+// by typed username and routed through deleteStudentProfile(), which refuses to
+// report success for a deletion it could not confirm.
 
 
 /* ============================================================
@@ -4602,7 +4893,7 @@ function _max230Sequence(users) {
 async function buildStudentNumberMigrationPlan() {
     const users = await obtainAllStudentsCached();
     const targets = (users || []).filter(
-        (u) => u && u.role === 'student' && !isValidStudentNumber(u.studentNumber)
+        (u) => u && u.role === 'student' && !isDeletedProfile(u) && !isValidStudentNumber(u.studentNumber)
     );
     targets.sort((a, b) => String(a.id || a._docId || '').localeCompare(String(b.id || b._docId || '')));
 
@@ -4718,7 +5009,7 @@ async function runStudentNumberMigration() {
     try {
         let users = await refreshUsers();
         let targets = (users || []).filter(
-            (u) => u && u.role === 'student' && !isValidStudentNumber(u.studentNumber)
+            (u) => u && u.role === 'student' && !isDeletedProfile(u) && !isValidStudentNumber(u.studentNumber)
         );
         targets.sort((a, b) => String(a.id || a._docId || '').localeCompare(String(b.id || b._docId || '')));
 
@@ -5361,7 +5652,7 @@ function rebuildAnalyticsScope() {
     }
     const ownerIds = new Set([currentUser.id, currentUser._docId].filter(Boolean));
     const isDefaultInst = ownerIds.has('u2');
-    const myStudents = cachedUsers.filter(u => u.role === 'student' && (
+    const myStudents = cachedUsers.filter(u => u.role === 'student' && !isDeletedProfile(u) && (
         ownerIds.has(u.instructorId) ||
         (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
     ));
@@ -5562,7 +5853,7 @@ function updateAnalyticsUI() {
     // Stat Cards
     const ownerIds = new Set([currentUser?.id, currentUser?._docId].filter(Boolean));
     const isDefaultInst = ownerIds.has('u2');
-    const myStudents = (cachedUsers || []).filter(u => u.role === 'student' && (
+    const myStudents = (cachedUsers || []).filter(u => u.role === 'student' && !isDeletedProfile(u) && (
         ownerIds.has(u.instructorId) ||
         (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
     ));
@@ -5623,7 +5914,10 @@ function analyticsPageNav(dir) {
 }
 
 function analyticsStudentNumber(record) {
-    const student = (cachedUsers || []).find(user => user.role === 'student' && (
+    // A deleted student is not resolved to a live profile; the record falls
+    // back to its own stored fields rather than showing a roster entry that
+    // no longer exists.
+    const student = (cachedUsers || []).find(user => user.role === 'student' && !isDeletedProfile(user) && (
         [user.id, user._docId].filter(Boolean).includes(record.studentAccountId || record.studentId) ||
         (record.studentId && [user.studentNumber, user.studentId].includes(record.studentId)) ||
         (record.username && user.username === record.username)
@@ -6783,6 +7077,11 @@ async function submitRecoveryRequest() {
         return;
     }
 
+    if (isDeletedProfile(targetUser)) {
+        showToast('That account has been deleted. Contact an administrator if this is unexpected.', 'error');
+        return;
+    }
+
     if (targetUser.status === 'inactive' || targetUser.status === 'archived') {
         const contactRole = targetUser.role === 'instructor' ? 'administrator' : 'instructor';
         showToast(`Your account is ${targetUser.status}. Please contact your ${contactRole}.`, 'error');
@@ -6875,6 +7174,11 @@ async function checkRecoveryStatus() {
 
     if (!targetUser) {
         showToast('Account not found.', 'error');
+        return;
+    }
+
+    if (isDeletedProfile(targetUser)) {
+        showToast('That account has been deleted. Contact an administrator if this is unexpected.', 'error');
         return;
     }
 
@@ -7102,6 +7406,13 @@ async function openRecoveryReview(requestId) {
     const student = cachedUsers.find(u => u._docId === req.studentId) ||
         (await refreshUsers()).find(u => u._docId === req.studentId);
 
+    // A student deleted since the request was filed must not be revivable
+    // through the recovery flow.
+    if (student && isDeletedProfile(student)) {
+        showToast('This student account has been deleted. The request can be rejected but not approved.', 'error');
+        return;
+    }
+
     const dt = req.requestedAt
         ? new Date(req.requestedAt).toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short' })
         : '—';
@@ -7320,7 +7631,7 @@ async function createExerciseNotifications(exerciseId, exerciseTitle, actionType
     try {
         const users = await refreshUsers();
         const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
-        const students = users.filter(u => u.role === 'student' && (
+        const students = users.filter(u => u.role === 'student' && !isDeletedProfile(u) && (
             u.instructorId === currentUser?.id ||
             u.instructorId === currentUser?._docId ||
             (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))

@@ -3,10 +3,10 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-shell-20261001-v12';
+const CACHE_NAME = 'pseudopy-shell-20261001-v13';
 // Vendor cache name is versioned so the old-worker cleanup below can prune
 // superseded PDF worker generations instead of accumulating them.
-const VENDOR_CACHE_NAME = 'pseudopy-vendor-20261001-v12';
+const VENDOR_CACHE_NAME = 'pseudopy-vendor-20261001-v13';
 
 const LOCAL_ASSETS = [
     './',

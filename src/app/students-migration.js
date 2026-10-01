@@ -38,7 +38,7 @@ function _max230Sequence(users) {
 async function buildStudentNumberMigrationPlan() {
     const users = await obtainAllStudentsCached();
     const targets = (users || []).filter(
-        (u) => u && u.role === 'student' && !isValidStudentNumber(u.studentNumber)
+        (u) => u && u.role === 'student' && !isDeletedProfile(u) && !isValidStudentNumber(u.studentNumber)
     );
     targets.sort((a, b) => String(a.id || a._docId || '').localeCompare(String(b.id || b._docId || '')));
 
@@ -154,7 +154,7 @@ async function runStudentNumberMigration() {
     try {
         let users = await refreshUsers();
         let targets = (users || []).filter(
-            (u) => u && u.role === 'student' && !isValidStudentNumber(u.studentNumber)
+            (u) => u && u.role === 'student' && !isDeletedProfile(u) && !isValidStudentNumber(u.studentNumber)
         );
         targets.sort((a, b) => String(a.id || a._docId || '').localeCompare(String(b.id || b._docId || '')));
 

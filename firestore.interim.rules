@@ -42,8 +42,15 @@ service cloud.firestore {
     // The in-app login must read this collection to resolve a username,
     // so it cannot be owner-scoped yet. See firestore.rules for the
     // post-migration version.
+    //
+    // Writes are open, but the one narrow restriction below still applies:
+    // a document that the deletion callable tombstoned can never be
+    // recreated. Without it, a device holding a stale offline write would
+    // silently resurrect the account the operator just deleted.
     match /pseudopy_users/{doc} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if !exists(/databases/$(database)/documents/pseudopy_deletedProfiles/$(doc));
+      allow update, delete: if true;
     }
 
     // ── Exercise catalog (shared learning content) ───────────────
@@ -79,6 +86,24 @@ service cloud.firestore {
     }
     match /pseudopy_counters/{doc} {
       allow read, write: if true;
+    }
+
+    // ── Deletion operation journal ───────────────────────────────
+    // Unlike the collections above, this one is NEVER opened to clients.
+    // It holds the idempotency keys written by the `deleteStudentAccount`
+    // callable (Admin SDK, which bypasses rules); letting a client write it
+    // would let it forge a "completed" deletion. firestore.rules keeps the
+    // same posture as the post-migration end state.
+    match /pseudopy_deletionOps/{doc} {
+      allow read, write: if false;
+    }
+
+    // ── Hard-deletion tombstones ─────────────────────────────────
+    // Read-only for clients, and the reason `pseudopy_users` cannot be
+    // recreated above. Admin SDK only; never deleted.
+    match /pseudopy_deletedProfiles/{doc} {
+      allow read: if true;
+      allow write: if false;
     }
   }
 }

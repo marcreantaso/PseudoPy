@@ -105,6 +105,11 @@ async function handleLogin() {
         }
 
         // Step 3: Check account status
+        if (typeof isDeletedProfile === 'function' && isDeletedProfile(userByUsername)) {
+            showToast('This account has been deleted. Please contact your administrator.', 'error');
+            return;
+        }
+
         if (userByUsername.status === 'archived') {
             showToast('This account has been archived. Please contact your administrator.', 'error');
             return;

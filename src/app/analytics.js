@@ -52,7 +52,7 @@ function rebuildAnalyticsScope() {
     }
     const ownerIds = new Set([currentUser.id, currentUser._docId].filter(Boolean));
     const isDefaultInst = ownerIds.has('u2');
-    const myStudents = cachedUsers.filter(u => u.role === 'student' && (
+    const myStudents = cachedUsers.filter(u => u.role === 'student' && !isDeletedProfile(u) && (
         ownerIds.has(u.instructorId) ||
         (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
     ));
@@ -253,7 +253,7 @@ function updateAnalyticsUI() {
     // Stat Cards
     const ownerIds = new Set([currentUser?.id, currentUser?._docId].filter(Boolean));
     const isDefaultInst = ownerIds.has('u2');
-    const myStudents = (cachedUsers || []).filter(u => u.role === 'student' && (
+    const myStudents = (cachedUsers || []).filter(u => u.role === 'student' && !isDeletedProfile(u) && (
         ownerIds.has(u.instructorId) ||
         (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))
     ));
@@ -314,7 +314,10 @@ function analyticsPageNav(dir) {
 }
 
 function analyticsStudentNumber(record) {
-    const student = (cachedUsers || []).find(user => user.role === 'student' && (
+    // A deleted student is not resolved to a live profile; the record falls
+    // back to its own stored fields rather than showing a roster entry that
+    // no longer exists.
+    const student = (cachedUsers || []).find(user => user.role === 'student' && !isDeletedProfile(user) && (
         [user.id, user._docId].filter(Boolean).includes(record.studentAccountId || record.studentId) ||
         (record.studentId && [user.studentNumber, user.studentId].includes(record.studentId)) ||
         (record.username && user.username === record.username)

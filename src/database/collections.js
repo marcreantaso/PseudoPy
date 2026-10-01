@@ -57,6 +57,11 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
     // 2. Fallback to Local/Seed data if empty.
     if (!results || results.length === 0) {
         results = getLocalCollection(ref);
+        // A confirmed permanent deletion must not come back from the local
+        // cache or the seed data when the cloud is unreachable.
+        if (ref === usersRef && typeof dropHardDeletedProfiles === 'function') {
+            results = dropHardDeletedProfiles(results);
+        }
         // A fallback read must not trigger cloud writes or permission retry loops.
     }
 
@@ -274,25 +279,50 @@ async function dbUpdate(ref, docId, data) {
 
 /**
  * Delete a document by ID.
- * Intentionally disabled for Firestore-backed persistence to prevent data loss.
+ *
+ * This helper NEVER deletes from Firestore. It used to attempt a raw
+ * `doc().delete()` and then report `{ success: false }` regardless of the
+ * outcome: an unauthorised or unreachable delete was indistinguishable from
+ * a refused one, and the caller announced success anyway. Deletion is now
+ * explicit and auditable:
+ *
+ *   - student profiles  → deleteStudentProfile() (student-deletion.js)
+ *   - related records   → the `deleteStudentAccount` Cloud Function
+ *   - device records    → dbRemoveLocalRecord() (local-only, non-persisted)
+ *
+ * Returns a result object describing what happened; it never throws and never
+ * claims a Firestore deletion it did not perform.
  */
 async function dbDelete(ref, docId) {
     const local = getLocalCollection(ref);
     const exists = local.some(item => item._docId === docId || item.id === docId);
 
-    if (firestoreReady() && (typeof cloudRequestsAllowed !== 'function' || cloudRequestsAllowed())) {
-        try {
-            await firestore.collection(ref).doc(docId).delete();
-        } catch (err) {
-            console.error(`[Database] Error deleting Firestore ${ref}/${docId}:`, err);
+    console.warn(`[Database] dbDelete(${ref}/${docId}) refused: persistent deletion requires an authorized path.`);
+    return {
+        success: false,
+        deleted: false,
+        code: 'deletion-disabled',
+        exists,
+        message: 'Persistent deletion is disabled for this collection. Use deleteStudentProfile() for student accounts.'
+    };
+}
+
+/**
+ * Remove a record from the local caches only (localStorage + IndexedDB mirror).
+ * Used for records that are not persisted per-account, such as instructor
+ * device authorizations. No cloud write is attempted.
+ */
+async function dbRemoveLocalRecord(ref, docId) {
+    const local = getLocalCollection(ref);
+    const next = local.filter(item => String(item._docId || item.id) !== String(docId));
+    const removed = next.length !== local.length;
+    if (removed) setLocalCollection(ref, next);
+    try {
+        if (typeof offlineStore !== 'undefined' && offlineStore && offlineStore.deleteDocument) {
+            await offlineStore.deleteDocument(ref, docId);
         }
-    }
-
-    if (!exists) {
-        return { success: false, deleted: false, message: 'Nothing to delete.' };
-    }
-
-    return { success: false, deleted: false, message: 'Deletion is disabled to protect persisted Firestore data.' };
+    } catch (e) { /* best-effort mirror */ }
+    return { success: true, removed };
 }
 
 async function dbClearCollection(ref) {

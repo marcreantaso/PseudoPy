@@ -118,7 +118,8 @@ function loadCachedProfileFor(snapshot) {
         if (!found) return null;
         const role = String(found.role || '').toLowerCase();
         const status = String(found.status || 'active').toLowerCase();
-        if (['student', 'instructor', 'admin'].includes(role) && status !== 'archived' && status !== 'inactive') return sanitizeUser(found);
+        if (['student', 'instructor', 'admin'].includes(role)
+            && status !== 'archived' && status !== 'inactive' && status !== 'deleted') return sanitizeUser(found);
     } catch (e) { /* fall through to the persisted snapshot */ }
     return null;
 }
@@ -228,7 +229,7 @@ async function restoreSession() {
         }
 
         const status = (fresh.status || 'active').toLowerCase();
-        if (status === 'archived' || status === 'inactive') {
+        if (status === 'archived' || status === 'inactive' || status === 'deleted') {
             clearSession();
             bootState = BOOT_UNAUTHENTICATED;
             hideBootSplash();

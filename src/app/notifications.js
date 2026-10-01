@@ -9,7 +9,7 @@ async function createExerciseNotifications(exerciseId, exerciseTitle, actionType
     try {
         const users = await refreshUsers();
         const isDefaultInst = !currentUser || currentUser.id === 'u2' || currentUser._docId === 'u2';
-        const students = users.filter(u => u.role === 'student' && (
+        const students = users.filter(u => u.role === 'student' && !isDeletedProfile(u) && (
             u.instructorId === currentUser?.id ||
             u.instructorId === currentUser?._docId ||
             (isDefaultInst && (!u.instructorId || u.instructorId === 'u2'))

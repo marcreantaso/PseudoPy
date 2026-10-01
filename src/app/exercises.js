@@ -792,11 +792,13 @@ async function deleteExercise(id) {
         }
     }
 
-    dbDelete(exercisesRef, id)
-        .then(() => showToast('Exercise deleted.', 'info'))
+    // Exercise deletion is archive-only: the catalog is shared learning
+    // content, so a removed exercise is flagged instead of erased.
+    dbUpdate(exercisesRef, id, { status: 'archived', archivedAt: new Date().toISOString() })
+        .then(() => showToast('Exercise archived.', 'info'))
         .catch(err => {
-            console.error('[Offline Database] Delete exercise error:', err);
-            showToast('Failed to delete exercise. Please refresh.', 'error');
+            console.error('[Offline Database] Archive exercise error:', err);
+            showToast('Failed to archive exercise. Please refresh.', 'error');
             loadExercises();
         });
 }
