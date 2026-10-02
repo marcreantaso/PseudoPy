@@ -135,6 +135,10 @@ function devToolsLoadAttempt(index) {
     _updateMetrics({ metrics: attempt.metrics, autoFixes: attempt.autoFixes }, attempt.complexity);
     _updateEventLog(attempt.traceEvents || []);
     devToolsState.stepEvents = attempt.traceEvents || [];
+    devToolsState.simulationEvents = attempt.simulationEvents || [];
+    devToolsState.simulationTrace = attempt.simulationTrace || null;
+    devToolsState.simulationStepIndex = -1;
+    if (typeof _updateSimulation === 'function') _updateSimulation({ ast: attempt.ast, symbolTable: attempt.symbolTable, mappedCode: attempt.mappedCode, metrics: attempt.metrics });
 
     if (typeof showToast === 'function') showToast(`Loaded Attempt #${attempt.attemptNumber}`, 'info');
 }

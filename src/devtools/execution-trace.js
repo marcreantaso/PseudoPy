@@ -102,7 +102,10 @@ function _updateRawJSON(result, runtimeData) {
     _setText('devtools-raw-result', safeStringify(resultCopy));
 
     _setText('devtools-raw-runtime', safeStringify(runtimeData || devToolsState.runtimeResult || '(not yet executed)'));
-    _setText('devtools-raw-events', safeStringify(devToolsState.stepEvents));
+    _setText('devtools-raw-events', safeStringify(devToolsState.simulationEvents && devToolsState.simulationEvents.length
+        ? devToolsState.simulationEvents
+        : devToolsState.stepEvents));
+    // The trace envelope carries the Python source map and the truncation budget.
     _setText('devtools-raw-metrics', safeStringify(result.metrics));
 }
 

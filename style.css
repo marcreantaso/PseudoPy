@@ -2435,7 +2435,6 @@ svg.lucide {
 
 .guidelines-icon-box svg.lucide,
 .ex-date-row svg.lucide,
-.ex-completed-badge svg.lucide,
 .ex-start-btn svg.lucide,
 .panel-header h3 svg.lucide,
 .panel-footer .btn svg.lucide,
@@ -2444,10 +2443,6 @@ svg.lucide {
   height: 1em;
   flex: 0 0 auto;
   vertical-align: middle;
-}
-
-.ex-completed-badge.active {
-  color: var(--success);
 }
 
 .ex-start-btn.inactive {
@@ -2689,19 +2684,6 @@ svg.lucide {
   background: #2563eb;
   transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(59, 130, 246, 0.45);
-}
-
-.ex-completed-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: 8px;
-  padding: 0.5rem 0.9rem;
-  font-size: 0.85rem;
-  font-weight: 600;
 }
 
 /* ── Pagination Wrapper ── */
@@ -8904,6 +8886,94 @@ select.form-input {
   margin: 0; padding: 0; z-index: auto;
 }
 #app-status-region .toast-container:empty { display: none; }
+
+/* Exercise actions have one home, outside the clipped editor panels. */
+#page-write-pseudocode {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+#page-write-pseudocode .editor-layout { flex: 1 0 auto; min-height: 0; }
+.main-content { min-height: 0; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.exercise-action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .75rem;
+  flex-shrink: 0;
+  margin-top: 1rem;
+  padding: 12px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.exercise-action-status { min-width: 0; overflow-wrap: anywhere; }
+.exercise-submit-state { display: block; font-weight: 600; }
+.exercise-submit-reason { display: block; font-size: .8rem; color: var(--text-secondary); }
+.exercise-action-bar .btn, .exercise-submit-fallback {
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+  white-space: normal;
+}
+.exercise-action-bar .btn:focus-visible, .exercise-submit-fallback:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+.exercise-submit-btn[aria-busy="true"]::before {
+  content: '';
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: exercise-submit-spin 1s linear infinite;
+}
+@keyframes exercise-submit-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .exercise-submit-btn[aria-busy="true"]::before { animation: none; } }
+.exercise-submit-fallback { display: none; }
+.exercise-submit-fallback.exercise-fallback-active { display: flex; margin-top: 1rem; justify-content: center; }
+.exercise-console summary { padding: .75rem; cursor: pointer; min-height: 44px; }
+@media (max-width: 1023px) {
+  #page-write-pseudocode { padding-bottom: calc(var(--exercise-actions-height, 220px) + 16px); }
+  #page-write-pseudocode .editor-panel { min-height: 0; }
+  #page-write-pseudocode .code-editor {
+    flex: none;
+    height: 40vh;
+    height: 40dvh;
+    min-height: 200px;
+    max-height: 50vh;
+    max-height: 50dvh;
+    overflow: auto;
+    font-size: 16px;
+  }
+  .exercise-action-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--exercise-keyboard-inset, 0px);
+    margin: 0;
+    border-radius: 0;
+    grid-template-columns: 1fr 1fr;
+    gap: .4rem;
+    padding-inline: max(12px, env(safe-area-inset-left, 0px)) max(12px, env(safe-area-inset-right, 0px));
+  }
+  .exercise-action-bar #btn-translate-pseudocode { width: auto !important; }
+  .exercise-action-bar #btn-submit-exercise { grid-column: 1 / -1; grid-row: 2; width: 100%; }
+  .exercise-action-status { grid-column: 1 / -1; grid-row: 3; max-height: 4.5rem; overflow: auto; }
+  .exercise-submit-state { display: none; }
+}
+@media (max-width: 1023px) and (max-height: 500px) {
+  .exercise-action-bar { grid-template-columns: auto auto minmax(0, 1fr); }
+  .exercise-action-bar #btn-submit-exercise { grid-column: 3; grid-row: 1; }
+  .exercise-action-status { grid-row: 2; max-height: 2.5rem; }
+}
 #app-status-region .toast { min-width: 0; max-width: 100%; overflow-wrap: anywhere; box-sizing: border-box; }
 @media (max-width: 48rem) {
   #app-status-region .sync-notice { grid-template-columns: 1.25rem minmax(0, 1fr) auto; }

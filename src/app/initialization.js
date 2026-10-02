@@ -210,8 +210,12 @@ async function init() {
     // Restore active exercise if any
     const activeExId = localStorage.getItem(STORAGE_KEYS.ACTIVE_EXERCISE);
     if (activeExId) {
+        const restoreUser = currentUser;
+        const restoreRequest = exerciseOpenRequest;
         if (typeof dbGet === 'function' && typeof exercisesRef !== 'undefined') {
             dbGet(exercisesRef, activeExId).then(ex => {
+                if (restoreUser !== currentUser || restoreRequest !== exerciseOpenRequest ||
+                    localStorage.getItem(STORAGE_KEYS.ACTIVE_EXERCISE) !== activeExId) return;
                 if (ex) renderActiveExercise(ex);
                 // Restore any matching unsaved draft once the exercise has loaded.
                 try { if (typeof maybeRestoreEditorDraft === 'function') maybeRestoreEditorDraft(); } catch (e) { }

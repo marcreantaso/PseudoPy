@@ -54,6 +54,11 @@ function runPythonCode(code, outputElementId) {
     // The compiler now handles str() wrapping correctly in smartPrintExpr(),
     // so no runtime code fixup is needed. Use code as-is.
     const cleanCode = code;
+    const runExercise = exerciseState.activeExercise;
+    const runSource = outputElementId === 'console-output' ? getValue('pseudocode-editor') : null;
+    const runUser = currentUser;
+    const sameExerciseRun = () => runExercise === exerciseState.activeExercise && runUser === currentUser &&
+        (outputElementId !== 'console-output' || runSource === getValue('pseudocode-editor'));
     const studentRun = typeof StudentWorkspace !== 'undefined' ? StudentWorkspace.beginRun(outputElementId, code) : null;
 
     // Helper: append text to the console output (HTML-safe)
@@ -154,7 +159,7 @@ function runPythonCode(code, outputElementId) {
             metricsEngine.recordExecution(true);
         }
 
-        if (outputElementId === 'console-output' && exerciseState.activeExercise) {
+        if (outputElementId === 'console-output' && exerciseState.activeExercise && sameExerciseRun()) {
             exerciseState.isExecuted = true;
             exerciseState.outputMatched = false;
             if (exerciseState.expectedOutputResolved && exerciseState.expectedOutput) {
@@ -188,7 +193,7 @@ function runPythonCode(code, outputElementId) {
             metricsEngine.recordExecution(false, errText);
         }
 
-        if (outputElementId === 'console-output' && exerciseState.activeExercise) {
+        if (outputElementId === 'console-output' && exerciseState.activeExercise && sameExerciseRun()) {
             exerciseState.isExecuted = false;
             exerciseState.outputMatched = false;
             updateExerciseStatus();

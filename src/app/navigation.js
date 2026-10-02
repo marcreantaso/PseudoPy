@@ -85,6 +85,7 @@ currentPage = pageId;
     }
     // Refresh student progress pill whenever the Write Pseudocode page is shown
     if (pageId === 'write-pseudocode' && currentUser && currentUser.role === 'student') {
+        updateExerciseStatus();
         loadStudentProgress();
         if (typeof maybeAutoStartTutorial === 'function') {
             try { maybeAutoStartTutorial(); } catch (e) { /* tour must never block navigation */ }

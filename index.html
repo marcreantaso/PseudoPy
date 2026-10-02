@@ -7,6 +7,59 @@
   <title>PseudoPy</title>
   <meta name="description"
     content="Translating Pseudocode to Python: An Algorithmic Approach to Automated Code Generation">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "@id": "https://pseudopy.me",
+  "url": "https://pseudopy.me",
+  "name": "PseudoPy",
+  "applicationCategory": "EducationalApplication, DeveloperApplication",
+  "operatingSystem": "All",
+  "browserRequirements": "Requires HTML5 compatible browser. Supports Skulpt canvas execution.",
+  "description": "An educational compiler platform providing automated code generation by translating a structured pseudocode subset into executable Python code.",
+  "abstract": "Translating Pseudocode to Python — An Algorithmic Approach to Automated Code Generation.",
+  "inLanguage": "en",
+  "creator": [
+    {
+      "@type": "Role",
+      "roleName": "Founder",
+      "creator": {
+        "@type": "Person",
+        "name": "Mikaella C. Daet",
+        "affiliation": {
+          "@type": "Organization",
+          "name": "Pamantasan ng Cabuyao - College of Computing Studies"
+        }
+      }
+    },
+    {
+      "@type": "Role",
+      "roleName": "Co-Founder",
+      "creator": {
+        "@type": "Person",
+        "name": "Marc Gian Reantaso",
+        "affiliation": {
+          "@type": "Organization",
+          "name": "Pamantasan ng Cabuyao - College of Computing Studies"
+        }
+      }
+    }
+  ],
+  "audience": {
+    "@type": "Audience",
+    "audienceType": "Computer Science Students, Instructors, and Algorithmic Researchers"
+  },
+  "featureList": [
+    "Syntax-Directed Translation (SDT) engine",
+    "Interactive Pseudocode Editor with syntax validation",
+    "Step-by-step Lexer, Parser, and Semantic analysis debugging traces",
+    "In-browser Python compilation and runtime execution execution powered by Skulpt",
+    "Automated learning feedback and structural logic analytics tools"
+  ],
+  "keywords": "pseudocode translator, automated code generation, pseudocode to python compiler, algorithm converter, computer science education tools, Pamantasan ng Cabuyao"
+}
+</script>
 
   <!-- Immediate Dark Mode Initializer -->
   <script>
@@ -484,8 +537,6 @@
                 Progress</span>
             </div>
             <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <button class="btn btn-success btn-sm hidden" id="btn-submit-exercise" onclick="submitExercise()">Submit
-                Exercise</button>
               <button class="btn btn-ghost btn-sm" id="btn-toggle-instructions"
                 onclick="toggleExerciseInstructions()">Hide Instructions</button>
               <button class="btn btn-secondary btn-sm" onclick="changeExercise()">Change Exercise</button>
@@ -534,10 +585,6 @@
               </div>
             </div>
             <div class="panel-footer">
-              <button class="btn btn-primary" id="btn-translate-pseudocode" style="width:auto"
-                onclick="translatePseudocode()">
-                <i data-lucide="refresh-cw" aria-hidden="true"></i> Translate to Python
-              </button>
               <button class="btn btn-secondary btn-sm" onclick="newFile()">
                 <i data-lucide="file-plus-2" aria-hidden="true"></i> New File
               </button>
@@ -575,9 +622,6 @@
               </div>
             </div>
             <div class="panel-footer">
-              <button class="btn btn-success btn-sm" id="btn-run-code" onclick="executePython()">
-                <i data-lucide="play" aria-hidden="true"></i> Run Code
-              </button>
               <button class="btn btn-secondary btn-sm" onclick="downloadPython()">
                 <i data-lucide="download" aria-hidden="true"></i> Download .py
               </button>
@@ -585,8 +629,30 @@
           </div>
         </div>
 
+        <!-- ═══════════════════════════════════
+             EXERCISE ACTION BAR (always rendered)
+             Submit lives here and is never removed or conditionally
+             rendered, so a re-render or a late data load can never drop it.
+             Correctness changes the visible state and the reason text, never
+             the existence of the control.
+             ═══════════════════════════════════ -->
+        <div id="exercise-action-bar" class="exercise-action-bar" role="group" aria-label="Editor actions">
+          <button type="button" class="btn btn-primary" id="btn-translate-pseudocode" onclick="translatePseudocode()">Translate</button>
+          <button type="button" class="btn btn-success" id="btn-run-code" onclick="executePython()">Run</button>
+          <div class="exercise-action-status">
+            <span id="exercise-submit-state" class="exercise-submit-state">Submit</span>
+            <span id="exercise-submit-reason" class="exercise-submit-reason" role="status" aria-live="polite">Open an exercise to submit an answer.</span>
+          </div>
+          <button type="button" class="btn btn-success exercise-submit-btn" id="btn-submit-exercise"
+            data-action="submit" aria-describedby="exercise-submit-reason">
+            <i data-lucide="send" aria-hidden="true"></i>
+            <span id="btn-submit-exercise-label">Submit Exercise</span>
+          </button>
+        </div>
+
         <!-- Output Section -->
-        <div style="margin-top:1.5rem">
+        <details class="exercise-console" open style="margin-top:1.5rem">
+          <summary>Console output (show/hide)</summary>
           <div class="output-container">
             <div class="panel-header">
               <h3><i data-lucide="terminal" aria-hidden="true"></i> Console Output</h3>
@@ -595,7 +661,7 @@
             <div id="console-output" class="output-content">Ready. Write pseudocode and click "Translate to Python" to
               begin.</div>
           </div>
-        </div>
+        </details>
 
         <!-- Learning Panel (post-translation feedback for students) -->
         <div id="learning-feedback-panel" class="feedback-container hidden" style="margin-top:1.5rem">
@@ -604,6 +670,7 @@
           </div>
           <div id="learning-feedback-panel-body" class="panel-body" style="padding:1.5rem;"></div>
         </div>
+        <button type="button" class="btn btn-success exercise-submit-fallback" id="exercise-submit-fallback" data-action="submit" aria-describedby="exercise-submit-reason">Submit answer</button>
       </div>
 
       <!-- ═══════════════════════════════════

@@ -5,7 +5,7 @@
      - Control Flow Graph        derived from the parsed AST
      - SDT table                 AST node -> generated Python
      - NLP mapping diff          original vs real mappedCode
-     - Event ledger              real CompilerTrace events
+     - Event ledger              real simulation-trace events
      - Step controller           advances over real trace events
      - Grade verdict             real stdout vs admin expected output
      - Stage duration bars       real compiler metrics
@@ -16,6 +16,89 @@ const DEV_SIM_STAGES = [
     'PREPROCESSING', 'NLP_MAPPING', 'LEXICAL_ANALYSIS', 'SYNTAX_ANALYSIS',
     'SEMANTIC_ANALYSIS', 'CODE_GENERATION', 'EXECUTION', 'VALIDATION_REFINEMENT'
 ];
+
+// ══════════════════════════════════════════════════════════════
+// SIMULATION TRACE ADAPTER
+// The Simulation tab predates src/compiler/simulation-tracer.js and
+// was written against the older CompilerTrace event shape
+// ({type, stage, status, data, timeISO}). The tracer emits
+// {seq, stage, type, ts, line, column, payload, snapshot?} instead,
+// so its events are translated here once, at the boundary. Nothing
+// below this adapter knows which producer it is reading.
+// ══════════════════════════════════════════════════════════════
+
+// Ledger vocabulary is fixed by the #sim-ledger-status filter options.
+const SIM_STATUS_OK = 'SUCCESS';
+const SIM_STATUS_RUNNING = 'RUNNING';
+const SIM_STATUS_WARNING = 'WARNING';
+const SIM_STATUS_ERROR = 'ERROR';
+
+// Tracer event types that are not ordinary progress.
+const SIM_ERROR_TYPES = {
+    TOKEN_REJECTED: true,
+    BLOCK_MISMATCH: true,
+    DIAGNOSTIC_EMITTED: true
+};
+const SIM_WARNING_TYPES = {
+    TYPE_WARNING: true,
+    TRACE_TRUNCATED: true
+};
+
+function _simEventStatus(type, payload) {
+    if (type === 'STAGE_START') return SIM_STATUS_RUNNING;
+    if (type === 'STAGE_END') return SIM_STATUS_OK;
+    if (SIM_WARNING_TYPES[type]) return SIM_STATUS_WARNING;
+    if (SIM_ERROR_TYPES[type]) {
+        // A diagnostic only fails the run when the compiler called it an error.
+        if (type === 'DIAGNOSTIC_EMITTED' && payload && payload.severity) {
+            return String(payload.severity).toLowerCase() === 'error' ? SIM_STATUS_ERROR : SIM_STATUS_WARNING;
+        }
+        return SIM_STATUS_ERROR;
+    }
+    return SIM_STATUS_OK;
+}
+
+function _normalizeSimulationEvent(ev) {
+    const payload = (ev && typeof ev.payload === 'object' && ev.payload !== null) ? ev.payload : {};
+    const status = _simEventStatus(ev.type, payload);
+    // `data` keeps the historical field name: _simApplyStep reads data.line and
+    // data.nodeType, and the ledger filter searches JSON.stringify(data).
+    const data = Object.assign({}, payload);
+    data.line = (typeof ev.line === 'number') ? ev.line : null;
+    if (payload.nodeType == null && ev.type === 'NODE_CREATED' && payload.kind) data.nodeType = payload.kind;
+    return {
+        seq: ev.seq,
+        stage: ev.stage,
+        type: ev.type,
+        status: status,
+        line: data.line,
+        column: (typeof ev.column === 'number') ? ev.column : null,
+        // Tracer timestamps are monotonic ms, not wall-clock. timeISO is derived
+        // for display only; the raw ts is preserved alongside it.
+        timestamp: ev.ts,
+        timeISO: new Date().toISOString(),
+        data: data,
+        payload: payload,
+        snapshot: ev.snapshot || null
+    };
+}
+
+function _normalizeSimulationEvents(events) {
+    return (events || []).map(_normalizeSimulationEvent);
+}
+
+function _normalizeSimulationTrace(envelope) {
+    if (!envelope || !Array.isArray(envelope.events)) return [];
+    return _normalizeSimulationEvents(envelope.events);
+}
+
+// Prefers the genuine simulation trace; falls back to the legacy CompilerTrace
+// stream so the tab still renders when tracing produced no events.
+function _simEvents(state) {
+    if (!state) return [];
+    if (state.simulationEvents && state.simulationEvents.length) return state.simulationEvents;
+    return state.stepEvents || [];
+}
 
 // ══════════════════════════════════════════════════════════════
 // CONTROL FLOW GRAPH — derived node-for-node from the real AST
@@ -289,35 +372,35 @@ function _filterSimEvents(events, filters) {
 // ══════════════════════════════════════════════════════════════
 
 function _simCurrentEvent(state) {
-    return (state.stepEvents || [])[state.stepIndex] || null;
+    return _simEvents(state)[state.simulationStepIndex] || null;
 }
 
 function _simStepForward(state) {
-    const events = state.stepEvents || [];
+    const events = _simEvents(state);
     if (events.length === 0) return null;
-    state.stepIndex = Math.min((state.stepIndex == null ? -1 : state.stepIndex) + 1, events.length - 1);
-    return events[state.stepIndex];
+    state.simulationStepIndex = Math.min((state.simulationStepIndex == null ? -1 : state.simulationStepIndex) + 1, events.length - 1);
+    return events[state.simulationStepIndex];
 }
 
 function _simStepBack(state) {
-    const events = state.stepEvents || [];
+    const events = _simEvents(state);
     if (events.length === 0) return null;
-    state.stepIndex = Math.max((state.stepIndex == null ? 0 : state.stepIndex) - 1, 0);
-    return events[state.stepIndex];
+    state.simulationStepIndex = Math.max((state.simulationStepIndex == null ? 0 : state.simulationStepIndex) - 1, 0);
+    return events[state.simulationStepIndex];
 }
 
 function _simStepBegin(state) {
-    const events = state.stepEvents || [];
+    const events = _simEvents(state);
     if (events.length === 0) return null;
-    state.stepIndex = 0;
+    state.simulationStepIndex = 0;
     return events[0];
 }
 
 function _simStepEnd(state) {
-    const events = state.stepEvents || [];
+    const events = _simEvents(state);
     if (events.length === 0) return null;
-    state.stepIndex = events.length - 1;
-    return events[state.stepIndex];
+    state.simulationStepIndex = events.length - 1;
+    return events[state.simulationStepIndex];
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -472,7 +555,7 @@ function _renderSimNlp(original, mapped) {
 }
 
 function devToolsSimPopulateFilters() {
-    const events = (typeof devToolsState !== 'undefined') ? devToolsState.stepEvents : [];
+    const events = _simEvents(typeof devToolsState !== 'undefined' ? devToolsState : null);
     const stageSel = document.getElementById('sim-ledger-stage');
     if (stageSel) {
         const stages = [];
@@ -520,8 +603,7 @@ function _renderSimLedger(events) {
 }
 
 function devToolsSimFilterLedger() {
-    const events = (typeof devToolsState !== 'undefined') ? devToolsState.stepEvents : [];
-    _renderSimLedger(events);
+    _renderSimLedger(_simEvents(typeof devToolsState !== 'undefined' ? devToolsState : null));
 }
 
 function _renderSimMetrics(result) {
@@ -541,7 +623,7 @@ function _renderSimMetrics(result) {
     }).join('');
     const stagesEl = document.getElementById('sim-stage-statuses');
     if (stagesEl) {
-        const events = (typeof devToolsState !== 'undefined') ? devToolsState.stepEvents : [];
+        const events = _simEvents(typeof devToolsState !== 'undefined' ? devToolsState : null);
         stagesEl.innerHTML = _simStageStatuses(events)
             .map(function (s) { return '<span class="sim-stage-chip sim-stage-' + s.status.toLowerCase() + '">' + s.stage + ' · ' + s.status + '</span>'; })
             .join('');
@@ -639,8 +721,9 @@ function devToolsSimPlay() {
         return;
     }
     _simPlayTimer = setInterval(function () {
+        const events = _simEvents(devToolsState);
         const current = _simCurrentEvent(devToolsState);
-        if (current && devToolsState.stepIndex >= devToolsState.stepEvents.length - 1) {
+        if (current && devToolsState.simulationStepIndex >= events.length - 1) {
             devToolsSimPause();
             if (typeof showToast === 'function') showToast('End of trace events.', 'info');
             return;
@@ -687,6 +770,7 @@ function devToolsSimStepEnd() {
 function devToolsSimReset() {
     devToolsSimPause();
     _simClearHighlights();
+    if (typeof devToolsState !== 'undefined') devToolsState.simulationStepIndex = -1;
     devToolsSimFilterLedger();
 }
 
@@ -700,7 +784,7 @@ function _updateSimulation(result) {
     _renderSimMetrics(result);
     _renderSimVerdict();
 
-    const events = (typeof devToolsState !== 'undefined') ? devToolsState.stepEvents : [];
+    const events = _simEvents(typeof devToolsState !== 'undefined' ? devToolsState : null);
     devToolsSimPopulateFilters();
     _renderSimLedger(events);
 

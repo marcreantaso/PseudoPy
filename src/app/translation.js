@@ -170,7 +170,7 @@ function translatePseudocode() {
         'pseudocode-editor',
         'python-output',
         'console-output',
-        '#page-write-pseudocode .btn-success',
+        '#btn-run-code',
         'Pseudocode translated to Python successfully!',
         () => {
             exerciseState.isTranslated = true;

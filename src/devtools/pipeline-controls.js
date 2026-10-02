@@ -16,6 +16,9 @@ const devToolsState = {
     runtimeResult: null,   // latest runtime result
     stepIndex: -1,         // for step-through mode
     stepEvents: [],        // cached events for stepping
+    simulationEvents: [],  // normalized simulation-tracer events (Simulation tab)
+    simulationTrace: null, // raw simulation-trace envelope (source map + limits)
+    simulationStepIndex: -1, // step cursor for the Simulation tab event ledger
     allErrors: [],         // classified errors across all stages
     importedSourceName: null, // uploaded pseudocode filename (for .py export)
     expectedOutput: null,  // admin-supplied expected stdout for the Simulation verdict
@@ -73,7 +76,17 @@ function devToolsRunPipeline() {
     _resetPipelineVis();
 
     // ── Run the REAL compiler ──
-    const result = compilerEngine.compile(pseudocode);
+    // The simulation tracer must be armed before compile(): Compiler.beginSimulationTrace
+    // is a no-op unless it is already enabled, and finishSimulationTrace finalizes it.
+    // Student-facing compiles never enable it, so tracing stays opt-in.
+    let result;
+    const tracerArmed = typeof simulationTracer !== 'undefined';
+    if (tracerArmed) simulationTracer.enable();
+    try {
+        result = compilerEngine.compile(pseudocode);
+    } finally {
+        if (tracerArmed) simulationTracer.disable();
+    }
 
     // Disable tracing (avoid noise from student-facing compilations)
     compilerTrace.disable();
@@ -81,6 +94,9 @@ function devToolsRunPipeline() {
     devToolsState.currentResult = result;
     devToolsState.stepEvents = compilerTrace.getEvents();
     devToolsState.stepIndex = -1;
+    devToolsState.simulationTrace = (result && result.simulation) || null;
+    devToolsState.simulationEvents = _normalizeSimulationTrace(devToolsState.simulationTrace);
+    devToolsState.simulationStepIndex = -1;
 
     // Compute complexity using the real compiler method
     const complexity = compilerEngine.analyzeComplexity(pseudocode);
@@ -104,6 +120,8 @@ function devToolsRunPipeline() {
         autoFixes: result.autoFixes || [],
         complexity: complexity,
         traceEvents: devToolsState.stepEvents,
+        simulationEvents: devToolsState.simulationEvents,
+        simulationTrace: devToolsState.simulationTrace,
     };
     devToolsState.attempts.push(attempt);
 
@@ -367,8 +385,12 @@ function devToolsReset() {
     devToolsState.runtimeResult = null;
     devToolsState.stepIndex = -1;
     devToolsState.stepEvents = [];
+    devToolsState.simulationEvents = [];
+    devToolsState.simulationTrace = null;
+    devToolsState.simulationStepIndex = -1;
     devToolsState.allErrors = [];
     compilerTrace.reset();
+    if (typeof simulationTracer !== 'undefined') simulationTracer.reset();
     if (typeof runtimeConsole !== 'undefined') runtimeConsole.reset();
 
     _resetPipelineVis();

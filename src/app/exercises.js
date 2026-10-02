@@ -328,7 +328,7 @@ async function loadStudentExercises(page = 1) {
       <hr class="ex-divider" />
       <div class="ex-card-footer">
         ${isCompleted
-                ? `<span class="ex-completed-badge active"><i data-lucide="circle-check" aria-hidden="true"></i> Completed</span>`
+                ? `<button class="ex-start-btn" onclick="attemptExercise('${ex._docId}')">View submission</button>`
                 : `<button class="ex-start-btn inactive" onclick="attemptExercise('${ex._docId}')"><i data-lucide="play" aria-hidden="true"></i> Start Exercise</button>`
             }
       </div>
@@ -413,9 +413,29 @@ async function loadStudentProgress() {
     }
 }
 
+let exerciseOpenRequest = 0;
 async function attemptExercise(id, resubmissionOf = null) {
-    const ex = await dbGet(exercisesRef, id);
-    if (!ex) return;
+    const request = ++exerciseOpenRequest;
+    const user = currentUser;
+    exerciseSubmissionLoading = true;
+    exerciseSubmissionMessage = '';
+    updateExerciseStatus();
+    let ex;
+    try { ex = await dbGet(exercisesRef, id); }
+    catch (error) {
+        if (request !== exerciseOpenRequest || user !== currentUser) return;
+        exerciseSubmissionLoading = false;
+        showToast('Unable to load this exercise. Please retry.', 'error');
+        updateExerciseStatus();
+        return;
+    }
+    if (request !== exerciseOpenRequest || user !== currentUser) return;
+    if (!ex) {
+        exerciseSubmissionLoading = false;
+        showToast('Exercise not found. Refresh the exercise list.', 'error');
+        updateExerciseStatus();
+        return;
+    }
 
     const pseudoEditor = $id('pseudocode-editor');
     if (pseudoEditor) {
@@ -474,7 +494,7 @@ function renderActiveExercise(ex) {
     exerciseState.outputMatched = false;
     exerciseState.expectedOutput = '';
     exerciseState.expectedOutputResolved = false;
-    updateExerciseStatus();
+    loadExerciseSubmissionState(ex);
 
     // Determine expected output:
     // 1. Prefer the instructor's stored expected output on the exercise record.
@@ -489,9 +509,12 @@ function renderActiveExercise(ex) {
         if (solutionCode) computeExpectedOutput(solutionCode);
         else exerciseState.expectedOutputResolved = true;
     }
+    updateExerciseStatus();
 }
 
 function computeExpectedOutput(code) {
+    const exercise = exerciseState.activeExercise;
+    const generation = exerciseSubmissionGeneration;
     if (typeof Sk === 'undefined') {
         exerciseState.expectedOutputResolved = true;
         return;
@@ -512,100 +535,33 @@ function computeExpectedOutput(code) {
     Sk.misceval.asyncToPromise(function () {
         return Sk.importMainWithBody("<stdin>", false, code, true);
     }).then(() => {
+        if (exercise !== exerciseState.activeExercise || generation !== exerciseSubmissionGeneration) return;
         exerciseState.expectedOutput = outText;
         exerciseState.expectedOutputResolved = true;
+        updateExerciseStatus();
         console.log('[Completion] Expected output computed dynamically.');
     }).catch(err => {
+        if (exercise !== exerciseState.activeExercise || generation !== exerciseSubmissionGeneration) return;
         exerciseState.expectedOutputResolved = true;
+        updateExerciseStatus();
         console.warn('[Completion] Failed to compute expected output:', err);
     });
 }
 
 function updateExerciseStatus() {
-    const statusEl = $id('active-ex-status');
-    const submitBtn = $id('btn-submit-exercise');
-    if (!statusEl || !submitBtn || !exerciseState.activeExercise) return;
-
-    // Exact output matching is only required when a reliable expected output
-    // could be established. If not (e.g. interactive INPUT-based programs such
-    // as the Calculator activity), successful translate + run counts as complete.
-    const hasExpectedOutput = exerciseState.expectedOutputResolved && !!exerciseState.expectedOutput;
-    const isCompleted = exerciseState.isTranslated && exerciseState.isExecuted &&
-        (!hasExpectedOutput || exerciseState.outputMatched);
-
-    if (isCompleted) {
-        statusEl.textContent = '{{ui:Circle}} Status: Completed';
-        statusEl.className = 'badge badge-success';
-        statusEl.style.marginLeft = '0.5rem';
-        submitBtn.classList.remove('hidden');
-    } else {
-        statusEl.textContent = '{{ui:Circle}} Status: In Progress';
-        statusEl.className = 'badge badge-warning';
-        statusEl.style.marginLeft = '0.5rem';
-        submitBtn.classList.add('hidden');
-    }
+    renderExerciseSubmissionState();
 }
 
 async function submitExercise() {
-    const ex = exerciseState.activeExercise;
-    if (!ex || !currentUser) return;
-    if (!confirm('Are you sure you want to submit this exercise?')) return;
-    const pseudo = getValue('pseudocode-editor');
-    const py = getPythonCode('python-output');
-    const outTextEl = $id('console-output');
-    const outText = outTextEl ? outTextEl.textContent || '' : '';
-    const now = new Date();
-    const docId = 'act_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-    const studentAccountId = currentUser._docId || currentUser.id;
-    const actRecord = {
-        _docId: docId, id: docId, exerciseId: ex._docId || ex.id,
-        revisionOf: exerciseState.resubmissionOf || null,
-        attemptNumber: exerciseState.resubmissionOf ? 2 : 1,
-        student: currentUser.fullName,
-        studentId: currentUser.studentId || currentUser.username || studentAccountId,
-        studentAccountId, section: currentUser.section || 'BSCS-3A',
-        instructorId: ex.instructorId || ex.createdBy || currentUser.instructorId || 'u2',
-        exercise: ex.title || ex.concept || 'Untitled Exercise',
-        difficulty: ex.difficulty || 'moderate', status: 'Completed',
-        reviewStatus: 'submitted', score: '100%', time: now.toISOString(),
-        timestamp: now.getTime(), pseudocode: pseudo, python_code: py,
-        result: 'Success', errorType: null, processingTime: '0.45s', output: outText
-    };
-    const saveBtn = $id('btn-submit-exercise');
-    if (saveBtn) saveBtn.disabled = true;
-    try {
-        await dbSet(activityRef, docId, actRecord);
-        if (typeof cachedActivity !== 'undefined') cachedActivity.unshift(actRecord);
-        if (typeof currentFilteredActivity !== 'undefined') currentFilteredActivity.unshift(actRecord);
-        if (typeof updateAnalyticsUI === 'function') { try { updateAnalyticsUI(); } catch (e) {} }
-        const overlay = $id('submission-success-overlay');
-        const timeDisplay = $id('submission-time-display');
-        if (overlay && timeDisplay) {
-            timeDisplay.innerHTML = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + '<br>' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-            overlay.classList.remove('hidden');
-            const returnBtn = $id('btn-return-to-exercises');
-            if (returnBtn) returnBtn.disabled = false;
-        }
-        const pseudoEditor = $id('pseudocode-editor');
-        if (pseudoEditor) pseudoEditor.readOnly = true;
-        const pyOutput = $id('python-output');
-        if (pyOutput) pyOutput.readOnly = true;
-        const translateBtn = $id('btn-translate-pseudocode');
-        if (translateBtn) translateBtn.disabled = true;
-        const runBtn = $id('btn-run-code');
-        if (runBtn) runBtn.disabled = true;
-        await loadStudentProgress();
-        showToast(exerciseState.resubmissionOf ? 'Resubmission submitted successfully.' : 'Exercise submitted successfully.', 'success');
-        exerciseState.resubmissionOf = null;
-    } catch (error) {
-        console.error('[Exercise] Submission failed:', error);
-        showToast('Unable to save submission. Please try again.', 'error');
-    } finally {
-        if (saveBtn) saveBtn.disabled = false;
-    }
+    return saveExerciseSubmission();
 }
 
 function changeExercise() {
+    ++exerciseOpenRequest;
+    ++exerciseSubmissionGeneration;
+    exerciseSubmissionReceipt = null;
+    exerciseSubmissionLoading = false;
+    exerciseSubmissionMessage = '';
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_EXERCISE);
     const panel = $id('active-exercise-panel');
     if (panel) panel.classList.add('hidden');
@@ -619,6 +575,8 @@ function changeExercise() {
     exerciseState.outputMatched = false;
     exerciseState.expectedOutputResolved = false;
     exerciseState.expectedOutput = '';
+    exerciseState.resubmissionOf = null;
+    updateExerciseStatus();
 
     const pseudoEditor = $id('pseudocode-editor');
     if (pseudoEditor) pseudoEditor.readOnly = false;

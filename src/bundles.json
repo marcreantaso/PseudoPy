@@ -21,6 +21,7 @@
     "src/app/execution.js",
     "src/app/feedback.js",
     "src/app/exercises.js",
+    "src/app/exercise-submission.js",
     "src/app/student-deletion-ui.js",
     "src/app/users.js",
     "src/app/students-migration.js",
