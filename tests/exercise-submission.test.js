@@ -55,8 +55,8 @@ test('visualViewport tracking drives the keyboard inset variable', () => {
 
 test('service worker cache version and precache are consistent', () => {
     const sw = read('sw.js');
-    assert.match(sw, /pseudopy-shell-20261001-v\d+/);
-    assert.match(sw, /pseudopy-vendor-20261001-v\d+/);
+    assert.match(sw, /pseudopy-shell-\d{8}-v\d+/);
+    assert.match(sw, /pseudopy-vendor-\d{8}-v\d+/);
     const shell = sw.match(/const CACHE_NAME = '([^']+)'/)[1];
     const vendor = sw.match(/const VENDOR_CACHE_NAME = '([^']+)'/)[1];
     assert.equal(shell.split('-').pop(), vendor.split('-').pop(), 'both caches share one generation');

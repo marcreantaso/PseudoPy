@@ -85,6 +85,7 @@
     "src/database/collections.js",
     "src/database/student-deletion.js",
     "src/database/student-number.js",
+    "src/database/username-claims.js",
     "src/database/seeding.js",
     "src/database/subscriptions-and-helpers.js",
     "src/database/facade.js"
@@ -98,6 +99,7 @@
     "src/devtools/execution-trace.js",
     "src/devtools/file-io.js",
     "src/devtools/simulation.js",
+    "src/devtools/health-panel.js",
     "src/devtools/dom.js"
   ]
 }

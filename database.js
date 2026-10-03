@@ -48,22 +48,148 @@ const firebaseConfig = resolveFirebaseConfig();
 let firestore = null;
 const hasFirebaseSDK = typeof firebase !== 'undefined' && firebase && typeof firebase.apps !== 'undefined';
 
+// ── Local cache + App Check diagnostics ─────────────────────
+// Recorded, never assumed. Verified against firebase-firestore-compat 10.12.0:
+// that build exposes NO cache configuration API at all. `initializeFirestore`,
+// `getFirestore`, `persistentLocalCache`, `memoryLocalCache` and
+// `persistentMultipleTabManager` are all `undefined` on the compat namespace,
+// and the `localCache` key is dropped before it reaches the client. Only the
+// legacy `db.enablePersistence()` remains, and it is deprecated by the SDK.
+//
+// So this app does not ask for a Firestore cache and does not claim one. Its
+// durable offline copy is its own IndexedDB store (src/database/idb-store.js)
+// plus the mutation queue in src/database/sync-manager.js; Firestore itself runs
+// with its default in-memory client cache. `localCache` therefore describes the
+// Firestore client cache only, and is informational.
+const firestoreInit = {
+    localCache: 'memory',
+    localCacheNote: 'Firestore client cache is in-memory. Durable offline data is held in the app\'s own IndexedDB store.',
+    localCacheEngineConfigurable: false,
+    appCheck: 'not-configured',
+    appCheckReason: ''
+};
+
 try {
     if (hasFirebaseSDK) {
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        firestore = firebase.firestore();
-        console.log('[Database] Firebase Firestore connected ✅ Project:', firebaseConfig.projectId);
-    } else if (typeof window !== 'undefined' && window.firebase) {
-        window.firebase.initializeApp(firebaseConfig);
-        firestore = window.firebase.firestore();
-        console.log('[Database] Firebase Firestore connected ✅ Project:', firebaseConfig.projectId);
+        const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
+        firestore = createFirestoreInstance(app);
+        console.log('[Database] Firebase Firestore connected ✅ Project:', firebaseConfig.projectId,
+            '| client cache:', firestoreInit.localCache);
     } else {
+        firestoreInit.localCache = 'unknown';
+        firestoreInit.localCacheNote = 'SDK not loaded when this module ran.';
         console.log('[Database] Firebase SDK not loaded yet — using local fallback data until Firestore is available.');
     }
 } catch (e) {
+    firestoreInit.localCache = 'failed';
+    firestoreInit.localCacheNote = (e && e.message) || String(e);
     console.warn('[Database] Firebase init warning:', e);
+}
+
+// App Check is the only control that distinguishes a real browser from a
+// scripted client against the open interim ruleset. It stays OFF unless a
+// reCAPTCHA v3 site key is configured, because activating App Check without a
+// registered token refuses every Firestore read and write.
+initAppCheckIfConfigured();
+
+/**
+ * Create the Firestore instance.
+ *
+ * firebase.firestore(app) is the only supported form in the compat build this
+ * app loads, and it is synchronous. An earlier version of this function called
+ * firebase.initializeFirestore(app, { localCache }) and then reported the
+ * outcome, which looked more rigorous but was not: initializeFirestore and
+ * persistentLocalCache do not exist on the compat namespace, so every launch
+ * threw a TypeError, fell into the catch, and recorded 'memory' with an error
+ * string. The health panel was reporting a configuration failure that the app
+ * had been fine with all along, and it hid the fact that no cache had been
+ * requested.
+ *
+ * If this app ever migrates to the modular SDK, initializeFirestore becomes the
+ * correct entry point, so it is still detected and preferred here rather than
+ * assumed. Local persistence remains OFF: the app's offline guarantee comes
+ * from its own IndexedDB store and mutation queue, and enabling a second cache
+ * would duplicate data without being asked for.
+ */
+function createFirestoreInstance(app) {
+    const hasModularInit = typeof firebase.initializeFirestore === 'function';
+    firestoreInit.localCacheEngineConfigurable = hasModularInit
+        && typeof firebase.persistentLocalCache === 'function';
+
+    if (firestoreInit.localCacheEngineConfigurable) {
+        try {
+            const localCache = firebase.persistentLocalCache(
+                firebase.persistentMultipleTabManager
+                    ? { tabManager: firebase.persistentMultipleTabManager() }
+                    : undefined
+            );
+            const instance = firebase.initializeFirestore(app, { localCache });
+            // Rejects only on failed-precondition/unimplemented (e.g. another
+            // tab holds the cache). Never let that leave firestore null.
+            Promise.resolve(instance).then(
+                () => {
+                    firestoreInit.localCache = 'indexeddb';
+                    firestoreInit.localCacheNote = 'Firestore persistent cache engaged.';
+                },
+                (e) => {
+                    firestoreInit.localCache = 'memory';
+                    firestoreInit.localCacheNote = 'Firestore persistent cache unavailable: '
+                        + ((e && e.message) || e) + ' Falling back to the in-memory client cache.';
+                }
+            );
+            return instance;
+        } catch (e) {
+            firestoreInit.localCache = 'memory';
+            firestoreInit.localCacheNote = 'Firestore cache could not be configured: '
+                + ((e && e.message) || e);
+        }
+    }
+
+    const instance = firebase.firestore(app);
+    if (typeof instance.enablePersistence === 'function') {
+        // Supported but deprecated in this SDK version, and deliberately not
+        // called: the app's offline layer is its own IndexedDB store. Recorded
+        // so the health panel can state that the lever exists rather than
+        // implying persistence was attempted and failed.
+        firestoreInit.localCacheNote += ' Firestore enablePersistence() is available but unused by design.';
+    }
+    return instance;
+}
+
+/**
+ * Activate App Check only when a reCAPTCHA v3 site key has been registered.
+ *
+ * Deliberately opt-in: enabling App Check without a site key produces no
+ * attestation token, and Firestore then rejects every read and write with
+ * permission-denied. Register a reCAPTCHA v3 site key in the Firebase console,
+ * then either add `appCheckSiteKey` to the config above or set
+ * window.__APP_CHECK_SITE_KEY__ before database.js loads.
+ */
+function initAppCheckIfConfigured() {
+    const browserKey = typeof window !== 'undefined' ? window.__APP_CHECK_SITE_KEY__ : null;
+    const siteKey = (browserKey || firebaseConfig.appCheckSiteKey || '').trim();
+    if (!siteKey) {
+        firestoreInit.appCheckReason = 'No reCAPTCHA v3 site key configured; App Check is inactive.';
+        return;
+    }
+    try {
+        const app = firebase.apps.length ? firebase.app() : null;
+        const provider = new firebase.appCheck.ReCaptchaV3Provider(siteKey);
+        const check = firebase.appCheck();
+        firestoreInit.appCheck = check && typeof check.initializeAppCheck === 'function' ? 'initializing' : 'unavailable';
+        if (!check || typeof check.initializeAppCheck !== 'function') {
+            firestoreInit.appCheckReason = 'firebase-app-check-compat.js is not loaded.';
+            return;
+        }
+        check.initializeAppCheck({ provider, isTokenAutoRefreshEnabled: true });
+        firestoreInit.appCheck = 'active';
+        firestoreInit.appCheckReason = '';
+        console.log('[Database] App Check active for app:', app ? app.name : '(unknown)');
+    } catch (e) {
+        firestoreInit.appCheck = 'failed';
+        firestoreInit.appCheckReason = (e && e.message) || String(e);
+        console.warn('[Database] App Check init failed:', e && e.message);
+    }
 }
 
 const firestoreReady = () => !!(firestore && typeof firestore.collection === 'function');
@@ -165,6 +291,7 @@ const countersRef = "pseudopy_counters";
 let cloudAuth = null;            // firebase.auth.Auth | null
 let cloudAuthState = 'unknown';  // unknown | unavailable | signed-out | signed-in
 let cloudAuthResolved = false;   // onAuthStateChanged has fired at least once
+let cloudAuthPersistence = 'unknown'; // unknown | local | default
 const cloudAuthListeners = [];
 
 /**
@@ -185,6 +312,23 @@ function initCloudAuth() {
     }
     try {
         cloudAuth = firebase.auth();
+        // Persistence was previously left unset, silently inheriting LOCAL
+        // (IndexedDB-backed) — which means a shared or lab machine retains the
+        // signed-in identity across browser restarts. Stated explicitly here so
+        // the choice is visible and so the health panel can report it.
+        // Fire-and-forget: a rejection must not block session observation.
+        try {
+            const mode = firebase.auth.Auth.PERSISTENCE_LOCAL;
+            cloudAuth.setPersistence(mode).then(
+                () => { cloudAuthPersistence = 'local'; },
+                (e) => {
+                    cloudAuthPersistence = 'default';
+                    console.warn('[CloudAuth] setPersistence rejected; using SDK default:', e && e.code);
+                }
+            );
+        } catch (e) {
+            cloudAuthPersistence = 'default';
+        }
         cloudAuth.onAuthStateChanged(user => {
             cloudAuthResolved = true;
             cloudAuthState = user ? 'signed-in' : 'signed-out';
@@ -243,7 +387,8 @@ function cloudAuthStatus() {
         resolved: cloudAuthResolved,
         state: cloudAuthState,
         uid: cloudUid(),
-        email: cloudEmail()
+        email: cloudEmail(),
+        persistence: cloudAuthPersistence
     };
 }
 
@@ -2566,6 +2711,20 @@ async function deleteStudentProfile(targetDocId, options = {}) {
         });
     }
     step('confirmed-soft', { requestId });
+
+    // Release the username claim. The account still exists but is deactivated,
+    // so the name must not stay reserved; undoStudentDeletion re-takes it. A
+    // stale claim would otherwise block that username for every future account
+    // while no profile exists to explain why.
+    if (profile && profile.username && typeof releaseUsernameClaim === 'function') {
+        try {
+            const released = await releaseUsernameClaim(profile.username, docId);
+            step('username-claim-released', { released });
+        } catch (e) {
+            step('username-claim-release-failed', { error: (e && e.message) || String(e) });
+        }
+    }
+
     return {
         ok: true,
         mode: STUDENT_DELETION.SOFT,
@@ -2596,6 +2755,20 @@ async function undoStudentDeletion(targetDocId) {
     }
     try {
         const profile = await dbGet(usersRef, docId);
+        // Re-take the username claim released by the soft delete. Without this
+        // the restored account and any new account could hold the same username.
+        if (profile && profile.username && typeof claimUsername === 'function') {
+            try {
+                await claimUsername(profile.username, docId);
+            } catch (claimErr) {
+                return {
+                    ok: false,
+                    code: (claimErr && claimErr.code) || 'username-claim-conflict',
+                    message: 'Restored, but this username is now held by another account: '
+                        + ((claimErr && claimErr.message) || 'rename the account before it is used again.')
+                };
+            }
+        }
         await dbUpdate(usersRef, docId, {
             status: (profile && profile.statusBeforeDeletion) || 'active',
             statusBeforeDeletion: null,
@@ -2651,6 +2824,18 @@ if (typeof module !== 'undefined' && module.exports) {
    creation never produces duplicates. A deterministic local
    fallback keeps the feature working when the SDK is offline.
 
+   The counter increment being atomic is necessary but NOT
+   sufficient for idempotency. Two near-simultaneous submissions
+   receive two *distinct consecutive* numbers (2300003 and
+   2300004 for one person), because nothing tied an allocation to
+   the request that asked for it. Pass a `requestId` and the
+   allocation is recorded against it, so a retry of the same
+   submission returns the number it already owns instead of
+   consuming another one.
+
+   Omitting `requestId` preserves the original behaviour exactly:
+   every call consumes a fresh number.
+
    The legacy 'studentId' field (2024-xxx seeds) is left intact;
    readStudentNumber() uses it only as a temporary display
    fallback until a migration assigns a 230-series number.
@@ -2662,7 +2847,15 @@ const STUDENT_NUMBER_MAX = 9999;
 const STUDENT_NUMBER_PATTERN = /^230\d{4}$/;
 const COUNTER_DOC = 'studentNumbers'; // doc id under pseudopy_counters
 const LOCAL_COUNTER_KEY = 'pseudopy_student_number_counter';
+const LOCAL_ALLOCATIONS_KEY = 'pseudopy_student_number_allocations';
 const MAX_ALLOCATION_RETRIES = 3;
+const MAX_TRACKED_ALLOCATIONS = 200; // bound the local idempotency ledger
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{8,80}$/;
+
+/** Reject anything that could collide in a document field or a storage key. */
+function isUsableRequestId(value) {
+    return typeof value === 'string' && REQUEST_ID_PATTERN.test(value);
+}
 
 function isValidStudentNumber(value) {
     return typeof value === 'string' && STUDENT_NUMBER_PATTERN.test(value);
@@ -2749,6 +2942,76 @@ async function _allocateFirestore() {
     return allocated;
 }
 
+/**
+ * Record `requestId -> number` inside the SAME transaction that increments the
+ * counter. Recording it in the same atomic step is the whole point: if the
+ * allocation and its record cannot commit together, a crash between them
+ * still burns a number.
+ */
+async function _allocateFirestoreKeyed(requestId) {
+    let allocated = null;
+    await firestore.runTransaction(async (tx) => {
+        const ref = firestore.collection(countersRef).doc(COUNTER_DOC);
+        const snap = await tx.get(ref);
+        const data = snap.exists ? (snap.data() || {}) : {};
+        const existing = data.allocations && typeof data.allocations === 'object' ? data.allocations : {};
+
+        // Replay: this request already owns a number.
+        if (isValidStudentNumber(existing[requestId])) {
+            allocated = existing[requestId];
+            return;
+        }
+
+        let current = 0;
+        if (typeof data.current === 'number' && data.current > 0) {
+            current = data.current;
+        }
+        if (current >= STUDENT_NUMBER_MAX) {
+            throw new RangeError('Student number range exhausted (2309999).');
+        }
+        const next = current + 1;
+        const number = formatStudentNumber(next);
+
+        // Keep the ledger bounded. Oldest keys are dropped first; a pruned
+        // request simply allocates a new number on retry, which is the
+        // pre-existing behaviour rather than a failure.
+        const merged = Object.assign({}, existing);
+        merged[requestId] = number;
+        const keys = Object.keys(merged);
+        if (keys.length > MAX_TRACKED_ALLOCATIONS) {
+            keys.sort((a, b) => String(merged[a]).localeCompare(String(merged[b])));
+            keys.slice(0, keys.length - MAX_TRACKED_ALLOCATIONS).forEach(k => delete merged[k]);
+        }
+
+        tx.set(ref, { current: next, allocations: merged });
+        allocated = number;
+    });
+    return allocated;
+}
+
+/** Local analogue of the allocation ledger, for the offline path. */
+function _readLocalAllocations() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(LOCAL_ALLOCATIONS_KEY) || '{}');
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function _writeLocalAllocation(requestId, number) {
+    try {
+        const all = _readLocalAllocations();
+        all[requestId] = number;
+        const keys = Object.keys(all);
+        if (keys.length > MAX_TRACKED_ALLOCATIONS) {
+            keys.sort((a, b) => String(all[a]).localeCompare(String(all[b])));
+            keys.slice(0, keys.length - MAX_TRACKED_ALLOCATIONS).forEach(k => delete all[k]);
+        }
+        localStorage.setItem(LOCAL_ALLOCATIONS_KEY, JSON.stringify(all));
+    } catch (e) { /* storage unavailable: fall back to a fresh number */ }
+}
+
 /** Deterministic sequential fallback for offline / local mode. */
 function _allocateLocal() {
     let current = 0;
@@ -2768,16 +3031,35 @@ function _allocateLocal() {
     return formatStudentNumber(next);
 }
 
+function _allocateLocalKeyed(requestId) {
+    const prior = _readLocalAllocations()[requestId];
+    if (isValidStudentNumber(prior)) return prior;
+    const number = _allocateLocal();
+    _writeLocalAllocation(requestId, number);
+    return number;
+}
+
 /**
  * Allocate the next unique 230-series student number.
  * Verifies uniqueness against the users collection and retries on
  * collisions; account creation must abort if this rejects.
+ *
+ * @param {string} [requestId] Stable id for one submission attempt. Retrying
+ *   with the same id returns the number already granted to it instead of
+ *   consuming a new one. Omit it for the original non-idempotent behaviour.
  */
-async function allocateStudentNumber() {
+async function allocateStudentNumber(requestId) {
+    const keyed = isUsableRequestId(requestId);
+    const key = keyed ? requestId : null;
+
     if (firestoreReady()) {
         await _ensureCounter();
         for (let attempt = 0; attempt < MAX_ALLOCATION_RETRIES; attempt++) {
-            const number = await _allocateFirestore();
+            const number = key ? await _allocateFirestoreKeyed(key) : await _allocateFirestore();
+            // A replayed request owns its number by definition; re-checking it
+            // against the users collection would reject the very retry it is
+            // meant to heal.
+            if (key) return number;
             let users = [];
             try {
                 users = await _readUsers();
@@ -2787,7 +3069,29 @@ async function allocateStudentNumber() {
         }
         throw new Error('Unable to allocate a unique student number. Please try again.');
     }
-    return _allocateLocal();
+    return key ? _allocateLocalKeyed(key) : _allocateLocal();
+}
+
+/**
+ * Forget a request's allocation. Called when account creation is abandoned so
+ * a later genuine attempt is not silently handed the abandoned number.
+ */
+function releaseStudentNumberRequest(requestId) {
+    if (!isUsableRequestId(requestId)) return false;
+    if (firestoreReady()) {
+        // Counter documents cannot be deleted from the client; the ledger entry
+        // is pruned by MAX_TRACKED_ALLOCATIONS on its own.
+        return false;
+    }
+    try {
+        const all = _readLocalAllocations();
+        if (!(requestId in all)) return false;
+        delete all[requestId];
+        localStorage.setItem(LOCAL_ALLOCATIONS_KEY, JSON.stringify(all));
+        return true;
+    } catch (e) {
+        return false;
+    }
 }
 
 /** Backward-compatible display value: studentNumber ?? studentId ?? em dash. */
@@ -2803,8 +3107,176 @@ if (typeof module !== 'undefined' && module.exports) {
         formatStudentNumber,
         readStudentNumber,
         allocateStudentNumber,
+        releaseStudentNumberRequest,
+        isUsableRequestId,
         STUDENT_NUMBER_PATTERN,
         STUDENT_NUMBER_MAX
+    };
+}// ============================================================
+// USERNAME CLAIMS
+//
+// Why this exists
+// ---------------
+// saveUser checks uniqueness against `cachedUsers`, which is a snapshot this tab
+// already had. Two tabs (or two instructors on two devices) can read the same
+// snapshot, both conclude the username is free, and both write a profile.
+// Firestore cannot enforce uniqueness on a field: a transaction cannot ask "does
+// any profile already use this username", only read documents whose paths it
+// already knows.
+//
+// So uniqueness is claimed at a path that IS known in advance — one document per
+// normalized username — using the same transaction shape already used for
+// student numbers. The winner writes the profile; the loser is told the name is
+// taken instead of silently creating a second account.
+//
+// The claim id is derived from the normalized username, never from raw user
+// input, so nothing reaches a document path before it has been normalized.
+// ============================================================
+
+const CLAIMS_COLLECTION = 'pseudopy_usernameClaims';
+// 'u:' prefix, then the encoded username. % is permitted because unsafe
+// characters are percent-encoded below.
+const CLAIM_KEY_PATTERN = /^u:[a-z0-9._%\-]{1,96}$/;
+const SAFE_USERNAME_CHAR = /^[a-z0-9._\-]$/;
+
+class UsernameClaimError extends Error {
+    constructor(message, claimedBy) {
+        super(message);
+        this.name = 'UsernameClaimError';
+        this.code = 'username-claim-conflict';
+        this.claimedBy = claimedBy || null;
+    }
+}
+
+/**
+ * Build the claim document id for a username.
+ *
+ * Normalizes to lower case and trims, because two usernames differing only by
+ * case or surrounding whitespace are the same account as far as login is
+ * concerned. Every character outside the safe set is percent-encoded and the
+ * encoding is lower-cased, so the result is always a single Firestore document
+ * id whose alphabet is entirely lower case: a username containing '/' can never
+ * introduce a path separator, and 'a/b' and 'a%2Fb' cannot collide because the
+ * literal '%' encodes to '%25'.
+ *
+ * No username is rejected here. Imposing a charset would be a product change,
+ * and existing accounts may already use characters this encodes instead.
+ */
+function usernameClaimKey(username) {
+    const normalized = String(username === undefined || username === null ? '' : username)
+        .trim()
+        .toLowerCase();
+    if (!normalized) return '';
+
+    let key = 'u:';
+    for (const ch of normalized) {
+        key += SAFE_USERNAME_CHAR.test(ch) ? ch : encodeURIComponent(ch).toLowerCase();
+    }
+    return key;
+}
+
+function isUsableClaimKey(key) {
+    return CLAIM_KEY_PATTERN.test(String(key || ''));
+}
+
+/**
+ * Claim a username for `ownerId`.
+ *
+ * Resolves `{ claimed: true, replayed }`. `replayed` is true when this owner
+ * already holds the claim, which is what makes a retried submit safe: a request
+ * addressing its own claim is not in conflict with itself.
+ *
+ * Throws UsernameClaimError when a different account holds the name, or when the
+ * claim could not be verified at all. Callers must treat both as a refusal —
+ * "could not verify" must never be treated as "free".
+ */
+async function claimUsername(username, ownerId) {
+    const key = usernameClaimKey(username);
+    if (!isUsableClaimKey(key)) {
+        throw new UsernameClaimError('That username cannot be stored.', null);
+    }
+    if (!firestoreReady()) {
+        // Offline: the local store is the only authority available, and the
+        // cached uniqueness check in saveUser already ran against it.
+        return { claimed: false, offline: true, replayed: false, key };
+    }
+
+    let outcome = null;
+    try {
+        await firestore.runTransaction(async (tx) => {
+            const ref = firestore.collection(CLAIMS_COLLECTION).doc(key);
+            const snap = await tx.get(ref);
+            const data = snap.exists ? (snap.data() || {}) : {};
+            const holder = data.ownerId ? String(data.ownerId) : '';
+
+            if (holder && holder !== String(ownerId)) {
+                outcome = { conflict: true, claimedBy: holder };
+                return;
+            }
+
+            outcome = { conflict: false, replayed: !!holder };
+            if (!holder) {
+                tx.set(ref, {
+                    ownerId: String(ownerId),
+                    claimedAt: new Date().toISOString()
+                });
+            }
+        });
+    } catch (e) {
+        if (e instanceof UsernameClaimError) throw e;
+        // Could not establish the claim. Refusing is the safe direction: the
+        // alternative is creating an account that cannot be logged into.
+        throw new UsernameClaimError(
+            'Could not verify that this username is available. Check your connection and try again.',
+            null
+        );
+    }
+
+    if (outcome && outcome.conflict) {
+        throw new UsernameClaimError('That username is already taken.', outcome.claimedBy);
+    }
+    return {
+        claimed: true,
+        offline: false,
+        replayed: !!(outcome && outcome.replayed),
+        key
+    };
+}
+
+/**
+ * Release a claim. Only the holder may release it, so a writer that lost the
+ * race cannot free a username the winner legitimately owns.
+ */
+async function releaseUsernameClaim(username, ownerId) {
+    const key = usernameClaimKey(username);
+    if (!isUsableClaimKey(key) || !firestoreReady()) return false;
+    let released = false;
+    try {
+        await firestore.runTransaction(async (tx) => {
+            const ref = firestore.collection(CLAIMS_COLLECTION).doc(key);
+            const snap = await tx.get(ref);
+            if (!snap.exists) return;
+            const data = snap.data() || {};
+            if (!data.ownerId || String(data.ownerId) !== String(ownerId)) return;
+            tx.delete(ref);
+            released = true;
+        });
+    } catch (e) {
+        // A stale claim is not worth failing a save over. Worst case the name
+        // stays reserved until the account is deleted, which is recoverable.
+        return false;
+    }
+    return released;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        claimUsername,
+        releaseUsernameClaim,
+        usernameClaimKey,
+        isUsableClaimKey,
+        UsernameClaimError,
+        CLAIMS_COLLECTION
     };
 }// ══════════════════════════════════════════════════════════════
 //  AUTOMATIC SEEDING LOGIC

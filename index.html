@@ -18,7 +18,7 @@
   "operatingSystem": "All",
   "browserRequirements": "Requires HTML5 compatible browser. Supports Skulpt canvas execution.",
   "description": "An educational compiler platform providing automated code generation by translating a structured pseudocode subset into executable Python code.",
-  "abstract": "Translating Pseudocode to Python — An Algorithmic Approach to Automated Code Generation.",
+  "abstract": "Translating Pseudocode to Python: An Algorithmic Approach to Automated Code Generation.",
   "inLanguage": "en",
   "creator": [
     {
@@ -86,6 +86,32 @@
   <link rel="stylesheet" href="style.css?v=charts-fix-1">
   <link rel="stylesheet" href="student-workspace.css?v=charts-fix-1">
   <link rel="stylesheet" href="ui-icons.css?v=1">
+
+  <!-- BOOT GATE.
+       This runs before any body content is parsed, so the first paint never
+       shows the login page. Previously #login-page was always visible while
+       restoreSession() decided what to do: a returning user saw
+       login -> boot splash -> app, which reads as a flash of a screen they
+       were already signed in to.
+
+       While `booting` is set, the splash is the only painted surface. Whether
+       a session exists is known synchronously from localStorage, so
+       restoreSession() shows the splash only when there is something to
+       restore and settles immediately otherwise.
+
+       The timer is a failsafe, not a load timer: if app.js never runs, or
+       throws before settling, the gate is lifted so the app can never be left
+       blank. It is deliberately self-contained and does not depend on any
+       bundled code having loaded. -->
+  <script>
+    (function () {
+      var root = document.documentElement;
+      root.classList.add('booting');
+      window.setTimeout(function () {
+        root.classList.remove('booting');
+      }, 8000);
+    })();
+  </script>
   <script src="ui-icons.js?v=2" defer></script>
   <link rel="icon" href="icons/pseudopy-favicon.png?v=2" type="image/png" sizes="32x32">
 
@@ -113,6 +139,23 @@
 
     <!-- ── Left Hero Panel ── -->
     <div class="login-hero">
+      <div class="hero-art" aria-hidden="true">
+        <svg class="hero-art-svg" viewBox="0 0 640 640" preserveAspectRatio="xMidYMid slice" focusable="false">
+          <!-- Abstract pseudocode blocks resolving into indented code lines. -->
+          <path class="hero-art-flow" d="M232 300 C 300 300, 316 262, 372 262" />
+          <path class="hero-art-flow" d="M232 300 C 306 300, 330 356, 372 356" />
+          <g class="hero-art-step">
+            <rect x="72" y="196" width="160" height="20" rx="7" />
+            <rect x="72" y="290" width="160" height="20" rx="7" />
+          </g>
+          <g class="hero-art-line">
+            <rect x="380" y="196" width="148" height="16" rx="6" />
+            <rect x="396" y="253" width="132" height="16" rx="6" />
+            <rect x="412" y="347" width="116" height="16" rx="6" />
+            <rect x="380" y="420" width="148" height="16" rx="6" />
+          </g>
+        </svg>
+      </div>
       <div class="hero-bg-shapes">
         <div class="hero-shape hero-shape-1"></div>
         <div class="hero-shape hero-shape-2"></div>
@@ -126,7 +169,7 @@
         <h1 class="hero-tagline">
           Transform<br>your ideas<br>into <span class="hero-highlight">code</span>.
         </h1>
-        <p class="hero-subtitle">Translating Pseudocode to Python — An Algorithmic Approach to Automated Code Generation
+        <p class="hero-subtitle">Translating Pseudocode to Python: An Algorithmic Approach to Automated Code Generation
         </p>
 
         <!-- Decorative floating code card -->
@@ -151,36 +194,6 @@
           <div class="login-card-header">
             <h2>Sign In</h2>
             <p>Enter your credentials to continue.</p>
-          </div>
-
-          <!-- ── Login Credentials Guide ── -->
-          <div class="login-hint-box">
-            <div class="login-hint-header" onclick="toggleLoginHint(this)">
-              <span><i data-lucide="lightbulb" aria-hidden="true"></i> How to log in</span>
-              <span class="login-hint-arrow"><i data-lucide="chevron-down" aria-hidden="true"></i></span>
-            </div>
-            <div class="login-hint-body">
-              <p class="login-hint-note">
-                Students and instructors use <strong>name_role</strong>.<br>
-                Your account determines which workspace you can access.
-              </p>
-              <div class="login-hint-table">
-                <div class="login-hint-row login-hint-head">
-                  <span>Username Format</span>
-                  <span>Logs in as</span>
-                </div>
-                <div class="login-hint-row hint-row-2col">
-                  <span class="hint-username" onclick="fillLoginUser('mreantaso_instructor')">mreantaso_instructor</span>
-                  <span class="hint-badge hint-instructor"><i data-lucide="graduation-cap" aria-hidden="true"></i> Instructor</span>
-                </div>
-
-                <div class="login-hint-row hint-row-2col">
-                  <span class="hint-username" onclick="fillLoginUser('mdaet_student')">mdaet_student</span>
-                  <span class="hint-badge hint-student"><i data-lucide="graduation-cap" aria-hidden="true"></i> Student</span>
-                </div>
-              </div>
-              <p class="login-hint-tip"><i data-lucide="message-circle" aria-hidden="true"></i> Click any username to auto-fill it.</p>
-            </div>
           </div>
 
           <form id="login-form">
@@ -484,6 +497,11 @@
     <!-- ── Main Content Area ── -->
       <main class="main-content" id="main-content" tabindex="-1">
         <div id="app-status-region">
+    <div id="sync-state-indicator" class="sync-state-indicator" data-state="synced" role="status" aria-live="polite">
+      <span class="sync-state-dot" aria-hidden="true"></span>
+      <span class="sync-state-label">Synced</span>
+      <span class="sync-state-count" id="sync-state-pending-count" aria-hidden="true" hidden></span>
+    </div>
     <div id="offline-save-status" class="offline-save-status sync-notice" role="status" aria-live="polite" aria-atomic="true" hidden>
       <span class="offline-save-status-icon" aria-hidden="true">{{ui:CloudOff}}</span>
       <span class="offline-save-status-body">
@@ -2059,6 +2077,7 @@
             <button class="devtools-tab" data-tab="metrics" onclick="devToolsSwitchTab('metrics')">Metrics</button>
             <button class="devtools-tab" data-tab="simulation" onclick="devToolsSwitchTab('simulation')">Simulation</button>
             <button class="devtools-tab" data-tab="rawjson" onclick="devToolsSwitchTab('rawjson')">Raw JSON</button>
+            <button class="devtools-tab" data-tab="health" onclick="devToolsSwitchTab('health')">DB Health</button>
           </div>
 
           <div class="devtools-tab-panel active" id="devtools-panel-tokens">
@@ -2195,6 +2214,18 @@
               <details class="devtools-raw-detail"><summary>Raw Trace Events</summary><pre id="devtools-raw-events" class="devtools-raw-pre">—</pre></details>
               <details class="devtools-raw-detail"><summary>Raw Metrics</summary><pre id="devtools-raw-metrics" class="devtools-raw-pre">—</pre></details>
             </div>
+          </div>
+
+          <div class="devtools-tab-panel" id="devtools-panel-health">
+            <div class="devtools-panel-toolbar">
+              <button class="btn btn-secondary btn-sm" id="devtools-health-refresh" onclick="devToolsHealthRefresh()">Re-run checks</button>
+              <button class="btn btn-secondary btn-sm" id="devtools-health-copy" onclick="devToolsHealthCopyReport()">Copy report</button>
+              <span class="devtools-health-summary" id="devtools-health-summary">Not run yet.</span>
+            </div>
+            <div class="devtools-health-grid" id="devtools-health-grid">
+              <p class="devtools-health-empty">Run the checks to inspect the live Firestore, Auth, offline-queue and server-function state.</p>
+            </div>
+            <pre id="devtools-health-json" class="devtools-raw-pre">—</pre>
           </div>
         </div>
 
@@ -2618,10 +2649,10 @@
           </select>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
-        <button class="btn btn-primary" style="width:auto" onclick="saveUser()">{{ui:Save}} Save User</button>
-      </div>
+<div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
+          <button class="btn btn-primary" id="user-save-btn" type="button" style="width:auto" onclick="saveUser()">{{ui:Save}} Save User</button>
+        </div>
       <p class="form-privacy-note">Passwords are stored only as salted hashes. Creating an account means you
         agree to our <button type="button" onclick="showLegalPage('privacy')">Privacy</button> and
         <button type="button" onclick="showLegalPage('terms')">Terms</button>.</p>
@@ -3066,6 +3097,20 @@
   <!-- Auth is required for `request.auth` in Firestore rules. Without it every
        read/write/listener is anonymous and any auth-required ruleset refuses it. -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <!-- Functions is required for the deleteStudentAccount callable. Without it
+       `firebase.functions` is undefined, so src/database/student-deletion.js
+       reported deletionServerAvailable() === false and the client silently
+       fell back to local-only deletion while the deployed function sat
+       unreachable. Keep this version pinned in step with the three above and
+       with EXTERNAL_ASSETS in sw.js. -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+  <!-- App Check is loaded but stays INACTIVE. src/database/firebase.js only calls
+       initializeAppCheck when a reCAPTCHA v3 site key is configured, because
+       activating App Check with no key makes Firestore refuse every read and
+       write. firestore.interim.rules is currently world-writable, so this module
+       is the prerequisite for tightening those rules later. Keep pinned in step
+       with the modules above and with EXTERNAL_ASSETS in sw.js. -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
 
   <!-- Firebase project configuration lives in ONE place: the default config in
        src/database/firebase.js (project `pseudopy-86149`). A second inline copy
@@ -3109,7 +3154,7 @@
   <script src="pwa-updates.js?v=20260921-1" defer></script>
 
   <!-- Boot Splash (only shown while a persisted session is being restored) -->
-  <div id="boot-splash" class="boot-splash hidden" role="status" aria-live="polite">
+  <div id="boot-splash" class="boot-splash" role="status" aria-live="polite">
     <div class="boot-splash-box">
       <span class="pwa-spinner" aria-hidden="true"></span>
       <span>Restoring your session...</span>

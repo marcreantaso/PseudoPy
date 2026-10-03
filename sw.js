@@ -3,10 +3,10 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-shell-20261001-v14';
+const CACHE_NAME = 'pseudopy-shell-20261003-v16';
 // Vendor cache name is versioned so the old-worker cleanup below can prune
 // superseded PDF worker generations instead of accumulating them.
-const VENDOR_CACHE_NAME = 'pseudopy-vendor-20261001-v14';
+const VENDOR_CACHE_NAME = 'pseudopy-vendor-20261003-v16';
 
 const LOCAL_ASSETS = [
     './',
@@ -53,6 +53,8 @@ const EXTERNAL_ASSETS = [
     'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
     'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js',
     'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js',
+    'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js',
+    'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js',
     'https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.js',
     'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js'
 ];

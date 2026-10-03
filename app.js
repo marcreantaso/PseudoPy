@@ -838,20 +838,6 @@ async function checkCurrentDeviceApprovalStatus() {
 
 var loginInProgress = false;
 
-function toggleLoginHint(header) {
-    const box = header.closest('.login-hint-box');
-    box.classList.toggle('open');
-}
-
-function fillLoginUser(username) {
-    setValue('login-username', username);
-    setValue('login-password', '');
-    const box = $qs('.login-hint-box');
-    if (box) box.classList.remove('open');
-    const passwordField = $id('login-password');
-    if (passwordField) passwordField.focus();
-}
-
 function getLoginSubmitButton() {
     return typeof $id === 'function' ? $id('login-submit') : null;
 }
@@ -1207,11 +1193,13 @@ function showReconnectingStatus() {
     if (!isBrowserOffline() && typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) return;
     const banner = typeof $id === 'function' ? $id('connection-status-banner') : null;
     if (banner) banner.hidden = false;
+    if (typeof renderSyncIndicator === 'function') renderSyncIndicator();
 }
 
 function hideReconnectingStatus() {
     const banner = typeof $id === 'function' ? $id('connection-status-banner') : null;
     if (banner) banner.hidden = true;
+    if (typeof renderSyncIndicator === 'function') renderSyncIndicator();
 }
 
 function showOfflineSaveStatus(reason) {
@@ -1276,6 +1264,7 @@ function reportCloudSaveDenied(context, classification) {
     } else {
         reason = 'Your changes are saved on this device, but the server rejected them (' + (classification.category || 'unknown') + ').';
     }
+    if (typeof renderSyncIndicator === 'function') renderSyncIndicator();
     return showOfflineSaveStatus(reason);
 }
 
@@ -1297,6 +1286,136 @@ function retryCloudSyncNow() {
         }
         return summary;
     });
+}
+
+/* ============================================================
+   PERSISTENT CONNECTION INDICATOR
+
+   The two notices above are transient and easy to miss: once
+   dismissed, nothing tells you whether this browser is actually
+   talking to Firestore. This is a small always-visible pill that
+   reports the current state permanently.
+
+   It holds NO state of its own. Every value is derived from the
+   sync manager's existing synchronous variables and the same
+   events the banners already listen to, so the pill can never
+   disagree with the rest of the connectivity UI.
+   ============================================================ */
+
+const SYNC_INDICATOR_ID = 'sync-state-indicator';
+const SYNC_INDICATOR_COUNT_ID = 'sync-state-pending-count';
+
+let syncIndicatorPendingCount = null;   // null until the queue is read once
+let syncIndicatorBound = false;
+let syncIndicatorCountTimer = null;
+
+/**
+ * Derive the current state. Order matters: a permission refusal outranks an
+ * outage because the server answered, and the browser's own offline flag is
+ * the weakest signal of all (navigator.onLine reports "online" on a captive
+ * portal and "offline" on some working wifi).
+ */
+function readSyncIndicatorState() {
+    if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+        return { key: 'offline', label: 'Offline', detail: 'No network connection. Changes are saved on this device.' };
+    }
+    if (typeof syncPermissionBlocked !== 'undefined' && syncPermissionBlocked) {
+        return { key: 'denied', label: 'Cloud denied', detail: 'Firestore refused a write. Changes are saved on this device.' };
+    }
+    if (typeof firestoreReady === 'function' && !firestoreReady()) {
+        return { key: 'local', label: 'Local only', detail: 'Firestore is unavailable. Changes are saved on this device.' };
+    }
+    if (typeof isFirestoreReachable === 'function' && !isFirestoreReachable()) {
+        return { key: 'reconnecting', label: 'Reconnecting', detail: 'Reaching Firestore. Changes are queued until it responds.' };
+    }
+    if (typeof syncInProgress !== 'undefined' && syncInProgress) {
+        return { key: 'syncing', label: 'Syncing', detail: 'Uploading saved changes.' };
+    }
+    if (syncIndicatorPendingCount > 0) {
+        return { key: 'queued', label: 'Queued', detail: syncIndicatorPendingCount + ' change(s) waiting to sync.' };
+    }
+    return { key: 'synced', label: 'Synced', detail: 'All changes are saved to the cloud.' };
+}
+
+function renderSyncIndicator() {
+    if (typeof $id !== 'function') return null;
+    const pill = $id(SYNC_INDICATOR_ID);
+    if (!pill) return null;
+
+    const state = readSyncIndicatorState();
+    pill.dataset.state = state.key;
+    pill.title = state.detail;
+    pill.setAttribute('aria-label', 'Cloud sync status: ' + state.label + '. ' + state.detail);
+
+    const label = pill.querySelector('.sync-state-label');
+    if (label) label.textContent = state.label;
+
+    const count = $id(SYNC_INDICATOR_COUNT_ID);
+    if (count) {
+        if (state.key === 'queued' && syncIndicatorPendingCount > 0) {
+            count.textContent = String(syncIndicatorPendingCount);
+            count.hidden = false;
+        } else {
+            count.hidden = true;
+        }
+    }
+    return state;
+}
+
+/**
+ * Refresh the queued-change count. getSyncState() is async because it reads
+ * IndexedDB, so the pill renders its synchronous state immediately and
+ * upgrades it when the count lands.
+ */
+function refreshSyncIndicatorCounts() {
+    if (typeof getSyncState !== 'function') return Promise.resolve(null);
+    return Promise.resolve(getSyncState()).then(function (state) {
+        if (!state) return null;
+        syncIndicatorPendingCount = (state.pending || 0) + (state.failed || 0);
+        renderSyncIndicator();
+        return state;
+    }, function () { return null; });
+}
+
+function initSyncIndicator() {
+    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+    if (!syncIndicatorBound) {
+        syncIndicatorBound = true;
+        // Reuse the listeners already wired above rather than adding a second
+        // set, so the pill and the banners can never drift apart.
+        window.addEventListener('online', refreshSyncIndicatorCounts);
+        window.addEventListener('offline', renderSyncIndicator);
+        window.addEventListener('pseudopy:connection-state', function () {
+            renderSyncIndicator();
+            scheduleSyncIndicatorCountRefresh();
+        });
+        window.addEventListener('pseudopy:sync-error', function () {
+            renderSyncIndicator();
+            scheduleSyncIndicatorCountRefresh();
+        });
+    }
+    renderSyncIndicator();
+    refreshSyncIndicatorCounts();
+}
+
+/**
+ * markFirestoreReachable fires on every completed Firestore attempt, which can
+ * be frequent. Coalesce the IndexedDB read so a sync burst costs one query.
+ */
+function scheduleSyncIndicatorCountRefresh() {
+    if (syncIndicatorCountTimer) return;
+    syncIndicatorCountTimer = setTimeout(function () {
+        syncIndicatorCountTimer = null;
+        refreshSyncIndicatorCounts();
+    }, 750);
+}
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initSyncIndicator);
+    } else {
+        initSyncIndicator();
+    }
 }
 
 function initConnectionStatus() {
@@ -1418,14 +1537,31 @@ function clearPersistedRoute() {
     try { localStorage.removeItem(ROUTE_KEY); } catch (e) { }
 }
 
+/**
+ * Boot gate. The `booting` class is added by an inline script in <head> before
+ * anything is parsed, so the first paint cannot reveal the login page.
+ * settleBoot() is the single place that lifts it, and every terminal path of
+ * restoreSession() must call it or the app is left behind the splash.
+ *
+ * The inline script also arms an independent 8s failsafe, so a bundle that never
+ * loads cannot leave a blank page.
+ */
 function showBootSplash() {
     const splash = $id('boot-splash');
-    if (splash) splash.classList.remove('hidden');
+    if (splash) splash.classList.add('is-visible');
 }
 
 function hideBootSplash() {
     const splash = $id('boot-splash');
-    if (splash) splash.classList.add('hidden');
+    if (splash) splash.classList.remove('is-visible');
+}
+
+/** Lift the boot gate: reveal whichever surface the session resolved to. */
+function settleBoot() {
+    hideBootSplash();
+    if (typeof document !== 'undefined' && document.documentElement) {
+        document.documentElement.classList.remove('booting');
+    }
 }
 
 // Session-level names kept for the existing callers (authentication logout,
@@ -1526,7 +1662,7 @@ function scheduleProfileRefresh(docId, fallbackRoute) {
  */
 function renderSessionState(result) {
     if (!result || (result.state !== BOOT_AUTHENTICATED && result.state !== BOOT_AUTHENTICATED_DEGRADED)) {
-        hideBootSplash();
+        settleBoot();
         return;
     }
     const targetPage = result.route || '';
@@ -1534,7 +1670,7 @@ function renderSessionState(result) {
         try { showApp(targetPage); } catch (e) { console.warn('[Session] App render failed, session kept:', e && e.message); }
     }
     if (result.state === BOOT_AUTHENTICATED_DEGRADED && !result.permanentFailure) showConnectionBanner();
-    hideBootSplash();
+    settleBoot();
 }
 
 /**
@@ -1560,10 +1696,16 @@ async function restoreSession() {
     }
 
     if (!snapshot || !((snapshot._docId || snapshot.id))) {
+        // No session, and localStorage answers that synchronously, so there is
+        // no reason to keep the gate closed for even one frame. Reveal the login
+        // page directly: a first-time visitor now goes straight to it instead of
+        // paying for a splash they did not need.
         bootState = BOOT_UNAUTHENTICATED;
+        settleBoot();
         return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
     }
 
+    // A session exists, so the strict profile read is worth waiting behind.
     showBootSplash();
     bootState = BOOT_PROFILE_LOADING;
 
@@ -1581,7 +1723,7 @@ async function restoreSession() {
         if (status === 'archived' || status === 'inactive' || status === 'deleted') {
             clearSession();
             bootState = BOOT_UNAUTHENTICATED;
-            hideBootSplash();
+            settleBoot();
             showToast('Your session ended. This account is no longer active.', 'info');
             return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
         }
@@ -1602,7 +1744,7 @@ async function restoreSession() {
             console.warn('[Session] Account no longer exists; clearing stored session.');
             clearSession();
             bootState = BOOT_UNAUTHENTICATED;
-            hideBootSplash();
+            settleBoot();
             return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
         }
         // Transient Firestore/network failure: the persisted session is
@@ -1629,7 +1771,7 @@ async function restoreSession() {
             return { state: BOOT_AUTHENTICATED_DEGRADED, user: currentUser, route: targetPage };
         }
         bootState = BOOT_UNAUTHENTICATED;
-        hideBootSplash();
+        settleBoot();
         return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
     }
 }/* ============================================================
@@ -4965,6 +5107,10 @@ async function openUserModal(id = null) {
         setValue('user-username', '');
         setValue('user-email', '');
         setValue('user-password', '');
+        // One key per opened form. Retrying a failed submit reuses it; opening
+        // the modal again mints a new one so two different students never share
+        // an idempotency key.
+        userCreateRequestId = _newUserCreateRequestId();
         if (currentUser.role === 'admin') {
             setValue('user-role-select', 'instructor');
         } else if (currentUser.role === 'instructor') {
@@ -4975,16 +5121,80 @@ async function openUserModal(id = null) {
         const pwGroup = $id('user-password-group');
         if (pwGroup) pwGroup.classList.remove('hidden');
     }
-    modal.classList.remove('hidden');
+modal.classList.remove('hidden');
+    setSaveUserBusy(false);
+    _bindUserModalEnterSubmit(modal);
+}
+
+/**
+ * The modal is a <div>, not a <form>, so pressing Enter in any field did
+ * nothing at all. Bind it once per modal element so keyboard submission
+ * matches the visible Save button.
+ */
+function _bindUserModalEnterSubmit(modal) {
+    if (!modal || modal.__pseudopyEnterBound) return;
+    modal.__pseudopyEnterBound = true;
+    modal.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter') return;
+        // A multi-line-capable control owns its own Enter.
+        const target = event.target;
+        if (target && target.tagName === 'TEXTAREA') return;
+        event.preventDefault();
+        saveUser();
+    });
 }
 
 function closeUserModal() {
     const modal = $id('user-modal');
     if (modal) modal.classList.add('hidden');
     editingUserId = null;
+    userCreateRequestId = null;
+    // Clear the fields, including the password. Leaving them in the DOM kept a
+    // completed submission live on the page for the next open() to race.
+    ['user-fullname', 'user-username', 'user-email', 'user-password'].forEach(function (field) {
+        setValue(field, '');
+    });
+    setSaveUserBusy(false);
+}
+
+// ── Add/Edit user: in-flight guard + idempotent submission ──
+//
+// The reported duplicate (one person holding 2300003 and 2300004) came from
+// three compounding gaps:
+//   1. saveUser had no in-flight guard, so a double click ran it twice.
+//   2. The duplicate check read cachedUsers, which dbSet never updates, so the
+//      second run saw a stale list and passed the check.
+//   3. The document id was 'u' + Date.now(), recomputed per invocation, so a
+//      retry could never converge on the record the first run already wrote.
+// Fixing the number allocator alone is not enough: it makes the second run
+// reuse 2300003, but it would still overwrite a different document.
+let saveUserBusy = false;
+// Minted when the modal opens, so every retry of the SAME submission shares it
+// while a genuinely new account gets a fresh key.
+let userCreateRequestId = null;
+
+function _newUserCreateRequestId() {
+    if (typeof crypto !== 'undefined' && crypto && typeof crypto.randomUUID === 'function') {
+        return 'req_' + crypto.randomUUID();
+    }
+    return 'req_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
+}
+
+function setSaveUserBusy(busy) {
+    saveUserBusy = !!busy;
+    const btn = $id('user-save-btn');
+    if (!btn) return;
+    btn.disabled = saveUserBusy;
+    btn.setAttribute('aria-busy', saveUserBusy ? 'true' : 'false');
+}
+
+/** Normalized username key: uniqueness must not depend on letter case. */
+function normalizedUsernameKey(value) {
+    return String(value || '').trim().toLowerCase();
 }
 
 async function saveUser() {
+    if (saveUserBusy) return;
     const fullName = getValue('user-fullname').trim();
     const username = getValue('user-username').trim();
     const email = getValue('user-email').trim();
@@ -5004,10 +5214,29 @@ async function saveUser() {
         if (!gate.ok) { showToast(gate.message, 'error'); return; }
     }
 
+    const requestId = userCreateRequestId || _newUserCreateRequestId();
+    userCreateRequestId = requestId;
+    setSaveUserBusy(true);
+
     try {
         const users = cachedUsers.length ? cachedUsers : await refreshUsers();
-        const dup = users.find(u => u.username === username && u.id !== editingUserId);
-        if (dup) { showToast('Username already exists!', 'error'); return; }
+        const usernameKey = normalizedUsernameKey(username);
+        const emailKey = String(email).toLowerCase();
+
+        const dup = users.find(u =>
+            u.id !== editingUserId && normalizedUsernameKey(u.username) === usernameKey);
+        if (dup) {
+            showToast('Username already exists!', 'error');
+            return;
+        }
+        // Email was previously unchecked, so one person could be registered
+        // twice under the same address.
+        const dupEmail = users.find(u =>
+            u.id !== editingUserId && String(u.email || '').toLowerCase() === emailKey);
+        if (dupEmail) {
+            showToast('That email is already used by another account.', 'error');
+            return;
+        }
 
         if (editingUserId) {
             const user = users.find(u => u.id === editingUserId);
@@ -5017,9 +5246,51 @@ async function saveUser() {
             }
             showToast('User updated successfully!', 'success');
         } else {
-            const newId = 'u' + Date.now();
+            // Idempotent replay: if this submission already landed, return the
+            // existing record instead of allocating another number and writing
+            // a second profile.
+            const already = users.find(u => u.creationRequestId === requestId);
+            if (already) {
+                showToast(already.studentNumber
+                    ? `${already.fullName} · Student No. ${already.studentNumber} · @${already.username} was already created.`
+                    : 'This account was already created.', 'info');
+                closeUserModal();
+                if (currentUser.role === 'admin') {
+                    await loadUsers();
+                } else if (currentUser.role === 'instructor') {
+                    await loadStudents();
+                }
+                return;
+            }
+
+            // Deterministic from the request id, NOT 'u' + Date.now().
+//
+// The cached-user replay check above is best-effort: it only sees writes that
+// already landed in this tab's cache. The reported duplicate happened because
+// the server accepted the write while the client was still deciding it had
+// failed, so on retry the cache was stale, the replay check missed, and a
+// second profile was written for the same person. Deriving the document id
+// from the request id means a retry addresses the SAME document: the write
+// becomes an overwrite and a second profile is impossible regardless of what
+// the cache happens to contain.
+const newId = 'u' + requestId.replace(/^req_/, '');
             const salt = generateSalt();
             const userHash = await hashPassword(password, salt);
+
+            // Claim the username before the profile write. The cached
+            // uniqueness check above cannot see another tab's write; this
+            // transaction can, because the claim document's path is known from
+            // the username alone.
+            let claim = null;
+            if (typeof claimUsername === 'function') {
+                try {
+                    claim = await claimUsername(username, newId);
+                } catch (claimErr) {
+                    showToast((claimErr && claimErr.message) || 'That username is unavailable.', 'error');
+                    return;
+                }
+            }
+
             const userData = {
                 id: newId,
                 fullName,
@@ -5029,21 +5300,30 @@ async function saveUser() {
                 passwordSalt: salt,
                 role,
                 status: 'active',
-                createdBy: currentUser.id
+                createdBy: currentUser.id,
+                creationRequestId: requestId
             };
             if (currentUser.role === 'instructor') {
                 userData.instructorId = currentUser.id;
             }
-            if (role === 'student') {
-                try {
-                    userData.studentNumber = await allocateStudentNumber();
-                } catch (allocErr) {
-                    console.error('[StudentNumber] Allocation failed:', allocErr);
-                    showToast(allocErr && allocErr.message ? allocErr.message : 'Failed to generate student number.', 'error');
-                    return;
+            try {
+                if (role === 'student') {
+                    // Keyed by requestId: a retry of this submission reuses the
+                    // number it already owns rather than consuming a new one.
+                    userData.studentNumber = await allocateStudentNumber(requestId);
                 }
+                await dbSet(usersRef, newId, userData);
+            } catch (writeErr) {
+                console.error('[User] Create failed after claiming username:', writeErr);
+                // The profile never landed, so the claim must not survive it. A
+                // username reserved for an account that does not exist is
+                // unusable, and the instructor would have no way to recover it.
+                if (claim && claim.claimed && typeof releaseUsernameClaim === 'function') {
+                    await releaseUsernameClaim(username, newId);
+                }
+                showToast((writeErr && writeErr.message) || 'Failed to save user.', 'error');
+                return;
             }
-            await dbSet(usersRef, newId, userData);
             showToast(role === 'student' && userData.studentNumber
                 ? `${userData.fullName} · Student No. ${userData.studentNumber} · @${userData.username} created successfully!`
                 : 'User created successfully!', 'success');
@@ -5057,6 +5337,8 @@ async function saveUser() {
     } catch (err) {
         console.error('[Offline Database] Save user error:', err);
         showToast('Failed to save user.', 'error');
+    } finally {
+        setSaveUserBusy(false);
     }
 }
 

@@ -20,6 +20,7 @@
 let cloudAuth = null;            // firebase.auth.Auth | null
 let cloudAuthState = 'unknown';  // unknown | unavailable | signed-out | signed-in
 let cloudAuthResolved = false;   // onAuthStateChanged has fired at least once
+let cloudAuthPersistence = 'unknown'; // unknown | local | default
 const cloudAuthListeners = [];
 
 /**
@@ -40,6 +41,23 @@ function initCloudAuth() {
     }
     try {
         cloudAuth = firebase.auth();
+        // Persistence was previously left unset, silently inheriting LOCAL
+        // (IndexedDB-backed) — which means a shared or lab machine retains the
+        // signed-in identity across browser restarts. Stated explicitly here so
+        // the choice is visible and so the health panel can report it.
+        // Fire-and-forget: a rejection must not block session observation.
+        try {
+            const mode = firebase.auth.Auth.PERSISTENCE_LOCAL;
+            cloudAuth.setPersistence(mode).then(
+                () => { cloudAuthPersistence = 'local'; },
+                (e) => {
+                    cloudAuthPersistence = 'default';
+                    console.warn('[CloudAuth] setPersistence rejected; using SDK default:', e && e.code);
+                }
+            );
+        } catch (e) {
+            cloudAuthPersistence = 'default';
+        }
         cloudAuth.onAuthStateChanged(user => {
             cloudAuthResolved = true;
             cloudAuthState = user ? 'signed-in' : 'signed-out';
@@ -98,7 +116,8 @@ function cloudAuthStatus() {
         resolved: cloudAuthResolved,
         state: cloudAuthState,
         uid: cloudUid(),
-        email: cloudEmail()
+        email: cloudEmail(),
+        persistence: cloudAuthPersistence
     };
 }
 

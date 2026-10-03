@@ -43,11 +43,13 @@ function showReconnectingStatus() {
     if (!isBrowserOffline() && typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) return;
     const banner = typeof $id === 'function' ? $id('connection-status-banner') : null;
     if (banner) banner.hidden = false;
+    if (typeof renderSyncIndicator === 'function') renderSyncIndicator();
 }
 
 function hideReconnectingStatus() {
     const banner = typeof $id === 'function' ? $id('connection-status-banner') : null;
     if (banner) banner.hidden = true;
+    if (typeof renderSyncIndicator === 'function') renderSyncIndicator();
 }
 
 function showOfflineSaveStatus(reason) {
@@ -112,6 +114,7 @@ function reportCloudSaveDenied(context, classification) {
     } else {
         reason = 'Your changes are saved on this device, but the server rejected them (' + (classification.category || 'unknown') + ').';
     }
+    if (typeof renderSyncIndicator === 'function') renderSyncIndicator();
     return showOfflineSaveStatus(reason);
 }
 
@@ -133,6 +136,136 @@ function retryCloudSyncNow() {
         }
         return summary;
     });
+}
+
+/* ============================================================
+   PERSISTENT CONNECTION INDICATOR
+
+   The two notices above are transient and easy to miss: once
+   dismissed, nothing tells you whether this browser is actually
+   talking to Firestore. This is a small always-visible pill that
+   reports the current state permanently.
+
+   It holds NO state of its own. Every value is derived from the
+   sync manager's existing synchronous variables and the same
+   events the banners already listen to, so the pill can never
+   disagree with the rest of the connectivity UI.
+   ============================================================ */
+
+const SYNC_INDICATOR_ID = 'sync-state-indicator';
+const SYNC_INDICATOR_COUNT_ID = 'sync-state-pending-count';
+
+let syncIndicatorPendingCount = null;   // null until the queue is read once
+let syncIndicatorBound = false;
+let syncIndicatorCountTimer = null;
+
+/**
+ * Derive the current state. Order matters: a permission refusal outranks an
+ * outage because the server answered, and the browser's own offline flag is
+ * the weakest signal of all (navigator.onLine reports "online" on a captive
+ * portal and "offline" on some working wifi).
+ */
+function readSyncIndicatorState() {
+    if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+        return { key: 'offline', label: 'Offline', detail: 'No network connection. Changes are saved on this device.' };
+    }
+    if (typeof syncPermissionBlocked !== 'undefined' && syncPermissionBlocked) {
+        return { key: 'denied', label: 'Cloud denied', detail: 'Firestore refused a write. Changes are saved on this device.' };
+    }
+    if (typeof firestoreReady === 'function' && !firestoreReady()) {
+        return { key: 'local', label: 'Local only', detail: 'Firestore is unavailable. Changes are saved on this device.' };
+    }
+    if (typeof isFirestoreReachable === 'function' && !isFirestoreReachable()) {
+        return { key: 'reconnecting', label: 'Reconnecting', detail: 'Reaching Firestore. Changes are queued until it responds.' };
+    }
+    if (typeof syncInProgress !== 'undefined' && syncInProgress) {
+        return { key: 'syncing', label: 'Syncing', detail: 'Uploading saved changes.' };
+    }
+    if (syncIndicatorPendingCount > 0) {
+        return { key: 'queued', label: 'Queued', detail: syncIndicatorPendingCount + ' change(s) waiting to sync.' };
+    }
+    return { key: 'synced', label: 'Synced', detail: 'All changes are saved to the cloud.' };
+}
+
+function renderSyncIndicator() {
+    if (typeof $id !== 'function') return null;
+    const pill = $id(SYNC_INDICATOR_ID);
+    if (!pill) return null;
+
+    const state = readSyncIndicatorState();
+    pill.dataset.state = state.key;
+    pill.title = state.detail;
+    pill.setAttribute('aria-label', 'Cloud sync status: ' + state.label + '. ' + state.detail);
+
+    const label = pill.querySelector('.sync-state-label');
+    if (label) label.textContent = state.label;
+
+    const count = $id(SYNC_INDICATOR_COUNT_ID);
+    if (count) {
+        if (state.key === 'queued' && syncIndicatorPendingCount > 0) {
+            count.textContent = String(syncIndicatorPendingCount);
+            count.hidden = false;
+        } else {
+            count.hidden = true;
+        }
+    }
+    return state;
+}
+
+/**
+ * Refresh the queued-change count. getSyncState() is async because it reads
+ * IndexedDB, so the pill renders its synchronous state immediately and
+ * upgrades it when the count lands.
+ */
+function refreshSyncIndicatorCounts() {
+    if (typeof getSyncState !== 'function') return Promise.resolve(null);
+    return Promise.resolve(getSyncState()).then(function (state) {
+        if (!state) return null;
+        syncIndicatorPendingCount = (state.pending || 0) + (state.failed || 0);
+        renderSyncIndicator();
+        return state;
+    }, function () { return null; });
+}
+
+function initSyncIndicator() {
+    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+    if (!syncIndicatorBound) {
+        syncIndicatorBound = true;
+        // Reuse the listeners already wired above rather than adding a second
+        // set, so the pill and the banners can never drift apart.
+        window.addEventListener('online', refreshSyncIndicatorCounts);
+        window.addEventListener('offline', renderSyncIndicator);
+        window.addEventListener('pseudopy:connection-state', function () {
+            renderSyncIndicator();
+            scheduleSyncIndicatorCountRefresh();
+        });
+        window.addEventListener('pseudopy:sync-error', function () {
+            renderSyncIndicator();
+            scheduleSyncIndicatorCountRefresh();
+        });
+    }
+    renderSyncIndicator();
+    refreshSyncIndicatorCounts();
+}
+
+/**
+ * markFirestoreReachable fires on every completed Firestore attempt, which can
+ * be frequent. Coalesce the IndexedDB read so a sync burst costs one query.
+ */
+function scheduleSyncIndicatorCountRefresh() {
+    if (syncIndicatorCountTimer) return;
+    syncIndicatorCountTimer = setTimeout(function () {
+        syncIndicatorCountTimer = null;
+        refreshSyncIndicatorCounts();
+    }, 750);
+}
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initSyncIndicator);
+    } else {
+        initSyncIndicator();
+    }
 }
 
 function initConnectionStatus() {

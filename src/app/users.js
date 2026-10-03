@@ -881,6 +881,10 @@ async function openUserModal(id = null) {
         setValue('user-username', '');
         setValue('user-email', '');
         setValue('user-password', '');
+        // One key per opened form. Retrying a failed submit reuses it; opening
+        // the modal again mints a new one so two different students never share
+        // an idempotency key.
+        userCreateRequestId = _newUserCreateRequestId();
         if (currentUser.role === 'admin') {
             setValue('user-role-select', 'instructor');
         } else if (currentUser.role === 'instructor') {
@@ -891,16 +895,80 @@ async function openUserModal(id = null) {
         const pwGroup = $id('user-password-group');
         if (pwGroup) pwGroup.classList.remove('hidden');
     }
-    modal.classList.remove('hidden');
+modal.classList.remove('hidden');
+    setSaveUserBusy(false);
+    _bindUserModalEnterSubmit(modal);
+}
+
+/**
+ * The modal is a <div>, not a <form>, so pressing Enter in any field did
+ * nothing at all. Bind it once per modal element so keyboard submission
+ * matches the visible Save button.
+ */
+function _bindUserModalEnterSubmit(modal) {
+    if (!modal || modal.__pseudopyEnterBound) return;
+    modal.__pseudopyEnterBound = true;
+    modal.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter') return;
+        // A multi-line-capable control owns its own Enter.
+        const target = event.target;
+        if (target && target.tagName === 'TEXTAREA') return;
+        event.preventDefault();
+        saveUser();
+    });
 }
 
 function closeUserModal() {
     const modal = $id('user-modal');
     if (modal) modal.classList.add('hidden');
     editingUserId = null;
+    userCreateRequestId = null;
+    // Clear the fields, including the password. Leaving them in the DOM kept a
+    // completed submission live on the page for the next open() to race.
+    ['user-fullname', 'user-username', 'user-email', 'user-password'].forEach(function (field) {
+        setValue(field, '');
+    });
+    setSaveUserBusy(false);
+}
+
+// ── Add/Edit user: in-flight guard + idempotent submission ──
+//
+// The reported duplicate (one person holding 2300003 and 2300004) came from
+// three compounding gaps:
+//   1. saveUser had no in-flight guard, so a double click ran it twice.
+//   2. The duplicate check read cachedUsers, which dbSet never updates, so the
+//      second run saw a stale list and passed the check.
+//   3. The document id was 'u' + Date.now(), recomputed per invocation, so a
+//      retry could never converge on the record the first run already wrote.
+// Fixing the number allocator alone is not enough: it makes the second run
+// reuse 2300003, but it would still overwrite a different document.
+let saveUserBusy = false;
+// Minted when the modal opens, so every retry of the SAME submission shares it
+// while a genuinely new account gets a fresh key.
+let userCreateRequestId = null;
+
+function _newUserCreateRequestId() {
+    if (typeof crypto !== 'undefined' && crypto && typeof crypto.randomUUID === 'function') {
+        return 'req_' + crypto.randomUUID();
+    }
+    return 'req_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
+}
+
+function setSaveUserBusy(busy) {
+    saveUserBusy = !!busy;
+    const btn = $id('user-save-btn');
+    if (!btn) return;
+    btn.disabled = saveUserBusy;
+    btn.setAttribute('aria-busy', saveUserBusy ? 'true' : 'false');
+}
+
+/** Normalized username key: uniqueness must not depend on letter case. */
+function normalizedUsernameKey(value) {
+    return String(value || '').trim().toLowerCase();
 }
 
 async function saveUser() {
+    if (saveUserBusy) return;
     const fullName = getValue('user-fullname').trim();
     const username = getValue('user-username').trim();
     const email = getValue('user-email').trim();
@@ -920,10 +988,29 @@ async function saveUser() {
         if (!gate.ok) { showToast(gate.message, 'error'); return; }
     }
 
+    const requestId = userCreateRequestId || _newUserCreateRequestId();
+    userCreateRequestId = requestId;
+    setSaveUserBusy(true);
+
     try {
         const users = cachedUsers.length ? cachedUsers : await refreshUsers();
-        const dup = users.find(u => u.username === username && u.id !== editingUserId);
-        if (dup) { showToast('Username already exists!', 'error'); return; }
+        const usernameKey = normalizedUsernameKey(username);
+        const emailKey = String(email).toLowerCase();
+
+        const dup = users.find(u =>
+            u.id !== editingUserId && normalizedUsernameKey(u.username) === usernameKey);
+        if (dup) {
+            showToast('Username already exists!', 'error');
+            return;
+        }
+        // Email was previously unchecked, so one person could be registered
+        // twice under the same address.
+        const dupEmail = users.find(u =>
+            u.id !== editingUserId && String(u.email || '').toLowerCase() === emailKey);
+        if (dupEmail) {
+            showToast('That email is already used by another account.', 'error');
+            return;
+        }
 
         if (editingUserId) {
             const user = users.find(u => u.id === editingUserId);
@@ -933,9 +1020,51 @@ async function saveUser() {
             }
             showToast('User updated successfully!', 'success');
         } else {
-            const newId = 'u' + Date.now();
+            // Idempotent replay: if this submission already landed, return the
+            // existing record instead of allocating another number and writing
+            // a second profile.
+            const already = users.find(u => u.creationRequestId === requestId);
+            if (already) {
+                showToast(already.studentNumber
+                    ? `${already.fullName} · Student No. ${already.studentNumber} · @${already.username} was already created.`
+                    : 'This account was already created.', 'info');
+                closeUserModal();
+                if (currentUser.role === 'admin') {
+                    await loadUsers();
+                } else if (currentUser.role === 'instructor') {
+                    await loadStudents();
+                }
+                return;
+            }
+
+            // Deterministic from the request id, NOT 'u' + Date.now().
+//
+// The cached-user replay check above is best-effort: it only sees writes that
+// already landed in this tab's cache. The reported duplicate happened because
+// the server accepted the write while the client was still deciding it had
+// failed, so on retry the cache was stale, the replay check missed, and a
+// second profile was written for the same person. Deriving the document id
+// from the request id means a retry addresses the SAME document: the write
+// becomes an overwrite and a second profile is impossible regardless of what
+// the cache happens to contain.
+const newId = 'u' + requestId.replace(/^req_/, '');
             const salt = generateSalt();
             const userHash = await hashPassword(password, salt);
+
+            // Claim the username before the profile write. The cached
+            // uniqueness check above cannot see another tab's write; this
+            // transaction can, because the claim document's path is known from
+            // the username alone.
+            let claim = null;
+            if (typeof claimUsername === 'function') {
+                try {
+                    claim = await claimUsername(username, newId);
+                } catch (claimErr) {
+                    showToast((claimErr && claimErr.message) || 'That username is unavailable.', 'error');
+                    return;
+                }
+            }
+
             const userData = {
                 id: newId,
                 fullName,
@@ -945,21 +1074,30 @@ async function saveUser() {
                 passwordSalt: salt,
                 role,
                 status: 'active',
-                createdBy: currentUser.id
+                createdBy: currentUser.id,
+                creationRequestId: requestId
             };
             if (currentUser.role === 'instructor') {
                 userData.instructorId = currentUser.id;
             }
-            if (role === 'student') {
-                try {
-                    userData.studentNumber = await allocateStudentNumber();
-                } catch (allocErr) {
-                    console.error('[StudentNumber] Allocation failed:', allocErr);
-                    showToast(allocErr && allocErr.message ? allocErr.message : 'Failed to generate student number.', 'error');
-                    return;
+            try {
+                if (role === 'student') {
+                    // Keyed by requestId: a retry of this submission reuses the
+                    // number it already owns rather than consuming a new one.
+                    userData.studentNumber = await allocateStudentNumber(requestId);
                 }
+                await dbSet(usersRef, newId, userData);
+            } catch (writeErr) {
+                console.error('[User] Create failed after claiming username:', writeErr);
+                // The profile never landed, so the claim must not survive it. A
+                // username reserved for an account that does not exist is
+                // unusable, and the instructor would have no way to recover it.
+                if (claim && claim.claimed && typeof releaseUsernameClaim === 'function') {
+                    await releaseUsernameClaim(username, newId);
+                }
+                showToast((writeErr && writeErr.message) || 'Failed to save user.', 'error');
+                return;
             }
-            await dbSet(usersRef, newId, userData);
             showToast(role === 'student' && userData.studentNumber
                 ? `${userData.fullName} · Student No. ${userData.studentNumber} · @${userData.username} created successfully!`
                 : 'User created successfully!', 'success');
@@ -973,6 +1111,8 @@ async function saveUser() {
     } catch (err) {
         console.error('[Offline Database] Save user error:', err);
         showToast('Failed to save user.', 'error');
+    } finally {
+        setSaveUserBusy(false);
     }
 }
 

@@ -69,14 +69,31 @@ function clearPersistedRoute() {
     try { localStorage.removeItem(ROUTE_KEY); } catch (e) { }
 }
 
+/**
+ * Boot gate. The `booting` class is added by an inline script in <head> before
+ * anything is parsed, so the first paint cannot reveal the login page.
+ * settleBoot() is the single place that lifts it, and every terminal path of
+ * restoreSession() must call it or the app is left behind the splash.
+ *
+ * The inline script also arms an independent 8s failsafe, so a bundle that never
+ * loads cannot leave a blank page.
+ */
 function showBootSplash() {
     const splash = $id('boot-splash');
-    if (splash) splash.classList.remove('hidden');
+    if (splash) splash.classList.add('is-visible');
 }
 
 function hideBootSplash() {
     const splash = $id('boot-splash');
-    if (splash) splash.classList.add('hidden');
+    if (splash) splash.classList.remove('is-visible');
+}
+
+/** Lift the boot gate: reveal whichever surface the session resolved to. */
+function settleBoot() {
+    hideBootSplash();
+    if (typeof document !== 'undefined' && document.documentElement) {
+        document.documentElement.classList.remove('booting');
+    }
 }
 
 // Session-level names kept for the existing callers (authentication logout,
@@ -177,7 +194,7 @@ function scheduleProfileRefresh(docId, fallbackRoute) {
  */
 function renderSessionState(result) {
     if (!result || (result.state !== BOOT_AUTHENTICATED && result.state !== BOOT_AUTHENTICATED_DEGRADED)) {
-        hideBootSplash();
+        settleBoot();
         return;
     }
     const targetPage = result.route || '';
@@ -185,7 +202,7 @@ function renderSessionState(result) {
         try { showApp(targetPage); } catch (e) { console.warn('[Session] App render failed, session kept:', e && e.message); }
     }
     if (result.state === BOOT_AUTHENTICATED_DEGRADED && !result.permanentFailure) showConnectionBanner();
-    hideBootSplash();
+    settleBoot();
 }
 
 /**
@@ -211,10 +228,16 @@ async function restoreSession() {
     }
 
     if (!snapshot || !((snapshot._docId || snapshot.id))) {
+        // No session, and localStorage answers that synchronously, so there is
+        // no reason to keep the gate closed for even one frame. Reveal the login
+        // page directly: a first-time visitor now goes straight to it instead of
+        // paying for a splash they did not need.
         bootState = BOOT_UNAUTHENTICATED;
+        settleBoot();
         return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
     }
 
+    // A session exists, so the strict profile read is worth waiting behind.
     showBootSplash();
     bootState = BOOT_PROFILE_LOADING;
 
@@ -232,7 +255,7 @@ async function restoreSession() {
         if (status === 'archived' || status === 'inactive' || status === 'deleted') {
             clearSession();
             bootState = BOOT_UNAUTHENTICATED;
-            hideBootSplash();
+            settleBoot();
             showToast('Your session ended. This account is no longer active.', 'info');
             return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
         }
@@ -253,7 +276,7 @@ async function restoreSession() {
             console.warn('[Session] Account no longer exists; clearing stored session.');
             clearSession();
             bootState = BOOT_UNAUTHENTICATED;
-            hideBootSplash();
+            settleBoot();
             return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
         }
         // Transient Firestore/network failure: the persisted session is
@@ -280,7 +303,7 @@ async function restoreSession() {
             return { state: BOOT_AUTHENTICATED_DEGRADED, user: currentUser, route: targetPage };
         }
         bootState = BOOT_UNAUTHENTICATED;
-        hideBootSplash();
+        settleBoot();
         return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
     }
 }

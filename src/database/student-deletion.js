@@ -493,6 +493,20 @@ async function deleteStudentProfile(targetDocId, options = {}) {
         });
     }
     step('confirmed-soft', { requestId });
+
+    // Release the username claim. The account still exists but is deactivated,
+    // so the name must not stay reserved; undoStudentDeletion re-takes it. A
+    // stale claim would otherwise block that username for every future account
+    // while no profile exists to explain why.
+    if (profile && profile.username && typeof releaseUsernameClaim === 'function') {
+        try {
+            const released = await releaseUsernameClaim(profile.username, docId);
+            step('username-claim-released', { released });
+        } catch (e) {
+            step('username-claim-release-failed', { error: (e && e.message) || String(e) });
+        }
+    }
+
     return {
         ok: true,
         mode: STUDENT_DELETION.SOFT,
@@ -523,6 +537,20 @@ async function undoStudentDeletion(targetDocId) {
     }
     try {
         const profile = await dbGet(usersRef, docId);
+        // Re-take the username claim released by the soft delete. Without this
+        // the restored account and any new account could hold the same username.
+        if (profile && profile.username && typeof claimUsername === 'function') {
+            try {
+                await claimUsername(profile.username, docId);
+            } catch (claimErr) {
+                return {
+                    ok: false,
+                    code: (claimErr && claimErr.code) || 'username-claim-conflict',
+                    message: 'Restored, but this username is now held by another account: '
+                        + ((claimErr && claimErr.message) || 'rename the account before it is used again.')
+                };
+            }
+        }
         await dbUpdate(usersRef, docId, {
             status: (profile && profile.statusBeforeDeletion) || 'active',
             statusBeforeDeletion: null,

@@ -4,20 +4,6 @@
 
 var loginInProgress = false;
 
-function toggleLoginHint(header) {
-    const box = header.closest('.login-hint-box');
-    box.classList.toggle('open');
-}
-
-function fillLoginUser(username) {
-    setValue('login-username', username);
-    setValue('login-password', '');
-    const box = $qs('.login-hint-box');
-    if (box) box.classList.remove('open');
-    const passwordField = $id('login-password');
-    if (passwordField) passwordField.focus();
-}
-
 function getLoginSubmitButton() {
     return typeof $id === 'function' ? $id('login-submit') : null;
 }

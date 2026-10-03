@@ -66,7 +66,7 @@ The existing storage fallback and demo-data behavior are retained. This refactor
 
 `npm start` and `npm run dev` build first. Static hosting uses the committed outputs directly. `npm run build:check` fails when outputs drift from their sources; `npm test` runs that check automatically. CI also rejects stale outputs.
 
-The only network request introduced for the browser is the lazy `devtools.js` fetch on first entry to the DevTools surface; it is excluded from the service-worker precache so non-devtool users never download it. Browser bundles are otherwise eager with no runtime loader. The service-worker cache is versioned (`CACHE_NAME` in `sw.js`); bump `CACHE_NAME` and `VENDOR_CACHE_NAME` whenever the precached asset list or any precached file changes.
+`devtools.js` is listed in `LOCAL_ASSETS` in `sw.js`, so it is precached with the rest of the shell even though it is only rendered inside the DevTools surface. Browser bundles are eager with no runtime loader. The service-worker cache is versioned (`CACHE_NAME` and `VENDOR_CACHE_NAME` in `sw.js`); bump both whenever the precached asset list or any precached file changes.
 
 ## Verification limits
 

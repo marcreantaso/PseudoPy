@@ -448,6 +448,68 @@ h4 {
   pointer-events: none;
 }
 
+  /* ── Native hero art ──────────────────────────────────────────
+     Inline SVG plus a CSS grid, so the hero gains depth with no image
+     request and no new dependency. It sits *before* .hero-bg-shapes in the
+     markup because those shapes are blurred with filter: blur(80px); stacking
+     the crisp line art underneath keeps the blur from smearing over it.
+
+     Static by design: no animation here on purpose. The blurred shapes above
+     already animate, and an extra animated layer would keep the compositor busy
+     behind the login form for no visual gain. */
+.hero-art {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.5;
+  color: var(--auth-hero-foreground);
+  -webkit-mask-image: radial-gradient(ellipse 70% 65% at 50% 45%, #000 35%, transparent 100%);
+  mask-image: radial-gradient(ellipse 70% 65% at 50% 45%, #000 35%, transparent 100%);
+}
+
+.hero-art-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* A faint drafting grid, drawn with gradients rather than markup. Kept on a
+   pseudo-element so its contrast can be tuned without dimming the line art. */
+.hero-art::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.06;
+  background-image:
+    linear-gradient(to right, currentColor 1px, transparent 1px),
+    linear-gradient(to bottom, currentColor 1px, transparent 1px);
+  background-size: 64px 64px;
+  background-position: center;
+}
+
+.hero-art-flow {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 4 7;
+  opacity: 0.5;
+}
+
+.hero-art-step rect {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  opacity: 0.28;
+}
+
+.hero-art-line rect {
+  fill: currentColor;
+  opacity: 0.22;
+}
+
 .hero-shape {
   position: absolute;
   border-radius: 50%;
@@ -772,7 +834,7 @@ h4 {
   border: 2px solid var(--border);
   border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all var(--duration) var(--ease);
+  transition: background, color, border-color, box-shadow var(--duration) var(--ease);
   text-transform: none;
   letter-spacing: 0;
 }
@@ -898,14 +960,6 @@ h4 {
   }
 }
 
-/* Keep long mono hint rows from forcing horizontal scroll on narrow phones. */
-@media (max-width: 768px) {
-  .login-hint-row > * {
-    min-width: 0;
-    overflow-wrap: break-word;
-  }
-}
-
 @media (max-width: 380px) {
   .role-selector {
     grid-template-columns: 1fr;
@@ -932,7 +986,7 @@ h4 {
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--duration) var(--ease);
+  transition: background, color, border-color, box-shadow, opacity, transform var(--duration) var(--ease);
   outline: none;
   text-decoration: none;
   white-space: nowrap;
@@ -1074,9 +1128,6 @@ svg.lucide {
 }
 
 .btn,
-.login-hint-header>span,
-.hint-badge,
-.login-hint-tip,
 .login-card-header h2 {
   align-items: center;
 }
@@ -1088,9 +1139,6 @@ svg.lucide {
   vertical-align: middle;
 }
 
-.login-hint-header>span,
-.hint-badge,
-.login-hint-tip,
 .btn,
 .login-card-header h2 {
   display: inline-flex;
@@ -1186,7 +1234,7 @@ svg.lucide {
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--duration) var(--ease);
+  transition: background, color, border-color, opacity, transform var(--duration) var(--ease);
   font-size: 0.8rem;
   font-weight: 500;
   border: none;
@@ -1531,7 +1579,7 @@ svg.lucide {
   text-align: left;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--duration) var(--ease);
+  transition: background, color, border-color var(--duration) var(--ease);
 }
 
 .sample-dropdown button:hover {
@@ -1616,7 +1664,7 @@ svg.lucide {
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background, color, border-color, box-shadow 0.2s ease;
   white-space: nowrap;
 }
 
@@ -1856,7 +1904,7 @@ svg.lucide {
   border-radius: 10px;
   box-shadow: 0 0 0 9999px rgba(2, 6, 23, 0.6);
   border: 2px solid var(--accent);
-  transition: all 0.25s ease;
+  transition: top, left, width, height, box-shadow, border-color 0.25s ease;
   pointer-events: none;
   z-index: 1001;
 }
@@ -1936,7 +1984,7 @@ svg.lucide {
   border-radius: 50%;
   background: var(--border);
   display: inline-block;
-  transition: all 0.2s var(--ease);
+  transition: background, opacity, transform 0.2s var(--ease);
 }
 
 .tour-dot.active { background: var(--accent); width: 0.85rem; border-radius: 999px; }
@@ -1985,7 +2033,7 @@ svg.lucide {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   padding: 1.25rem 1.5rem;
-  transition: all var(--duration) var(--ease);
+  transition: background, border-color, box-shadow, transform var(--duration) var(--ease);
 }
 
 .stat-card:hover {
@@ -2287,7 +2335,7 @@ svg.lucide {
   flex: 1;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   min-height: 20px;
-  transition: all var(--duration) var(--ease);
+  transition: height, background, opacity var(--duration) var(--ease);
   position: relative;
   cursor: pointer;
 }
@@ -2404,7 +2452,7 @@ svg.lucide {
   padding: 1.25rem;
   margin-bottom: 1.75rem;
   box-shadow: var(--shadow-sm);
-  transition: all 0.3s ease;
+  transition: background, border-color, box-shadow 0.3s ease;
 }
 
 .guidelines-header {
@@ -2718,7 +2766,7 @@ svg.lucide {
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background, color, border-color, transform 0.2s ease;
 }
 
 .page-btn:hover:not(:disabled):not(.active) {
@@ -3653,7 +3701,7 @@ select.form-input {
   border-radius: var(--radius-md);
   padding: 1rem 1.25rem;
   margin-bottom: 0.75rem;
-  transition: all var(--duration) var(--ease);
+  transition: background, border-color, border-left-color, box-shadow var(--duration) var(--ease);
 }
 
 .request-card:hover {
@@ -3891,162 +3939,6 @@ select.form-input {
   color: var(--text-muted);
 }
 
-/* ── Login Credentials Hint Box ── */
-.login-hint-box {
-  margin-bottom: 1.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--bg-secondary);
-  transition: border-color var(--duration) var(--ease);
-}
-
-.login-hint-box:hover {
-  border-color: var(--accent);
-}
-
-.login-hint-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.65rem 1rem;
-  cursor: pointer;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  user-select: none;
-  transition: background var(--duration) var(--ease), color var(--duration) var(--ease);
-}
-
-.login-hint-header:hover {
-  background: var(--accent-subtle);
-  color: var(--accent);
-}
-
-.login-hint-arrow {
-  font-size: 1rem;
-  transition: transform var(--duration) var(--ease);
-}
-
-.login-hint-box.open .login-hint-arrow {
-  transform: rotate(180deg);
-}
-
-.login-hint-body {
-  display: none;
-  padding: 0.75rem 1rem 1rem;
-  border-top: 1px solid var(--border);
-  animation: hintFadeIn 0.2s ease;
-}
-
-.login-hint-box.open .login-hint-body {
-  display: block;
-}
-
-@keyframes hintFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.login-hint-note {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin-bottom: 0.65rem;
-  line-height: 1.5;
-}
-
-.login-hint-table {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.login-hint-row {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 0.9fr;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.78rem;
-  font-family: 'JetBrains Mono', monospace;
-  transition: background var(--duration) var(--ease);
-}
-
-.login-hint-row.hint-row-2col {
-  grid-template-columns: 1.6fr 1fr;
-}
-
-.login-hint-row:not(.login-hint-head):hover {
-  background: var(--accent-subtle);
-}
-
-.login-hint-head {
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  font-family: 'Inter', sans-serif;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.4rem;
-  margin-bottom: 0.1rem;
-}
-
-.hint-username {
-  color: var(--accent);
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-  transition: color var(--duration) var(--ease);
-}
-
-.hint-username:hover {
-  color: var(--accent-hover);
-}
-
-.hint-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.18rem 0.55rem;
-  border-radius: var(--radius-full);
-  font-size: 0.7rem;
-  font-weight: 700;
-  font-family: 'Inter', sans-serif;
-  letter-spacing: 0.03em;
-}
-
-.hint-admin {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--icon-danger);
-}
-
-.hint-instructor {
-  background: rgba(245, 158, 11, 0.15);
-  color: var(--text-warning);
-}
-
-.hint-student {
-  background: rgba(16, 185, 129, 0.15);
-  color: var(--icon-success);
-}
-
-.login-hint-tip {
-  margin-top: 0.6rem;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  font-style: italic;
-}
-
 /* ════════════════════════════════════════════════════════════════════════
    LEARNING ANALYTICS (REFERENCE DASHBOARD DESIGN)
    ════════════════════════════════════════════════════════════════════════ */
@@ -4150,7 +4042,7 @@ select.form-input {
   font-size: 0.85rem;
   padding: 0.45rem 0.75rem;
   outline: none;
-  transition: all var(--duration) var(--ease);
+  transition: background, color, border-color, box-shadow var(--duration) var(--ease);
   width: 100%;
 }
 
@@ -4634,7 +4526,7 @@ select.form-input {
   padding: 0.35rem 0.75rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--duration) var(--ease);
+  transition: background, color, border-color var(--duration) var(--ease);
 }
 
 .sys-range-btn:hover {
@@ -5667,7 +5559,7 @@ select.form-input {
   border: 1px solid transparent;
   cursor: pointer;
   font-size: 1.1rem;
-  transition: all 0.2s ease;
+  transition: background, color, box-shadow, transform 0.2s ease;
   color: var(--text-primary);
 }
 
@@ -5760,7 +5652,7 @@ select.form-input {
   cursor: pointer;
   padding: 0.2rem 0.4rem;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: background, color, border-color, opacity 0.2s ease;
 }
 
 .notif-mark-all-btn:hover {
@@ -5778,7 +5670,7 @@ select.form-input {
   padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--border, #1e293b);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background, opacity, transform 0.15s ease;
   position: relative;
 }
 
@@ -6121,6 +6013,100 @@ select.form-input {
 
 .connection-status-banner[hidden] {
   display: none;
+}
+
+/* ── Persistent sync indicator ──
+   Always visible while signed in. State is carried entirely by
+   data-state so the colour and copy can never disagree, and the
+   dot uses transform/opacity only (never a layout property) so
+   switching state cannot shift the status bar. */
+.sync-state-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.sync-state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: 0 0 auto;
+  transition: background-color 0.2s var(--ease), opacity 0.2s var(--ease);
+}
+
+.sync-state-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--warning);
+  color: #0b1220;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.sync-state-count[hidden] {
+  display: none;
+}
+
+.sync-state-indicator[data-state="synced"] {
+  border-color: var(--border);
+}
+.sync-state-indicator[data-state="synced"] .sync-state-dot {
+  background: var(--success, #22c55e);
+}
+
+.sync-state-indicator[data-state="syncing"] .sync-state-dot,
+.sync-state-indicator[data-state="queued"] .sync-state-dot {
+  background: var(--warning, #f59e0b);
+  opacity: 1;
+  animation: syncStatePulse 1.4s ease-in-out infinite;
+}
+
+.sync-state-indicator[data-state="queued"] {
+  color: var(--text-primary);
+}
+
+.sync-state-indicator[data-state="reconnecting"] .sync-state-dot,
+.sync-state-indicator[data-state="offline"] .sync-state-dot {
+  background: var(--warning, #f59e0b);
+  opacity: 0.6;
+  animation: syncStatePulse 1.4s ease-in-out infinite;
+}
+
+.sync-state-indicator[data-state="denied"] .sync-state-dot,
+.sync-state-indicator[data-state="local"] .sync-state-dot {
+  background: var(--danger, #ef4444);
+}
+
+.sync-state-indicator[data-state="denied"],
+.sync-state-indicator[data-state="local"] {
+  color: var(--text-primary);
+}
+
+@keyframes syncStatePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.82); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-state-indicator[data-state] .sync-state-dot {
+    animation: none !important;
+  }
 }
 
 /* Permanent cloud refusals are NOT a reconnect state: this banner states the
@@ -7134,6 +7120,84 @@ select.form-input {
   gap: 0.5rem;
 }
 
+/* ── Database Health Panel ── */
+.devtools-health-summary {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-left: 0.5rem;
+}
+
+.devtools-health-empty {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.devtools-health-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.devtools-health-group h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.devtools-health-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.devtools-health-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(0, 2fr);
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.78rem;
+  border-bottom: 1px solid var(--dt-surface-subtle);
+}
+
+.devtools-health-row:last-child {
+  border-bottom: none;
+}
+
+.devtools-health-row dt {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.devtools-health-row dd {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Courier New', Consolas, monospace;
+  font-size: 0.74rem;
+  word-break: break-word;
+}
+
+.devtools-health-row.is-ok dd {
+  color: var(--text-primary);
+}
+
+.devtools-health-row.is-warn dd {
+  color: var(--status-warning, #f59e0b);
+}
+
+.devtools-health-row.is-fail {
+  background: var(--status-danger-soft, rgba(239, 68, 68, 0.08));
+}
+
+.devtools-health-row.is-fail dd {
+  color: var(--status-danger, #ef4444);
+}
+
 .devtools-raw-detail {
   border: 1px solid var(--border);
   border-radius: 0.375rem;
@@ -7981,7 +8045,7 @@ select.form-input {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background, color, border-color 0.15s ease;
   white-space: nowrap;
 }
 
@@ -8222,7 +8286,7 @@ select.form-input {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background, color, border-color, transform 0.15s ease;
 }
 
 .rules-btn:hover {
@@ -8414,6 +8478,19 @@ select.form-input {
     scroll-behavior: auto !important;
     animation-duration: .01ms !important;
     transition-duration: .01ms !important;
+
+    /* Clamping the duration alone does not stop an `infinite` loop: it would
+       still repaint forever at .01ms a frame. One iteration ends it, which is
+       what actually honours the preference for the ambient float/spin/pulse
+       animations that have no reduced-motion rule of their own. */
+    animation-iteration-count: 1 !important;
+  }
+
+  /* Decorative motion with no meaning to convey: switched off outright rather
+     than played once. */
+  .hero-shape,
+  .hero-code-card {
+    animation: none !important;
   }
 }
 
@@ -8504,11 +8581,33 @@ select.form-input {
   position: fixed;
   inset: 0;
   z-index: 99998;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   background: var(--bg-primary, #0b1220);
 }
+
+  /* ── Boot gate ────────────────────────────────────────────────
+     The splash is the only painted surface while the session decision is
+     pending, so a returning user never sees a flash of the login page. It is
+     off by default and turned on either by the `booting` class set before
+     first paint, or by showBootSplash() for a session that needs restoring. */
+  html.booting .boot-splash,
+  .boot-splash.is-visible {
+    display: flex;
+  }
+
+  /* `visibility` rather than `display`: the login page keeps its layout, so
+     revealing it after the gate lifts cannot shift anything on screen. */
+  html.booting #login-page {
+    visibility: hidden;
+  }
+
+  /* The app shell is already `hidden` in markup, but guard it too so a future
+     edit that unhides it early cannot paint over the splash. */
+  html.booting #app-layout {
+    visibility: hidden;
+  }
 
 .boot-splash-box {
   display: flex;
