@@ -2370,7 +2370,50 @@ function pseudocodeToPython(pseudocode) {
 
 /* ============================================================
    CODE EXECUTION (via Skulpt)
+   UX Rule 3: every Run tap answers within one frame — the button
+   goes busy immediately, the console area shows a skeleton, and
+   program output is batched into one layout per animation frame
+   with a 2,000-node cap so long runs never freeze the page.
    ============================================================ */
+
+// Rendered-output cap for the student/instructor/admin consoles. The full
+// transcript is retained in memory for submissions; only the DOM is capped
+// (same policy as the DevTools console, DEV_CONSOLE_MAX_ROWS).
+const RUN_OUTPUT_NODE_CAP = 2000;
+
+const RUN_BUTTON_BY_OUTPUT = {
+    'python-output': 'btn-run-code',
+    'translate-output': 'btn-run-translate',
+    'execute-editor': 'btn-run-execpage',
+    'instructor-python-output': 'btn-run-instructor',
+    'admin-execute-editor': 'btn-run-admin'
+};
+
+/**
+ * Busy state for the Run button that started this run: disabled, aria-busy
+ * and a visible "Running…" label with an inline spinner (.is-loading-text).
+ * The label swap is reverted on completion so the resting label never moves.
+ */
+function setRunButtonBusy(outputId, busy) {
+    const btnId = RUN_BUTTON_BY_OUTPUT[outputId];
+    if (!btnId) return;
+    const btn = $id(btnId);
+    if (!btn) return;
+    if (busy) {
+        // Preserve the rendered markup (icons included) and restore it after
+        // the run so the resting button is byte-identical to before.
+        if (!btn.dataset.runHtml) btn.dataset.runHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+        btn.classList.add('is-loading-text');
+        btn.textContent = 'Running…';
+    } else {
+        btn.disabled = false;
+        btn.setAttribute('aria-busy', 'false');
+        btn.classList.remove('is-loading-text');
+        if (btn.dataset.runHtml) btn.innerHTML = btn.dataset.runHtml;
+    }
+}
 
 function executePython() {
     executeCode('python-output', 'console-output', 'No Python code to execute. Translate first!');
@@ -2396,7 +2439,13 @@ function executeCode(sourceId, outputId, emptyMessage) {
     const sourceEl = $id(sourceId);
     const code = sourceEl ? (sourceEl.tagName === 'TEXTAREA' || sourceEl.tagName === 'INPUT' ? sourceEl.value : sourceEl.textContent || '') : '';
     if (!code.trim()) { showToast(emptyMessage, 'error'); return; }
-    runPythonCode(code, outputId);
+    setRunButtonBusy(outputId, true);
+    try {
+        runPythonCode(code, outputId);
+    } catch (e) {
+        setRunButtonBusy(outputId, false);
+        throw e;
+    }
 }
 
 function runPythonCode(code, outputElementId) {
@@ -2435,12 +2484,66 @@ function runPythonCode(code, outputElementId) {
         (outputElementId !== 'console-output' || runSource === getValue('pseudocode-editor'));
     const studentRun = typeof StudentWorkspace !== 'undefined' ? StudentWorkspace.beginRun(outputElementId, code) : null;
 
-    // Helper: append text to the console output (HTML-safe)
-    function appendOutput(text) {
+    // UX Rule 3: batch Skulpt output into a single layout pass per animation
+    // frame (one span per frame, not one per output chunk) and cap the
+    // rendered nodes. The full transcript stays in `outputTranscript` so
+    // submissions and exercise matching never lose content to the cap.
+    let pendingOutputText = '';
+    let outputFlushHandle = null;
+    let outputTranscript = '';
+    const renderedSpans = [];
+    let droppedSpans = 0;
+
+    function flushOutput() {
+        outputFlushHandle = null;
+        if (!pendingOutputText) return;
         if (typeof clearRunSkeleton === 'function') clearRunSkeleton(outputEl);
+        const chunk = pendingOutputText;
+        pendingOutputText = '';
         const span = document.createElement('span');
-        span.textContent = text;
+        span.textContent = chunk;
+        renderedSpans.push(span);
         outputEl.appendChild(span);
+        while (renderedSpans.length > RUN_OUTPUT_NODE_CAP) {
+            const dropped = renderedSpans.shift();
+            if (dropped.parentNode === outputEl) dropped.remove();
+            droppedSpans++;
+        }
+        if (droppedSpans > 0) {
+            let notice = outputEl.querySelector('.console-cap-notice');
+            if (!notice) {
+                notice = document.createElement('div');
+                notice.className = 'console-cap-notice';
+                notice.setAttribute('role', 'status');
+            } else if (notice.parentNode === outputEl) {
+                notice.remove();
+            }
+            notice.textContent = 'Older output trimmed to the most recent ' + RUN_OUTPUT_NODE_CAP + ' chunks — the full transcript is kept for your submission.';
+            outputEl.appendChild(notice);
+        }
+    }
+
+    function scheduleOutputFlush() {
+        if (typeof requestAnimationFrame === 'function') {
+            if (outputFlushHandle === null) outputFlushHandle = requestAnimationFrame(flushOutput);
+        } else {
+            flushOutput();
+        }
+    }
+
+    function flushNow() {
+        if (outputFlushHandle !== null && typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(outputFlushHandle);
+            outputFlushHandle = null;
+        }
+        flushOutput();
+    }
+
+    // Helper: append text to the console output (HTML-safe, frame-batched)
+    function appendOutput(text) {
+        outputTranscript += text;
+        pendingOutputText += text;
+        scheduleOutputFlush();
     }
 
     // execLimit must be part of the Sk.configure() payload: Skulpt's compiler
@@ -2459,6 +2562,7 @@ function runPythonCode(code, outputElementId) {
         },
         inputfun: function (promptText) {
             return new Promise(function (resolve) {
+                flushNow();
                 if (typeof clearRunSkeleton === 'function') clearRunSkeleton(outputEl);
                 // Create the inline input container
                 const container = document.createElement('div');
@@ -2526,10 +2630,12 @@ function runPythonCode(code, outputElementId) {
     Sk.misceval.asyncToPromise(function () {
         return Sk.importMainWithBody("<stdin>", false, cleanCode, true);
     }).then(function () {
+        flushNow();
+        setRunButtonBusy(outputElementId, false);
         if (typeof clearRunSkeleton === 'function') clearRunSkeleton(outputEl);
-        if (!outputEl.textContent.trim()) outputEl.textContent = 'Code executed successfully (no output).';
+        if (!outputTranscript.trim()) outputEl.textContent = 'Code executed successfully (no output).';
         showToast('Code executed successfully!', 'success');
-        if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.endRun(studentRun, true, outputEl.textContent);
+        if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.endRun(studentRun, true, outputTranscript);
 
         // ── Panel 1: Record successful execution ──
         if (typeof metricsEngine !== 'undefined') {
@@ -2540,7 +2646,7 @@ function runPythonCode(code, outputElementId) {
             exerciseState.isExecuted = true;
             exerciseState.outputMatched = false;
             if (exerciseState.expectedOutputResolved && exerciseState.expectedOutput) {
-                const actualOut = outputEl.textContent.replace('Code executed successfully (no output).', '').trim();
+                const actualOut = outputTranscript.trim();
                 const expectedOut = (exerciseState.expectedOutput || '').trim();
 
                 if (actualOut === expectedOut) {
@@ -2552,6 +2658,8 @@ function runPythonCode(code, outputElementId) {
             updateExerciseStatus();
         }
     }).catch(function (err) {
+        flushNow();
+        setRunButtonBusy(outputElementId, false);
         const errText = String(err && err.toString ? err.toString() : err);
         // A tripped run budget is a stop condition, not a program bug. Say so
         // plainly so the student does not hunt for a syntax error that is not
@@ -2561,9 +2669,10 @@ function runPythonCode(code, outputElementId) {
         if (timedOut) {
             appendOutput('\n\nStopped after ' + Math.round((typeof SKULPT_EXEC_LIMIT_MS === 'number' ? SKULPT_EXEC_LIMIT_MS : 15000) / 1000) + ' seconds. Check for a loop that never ends.');
         }
+        flushNow();
         outputEl.className = 'output-content error';
         showToast(timedOut ? 'Execution stopped: time limit reached.' : 'Runtime error occurred.', 'error');
-        if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.endRun(studentRun, false, outputEl.textContent);
+        if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.endRun(studentRun, false, outputTranscript);
 
         // ── Panel 1: Record failed execution ──
         if (typeof metricsEngine !== 'undefined') {
@@ -7567,6 +7676,7 @@ async function loadStudentSettings() {
             setText('cooldown-message', `Your last password change was ${diffDays} day(s) ago. You can change your password again in ${remainingDays} day(s).`);
             if (submitBtn) {
                 submitBtn.disabled = true;
+                submitBtn.dataset.cooldownSet = '1';
                 submitBtn.textContent = '{{ui:Hourglass}} Cooldown Active (' + remainingDays + ' days remaining)';
             }
         }
@@ -7576,6 +7686,7 @@ async function loadStudentSettings() {
         if (cooldownWarning) cooldownWarning.classList.add('hidden');
         if (submitBtn) {
             submitBtn.disabled = false;
+            submitBtn.dataset.cooldownSet = '1';
             submitBtn.textContent = '{{ui:KeyRound}} Change Password';
         }
     }
@@ -7627,6 +7738,15 @@ async function submitPasswordChangeRequest() {
         if (!gate.ok) { showToast(gate.message, 'error'); return; }
     }
 
+    // UX Rule 3: hashing + a cloud write take real time — the button must go
+    // busy immediately so the tap is answered and cannot be double-submitted.
+    const submitBtn = $id('submit-password-request-btn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.setAttribute('aria-busy', 'true');
+        submitBtn.classList.add('is-loading-text');
+    }
+
     try {
         // Hash the new password before storing
         const salt = generateSalt();
@@ -7675,6 +7795,15 @@ async function submitPasswordChangeRequest() {
     } catch (err) {
         console.error('[Offline Database] Change password error:', err);
         showToast('Failed to change password. Please try again.', 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.setAttribute('aria-busy', 'false');
+            submitBtn.classList.remove('is-loading-text');
+            // loadStudentSettings (when reached) already applied the correct
+            // cooldown/enabled state; only re-enable if it did not run.
+            if (!submitBtn.dataset.cooldownSet) submitBtn.disabled = false;
+            delete submitBtn.dataset.cooldownSet;
+        }
     }
 }
 

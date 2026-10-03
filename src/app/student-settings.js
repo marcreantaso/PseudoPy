@@ -111,6 +111,7 @@ async function loadStudentSettings() {
             setText('cooldown-message', `Your last password change was ${diffDays} day(s) ago. You can change your password again in ${remainingDays} day(s).`);
             if (submitBtn) {
                 submitBtn.disabled = true;
+                submitBtn.dataset.cooldownSet = '1';
                 submitBtn.textContent = '{{ui:Hourglass}} Cooldown Active (' + remainingDays + ' days remaining)';
             }
         }
@@ -120,6 +121,7 @@ async function loadStudentSettings() {
         if (cooldownWarning) cooldownWarning.classList.add('hidden');
         if (submitBtn) {
             submitBtn.disabled = false;
+            submitBtn.dataset.cooldownSet = '1';
             submitBtn.textContent = '{{ui:KeyRound}} Change Password';
         }
     }
@@ -171,6 +173,15 @@ async function submitPasswordChangeRequest() {
         if (!gate.ok) { showToast(gate.message, 'error'); return; }
     }
 
+    // UX Rule 3: hashing + a cloud write take real time — the button must go
+    // busy immediately so the tap is answered and cannot be double-submitted.
+    const submitBtn = $id('submit-password-request-btn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.setAttribute('aria-busy', 'true');
+        submitBtn.classList.add('is-loading-text');
+    }
+
     try {
         // Hash the new password before storing
         const salt = generateSalt();
@@ -219,6 +230,15 @@ async function submitPasswordChangeRequest() {
     } catch (err) {
         console.error('[Offline Database] Change password error:', err);
         showToast('Failed to change password. Please try again.', 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.setAttribute('aria-busy', 'false');
+            submitBtn.classList.remove('is-loading-text');
+            // loadStudentSettings (when reached) already applied the correct
+            // cooldown/enabled state; only re-enable if it did not run.
+            if (!submitBtn.dataset.cooldownSet) submitBtn.disabled = false;
+            delete submitBtn.dataset.cooldownSet;
+        }
     }
 }
 

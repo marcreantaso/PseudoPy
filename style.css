@@ -1086,6 +1086,17 @@ h4 {
   box-shadow: none;
 }
 
+/* UX Rule 3: pressed feedback for every tap, not only touch devices.
+   Disabled buttons never scale (they are not the thing being pressed). */
+.btn:active:not(:disabled),
+.btn:not(:disabled)[aria-busy='true'] {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+}
+
 .btn.is-loading {
   position: relative;
   pointer-events: none;
@@ -4376,6 +4387,18 @@ tr.skeleton-tr td {
   padding: 0.25rem 0;
 }
 .console-running .skeleton { height: 0.8rem; }
+
+/* UX Rule 3: rendered-output cap notice for long student runs. */
+.console-cap-notice {
+  display: block;
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
 
 /* The busy container itself signals progress. */
 [aria-busy="true"] {
