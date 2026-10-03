@@ -36,8 +36,11 @@ test('login persists the session and explicit logout clears it', () => {
     assert.match(auth, /saveSession\(currentUser\);/, 'handleLogin does not persist the session');
     assert.match(auth, /clearSession\(\);\s+clearPersistedRoute\(\);/, 'logout does not clear the persisted session');
     assert.match(auth, /bootState = BOOT_UNAUTHENTICATED;/, 'logout does not mark state unauthenticated');
-    assert.ok(!auth.includes("currentUser.fullName.charAt(0)"), 'sidebar avatar initials logic remained');
-    assert.match(auth, /clearEditorDraft\(\);/, 'logout does not clear the previous user editor draft');
+    // UX Rule 2: sign-out no longer deletes the draft — it is saved and
+    // account-tagged so unsaved work survives while the next account on the
+    // device still cannot see it (see tests/dark-patterns.test.js).
+    assert.match(auth, /maybeSaveEditorDraft\(\)/, 'logout does not preserve the unsaved draft');
+    assert.ok(!/clearEditorDraft\(\);/.test(auth), 'logout must not destroy unsaved work');
     assert.match(auth, /STORAGE_KEYS\.ACTIVE_EXERCISE/, 'logout does not clear the active exercise key');
 });
 

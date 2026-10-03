@@ -232,6 +232,10 @@ async function handleLogin() {
 }
 
 function handleLogout() {
+    // UX Rule 2: sign-out must not destroy unsaved work. The draft is saved
+    // first and stays on this device, tagged with this account, so the same
+    // student finds it again after signing back in — and nobody else does.
+    try { if (typeof maybeSaveEditorDraft === 'function') maybeSaveEditorDraft(); } catch (e) { }
     if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.reset();
     if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
@@ -245,11 +249,11 @@ function handleLogout() {
     editingExerciseId = null;
     editingUserId = null;
 
-    // Explicit sign-out: clear the persisted session, last route and any
-    // per-user editor state so the next account on this device starts fresh.
+    // Explicit sign-out: clear the persisted session and last route so the
+    // next account on this device starts fresh. The editor draft is kept
+    // (account-tagged) rather than deleted: see the note above.
     clearSession();
     clearPersistedRoute();
-    if (typeof clearEditorDraft === 'function') clearEditorDraft();
     try { localStorage.removeItem(STORAGE_KEYS.ACTIVE_EXERCISE); } catch (e) { }
     bootState = BOOT_UNAUTHENTICATED;
 

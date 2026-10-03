@@ -1162,6 +1162,10 @@ async function handleLogin() {
 }
 
 function handleLogout() {
+    // UX Rule 2: sign-out must not destroy unsaved work. The draft is saved
+    // first and stays on this device, tagged with this account, so the same
+    // student finds it again after signing back in — and nobody else does.
+    try { if (typeof maybeSaveEditorDraft === 'function') maybeSaveEditorDraft(); } catch (e) { }
     if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.reset();
     if (typeof stopAnalyticsRealtime === 'function') stopAnalyticsRealtime();
     if (typeof hideConnectionBanner === 'function') hideConnectionBanner();
@@ -1175,11 +1179,11 @@ function handleLogout() {
     editingExerciseId = null;
     editingUserId = null;
 
-    // Explicit sign-out: clear the persisted session, last route and any
-    // per-user editor state so the next account on this device starts fresh.
+    // Explicit sign-out: clear the persisted session and last route so the
+    // next account on this device starts fresh. The editor draft is kept
+    // (account-tagged) rather than deleted: see the note above.
     clearSession();
     clearPersistedRoute();
-    if (typeof clearEditorDraft === 'function') clearEditorDraft();
     try { localStorage.removeItem(STORAGE_KEYS.ACTIVE_EXERCISE); } catch (e) { }
     bootState = BOOT_UNAUTHENTICATED;
 
@@ -7454,6 +7458,51 @@ function anEsc(value) {
    STUDENT SETTINGS & PASSWORD CHANGE
    ============================================================ */
 
+/**
+ * UX Rule 2 — clear the offline copies this browser holds.
+ * Plain wording up front (what is removed, what is untouched, that it
+ * cannot be undone), one confirm, then an immediate busy state. Local
+ * only: the cloud account and everything already synced stays intact.
+ * The device identifier is deliberately kept so removing data does not
+ * silently turn the device into an unauthorized one.
+ */
+async function clearOfflineDataFromSettings() {
+    const confirmed = window.confirm(
+        'Clear offline data on this device?\n\n' +
+        'This removes the offline copies of exercises, activity and notifications, your unsaved editor draft and cached lists from this browser.\n\n' +
+        'Your account and everything already synced to the cloud are not affected. This cannot be undone.'
+    );
+    if (!confirmed) return;
+    const btn = $id('clear-local-data-btn');
+    if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
+    try {
+        // 1. The offline IndexedDB store (cached collections + mutation queue).
+        if (typeof indexedDB !== 'undefined' && indexedDB.deleteDatabase) {
+            await new Promise((resolve) => {
+                let settled = false;
+                const done = () => { if (!settled) { settled = true; resolve(); } };
+                try {
+                    const req = indexedDB.deleteDatabase('pseudopy-offline');
+                    req.onsuccess = req.onerror = req.onblocked = done;
+                } catch (e) { done(); }
+                setTimeout(done, 3000); // never hang the settings page
+            });
+        }
+        // 2. Device-local keys: draft, active exercise, route. Theme and the
+        //    device identifier stay (a preference is not data loss).
+        try {
+            localStorage.removeItem(STORAGE_KEYS.EDITOR_DRAFT);
+            localStorage.removeItem(STORAGE_KEYS.ACTIVE_EXERCISE);
+        } catch (e) { /* private browsing */ }
+        showToast('Offline data cleared. Reloading…', 'success');
+        setTimeout(() => window.location.reload(), 600);
+    } catch (e) {
+        console.warn('[Settings] Clear offline data failed:', e);
+        if (btn) { btn.disabled = false; btn.setAttribute('aria-busy', 'false'); }
+        showToast('Could not clear offline data. Try again.', 'error');
+    }
+}
+
 // Cache for password change history
 let cachedPasswordHistory = [];
 
@@ -8983,7 +9032,11 @@ function maybeSaveEditorDraft() {
         localStorage.setItem(EDITOR_DRAFT_KEY, JSON.stringify({
             exerciseId: activeId,
             text: editor.value,
-            savedAt: new Date().toISOString()
+            savedAt: new Date().toISOString(),
+            // UX Rule 2: the draft belongs to its author. Tagging it keeps
+            // sign-out non-destructive (the draft survives) while the restore
+            // below still refuses to show one account's work to another.
+            user: (typeof currentUser !== 'undefined' && currentUser) ? String(currentUser.username || currentUser.id || '') : ''
         }));
         return true;
     } catch (e) {
@@ -9007,6 +9060,15 @@ function maybeRestoreEditorDraft() {
         const draft = JSON.parse(raw);
         const editor = $id('pseudocode-editor');
         if (!editor) return;
+        // A draft saved by a named account is only restored for that account:
+        // sign-out keeps the draft so unsaved work is never destroyed, but the
+        // next person on this device must not see it. Untagged (legacy)
+        // drafts keep the old behavior.
+        const draftUser = draft.user || '';
+        if (draftUser) {
+            const sessionUser = (typeof currentUser !== 'undefined' && currentUser) ? String(currentUser.username || currentUser.id || '') : '';
+            if (draftUser !== sessionUser) return;
+        }
         const active = exerciseState && exerciseState.activeExercise;
         const activeId = active ? (active._docId || active.id || '') : '';
         if (draft.exerciseId && activeId && draft.exerciseId !== activeId) return;

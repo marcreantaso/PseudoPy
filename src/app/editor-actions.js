@@ -68,7 +68,11 @@ function maybeSaveEditorDraft() {
         localStorage.setItem(EDITOR_DRAFT_KEY, JSON.stringify({
             exerciseId: activeId,
             text: editor.value,
-            savedAt: new Date().toISOString()
+            savedAt: new Date().toISOString(),
+            // UX Rule 2: the draft belongs to its author. Tagging it keeps
+            // sign-out non-destructive (the draft survives) while the restore
+            // below still refuses to show one account's work to another.
+            user: (typeof currentUser !== 'undefined' && currentUser) ? String(currentUser.username || currentUser.id || '') : ''
         }));
         return true;
     } catch (e) {
@@ -92,6 +96,15 @@ function maybeRestoreEditorDraft() {
         const draft = JSON.parse(raw);
         const editor = $id('pseudocode-editor');
         if (!editor) return;
+        // A draft saved by a named account is only restored for that account:
+        // sign-out keeps the draft so unsaved work is never destroyed, but the
+        // next person on this device must not see it. Untagged (legacy)
+        // drafts keep the old behavior.
+        const draftUser = draft.user || '';
+        if (draftUser) {
+            const sessionUser = (typeof currentUser !== 'undefined' && currentUser) ? String(currentUser.username || currentUser.id || '') : '';
+            if (draftUser !== sessionUser) return;
+        }
         const active = exerciseState && exerciseState.activeExercise;
         const activeId = active ? (active._docId || active.id || '') : '';
         if (draft.exerciseId && activeId && draft.exerciseId !== activeId) return;

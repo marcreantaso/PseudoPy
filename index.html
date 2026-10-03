@@ -83,8 +83,8 @@
   <!-- Android Chrome -->
   <meta name="application-name" content="PseudoPy">
 
-  <link rel="stylesheet" href="style.css?v=ux-20261004-1">
-  <link rel="stylesheet" href="student-workspace.css?v=ux-20261004-1">
+  <link rel="stylesheet" href="style.css?v=ux-20261004-2">
+  <link rel="stylesheet" href="student-workspace.css?v=ux-20261004-2">
   <link rel="stylesheet" href="ui-icons.css?v=1">
 
   <!-- BOOT GATE.
@@ -2392,6 +2392,32 @@
           </div>
         </div>
 
+        <!-- Data on this device (UX Rule 2: plain local-vs-cloud disclosure,
+             with a clearly-confirmed way to clear local data — at most two
+             taps from Settings: the button, then the confirm) -->
+        <div class="settings-section">
+          <div class="section-header">
+            <h3><i data-lucide="hard-drive" aria-hidden="true"></i> Data on this device</h3>
+            <p>What PseudoPy keeps in this browser, and what syncs to the cloud.</p>
+          </div>
+          <div class="profile-details">
+            <div class="profile-detail-row">
+              <span class="detail-label"><i data-lucide="laptop" aria-hidden="true"></i> On this device only</span>
+              <span class="detail-value">Your sign-in session, unsaved editor drafts, theme choice, tutorial progress, device identifier and offline copies of exercises and activity. Clearing them does not touch your account.</span>
+            </div>
+            <div class="profile-detail-row">
+              <span class="detail-label"><i data-lucide="cloud" aria-hidden="true"></i> Synced to the cloud</span>
+              <span class="detail-value">Your account profile, submitted exercises and scores, notifications, password requests and authorized devices. Visible to your instructor and administrator.</span>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:0.75rem">
+            <button class="btn btn-secondary" style="width:auto" id="clear-local-data-btn" onclick="clearOfflineDataFromSettings()">
+              <i data-lucide="eraser" aria-hidden="true"></i> Clear offline data on this device
+            </button>
+            <span style="font-size:0.75rem;color:var(--text-muted)">Removes offline copies and drafts from this browser. Your account and cloud data are untouched. This cannot be undone.</span>
+          </div>
+        </div>
+
         <!-- About / App Version -->
         <div class="settings-section">
           <div class="section-header">
@@ -3131,7 +3157,7 @@
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=ux-20261004-1"></script>
+  <script src="app.js?v=ux-20261004-2"></script>
   <script>
     // Lazy-init lucide: every createIcons call site is guarded, so the icon
     // library is fetched on load (not at parse) and icons render once it lands.

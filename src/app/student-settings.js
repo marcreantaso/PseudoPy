@@ -2,6 +2,51 @@
    STUDENT SETTINGS & PASSWORD CHANGE
    ============================================================ */
 
+/**
+ * UX Rule 2 — clear the offline copies this browser holds.
+ * Plain wording up front (what is removed, what is untouched, that it
+ * cannot be undone), one confirm, then an immediate busy state. Local
+ * only: the cloud account and everything already synced stays intact.
+ * The device identifier is deliberately kept so removing data does not
+ * silently turn the device into an unauthorized one.
+ */
+async function clearOfflineDataFromSettings() {
+    const confirmed = window.confirm(
+        'Clear offline data on this device?\n\n' +
+        'This removes the offline copies of exercises, activity and notifications, your unsaved editor draft and cached lists from this browser.\n\n' +
+        'Your account and everything already synced to the cloud are not affected. This cannot be undone.'
+    );
+    if (!confirmed) return;
+    const btn = $id('clear-local-data-btn');
+    if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
+    try {
+        // 1. The offline IndexedDB store (cached collections + mutation queue).
+        if (typeof indexedDB !== 'undefined' && indexedDB.deleteDatabase) {
+            await new Promise((resolve) => {
+                let settled = false;
+                const done = () => { if (!settled) { settled = true; resolve(); } };
+                try {
+                    const req = indexedDB.deleteDatabase('pseudopy-offline');
+                    req.onsuccess = req.onerror = req.onblocked = done;
+                } catch (e) { done(); }
+                setTimeout(done, 3000); // never hang the settings page
+            });
+        }
+        // 2. Device-local keys: draft, active exercise, route. Theme and the
+        //    device identifier stay (a preference is not data loss).
+        try {
+            localStorage.removeItem(STORAGE_KEYS.EDITOR_DRAFT);
+            localStorage.removeItem(STORAGE_KEYS.ACTIVE_EXERCISE);
+        } catch (e) { /* private browsing */ }
+        showToast('Offline data cleared. Reloading…', 'success');
+        setTimeout(() => window.location.reload(), 600);
+    } catch (e) {
+        console.warn('[Settings] Clear offline data failed:', e);
+        if (btn) { btn.disabled = false; btn.setAttribute('aria-busy', 'false'); }
+        showToast('Could not clear offline data. Try again.', 'error');
+    }
+}
+
 // Cache for password change history
 let cachedPasswordHistory = [];
 
