@@ -4302,6 +4302,94 @@ select.form-input {
 .an-chart-plot.an-chart-lg { min-height: var(--chart-h-lg); }
 .an-chart-plot.an-chart-xl { min-height: var(--chart-h-xl); }
 
+/* ============================================================
+   Reusable skeleton placeholders (UX Rule 1)
+   ONE component: a .skeleton base plus layout-shaped variants.
+   A skeleton must mirror the final layout (same heights, gaps,
+   aspect ratio) so replacing it with real content causes no
+   layout shift. Containers set aria-busy="true" while shown;
+   the shimmer respects prefers-reduced-motion.
+   ============================================================ */
+:root {
+  --skeleton-sheen: rgba(255, 255, 255, 0.35);
+}
+[data-theme="dark"] {
+  --skeleton-sheen: rgba(255, 255, 255, 0.09);
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--muted);
+  border-radius: var(--radius-sm);
+  min-height: var(--skeleton-min, 0.85rem);
+  pointer-events: none;
+  user-select: none;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--skeleton-sheen), transparent);
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  to { transform: translateX(100%); }
+}
+
+/* Content-shaped variants: same box the real content will occupy. */
+.skeleton-line { height: 0.85rem; }
+.skeleton-line.skeleton-title { height: 1.1rem; }
+.skeleton-card { min-height: 3rem; border-radius: var(--radius-shadcn); }
+
+/* Width utilities, percent of the parent box. */
+.skeleton-w-25 { width: 25%; }
+.skeleton-w-35 { width: 35%; }
+.skeleton-w-50 { width: 50%; }
+.skeleton-w-65 { width: 65%; }
+.skeleton-w-80 { width: 80%; }
+.skeleton-w-100 { width: 100%; }
+
+/* Table body placeholders: cells keep the table's own padding, so the
+   skeleton rows are exactly as tall as the rows that replace them. */
+tr.skeleton-tr td {
+  vertical-align: middle;
+}
+
+/* Notification list placeholders. */
+.skeleton-notif {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Console output while a run is in progress. */
+.console-running {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.25rem 0;
+}
+.console-running .skeleton { height: 0.8rem; }
+
+/* The busy container itself signals progress. */
+[aria-busy="true"] {
+  cursor: progress;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+    transform: none;
+    background: none;
+  }
+}
+
 .an-svg {
   width: 100%;
   height: auto;

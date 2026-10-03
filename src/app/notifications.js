@@ -81,6 +81,7 @@ async function loadStudentNotifications() {
         // Render notifications list
         const listEl = $id('notif-list');
         if (!listEl) return;
+        listEl.setAttribute('aria-busy', 'false');
 
         if (myNotifs.length === 0) {
             listEl.innerHTML = `
@@ -113,6 +114,15 @@ async function loadStudentNotifications() {
         }).join('');
     } catch (err) {
         console.error('[Notifications] Failed to load student notifications:', err);
+        const listEl = $id('notif-list');
+        if (listEl && listEl.getAttribute('aria-busy') === 'true') {
+            listEl.setAttribute('aria-busy', 'false');
+            listEl.innerHTML = `
+                <div class="notif-empty">
+                    <div style="font-weight:600; color:var(--text-secondary); margin-bottom:0.25rem;">Notifications are unavailable right now.</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted);">Your notifications are saved with your account. Try again in a moment.</div>
+                </div>`;
+        }
     }
 }
 
@@ -127,6 +137,14 @@ function toggleNotificationDropdown(event) {
     const isHidden = dropdown.classList.contains('hidden');
     if (isHidden) {
         dropdown.classList.remove('hidden');
+        // UX Rule 1: the tap must answer immediately with the final layout's
+        // shape while the list resolves. Only skeleton an empty list so a
+        // refresh never flashes.
+        const listEl = $id('notif-list');
+        if (listEl && !listEl.childElementCount) {
+            listEl.innerHTML = skeletonListItems(3);
+            listEl.setAttribute('aria-busy', 'true');
+        }
         loadStudentNotifications();
     } else {
         dropdown.classList.add('hidden');

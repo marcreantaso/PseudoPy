@@ -749,6 +749,102 @@ function resolveSyncNotice() {
     hideOfflineSaveStatus();
 }
 /* ============================================================
+   SKELETON PLACEHOLDERS (UX Rule 1)
+   One reusable component: a skeleton must mirror the final
+   layout (same heights, gaps, aspect ratio) so replacing it
+   with real content causes zero layout shift. Containers set
+   aria-busy="true" while a skeleton is visible; the shimmer is
+   disabled by prefers-reduced-motion in style.css.
+   ============================================================ */
+
+const SKELETON_ROW_WIDTHS = [35, 50, 25, 45, 65, 40, 55, 30];
+
+/** One shimmering bar, optionally width-limited. */
+function skeletonBar(widthClass) {
+    return '<div class="skeleton skeleton-line' + (widthClass ? ' ' + widthClass : '') + '"></div>';
+}
+
+/**
+ * Skeleton rows for a table body: one shimmering cell per column, with
+ * row-to-row width variation so it reads as data, not a gray slab.
+ * The caller sets tbody.setAttribute('aria-busy', 'true').
+ */
+function skeletonTableRows(columnCount, rowCount) {
+    const cols = Math.max(1, columnCount | 0);
+    const rows = Math.max(1, rowCount || 4);
+    let html = '';
+    for (let r = 0; r < rows; r++) {
+        let cells = '';
+        for (let c = 0; c < cols; c++) {
+            const w = SKELETON_ROW_WIDTHS[(r * 3 + c * 5) % SKELETON_ROW_WIDTHS.length];
+            cells += '<td aria-hidden="true">' + skeletonBar('skeleton-w-' + w) + '</td>';
+        }
+        html += '<tr class="skeleton-tr">' + cells + '</tr>';
+    }
+    return html;
+}
+
+/**
+ * Fill a table body with skeleton rows and mark it busy.
+ * `label` is announced to screen readers while loading.
+ */
+function showTableSkeleton(tbodyId, columnCount, rowCount, label) {
+    const tbody = typeof $id === 'function' ? $id(tbodyId) : null;
+    if (!tbody) return;
+    tbody.innerHTML =
+        '<tr aria-hidden="true"><td colspan="' + Math.max(1, columnCount | 0) + '" style="padding:0.35rem 0.75rem">' +
+        '<span class="sr-only" role="status">' + (label || 'Loading…') + '</span>' +
+        '</td></tr>' + skeletonTableRows(columnCount, rowCount);
+    tbody.setAttribute('aria-busy', 'true');
+}
+
+/** Clear the busy flag once real rows replace the skeleton. */
+function clearTableSkeleton(tbodyId) {
+    const tbody = typeof $id === 'function' ? $id(tbodyId) : null;
+    if (tbody) tbody.setAttribute('aria-busy', 'false');
+}
+
+/**
+ * Skeleton items for vertical lists (notifications, cards):
+ * title bar + message bars, matching the real item padding.
+ */
+function skeletonListItems(count, itemClass) {
+    const n = Math.max(1, count | 0);
+    const cls = itemClass ? ' ' + itemClass : '';
+    let html = '';
+    for (let i = 0; i < n; i++) {
+        html += '<div class="skeleton-notif' + cls + '" aria-hidden="true">' +
+            skeletonBar('skeleton-title skeleton-w-' + SKELETON_ROW_WIDTHS[i % SKELETON_ROW_WIDTHS.length]) +
+            skeletonBar('skeleton-w-100') +
+            skeletonBar('skeleton-w-' + SKELETON_ROW_WIDTHS[(i + 3) % SKELETON_ROW_WIDTHS.length]) +
+            '</div>';
+    }
+    return html;
+}
+
+/**
+ * Running placeholder for a console/output area (UX Rule 1 + 3):
+ * shown the instant Run is pressed so the tap always answers.
+ * Remove with clearRunSkeleton as soon as the first output lands.
+ */
+function showRunSkeleton(outputEl) {
+    if (!outputEl) return;
+    outputEl.innerHTML =
+        '<div class="console-running" data-run-skeleton="true" aria-hidden="true">' +
+        skeletonBar('skeleton-w-65') + skeletonBar('skeleton-w-50') + skeletonBar('skeleton-w-35') +
+        '</div><span class="sr-only" role="status">Running…</span>';
+    outputEl.setAttribute('aria-busy', 'true');
+}
+
+function clearRunSkeleton(outputEl) {
+    if (!outputEl) return;
+    const skeleton = outputEl.querySelector ? outputEl.querySelector('[data-run-skeleton]') : null;
+    if (skeleton) skeleton.remove();
+    const status = outputEl.querySelector ? outputEl.querySelector('.sr-only[role="status"]') : null;
+    if (status && status.textContent === 'Running…') status.remove();
+    outputEl.removeAttribute('aria-busy');
+}
+/* ============================================================
    DEVICE FINGERPRINTING & AUTHORIZATION
    ============================================================ */
 
@@ -2304,6 +2400,10 @@ function runPythonCode(code, outputElementId) {
     if (!outputEl) return;
     outputEl.innerHTML = '';
     outputEl.className = 'output-content';
+    // UX Rule 1 + 3: the tap must answer immediately. A layout-matched
+    // skeleton appears the moment Run is pressed and is removed as soon as
+    // the first real output lands (clearRunSkeleton in appendOutput).
+    if (typeof showRunSkeleton === 'function') showRunSkeleton(outputEl);
 
     if (typeof Sk === 'undefined') {
         outputEl.textContent = 'Loading Python runtime...';
@@ -2333,6 +2433,7 @@ function runPythonCode(code, outputElementId) {
 
     // Helper: append text to the console output (HTML-safe)
     function appendOutput(text) {
+        if (typeof clearRunSkeleton === 'function') clearRunSkeleton(outputEl);
         const span = document.createElement('span');
         span.textContent = text;
         outputEl.appendChild(span);
@@ -2354,6 +2455,7 @@ function runPythonCode(code, outputElementId) {
         },
         inputfun: function (promptText) {
             return new Promise(function (resolve) {
+                if (typeof clearRunSkeleton === 'function') clearRunSkeleton(outputEl);
                 // Create the inline input container
                 const container = document.createElement('div');
                 container.className = 'skulpt-input-container';
@@ -2420,6 +2522,7 @@ function runPythonCode(code, outputElementId) {
     Sk.misceval.asyncToPromise(function () {
         return Sk.importMainWithBody("<stdin>", false, cleanCode, true);
     }).then(function () {
+        if (typeof clearRunSkeleton === 'function') clearRunSkeleton(outputEl);
         if (!outputEl.textContent.trim()) outputEl.textContent = 'Code executed successfully (no output).';
         showToast('Code executed successfully!', 'success');
         if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.endRun(studentRun, true, outputEl.textContent);
@@ -4238,7 +4341,8 @@ function _fmtDate(dateStr, fallback = 'Never') {
 
 async function loadUsers() {
     const tbody = $id('users-table-body');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">Loading instructors...</td></tr>`;
+    // UX Rule 1: skeleton rows that mirror the final table layout.
+    showTableSkeleton('users-table-body', 7, 4, 'Loading instructors…');
 
     try {
         const users = await refreshUsers();
@@ -4265,15 +4369,17 @@ async function loadUsers() {
 
         // apply existing filter state
         applyInstructorFilters();
+        clearTableSkeleton('users-table-body');
     } catch (err) {
         console.error('[App] Failed to load instructors:', err);
+        clearTableSkeleton('users-table-body');
         if (tbody) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="7" style="text-align:center;padding:3rem;color:var(--danger)">
                         <div style="font-size:2rem;margin-bottom:0.5rem">{{ui:TriangleAlert}}</div>
                         <div style="font-weight:600;font-size:1rem;margin-bottom:0.4rem">Unable to load instructors. Please try again.</div>
-                        <div style="font-size:0.83rem;color:var(--text-muted);margin-bottom:1rem">${err.message || 'Check database connection.'}</div>
+                        <div style="font-size:0.83rem;color:var(--text-muted);margin-bottom:1rem">${typeof describeUserFacingError === 'function' ? describeUserFacingError(err) : 'Check your connection and try again.'}</div>
                         <button class="btn btn-secondary btn-sm" onclick="loadUsers()" style="margin:0 auto">{{ui:RefreshCw}} Try Again</button>
                     </td>
                 </tr>`;
@@ -4463,7 +4569,8 @@ async function renderDeviceModalTable() {
     const tbody = $id('device-modal-table-body');
     if (!tbody) return;
 
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:1.5rem; color:var(--text-muted);">Loading devices...</td></tr>`;
+    // UX Rule 1: skeleton rows while the device list resolves.
+    showTableSkeleton('device-modal-table-body', 5, 3, 'Loading devices…');
 
     const allDevices = await dbGetAll(devicesRef);
     cachedDevices = allDevices;
@@ -6767,6 +6874,50 @@ function renderAnalyticsCharts(filteredActivity) {
         console.error('[Analytics] error distribution render failed:', e);
         showChartError('an-error-svg', anErrMessage(e));
     }
+    if (typeof initChartResizeObserver === 'function') initChartResizeObserver();
+}
+
+/* ── Resize handling (UX Rule 1) ─────────────────────────────
+   Chart boxes reserve their height with min-height tokens, so a
+   viewport change never shifts layout; the debounced observer
+   only re-renders the SVG of whichever analytics page is
+   visible, after the resize settles (150 ms). Idempotent: the
+   observer is created once and plots keep their reserved box.
+   ============================================================ */
+let anResizeDebounceTimer = null;
+let anChartResizeObserver = null;
+
+function anRerenderVisibleCharts() {
+    if (typeof $id !== 'function') return;
+    const analyticsPage = $id('page-analytics');
+    if (analyticsPage && !analyticsPage.classList.contains('hidden') &&
+        typeof currentFilteredActivity !== 'undefined') {
+        try { renderAnalyticsCharts(currentFilteredActivity); } catch (e) { console.warn('[Analytics] resize re-render failed:', e); }
+        return;
+    }
+    const systemPage = $id('page-system-analytics');
+    if (systemPage && !systemPage.classList.contains('hidden') &&
+        typeof cachedSystemActivity !== 'undefined' && typeof renderSystemAnalytics === 'function') {
+        try { renderSystemAnalytics(); } catch (e) { console.warn('[SystemAnalytics] resize re-render failed:', e); }
+    }
+}
+
+function scheduleChartRerender() {
+    if (anResizeDebounceTimer) clearTimeout(anResizeDebounceTimer);
+    anResizeDebounceTimer = setTimeout(function () {
+        anResizeDebounceTimer = null;
+        anRerenderVisibleCharts();
+    }, 150);
+}
+
+function initChartResizeObserver() {
+    if (anChartResizeObserver || typeof ResizeObserver !== 'function' || typeof $id !== 'function') return;
+    anChartResizeObserver = new ResizeObserver(function () { scheduleChartRerender(); });
+    ['an-trajectory-svg', 'an-submissions-svg', 'an-error-svg', 'system-activity-svg', 'system-errors-svg']
+        .forEach(function (id) {
+            const plot = $id(id);
+            if (plot) anChartResizeObserver.observe(plot);
+        });
 }
 
 function anErrMessage(e) {
@@ -8199,6 +8350,7 @@ async function loadStudentNotifications() {
         // Render notifications list
         const listEl = $id('notif-list');
         if (!listEl) return;
+        listEl.setAttribute('aria-busy', 'false');
 
         if (myNotifs.length === 0) {
             listEl.innerHTML = `
@@ -8231,6 +8383,15 @@ async function loadStudentNotifications() {
         }).join('');
     } catch (err) {
         console.error('[Notifications] Failed to load student notifications:', err);
+        const listEl = $id('notif-list');
+        if (listEl && listEl.getAttribute('aria-busy') === 'true') {
+            listEl.setAttribute('aria-busy', 'false');
+            listEl.innerHTML = `
+                <div class="notif-empty">
+                    <div style="font-weight:600; color:var(--text-secondary); margin-bottom:0.25rem;">Notifications are unavailable right now.</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted);">Your notifications are saved with your account. Try again in a moment.</div>
+                </div>`;
+        }
     }
 }
 
@@ -8245,6 +8406,14 @@ function toggleNotificationDropdown(event) {
     const isHidden = dropdown.classList.contains('hidden');
     if (isHidden) {
         dropdown.classList.remove('hidden');
+        // UX Rule 1: the tap must answer immediately with the final layout's
+        // shape while the list resolves. Only skeleton an empty list so a
+        // refresh never flashes.
+        const listEl = $id('notif-list');
+        if (listEl && !listEl.childElementCount) {
+            listEl.innerHTML = skeletonListItems(3);
+            listEl.setAttribute('aria-busy', 'true');
+        }
         loadStudentNotifications();
     } else {
         dropdown.classList.add('hidden');

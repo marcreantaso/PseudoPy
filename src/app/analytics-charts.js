@@ -40,6 +40,50 @@ function renderAnalyticsCharts(filteredActivity) {
         console.error('[Analytics] error distribution render failed:', e);
         showChartError('an-error-svg', anErrMessage(e));
     }
+    if (typeof initChartResizeObserver === 'function') initChartResizeObserver();
+}
+
+/* ── Resize handling (UX Rule 1) ─────────────────────────────
+   Chart boxes reserve their height with min-height tokens, so a
+   viewport change never shifts layout; the debounced observer
+   only re-renders the SVG of whichever analytics page is
+   visible, after the resize settles (150 ms). Idempotent: the
+   observer is created once and plots keep their reserved box.
+   ============================================================ */
+let anResizeDebounceTimer = null;
+let anChartResizeObserver = null;
+
+function anRerenderVisibleCharts() {
+    if (typeof $id !== 'function') return;
+    const analyticsPage = $id('page-analytics');
+    if (analyticsPage && !analyticsPage.classList.contains('hidden') &&
+        typeof currentFilteredActivity !== 'undefined') {
+        try { renderAnalyticsCharts(currentFilteredActivity); } catch (e) { console.warn('[Analytics] resize re-render failed:', e); }
+        return;
+    }
+    const systemPage = $id('page-system-analytics');
+    if (systemPage && !systemPage.classList.contains('hidden') &&
+        typeof cachedSystemActivity !== 'undefined' && typeof renderSystemAnalytics === 'function') {
+        try { renderSystemAnalytics(); } catch (e) { console.warn('[SystemAnalytics] resize re-render failed:', e); }
+    }
+}
+
+function scheduleChartRerender() {
+    if (anResizeDebounceTimer) clearTimeout(anResizeDebounceTimer);
+    anResizeDebounceTimer = setTimeout(function () {
+        anResizeDebounceTimer = null;
+        anRerenderVisibleCharts();
+    }, 150);
+}
+
+function initChartResizeObserver() {
+    if (anChartResizeObserver || typeof ResizeObserver !== 'function' || typeof $id !== 'function') return;
+    anChartResizeObserver = new ResizeObserver(function () { scheduleChartRerender(); });
+    ['an-trajectory-svg', 'an-submissions-svg', 'an-error-svg', 'system-activity-svg', 'system-errors-svg']
+        .forEach(function (id) {
+            const plot = $id(id);
+            if (plot) anChartResizeObserver.observe(plot);
+        });
 }
 
 function anErrMessage(e) {

@@ -12,7 +12,8 @@ function _fmtDate(dateStr, fallback = 'Never') {
 
 async function loadUsers() {
     const tbody = $id('users-table-body');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">Loading instructors...</td></tr>`;
+    // UX Rule 1: skeleton rows that mirror the final table layout.
+    showTableSkeleton('users-table-body', 7, 4, 'Loading instructors…');
 
     try {
         const users = await refreshUsers();
@@ -39,15 +40,17 @@ async function loadUsers() {
 
         // apply existing filter state
         applyInstructorFilters();
+        clearTableSkeleton('users-table-body');
     } catch (err) {
         console.error('[App] Failed to load instructors:', err);
+        clearTableSkeleton('users-table-body');
         if (tbody) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="7" style="text-align:center;padding:3rem;color:var(--danger)">
                         <div style="font-size:2rem;margin-bottom:0.5rem">{{ui:TriangleAlert}}</div>
                         <div style="font-weight:600;font-size:1rem;margin-bottom:0.4rem">Unable to load instructors. Please try again.</div>
-                        <div style="font-size:0.83rem;color:var(--text-muted);margin-bottom:1rem">${err.message || 'Check database connection.'}</div>
+                        <div style="font-size:0.83rem;color:var(--text-muted);margin-bottom:1rem">${typeof describeUserFacingError === 'function' ? describeUserFacingError(err) : 'Check your connection and try again.'}</div>
                         <button class="btn btn-secondary btn-sm" onclick="loadUsers()" style="margin:0 auto">{{ui:RefreshCw}} Try Again</button>
                     </td>
                 </tr>`;
@@ -237,7 +240,8 @@ async function renderDeviceModalTable() {
     const tbody = $id('device-modal-table-body');
     if (!tbody) return;
 
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:1.5rem; color:var(--text-muted);">Loading devices...</td></tr>`;
+    // UX Rule 1: skeleton rows while the device list resolves.
+    showTableSkeleton('device-modal-table-body', 5, 3, 'Loading devices…');
 
     const allDevices = await dbGetAll(devicesRef);
     cachedDevices = allDevices;

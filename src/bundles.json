@@ -9,6 +9,7 @@
     "src/app/initialization.js",
     "src/app/data-refresh.js",
     "src/app/toasts.js",
+    "src/app/skeletons.js",
     "src/app/device-authorization.js",
     "src/app/authentication.js",
     "src/app/connection-status.js",

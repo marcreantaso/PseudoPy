@@ -83,8 +83,8 @@
   <!-- Android Chrome -->
   <meta name="application-name" content="PseudoPy">
 
-  <link rel="stylesheet" href="style.css?v=charts-fix-1">
-  <link rel="stylesheet" href="student-workspace.css?v=charts-fix-1">
+  <link rel="stylesheet" href="style.css?v=ux-20261004-1">
+  <link rel="stylesheet" href="student-workspace.css?v=ux-20261004-1">
   <link rel="stylesheet" href="ui-icons.css?v=1">
 
   <!-- BOOT GATE.
@@ -1311,10 +1311,12 @@
                 <th scope="col" style="width:23%">Actions</th>
               </tr>
             </thead>
-            <tbody id="exercises-table-body">
-              <tr>
-                <td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">Loading exercises…</td>
-              </tr>
+            <tbody id="exercises-table-body" aria-busy="true">
+              <tr aria-hidden="true"><td colspan="5" style="padding:0.35rem 0.75rem"><span class="sr-only" role="status">Loading exercises…</span></td></tr>
+              <tr class="skeleton-tr" aria-hidden="true"><td><div class="skeleton skeleton-line skeleton-w-65"></div></td><td><div class="skeleton skeleton-line skeleton-w-100"></div></td><td><div class="skeleton skeleton-line skeleton-w-35"></div></td><td><div class="skeleton skeleton-line skeleton-w-50"></div></td><td><div class="skeleton skeleton-line skeleton-w-80"></div></td></tr>
+              <tr class="skeleton-tr" aria-hidden="true"><td><div class="skeleton skeleton-line skeleton-w-50"></div></td><td><div class="skeleton skeleton-line skeleton-w-80"></div></td><td><div class="skeleton skeleton-line skeleton-w-25"></div></td><td><div class="skeleton skeleton-line skeleton-w-35"></div></td><td><div class="skeleton skeleton-line skeleton-w-65"></div></td></tr>
+              <tr class="skeleton-tr" aria-hidden="true"><td><div class="skeleton skeleton-line skeleton-w-80"></div></td><td><div class="skeleton skeleton-line skeleton-w-65"></div></td><td><div class="skeleton skeleton-line skeleton-w-50"></div></td><td><div class="skeleton skeleton-line skeleton-w-25"></div></td><td><div class="skeleton skeleton-line skeleton-w-35"></div></td></tr>
+              <tr class="skeleton-tr" aria-hidden="true"><td><div class="skeleton skeleton-line skeleton-w-35"></div></td><td><div class="skeleton skeleton-line skeleton-w-50"></div></td><td><div class="skeleton skeleton-line skeleton-w-65"></div></td><td><div class="skeleton skeleton-line skeleton-w-80"></div></td><td><div class="skeleton skeleton-line skeleton-w-50"></div></td></tr>
             </tbody>
           </table>
         </div>
@@ -3129,7 +3131,7 @@
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=charts-fix-1"></script>
+  <script src="app.js?v=ux-20261004-1"></script>
   <script>
     // Lazy-init lucide: every createIcons call site is guarded, so the icon
     // library is fetched on load (not at parse) and icons render once it lands.

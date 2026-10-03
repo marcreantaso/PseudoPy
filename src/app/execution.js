@@ -34,6 +34,10 @@ function runPythonCode(code, outputElementId) {
     if (!outputEl) return;
     outputEl.innerHTML = '';
     outputEl.className = 'output-content';
+    // UX Rule 1 + 3: the tap must answer immediately. A layout-matched
+    // skeleton appears the moment Run is pressed and is removed as soon as
+    // the first real output lands (clearRunSkeleton in appendOutput).
+    if (typeof showRunSkeleton === 'function') showRunSkeleton(outputEl);
 
     if (typeof Sk === 'undefined') {
         outputEl.textContent = 'Loading Python runtime...';
@@ -63,6 +67,7 @@ function runPythonCode(code, outputElementId) {
 
     // Helper: append text to the console output (HTML-safe)
     function appendOutput(text) {
+        if (typeof clearRunSkeleton === 'function') clearRunSkeleton(outputEl);
         const span = document.createElement('span');
         span.textContent = text;
         outputEl.appendChild(span);
@@ -84,6 +89,7 @@ function runPythonCode(code, outputElementId) {
         },
         inputfun: function (promptText) {
             return new Promise(function (resolve) {
+                if (typeof clearRunSkeleton === 'function') clearRunSkeleton(outputEl);
                 // Create the inline input container
                 const container = document.createElement('div');
                 container.className = 'skulpt-input-container';
@@ -150,6 +156,7 @@ function runPythonCode(code, outputElementId) {
     Sk.misceval.asyncToPromise(function () {
         return Sk.importMainWithBody("<stdin>", false, cleanCode, true);
     }).then(function () {
+        if (typeof clearRunSkeleton === 'function') clearRunSkeleton(outputEl);
         if (!outputEl.textContent.trim()) outputEl.textContent = 'Code executed successfully (no output).';
         showToast('Code executed successfully!', 'success');
         if (typeof StudentWorkspace !== 'undefined') StudentWorkspace.endRun(studentRun, true, outputEl.textContent);
