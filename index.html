@@ -83,8 +83,8 @@
   <!-- Android Chrome -->
   <meta name="application-name" content="PseudoPy">
 
-  <link rel="stylesheet" href="style.css?v=ux-20261004-3">
-  <link rel="stylesheet" href="student-workspace.css?v=ux-20261004-3">
+  <link rel="stylesheet" href="style.css?v=ux-20261004-4">
+  <link rel="stylesheet" href="student-workspace.css?v=ux-20261004-4">
   <link rel="stylesheet" href="ui-icons.css?v=1">
 
   <!-- BOOT GATE.
@@ -249,21 +249,21 @@
           </div>
 
           <!-- Step 1: User Identification -->
-          <div id="fp-step-1">
+          <div id="fp-step-1" class="auth-step">
             <div class="form-group">
               <label>Username, Email, or Student ID</label>
               <input type="text" id="fp-username-input" class="form-input" placeholder="e.g. mdaet_student, mreantaso_instructor or 2024-032">
             </div>
-            <div style="display:flex; gap:0.75rem; margin-top:1rem;">
-              <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">Cancel</button>
-              <button class="btn btn-primary" onclick="submitRecoveryRequest()" style="flex:2"><i data-lucide="mail" aria-hidden="true"></i> Request Recovery</button>
+            <div class="auth-flow-footer">
+              <button class="btn btn-ghost" onclick="cancelForgotPassword()">Back to Sign In</button>
+              <button class="btn btn-primary" onclick="submitRecoveryRequest()"><i data-lucide="mail" aria-hidden="true"></i> Request Recovery</button>
             </div>
             <p class="form-privacy-note">Recovery requests are logged for security. See our
               <button type="button" onclick="showLegalPage('privacy')">Privacy</button>.</p>
           </div>
 
           <!-- Step 2: Request Submitted / Check Status -->
-          <div id="fp-step-2" class="hidden">
+          <div id="fp-step-2" class="auth-step hidden">
             <div class="fp-status-card fp-status-pending">
               <div class="fp-status-icon"><i data-lucide="hourglass" aria-hidden="true"></i></div>
               <h3>Request Submitted</h3>
@@ -277,14 +277,14 @@
               <label>Check Status &mdash; Enter your Username, Email, or Student ID</label>
               <input type="text" id="fp-check-username" class="form-input" placeholder="e.g. mdaet_student, mreantaso_instructor or 2024-032">
             </div>
-            <div style="display:flex; gap:0.75rem; margin-top:1rem;">
-              <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">← Back to Login</button>
-              <button class="btn btn-primary" onclick="checkRecoveryStatus()" style="flex:2"><i data-lucide="search" aria-hidden="true"></i> Check Status</button>
+            <div class="auth-flow-footer">
+              <button class="btn btn-ghost" onclick="cancelForgotPassword()">Back to Sign In</button>
+              <button class="btn btn-primary" onclick="checkRecoveryStatus()"><i data-lucide="search" aria-hidden="true"></i> Check Status</button>
             </div>
           </div>
 
           <!-- Step 3: Reset Password Form (shown after instructor approval) -->
-          <div id="fp-step-3" class="hidden">
+          <div id="fp-step-3" class="auth-step hidden">
             <div class="fp-status-card fp-status-approved">
               <div class="fp-status-icon"><i data-lucide="circle-check" aria-hidden="true"></i></div>
               <h3>Reset Authorized!</h3>
@@ -316,22 +316,22 @@
               </div>
             </div>
               <div>{{ui:Check}} Passwords must match</div>
-            <div style="display:flex; gap:0.75rem; margin-top:1.25rem;">
-              <button class="btn btn-ghost" onclick="cancelForgotPassword()" style="flex:1">← Cancel</button>
-              <button class="btn btn-primary" onclick="submitPasswordReset()" style="flex:2"><i data-lucide="lock-keyhole" aria-hidden="true"></i> Reset Password</button>
+            <div class="auth-flow-footer">
+              <button class="btn btn-ghost" onclick="cancelForgotPassword()">Back to Sign In</button>
+              <button class="btn btn-primary" onclick="submitPasswordReset()"><i data-lucide="lock-keyhole" aria-hidden="true"></i> Reset Password</button>
             </div>
           </div>
 
           <!-- Step Success -->
-          <div id="fp-step-success" class="hidden">
+          <div id="fp-step-success" class="auth-step hidden">
             <div class="fp-status-card fp-status-success">
               <div class="fp-status-icon"><i data-lucide="party-popper" aria-hidden="true"></i></div>
               <h3>Password Reset Successfully!</h3>
               <p>You can now log in with your new password.</p>
             </div>
-            <button class="btn btn-primary" onclick="backToLoginAfterReset()" style="width:100%; margin-top:1.25rem;">
-              → Back to Login
-            </button>
+            <div class="auth-flow-footer">
+              <button class="btn btn-primary" onclick="backToLoginAfterReset()">Back to Sign In</button>
+            </div>
           </div>
         </div>
       </div>
@@ -3015,12 +3015,12 @@
         </div>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-        <button class="btn btn-primary" onclick="checkCurrentDeviceApprovalStatus()" style="width: 100%; justify-content: center;">
-          {{ui:RefreshCw}} Check Approval Status &amp; Sign In
-        </button>
-        <button class="btn btn-secondary" onclick="closePendingDeviceModal()" style="width: 100%; justify-content: center;">
+      <div class="auth-flow-footer" style="margin-top:1.5rem; position:static;">
+        <button class="btn btn-secondary" onclick="closePendingDeviceModal()">
           Back to Sign In
+        </button>
+        <button class="btn btn-primary" onclick="checkCurrentDeviceApprovalStatus()">
+          {{ui:RefreshCw}} Check Approval Status &amp; Sign In
         </button>
       </div>
     </div>
@@ -3157,7 +3157,7 @@
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=ux-20261004-3"></script>
+  <script src="app.js?v=ux-20261004-4"></script>
   <script>
     // Lazy-init lucide: every createIcons call site is guarded, so the icon
     // library is fetched on load (not at parse) and icons render once it lands.

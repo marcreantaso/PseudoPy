@@ -736,6 +736,52 @@ h4 {
   position: relative;
 }
 
+/* ============================================================
+   UX Rule 4 — one primary-action position for every multi-step
+   flow. Back (secondary) sits on the left, Continue/Next/Submit
+   (primary) on the right, in the same spot on every step. Each
+   step reserves the tallest step's height so content changes
+   never push the buttons, and the footer stays reachable on
+   small screens with safe-area padding.
+   ============================================================ */
+.auth-step {
+  display: flex;
+  flex-direction: column;
+  /* Reserves the space of the tallest step so shorter steps do not
+     move the footer. Grows past this when a step genuinely needs it. */
+  min-height: min(30rem, calc(100dvh - 15rem));
+}
+
+@media (max-width: 380px) {
+  .auth-step { min-height: min(34rem, calc(100dvh - 13rem)); }
+}
+
+.auth-flow-footer {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 1.25rem;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-primary);
+  padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
+}
+
+.auth-flow-footer .btn-ghost,
+.auth-flow-footer .btn-secondary {
+  flex: 1 1 0;
+  margin-right: auto;
+  min-height: 44px;
+  justify-content: center;
+}
+
+.auth-flow-footer .btn-primary {
+  flex: 2 1 0;
+  min-height: 44px;
+  justify-content: center;
+}
+
 .login-form-section::before {
   content: '';
   position: absolute;
