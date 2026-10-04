@@ -7368,85 +7368,44 @@ function setTrajectoryHighlight(trigger) {
 /* ── Submission Activity (area chart) ──────────────────────── */
 
 function renderSubmissionActivityChart(records) {
-    const plot = $id('an-submissions-svg');
-    if (!plot) return;
-    const card = plot.closest('.an-chart-card');
-
+    const mode = $id('chart-view-mode')?.value || 'day';
     const series = buildSubmissionSeries(records || [], {
         monthVal: $id('filter-month')?.value ?? '',
         weekVal: $id('filter-week')?.value || '',
         dateVal: $id('filter-date')?.value || '',
-        viewMode: $id('chart-view-mode')?.value || 'day'
+        viewMode: mode
     });
-
     const total = series.reduce((sum, b) => sum + b.count, 0);
-    const totalEl = card ? card.querySelector('#an-submissions-total') : null;
-    if (totalEl) totalEl.textContent = total + ' submissions in the charted period';
-
-    if (series.length === 0 || total === 0) {
-        plot.innerHTML = anEmptyHtml('No submissions match the selected period.',
-            'Adjust the filters or check back after students submit.');
-        if (card) {
-            const legend = card.querySelector('#an-submissions-total');
-            if (legend) legend.textContent = '0 submissions in the charted period';
-        }
-        return;
-    }
-
-    const viewW = 560, viewH = 260;
-    const margin = { left: 40, right: 18, top: 18, bottom: 34 };
-    const plotW = viewW - margin.left - margin.right;
-    const plotH = viewH - margin.top - margin.bottom;
-    const baseline = margin.top + plotH;
-
-    const maxCount = series.reduce((m, b) => Math.max(m, b.count), 0);
-    const yMax = niceCeil(maxCount);
-    const yStep = yMax <= 6 ? 2 : yMax <= 12 ? 2 : Math.ceil(yMax / 6);
-    const yTicks = [];
-    for (let v = yMax; v >= 0; v -= yStep) yTicks.push(v);
-    if (yTicks[yTicks.length - 1] !== 0) yTicks.push(0);
-
-    const yFor = linearScale([0, yMax], [baseline, margin.top]);
-    const xMax = Math.max(series.length - 1, 1);
-    const xFor = linearScale([0, xMax], [margin.left, margin.left + plotW]);
-
-    const grid = yTicks.map(v =>
-        `<line x1="${margin.left}" y1="${yFor(v)}" x2="${margin.left + plotW}" y2="${yFor(v)}" class="an-grid-line"/>` +
-        `<text x="${margin.left - 6}" y="${yFor(v) + 3}" text-anchor="end" class="an-axis-label">${v}</text>`
-    ).join('');
-
-    const points = series.map((b, i) => ({ x: i, y: b.count }));
-    const linePath = smoothPath(points, xFor, yFor);
-    const fillPath = areaPath(points, xFor, yFor, baseline);
-
-    const barsForAria = series.map(b => `${b.sub} (${b.label}): ${b.count}`).join('; ');
-    const xLabels = series.map((b, i) =>
-        `<text x="${xFor(i)}" y="${baseline + 16}" text-anchor="middle" class="an-axis-label an-axis-label-x">${anEsc(b.sub)}</text>`
-    ).join('');
-
-    const dots = series.map((b, i) =>
-        `<circle tabindex="0" role="button" aria-label="${anAttr(b.sub + ': ' + b.count + ' submissions; filter this period')}" data-label="${anAttr(b.label)}" data-sub="${anAttr(b.sub)}" data-count="${b.count}" data-key="${b.dateKey || ''}"`
-        + ` cx="${xFor(i)}" cy="${yFor(b.count)}" r="4" class="an-area-dot" fill="var(--chart-1)"/>`).join('');
-
-    plot.innerHTML = `
-        <svg class="an-svg an-area-svg" viewBox="0 0 ${viewW} ${viewH}" role="img"
-             aria-label="${anAttr('Area chart of submissions per period: ' + barsForAria)}"
-             preserveAspectRatio="xMidYMid meet">
-            <defs>
-                <linearGradient id="an-area-grad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="var(--chart-1)" stop-opacity="0.28"/>
-                    <stop offset="100%" stop-color="var(--chart-1)" stop-opacity="0.02"/>
-                </linearGradient>
-            </defs>
-            ${grid}
-            <path d="${fillPath}" fill="url(#an-area-grad)"/>
-            <path d="${linePath}" fill="none" class="an-area-line" vector-effect="non-scaling-stroke"/>
-            ${dots}
-            ${xLabels}
-        </svg>`;
-
-    anAreaAriaDescribe(card, total);
-    anBindAreaInteractions(plot, card, series, points, xFor, yFor);
+    const peak = Math.max(0, ...series.map(b=>b.count));
+    const view = anMountChart('an-submissions-svg', {title:'Student Submission Activity',description:'Submissions over the selected period.',
+        stats:[{label:'Submissions',value:total},{label:'Peak period',value:peak}],
+        controls:`<label>View by <select id="chart-view-mode"><option value="day" ${mode==='day'?'selected':''}>Day</option><option value="month" ${mode==='month'?'selected':''}>Month</option></select></label>`,
+        caption:'Select a point to view submissions for that period.'});
+    if(!view)return;
+    view.controls.querySelector('select').onchange=()=>{renderSubmissionActivityChart(records);view.controls.querySelector('select').focus();};
+    view.legend.innerHTML=anLegendChip('Submissions',String(total),'var(--chart-1)');
+    anChartDraw(view,width=>{
+        if(!total){anChartState(view.plot,'empty','No submissions match this period.');return;}
+        const yMax=niceCeil(peak), y=linearScale([0,yMax],[216,16]);
+        const x=i=>48+(series.length===1?(width-80)/2:i*(width-80)/(series.length-1));
+        const points=series.map((b,i)=>({x:i,y:b.count}));
+        const ticks=[0,Math.ceil(yMax/2),yMax];
+        const items=series.map(b=>({label:b.sub+' · '+b.label,rows:[{name:'Submissions',value:b.count,color:'var(--chart-1)'}],bucket:b}));
+        // Straight segments avoid smoothing below zero between sparse counts.
+        const line=points.map((p,i)=>`${i?'L':'M'} ${x(p.x)} ${y(p.y)}`).join(' ');
+        let content=`<defs><linearGradient id="an-submission-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--chart-1)" stop-opacity=".3"/><stop offset="1" stop-color="var(--chart-1)" stop-opacity=".03"/></linearGradient></defs>`;
+        content+=anChartGrid(width,ticks,y,'')+`<path d="${line} L ${x(points.length-1)} 216 L ${x(0)} 216 Z" fill="url(#an-submission-fill)"/><path d="${line}" fill="none" stroke="var(--chart-1)" stroke-width="2"/>`;
+        content+=points.map((p,i)=>`<circle data-mark="${i}" tabindex="-1" role="button" aria-label="${anAttr(items[i].label+': '+p.y+' submissions; filter this period')}" cx="${x(i)}" cy="${y(p.y)}" r="5" fill="var(--chart-1)"/>`).join('');
+        content+=chartTicks(series.map(b=>b.sub),series.map((_,i)=>x(i))).map(i=>`<text class="an-axis-label" x="${x(i)}" y="236" text-anchor="middle">${anEsc(series[i].sub)}</text>`).join('');
+        view.plot.innerHTML=anChartSvg(width,'Submission activity by period',content);
+        anBindMarks(view.plot,view.card,items,item=>{
+            const b=item.bucket;
+            if(b.dateKey&&$id('filter-date'))$id('filter-date').value=b.dateKey;
+            else if(b.weekRange&&$id('filter-week'))$id('filter-week').value=String(b.weekRange.w);
+            else return;
+            applyAnalyticsFilters();
+        });
+    });
 }
 
 function anAreaAriaDescribe(card, total) {
