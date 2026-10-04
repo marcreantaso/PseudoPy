@@ -7029,6 +7029,11 @@ function anMountChart(id, config) {
 function anChartDraw(view, render) {
     if (!view) return;
     const {plot} = view;
+    // A re-render may have replaced this plot element; release the old node so
+    // the observer does not keep detached elements alive.
+    anChartJobs.forEach((job, el) => {
+        if (!el.isConnected) { if (anSystemObserver) anSystemObserver.unobserve(el); anChartJobs.delete(el); }
+    });
     const run = () => {
         const width = Math.floor(plot.clientWidth);
         if (width <= 0 || !plot.isConnected) return;
@@ -12372,77 +12377,30 @@ function renderBenchmarkResults(results) {
  * Render pipeline timing bar chart.
  */
 function renderPipelineTimingChart(timing) {
-    const container = $id('chart-pipeline-timing');
-    if (!container) return;
-
-    if (timing.count === 0) {
-        container.innerHTML = '<div class="an-chart-empty">' +
-            '<p class="an-chart-empty-title">No timing data yet</p>' +
-            '<p class="an-chart-empty-hint">Translate some pseudocode to see average milliseconds spent in each compiler stage.</p>' +
-            '</div>';
-        return;
-    }
-
     const stages = [
         { name: 'Lexer', value: timing.avgLexTime, color: 'var(--chart-1)' },
         { name: 'Parser', value: timing.avgParseTime, color: 'var(--chart-2)' },
         { name: 'Semantic', value: timing.avgSemanticTime, color: 'var(--chart-3)' },
         { name: 'CodeGen', value: timing.avgCodeGenTime, color: 'var(--chart-4)' }
     ];
-
-    const max = Math.max(...stages.map(s => s.value), 0.001);
-    const slowest = stages.reduce((a, b) => (b.value > a.value ? b : a));
-
-    // Headline: the end-to-end total that was measured but previously never shown.
-    const headline = timing.count > 1
-        ? 'Averaged over ' + timing.count + ' translations'
-        : 'From 1 translation';
-
-    container.innerHTML =
-        '<div class="pipeline-timing-summary">' +
-        '<span class="pipeline-timing-total"><strong>' + timing.avgTotalTime + 'ms</strong> average total pipeline time</span>' +
-        '<span class="pipeline-timing-meta">' + headline + ' &middot; slowest stage: ' +
-        '<strong style="color:' + slowest.color + '">' + slowest.name + '</strong> (' + slowest.value + 'ms)</span>' +
-        '</div>' +
-        '<div class="chart-bars-wrap">' + stages.map(s =>
-        '<div class="chart-bar" tabindex="0" aria-label="' + s.name + ': ' + s.value + 'ms average" title="' + s.name + ' average: ' + s.value + 'ms" style="height:' + Math.max((s.value / max) * 180, 20) + 'px;background:' + s.color + '">' +
-        '<span class="bar-value">' + s.value + 'ms</span>' +
-        '<span class="bar-label">' + s.name + '</span>' +
-        '</div>'
-    ).join('') + '</div>';
-
-    // Styled tooltip, consistent with the analytics SVG charts.
-    const tip = document.createElement('div');
-    tip.className = 'an-svg-tooltip hidden';
-    container.appendChild(tip);
-    const total = stages.reduce((sum, s) => sum + s.value, 0) || 1;
-    container.querySelectorAll('.chart-bar').forEach((bar, i) => {
-        const s = stages[i];
-        const share = Math.round((s.value / total) * 100);
-        const show = evt => anShowTooltip(tip, evt, `
-            <div class="an-tt-header"><span class="an-tt-dot" style="background:${s.color}"></span>${s.name}</div>
-            <div class="an-tt-row"><strong>${s.value}ms</strong> average</div>
-            <div class="an-tt-row an-tt-muted">${share}% of pipeline time</div>
-        `, container);
-        bar.addEventListener('mouseenter', show);
-        bar.addEventListener('mousemove', e => anShowTooltip(tip, e, tip.innerHTML, container));
-        bar.addEventListener('mouseleave', () => anHideTooltip(tip));
-        bar.addEventListener('focus', () => bar.dispatchEvent(new MouseEvent('mouseenter', { clientX: bar.getBoundingClientRect().left, clientY: bar.getBoundingClientRect().top })));
-        bar.addEventListener('blur', () => anHideTooltip(tip));
+    const slowest=stages.reduce((a,b)=>b.value>a.value?b:a);
+    const view=anMountChart('chart-pipeline-timing',{title:'Compiler Pipeline Timing',description:'Average time spent in each compiler stage.',
+        stats:[{label:'Average total',value:timing.count?timing.avgTotalTime+' ms':'—'},{label:'Translations',value:timing.count}],
+        insight:timing.count?'Slowest stage: '+slowest.name+' · '+slowest.value+' ms':'',caption:'Measured locally, in milliseconds. Shorter bars indicate faster stages.'});
+    if(!view)return;
+    view.legend.innerHTML=stages.map(s=>anLegendChip(s.name,timing.count?s.value+' ms':'—',s.color)).join('');
+    anChartDraw(view,width=>{
+        if(!timing.count){anChartState(view.plot,'empty','Translate pseudocode to see stage timings.');return;}
+        const max=Math.max(...stages.map(s=>s.value),.001),left=76,right=60;
+        const span=Math.max(1,width-left-right),items=[];
+        let content='';
+        stages.forEach((s,i)=>{
+            const y=26+i*48,w=Math.max(2,s.value/max*span);
+            items.push({label:'Average stage time',rows:[{name:s.name,value:s.value+' ms',color:s.color}]});
+            content+=`<line x1="${left}" x2="${width-right}" y1="${y+30}" y2="${y+30}" class="an-grid-line"/><text x="${left-8}" y="${y+20}" text-anchor="end" class="an-axis-label">${s.name}</text><rect data-mark="${i}" tabindex="-1" aria-label="${s.name}: ${s.value} milliseconds average" x="${left}" y="${y}" width="${w}" height="30" rx="4" fill="${s.color}"/><text x="${left+w+6}" y="${y+20}" class="an-axis-label">${s.value} ms</text>`;
+        });
+        view.plot.innerHTML=anChartSvg(width,'Average compiler stage times in milliseconds',content);anBindMarks(view.plot,view.card,items);
     });
-
-    // Accessible text equivalent for the bar chart.
-    container.setAttribute('role', 'img');
-    container.setAttribute('aria-label',
-        'Pipeline timing: ' + stages.map(s => `${s.name} ${s.value}ms`).join(', '));
-    const descEl = $id('pipeline-chart-text-summary');
-    if (descEl) descEl.remove();
-    const desc = document.createElement('p');
-    desc.className = 'sr-only';
-    desc.id = 'pipeline-chart-text-summary';
-    desc.textContent = 'Average stage timings: ' + stages.map(s => `${s.name} ${s.value}ms`).join(', ');
-    container.setAttribute('aria-describedby', 'pipeline-chart-text-summary');
-    container.appendChild(desc);
 }
 
 

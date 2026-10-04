@@ -95,12 +95,17 @@ test('containers use skeletons instead of Loading… text rows',()=>{
     assert.match(exec,/showRunSkeleton\(outputEl\)/);
 });
 
-test('charts re-render on resize, debounced, only for the visible page',()=>{
-    const charts=read('src/app/analytics-charts.js');
-    assert.match(charts,/ResizeObserver/);
-    assert.match(charts,/150/,'debounce window');
-    assert.match(charts,/page-analytics/);
-    assert.match(charts,/page-system-analytics/);
+test('charts re-render on resize, debounced, only when a registered plot resizes',()=>{
+    const shared=read('src/app/chart-system.js');
+    assert.match(shared,/ResizeObserver/);
+    assert.match(shared,/\}, 150\)/,'debounce window');
+    assert.match(shared,/clientWidth > 0/,'plots that are hidden or unrendered are skipped');
+    assert.match(shared,/!== job\.width/,'only a measured width change re-renders');
+    assert.match(shared,/!el\.isConnected/,'replaced plot elements are released');
+    // Every renderer registers its plot through the shared draw helper.
+    ['src/app/analytics-charts.js','src/app/trajectory-chart.js','src/app/admin-analytics.js',
+        'src/student/workspace.js','src/app/compiler-dashboard.js']
+        .forEach(file=>assert.match(read(file),/anChartDraw\(/,`${file} uses the shared observer`));
 });
 
 test('the skeleton module is part of the app bundle',()=>{

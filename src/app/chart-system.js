@@ -43,6 +43,11 @@ function anMountChart(id, config) {
 function anChartDraw(view, render) {
     if (!view) return;
     const {plot} = view;
+    // A re-render may have replaced this plot element; release the old node so
+    // the observer does not keep detached elements alive.
+    anChartJobs.forEach((job, el) => {
+        if (!el.isConnected) { if (anSystemObserver) anSystemObserver.unobserve(el); anChartJobs.delete(el); }
+    });
     const run = () => {
         const width = Math.floor(plot.clientWidth);
         if (width <= 0 || !plot.isConnected) return;

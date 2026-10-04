@@ -32,7 +32,13 @@ test('the action bar is sticky or fixed with safe-area padding and 44px targets'
     assert.match(block, /touch-action:\s*manipulation/);
     assert.match(block, /z-index:\s*30/);
     assert.match(block, /focus-visible/, 'keyboard focus stays visible');
-    assert.doesNotMatch(block, /pointer-events:\s*none/);
+    // Scoped to the action bar's own rules: unrelated later app CSS may use
+    // pointer-events: none for its own overlays (chart tooltips, for example).
+    const barRules = Array.from(style.matchAll(/([^{}]*\.exercise-action-bar[^{}]*)\{([^{}]*)\}/g));
+    assert.ok(barRules.length, 'action bar rules exist');
+    barRules.forEach(([, , body]) => {
+        assert.doesNotMatch(body, /pointer-events:\s*none/, `bar rule must stay interactive: ${body.slice(0, 40)}`);
+    });
 });
 
 test('mobile editors are bounded and the fixed bar has matching scroll padding', () => {
