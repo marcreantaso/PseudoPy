@@ -9277,7 +9277,8 @@ tr.skeleton-tr td {
 .an-chart-system .an-legend-dot, .an-chart-system .an-tt-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
 .an-chart-system .an-chart-footer { margin: 0; padding: 12px 24px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.5; color: var(--muted-foreground); display: block; }
 .an-chart-system .an-chart-footer:empty { display: none; }
-.an-chart-system .an-svg-tooltip { position: fixed; z-index: 1000; max-width: min(320px, calc(100vw - 16px)); padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--card-foreground); box-shadow: 0 4px 12px rgb(0 0 0 / .12); font-size: 12px; pointer-events: none; }
+.an-chart-system .an-svg-tooltip { position: absolute; z-index: 1000; max-width: min(320px, calc(100vw - 16px)); padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--card-foreground); box-shadow: 0 4px 12px rgb(0 0 0 / .12); font-size: 12px; pointer-events: none; }
+.an-chart-system .an-svg .an-donut-total { font-size: 28px; font-weight: 600; }
 .an-chart-system .an-tt-header { font-size: 12px; font-weight: 600; margin: 0 0 6px; }
 .an-chart-system .an-tt-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px; overflow-wrap: anywhere; }
 .an-chart-system .an-tt-row strong { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
