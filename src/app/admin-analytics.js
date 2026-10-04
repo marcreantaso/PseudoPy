@@ -207,74 +207,41 @@ function renderSystemAnalytics() {
     catch (e) { console.error('[SystemAnalytics] error chart failed:', e); }
 }
 
+let systemActivityMetric = 'all';
 function renderSystemActivityChart(records) {
-    const plot = $id('system-activity-svg');
-    if (!plot) return;
-    const series = systemBuildActivitySeries(records, systemTimeRange);
-    const total = series.reduce((sum, bucket) => sum + bucket.translations + bucket.executions, 0);
-    const totalElement = $id('system-activity-total');
-    if (totalElement) totalElement.textContent = total + ' activity events in the charted period';
-
-    if (total === 0) {
-        plot.innerHTML = `
-            <div class="an-chart-empty">
-                <i data-lucide="chart-column" style="width:48px;height:48px;opacity:0.3;margin-bottom:0.75rem;"></i>
-                <p class="an-chart-empty-title">No activity in this period</p>
-                <p class="an-chart-empty-hint">Activity appears once students translate or execute pseudocode.</p>
-            </div>`;
-        return;
+    const daily=systemBuildActivitySeries(records,systemTimeRange);
+    // Combine contiguous days for a bounded plot; retain every event in totals.
+    const stride=Math.max(1,Math.ceil(daily.length/30));
+    const series=[];
+    for(let i=0;i<daily.length;i+=stride){
+        const chunk=daily.slice(i,i+stride);
+        series.push({label:chunk[0].label+(chunk.length>1?'–'+chunk.at(-1).label:''),
+            translations:chunk.reduce((n,b)=>n+b.translations,0),executions:chunk.reduce((n,b)=>n+b.executions,0)});
     }
-
-    const viewW = 560, viewH = 240;
-    const margin = { left: 40, right: 16, top: 18, bottom: 30 };
-    const plotW = viewW - margin.left - margin.right;
-    const plotH = viewH - margin.top - margin.bottom;
-    const baseline = margin.top + plotH;
-
-    const maxCount = series.reduce((max, bucket) => Math.max(max, bucket.translations, bucket.executions), 1);
-    const yMax = niceCeil(maxCount);
-    const yStep = yMax <= 6 ? 2 : yMax <= 12 ? 2 : Math.ceil(yMax / 6);
-    const yTicks = [];
-    for (let v = yMax; v >= 0; v -= yStep) yTicks.push(v);
-    if (yTicks[yTicks.length - 1] !== 0) yTicks.push(0);
-
-    const yFor = linearScale([0, yMax], [baseline, margin.top]);
-    const barSlot = plotW / series.length;
-    const barW = Math.min(11, Math.max(3, barSlot * 0.34));
-
-    const grid = yTicks.map(v =>
-        `<line x1="${margin.left}" y1="${yFor(v)}" x2="${margin.left + plotW}" y2="${yFor(v)}" class="an-grid-line"/>` +
-        `<text x="${margin.left - 6}" y="${yFor(v) + 3}" text-anchor="end" class="an-axis-label">${v}</text>`
-    ).join('');
-
-    const labelEvery = Math.max(1, Math.ceil(series.length / 12));
-    const xLabels = series.map((bucket, i) =>
-        (i % labelEvery === 0)
-            ? `<text x="${margin.left + barSlot * i + barSlot / 2}" y="${baseline + 16}" text-anchor="middle" class="an-axis-label an-axis-label-x">${anEsc(bucket.label)}</text>`
-            : ''
-    ).join('');
-
-    const bars = series.map((bucket, i) => {
-        const centerX = margin.left + barSlot * i + barSlot / 2;
-        const transY = bucket.translations > 0 ? yFor(bucket.translations) : baseline - 1;
-        const execY = bucket.executions > 0 ? yFor(bucket.executions) : baseline - 1;
-        const transH = baseline - transY;
-        const execH = baseline - execY;
-        return `<g role="img" aria-label="${anAttr(bucket.label + ': ' + bucket.translations + ' translations, ' + bucket.executions + ' executions')}">
-            ${bucket.translations > 0 ? `<rect x="${centerX - barW - 1}" y="${transY}" width="${barW}" height="${transH}" rx="2" fill="var(--chart-1)"/>` : ''}
-            ${bucket.executions > 0 ? `<rect x="${centerX + 1}" y="${execY}" width="${barW}" height="${execH}" rx="2" fill="var(--chart-2)"/>` : ''}
-        </g>`;
-    }).join('');
-
-    const aria = series.map(bucket => `${bucket.label}: ${bucket.translations} translations, ${bucket.executions} executions`).join('; ');
-    plot.innerHTML = `
-        <svg class="an-svg an-area-svg" viewBox="0 0 ${viewW} ${viewH}" role="img"
-             aria-label="${anAttr('Translations and executions per day: ' + aria)}"
-             preserveAspectRatio="xMidYMid meet">
-            ${grid}
-            ${bars}
-            ${xLabels}
-        </svg>`;
+    const translations=series.reduce((n,b)=>n+b.translations,0),executions=series.reduce((n,b)=>n+b.executions,0);
+    const view=anMountChart('system-activity-svg',{title:'Translations & Executions',description:'Recorded compiler activity over the charted period.',
+        stats:[{key:'all',label:'All events',value:translations+executions,active:systemActivityMetric==='all'},
+            {key:'translations',label:'Translations',value:translations,active:systemActivityMetric==='translations'},
+            {key:'executions',label:'Executions',value:executions,active:systemActivityMetric==='executions'}],
+        caption:stride>1?'Contiguous days are grouped to keep the chart readable.':'Daily translations and executions.',
+        onMetric:key=>{systemActivityMetric=key;renderSystemActivityChart(records);}});
+    if(!view)return;
+    const keys=(systemActivityMetric==='all'?['translations','executions']:[systemActivityMetric]);
+    const color=key=>key==='translations'?'var(--chart-1)':'var(--chart-2)';
+    const name=key=>key==='translations'?'Translations':'Executions';
+    view.legend.innerHTML=keys.map(key=>anLegendChip(name(key),String(key==='translations'?translations:executions),color(key))).join('');
+    anChartDraw(view,width=>{
+        if(!translations&&!executions){anChartState(view.plot,'empty','No activity in this period.');return;}
+        const w=Math.max(width,64+series.length*18),max=niceCeil(Math.max(1,...series.flatMap(b=>keys.map(k=>b[k]))));
+        const y=linearScale([0,max],[216,16]),slot=(w-64)/series.length;
+        const groups=keys.map(key=>({points:series.map((b,x)=>({x,y:b[key]}))}));
+        const bars=groupedBarGeometry(groups,series.length,w,{domain:[0,max]});
+        const items=bars.map(b=>({label:series[b.point.x].label,rows:[{name:name(keys[b.student]),value:b.point.y,color:color(keys[b.student])}]}));
+        let content=anChartGrid(w,[0,Math.ceil(max/2),max],y,'');
+        content+=bars.map((b,i)=>`<path data-mark="${i}" tabindex="-1" aria-label="${anAttr(items[i].label+', '+items[i].rows[0].name+': '+b.point.y)}" d="${roundedBarPath(b)}" fill="${color(keys[b.student])}"/>`).join('');
+        content+=chartTicks(series.map(b=>b.label),series.map((_,i)=>48+slot*(i+.5))).map(i=>`<text x="${48+slot*(i+.5)}" y="236" text-anchor="middle" class="an-axis-label">${anEsc(series[i].label)}</text>`).join('');
+        view.plot.innerHTML=anChartSvg(w,'System activity counts',content);anBindMarks(view.plot,view.card,items);
+    });
 }
 
 function renderSystemErrorChart(records) {
