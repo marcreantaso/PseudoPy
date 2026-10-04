@@ -33,6 +33,55 @@ function page() {
     let student = read('src/student/workspace.js').replace('return { activate, reset,', `return { captureChart(card) { attempts = Array.from({length:8},(_,i)=>({id:String(i), compilation:i<2?0:100, validation:70+i*4, errors:i<2?2:0, warnings:0, suggestions:0, valid:i>=2})); renderChart(card); }, activate, reset,`);
     return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/student-workspace.css"><style>body{display:block!important;overflow:auto!important;height:auto!important;padding:16px;margin:0}main{max-width:1280px;margin:auto}h1{font-size:20px;margin:16px 0}section{margin-bottom:32px;min-width:0}.capture-label{font-size:13px}</style></head><body><main><p class="capture-label">PseudoPy · synthetic local chart fixtures</p><section id="page-analytics"><h1>Instructor Analytics</h1>' + instructorCards + '</section><section id="page-system-analytics"><h1>System Analytics</h1>' + adminCards + '</section><section><h1>Student Learning Progress</h1><div id="capture-student" class="an-chart-card sw-chart-card"></div></section><section><h1>Compiler Timing</h1><div class="chart-container"><div class="panel-header"><h3>Pipeline Timing</h3></div><div id="chart-pipeline-timing"></div></div></section></main><script>' + boot + '</script>' + ['src/analytics/aggregation.js','src/analytics/geometry.js','src/app/analytics-charts.js','src/app/admin-analytics.js','src/student/learning-model.js'].map(p=>'<script>'+read(p)+'</script>').join('') + '<script>'+student+'</script><script>' + read('src/app/compiler-dashboard.js').replace(/if \(document.readyState === 'loading'\)[\s\S]*$/, '') + '</script><script>renderAnalyticsCharts(currentFilteredActivity);renderSystemActivityChart(currentFilteredActivity);renderSystemErrorChart(currentFilteredActivity);StudentWorkspace.captureChart($id("capture-student"));renderPipelineTimingChart({count:8,avgLexTime:1.2,avgParseTime:2.4,avgSemanticTime:0.8,avgCodeGenTime:0.5,avgTotalTime:4.9});window.captureReady=true;</script></body></html>';
 }
+// Structural/accessibility audit collected next to every screenshot.
+function auditExpression() {
+    return [
+        "JSON.stringify({",
+        "ready:window.captureReady,width:innerWidth,scrollWidth:document.documentElement.scrollWidth,",
+        "plots:[...document.querySelectorAll('.an-chart-plot,.an-pie-plot')].map(p=>({id:p.id,height:Math.round(p.getBoundingClientRect().height),innerScroll:p.scrollWidth-p.clientWidth})),",
+        "smallText:[...document.querySelectorAll('.an-chart-card text,.an-chart-system text')].filter(e=>parseFloat(getComputedStyle(e).fontSize)<11).length,",
+        "svgWiderThanBox:[...document.querySelectorAll('.an-chart-system .an-svg')].filter(s=>s.getBoundingClientRect().width>s.parentElement.clientWidth+1).length,",
+        "cards:[...document.querySelectorAll('.an-chart-system')].map(c=>{",
+        "const p=c.querySelector('.an-chart-plot');",
+        "const marks=p?[...p.querySelectorAll('[data-mark]')]:[];",
+        "const short=[...c.querySelectorAll('button,select,input[type=checkbox],summary')].filter(e=>e.offsetParent!==null).map(e=>e.type==='checkbox'?(e.closest('label')||e):e).filter(e=>e.getBoundingClientRect().height<44).map(e=>e.tagName.toLowerCase()+'.'+(e.className||'-')+'='+Math.round(e.getBoundingClientRect().height));",
+        "return{title:(c.querySelector('.an-chart-title')||{}).textContent||'',",
+        "legend:c.querySelectorAll('.an-svg-legend .an-legend-chip,.an-svg-legend .an-legend-chip-static,.an-svg-legend .sg-legend-chip').length,",
+        "marks:marks.length,roving:marks.filter(m=>m.getAttribute('tabindex')==='0').length,",
+        "role:p?p.getAttribute('role'):null,label:p?p.getAttribute('aria-label'):null,busy:p?p.getAttribute('aria-busy'):null,",
+        "shortTargets:short};})",
+        "})"
+    ].join('');
+}
+// Keyboard/tooltip behaviour probe, run once per capture pass. The shared
+// tooltip positions itself in a rAF, so the probe waits for the frame. Headless
+// SVG .focus() does not always dispatch a focus event, so the mark handlers are
+// exercised with explicit focus and pointer events.
+function interactionExpression() {
+    return [
+        "(async()=>{",
+        "const frame=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));",
+        "const card=document.querySelector('.an-chart-system');",
+        "const plot=card.querySelector('.an-chart-plot');",
+        "const first=plot.querySelector('[data-mark]');",
+        "first.focus();",
+        "const focusedOnLoad=document.activeElement===first;",
+        "const tip=card.querySelector('.an-svg-tooltip');",
+        "first.dispatchEvent(new FocusEvent('focus'));",
+        "first.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,clientX:200,clientY:300}));",
+        "await frame();",
+        "const focusHandlerShowsTooltip=!tip.classList.contains('hidden')&&tip.textContent.trim().length>0;",
+        "first.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));",
+        "await frame();",
+        "const arrowMovedFocus=document.activeElement!==first&&document.activeElement.hasAttribute('data-mark');",
+        "const shownAfterArrow=!tip.classList.contains('hidden');",
+        "const roving=plot.querySelectorAll('[data-mark][tabindex=\"0\"]').length;",
+        "document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));",
+        "const escapeHides=tip.classList.contains('hidden');",
+        "return JSON.stringify({focusedOnLoad,focusHandlerShowsTooltip,arrowMovedFocus,shownAfterArrow,rovingTabStops:roving,escapeHides});",
+        "})()"
+    ].join('');
+}
 async function main() {
     fs.mkdirSync(out,{recursive:true});
     const server=http.createServer((req,res)=>{try{const p=new URL(req.url,'http://local').pathname;if(p==='/'){res.setHeader('Content-Type','text/html');res.end(page());}else{res.setHeader('Content-Type',p.endsWith('.css')?'text/css':'text/plain');res.end(read(p.slice(1)));}}catch(e){res.statusCode=404;res.end(String(e));}});
@@ -49,15 +98,26 @@ async function main() {
         ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.id){const p=pending.get(m.id);pending.delete(m.id);m.error?p.reject(Error(m.error.message)):p.resolve(m.result);}else if(m.method==='Runtime.exceptionThrown')errors.push(m.params.exceptionDetails);});
         const call=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
         await call('Runtime.enable');await call('Page.enable');
+        await call('Network.enable');await call('Network.setBlockedURLs',{urls:['https://*']});
         const measurements=[];
         for(const width of [320,375,768,1440])for(const theme of ['light','dark']){
             await call('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:false});
             await call('Page.navigate',{url:'http://127.0.0.1:'+server.address().port});
-            await new Promise(r=>setTimeout(r,1800));
+            let ready=false;
+            for(let i=0;i<100;i++){
+                await new Promise(r=>setTimeout(r,100));
+                const check=await call('Runtime.evaluate',{expression:'window.captureReady===true',returnByValue:true});
+                if(check.result.value){ready=true;break;}
+            }
+            if(!ready)throw Error('Fixture did not finish rendering: '+JSON.stringify(errors));
             await call('Runtime.evaluate',{expression:`document.documentElement.setAttribute('data-theme','${theme}');document.body.setAttribute('data-theme','${theme}');document.documentElement.classList.toggle('dark','${theme}'==='dark')`});
             await new Promise(r=>setTimeout(r,300));
-            const measure=await call('Runtime.evaluate',{expression:`JSON.stringify({ready:window.captureReady,width:innerWidth,scrollWidth:document.documentElement.scrollWidth,plots:[...document.querySelectorAll('.an-chart-plot,.an-pie-plot')].map(p=>({id:p.id,height:p.getBoundingClientRect().height})),smallText:[...document.querySelectorAll('.an-chart-card text')].filter(e=>parseFloat(getComputedStyle(e).fontSize)<11).length})`,returnByValue:true});
+            const measure=await call('Runtime.evaluate',{expression:auditExpression(),returnByValue:true});
             measurements.push({width,theme,...JSON.parse(measure.result.value)});
+            if (width===1440 && theme==='light') {
+                const probe=await call('Runtime.evaluate',{expression:interactionExpression(),returnByValue:true,awaitPromise:true});
+                measurements[measurements.length-1].interaction=JSON.parse(probe.result.value);
+            }
             const metrics=await call('Page.getLayoutMetrics');
             const shot=await call('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,width,height:Math.ceil(metrics.cssContentSize.height),scale:1}});
             fs.writeFileSync(path.join(out,`${width}-${theme}.png`),Buffer.from(shot.data,'base64'));

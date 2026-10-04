@@ -1,0 +1,949 @@
+{
+  "measurements": [
+    {
+      "width": 320,
+      "theme": "light",
+      "ready": true,
+      "scrollWidth": 314,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 250,
+          "innerScroll": 168
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "an-error-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "system-activity-svg",
+          "height": 250,
+          "innerScroll": 348
+        },
+        {
+          "id": "system-errors-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "student-progress-preview",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "chart-pipeline-timing",
+          "height": 250,
+          "innerScroll": 0
+        }
+      ],
+      "smallText": 0,
+      "svgWiderThanBox": 2,
+      "cards": [
+        {
+          "title": "Student Improvement Trajectory",
+          "legend": 6,
+          "marks": 40,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Improvement Trajectory",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Student Submission Activity",
+          "legend": 1,
+          "marks": 7,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Submission Activity",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Translations & Executions",
+          "legend": 2,
+          "marks": 60,
+          "roving": 1,
+          "role": "group",
+          "label": "Translations & Executions",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "System Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "System Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Your Learning Progress",
+          "legend": 3,
+          "marks": 24,
+          "roving": 1,
+          "role": "group",
+          "label": "Your Learning Progress",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Compiler Pipeline Timing",
+          "legend": 4,
+          "marks": 4,
+          "roving": 1,
+          "role": "group",
+          "label": "Compiler Pipeline Timing",
+          "busy": "false",
+          "shortTargets": []
+        }
+      ]
+    },
+    {
+      "width": 320,
+      "theme": "dark",
+      "ready": true,
+      "scrollWidth": 314,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 250,
+          "innerScroll": 168
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "an-error-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "system-activity-svg",
+          "height": 250,
+          "innerScroll": 348
+        },
+        {
+          "id": "system-errors-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "student-progress-preview",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "chart-pipeline-timing",
+          "height": 250,
+          "innerScroll": 0
+        }
+      ],
+      "smallText": 0,
+      "svgWiderThanBox": 2,
+      "cards": [
+        {
+          "title": "Student Improvement Trajectory",
+          "legend": 6,
+          "marks": 40,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Improvement Trajectory",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Student Submission Activity",
+          "legend": 1,
+          "marks": 7,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Submission Activity",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Translations & Executions",
+          "legend": 2,
+          "marks": 60,
+          "roving": 1,
+          "role": "group",
+          "label": "Translations & Executions",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "System Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "System Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Your Learning Progress",
+          "legend": 3,
+          "marks": 24,
+          "roving": 1,
+          "role": "group",
+          "label": "Your Learning Progress",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Compiler Pipeline Timing",
+          "legend": 4,
+          "marks": 4,
+          "roving": 1,
+          "role": "group",
+          "label": "Compiler Pipeline Timing",
+          "busy": "false",
+          "shortTargets": []
+        }
+      ]
+    },
+    {
+      "width": 375,
+      "theme": "light",
+      "ready": true,
+      "scrollWidth": 369,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 250,
+          "innerScroll": 113
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "an-error-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "system-activity-svg",
+          "height": 250,
+          "innerScroll": 293
+        },
+        {
+          "id": "system-errors-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "student-progress-preview",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "chart-pipeline-timing",
+          "height": 250,
+          "innerScroll": 0
+        }
+      ],
+      "smallText": 0,
+      "svgWiderThanBox": 2,
+      "cards": [
+        {
+          "title": "Student Improvement Trajectory",
+          "legend": 6,
+          "marks": 40,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Improvement Trajectory",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Student Submission Activity",
+          "legend": 1,
+          "marks": 7,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Submission Activity",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Translations & Executions",
+          "legend": 2,
+          "marks": 60,
+          "roving": 1,
+          "role": "group",
+          "label": "Translations & Executions",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "System Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "System Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Your Learning Progress",
+          "legend": 3,
+          "marks": 24,
+          "roving": 1,
+          "role": "group",
+          "label": "Your Learning Progress",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Compiler Pipeline Timing",
+          "legend": 4,
+          "marks": 4,
+          "roving": 1,
+          "role": "group",
+          "label": "Compiler Pipeline Timing",
+          "busy": "false",
+          "shortTargets": []
+        }
+      ]
+    },
+    {
+      "width": 375,
+      "theme": "dark",
+      "ready": true,
+      "scrollWidth": 369,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 250,
+          "innerScroll": 113
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "an-error-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "system-activity-svg",
+          "height": 250,
+          "innerScroll": 293
+        },
+        {
+          "id": "system-errors-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "student-progress-preview",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "chart-pipeline-timing",
+          "height": 250,
+          "innerScroll": 0
+        }
+      ],
+      "smallText": 0,
+      "svgWiderThanBox": 2,
+      "cards": [
+        {
+          "title": "Student Improvement Trajectory",
+          "legend": 6,
+          "marks": 40,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Improvement Trajectory",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Student Submission Activity",
+          "legend": 1,
+          "marks": 7,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Submission Activity",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Translations & Executions",
+          "legend": 2,
+          "marks": 60,
+          "roving": 1,
+          "role": "group",
+          "label": "Translations & Executions",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "System Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "System Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Your Learning Progress",
+          "legend": 3,
+          "marks": 24,
+          "roving": 1,
+          "role": "group",
+          "label": "Your Learning Progress",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Compiler Pipeline Timing",
+          "legend": 4,
+          "marks": 4,
+          "roving": 1,
+          "role": "group",
+          "label": "Compiler Pipeline Timing",
+          "busy": "false",
+          "shortTargets": []
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "theme": "light",
+      "ready": true,
+      "scrollWidth": 762,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "an-error-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "system-activity-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "system-errors-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "student-progress-preview",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "chart-pipeline-timing",
+          "height": 250,
+          "innerScroll": 0
+        }
+      ],
+      "smallText": 0,
+      "svgWiderThanBox": 0,
+      "cards": [
+        {
+          "title": "Student Improvement Trajectory",
+          "legend": 6,
+          "marks": 40,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Improvement Trajectory",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Student Submission Activity",
+          "legend": 1,
+          "marks": 7,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Submission Activity",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Translations & Executions",
+          "legend": 2,
+          "marks": 60,
+          "roving": 1,
+          "role": "group",
+          "label": "Translations & Executions",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "System Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "System Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Your Learning Progress",
+          "legend": 3,
+          "marks": 24,
+          "roving": 1,
+          "role": "group",
+          "label": "Your Learning Progress",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Compiler Pipeline Timing",
+          "legend": 4,
+          "marks": 4,
+          "roving": 1,
+          "role": "group",
+          "label": "Compiler Pipeline Timing",
+          "busy": "false",
+          "shortTargets": []
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "theme": "dark",
+      "ready": true,
+      "scrollWidth": 762,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "an-error-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "system-activity-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "system-errors-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "student-progress-preview",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "chart-pipeline-timing",
+          "height": 250,
+          "innerScroll": 0
+        }
+      ],
+      "smallText": 0,
+      "svgWiderThanBox": 0,
+      "cards": [
+        {
+          "title": "Student Improvement Trajectory",
+          "legend": 6,
+          "marks": 40,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Improvement Trajectory",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Student Submission Activity",
+          "legend": 1,
+          "marks": 7,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Submission Activity",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Translations & Executions",
+          "legend": 2,
+          "marks": 60,
+          "roving": 1,
+          "role": "group",
+          "label": "Translations & Executions",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "System Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "System Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Your Learning Progress",
+          "legend": 3,
+          "marks": 24,
+          "roving": 1,
+          "role": "group",
+          "label": "Your Learning Progress",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Compiler Pipeline Timing",
+          "legend": 4,
+          "marks": 4,
+          "roving": 1,
+          "role": "group",
+          "label": "Compiler Pipeline Timing",
+          "busy": "false",
+          "shortTargets": []
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "theme": "light",
+      "ready": true,
+      "scrollWidth": 1434,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "an-error-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "system-activity-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "system-errors-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "student-progress-preview",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "chart-pipeline-timing",
+          "height": 250,
+          "innerScroll": 0
+        }
+      ],
+      "smallText": 0,
+      "svgWiderThanBox": 0,
+      "cards": [
+        {
+          "title": "Student Improvement Trajectory",
+          "legend": 6,
+          "marks": 40,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Improvement Trajectory",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Student Submission Activity",
+          "legend": 1,
+          "marks": 7,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Submission Activity",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Translations & Executions",
+          "legend": 2,
+          "marks": 60,
+          "roving": 1,
+          "role": "group",
+          "label": "Translations & Executions",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "System Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "System Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Your Learning Progress",
+          "legend": 3,
+          "marks": 24,
+          "roving": 1,
+          "role": "group",
+          "label": "Your Learning Progress",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Compiler Pipeline Timing",
+          "legend": 4,
+          "marks": 4,
+          "roving": 1,
+          "role": "group",
+          "label": "Compiler Pipeline Timing",
+          "busy": "false",
+          "shortTargets": []
+        }
+      ],
+      "interaction": {
+        "focusedOnLoad": true,
+        "focusHandlerShowsTooltip": true,
+        "arrowMovedFocus": true,
+        "shownAfterArrow": true,
+        "rovingTabStops": 1,
+        "escapeHides": true
+      }
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "ready": true,
+      "scrollWidth": 1434,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "an-error-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "system-activity-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "system-errors-svg",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "student-progress-preview",
+          "height": 250,
+          "innerScroll": 0
+        },
+        {
+          "id": "chart-pipeline-timing",
+          "height": 250,
+          "innerScroll": 0
+        }
+      ],
+      "smallText": 0,
+      "svgWiderThanBox": 0,
+      "cards": [
+        {
+          "title": "Student Improvement Trajectory",
+          "legend": 6,
+          "marks": 40,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Improvement Trajectory",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Student Submission Activity",
+          "legend": 1,
+          "marks": 7,
+          "roving": 1,
+          "role": "group",
+          "label": "Student Submission Activity",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Translations & Executions",
+          "legend": 2,
+          "marks": 60,
+          "roving": 1,
+          "role": "group",
+          "label": "Translations & Executions",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "System Error Distribution",
+          "legend": 3,
+          "marks": 3,
+          "roving": 1,
+          "role": "group",
+          "label": "System Error Distribution",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Your Learning Progress",
+          "legend": 3,
+          "marks": 24,
+          "roving": 1,
+          "role": "group",
+          "label": "Your Learning Progress",
+          "busy": "false",
+          "shortTargets": []
+        },
+        {
+          "title": "Compiler Pipeline Timing",
+          "legend": 4,
+          "marks": 4,
+          "roving": 1,
+          "role": "group",
+          "label": "Compiler Pipeline Timing",
+          "busy": "false",
+          "shortTargets": []
+        }
+      ]
+    }
+  ],
+  "errors": []
+}
