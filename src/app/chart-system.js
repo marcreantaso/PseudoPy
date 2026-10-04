@@ -16,8 +16,9 @@ function anMountChart(id, config) {
     if (!plot) return null;
     const card = plot.closest('.an-chart-card, .chart-container');
     if (!card) return null;
-    if (!card.classList.contains('an-chart-system')) {
+    if (!card.dataset.chartMounted) {
         card.classList.add('an-chart-system');
+        card.dataset.chartMounted = 'true';
         card.innerHTML = `<div class="an-chart-header"></div><div class="an-chart-controls"></div><p class="an-chart-insight" aria-live="polite"></p><div class="an-chart-plot" id="${anAttr(id)}"></div><div class="an-svg-legend"></div><div class="an-chart-footer"></div><div class="an-chart-data"></div>`;
         plot = $id(id);
     }

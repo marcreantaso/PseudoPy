@@ -92,10 +92,7 @@ function anErrMessage(e) {
 
 function showChartError(plotId, message) {
     const plot = $id(plotId);
-    if (plot) {
-        plot.setAttribute('aria-busy', 'false');
-        plot.innerHTML = `<p class="an-chart-empty" role="status">${anEsc(message)}</p>`;
-    }
+    anChartState(plot, 'error', '', () => typeof loadAnalytics === 'function' && loadAnalytics());
 }
 
 function showAnalyticsLoading() {
@@ -119,6 +116,7 @@ function anEnsureTooltip(card) {
     if (!tip) {
         tip = document.createElement('div');
         tip.className = 'an-svg-tooltip hidden';
+        tip.setAttribute('role', 'tooltip');
         card.appendChild(tip);
     }
     return tip;
@@ -126,113 +124,33 @@ function anEnsureTooltip(card) {
 
 function anShowTooltip(tip, event, html, card) {
     if (!tip) return;
-    tip.innerHTML = html;
-    tip.classList.remove('hidden');
-    const cardRect = card.getBoundingClientRect();
-    const targetRect = event.target?.getBoundingClientRect();
-    const left = (event.clientX ?? targetRect?.left ?? cardRect.left) - cardRect.left + 12;
-    const top = (event.clientY ?? targetRect?.top ?? cardRect.top) - cardRect.top - 12;
-    // Clamp in viewport coordinates (the card may be partially scrolled out of view),
-    // then convert back to card-relative offsets for the absolutely positioned tooltip.
-    const vpLeft = Math.max(8, Math.min(cardRect.left + left, window.innerWidth - tip.offsetWidth - 8));
-    const vpTop = Math.max(8, Math.min(cardRect.top + top, window.innerHeight - tip.offsetHeight - 8));
-    tip.style.left = (vpLeft - cardRect.left) + 'px';
-    tip.style.top = (vpTop - cardRect.top) + 'px';
+    tip._pending = {event, html};
+    if (tip._frame) return;
+    tip._frame = requestAnimationFrame(() => {
+        tip._frame = 0;
+        const next = tip._pending;
+        if (!next) return;
+        tip.innerHTML = next.html;
+        tip.classList.remove('hidden');
+        const rect = (next.event.currentTarget || next.event.target)?.getBoundingClientRect() || card.getBoundingClientRect();
+        const x = next.event.clientX || rect.left + rect.width / 2;
+        const y = next.event.clientY || rect.top;
+        const left = Math.max(8, Math.min(x + 12, window.innerWidth - tip.offsetWidth - 8));
+        const top = Math.max(8, Math.min(y - tip.offsetHeight - 12, window.innerHeight - tip.offsetHeight - 8));
+        const base = card.classList.contains('an-chart-system') ? {left:0,top:0} : card.getBoundingClientRect();
+        tip.style.left = (left - base.left) + 'px';
+        tip.style.top = (top - base.top) + 'px';
+    });
 }
 
 function anHideTooltip(tip) {
-    if (tip) tip.classList.add('hidden');
+    if (tip) { tip._pending = null; tip.classList.add('hidden'); }
 }
 
 /* ── Student Improvement Trajectory ───────────────────────── */
 
 function renderTrajectoryChart(records) {
-    const plot = $id('an-trajectory-svg');
-    if (!plot) return;
-    const card = plot.closest('.an-chart-card');
-
-    const result = buildTrajectorySeries(records || [], { maxStudents: 5, maxSessions: 8 });
-    const maxAttempts = result.maxAttempts;
-    if (maxAttempts === 0 || !result.series.some(s => s.points.some(p => p.y != null))) {
-        plot.innerHTML = anEmptyHtml('Not enough completed submissions yet.',
-            'The improvement trajectory appears once students have graded attempts.');
-        if (card) {
-            const legend = card.querySelector('#an-trajectory-legend');
-            if (legend) legend.innerHTML = '';
-        }
-        return;
-    }
-
-    const viewW = 560, viewH = 260;
-    const margin = { left: 40, right: 18, top: 18, bottom: 30 };
-    const plotW = viewW - margin.left - margin.right;
-    const plotH = viewH - margin.top - margin.bottom;
-    const xMax = Math.max(maxAttempts - 1, 1);
-    const xFor = linearScale([0, xMax], [margin.left, margin.left + plotW]);
-    const yFor = linearScale([0, 100], [margin.top + plotH, margin.top]);
-    const baseline = margin.top + plotH;
-
-    const gridStops = [0, 25, 50, 75, 100];
-    const grid = gridStops.map(v =>
-        `<line x1="${margin.left}" y1="${yFor(v)}" x2="${margin.left + plotW}" y2="${yFor(v)}" class="an-grid-line"/>` +
-        `<text x="${margin.left - 6}" y="${yFor(v) + 3}" text-anchor="end" class="an-axis-label">${v}</text>`
-    ).join('');
-
-    const palette = anChartPalette();
-    const seriesHtml = result.series.map((s, i) => {
-        const color = palette[i % palette.length];
-        const segments = anSplitSegments(s.points);
-        const linePaths = segments.map(seg => smoothPath(seg, xFor, yFor)).filter(Boolean).join('');
-        const dots = s.points.map(p => p.y == null ? '' :
-            `<circle tabindex="0" aria-label="${anAttr(s.name + ', attempt ' + (p.x + 1) + ', score ' + p.y + ', ' + p.date)}" data-name="${anAttr(s.name)}" data-x="${p.x}" data-y="${p.y}" data-date="${p.date}" data-score="${anAttr(p.score || '')}" cx="${xFor(p.x)}" cy="${yFor(p.y)}" r="4" class="an-series-dot" fill="${color}"/>`).join('');
-        return `<g class="an-series" data-name="${anAttr(s.name)}">
-            <path d="${linePaths}" class="an-trajectory-line" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/>
-            ${dots}
-        </g>`;
-    }).join('');
-
-    const classLine = result.classAverage.filter(p => p.y != null);
-    const classPath = anSplitSegments(result.classAverage).map(segment => smoothPath(segment, xFor, yFor)).join(' ');
-    const classDots = classLine.map(p => p.y == null ? '' :
-        `<circle tabindex="0" role="button" data-x="${p.x}" data-y="${p.y}" aria-label="Class average, attempt ${p.x + 1}: ${p.y} percent" cx="${xFor(p.x)}" cy="${yFor(p.y)}" r="3" class="an-class-dot"/>`).join('');
-
-    const xLabels = [];
-    for (let x = 0; x < Math.min(maxAttempts, 8); x++) {
-        xLabels.push(`<text x="${xFor(x)}" y="${baseline + 16}" text-anchor="middle" class="an-axis-label">#${x + 1}</text>`);
-    }
-
-    plot.innerHTML = `
-        <svg class="an-svg an-trajectory-svg" viewBox="0 0 ${viewW} ${viewH}" role="img"
-             aria-label="${anAttr(anTrajectoryAriaLabel(result, gridStops))}"
-             preserveAspectRatio="xMidYMid meet">
-            ${grid}
-            ${classPath ? `<g class="an-class-series">
-                <path d="${classPath}" fill="none" class="an-class-line" vector-effect="non-scaling-stroke"/>
-                ${classDots}
-            </g>` : ''}
-            ${seriesHtml}
-            ${xLabels}
-        </svg>`;
-
-    const legend = card ? card.querySelector('#an-trajectory-legend') : null;
-    if (legend) {
-        legend.innerHTML = result.series.map((s, i) => {
-            const color = palette[i % palette.length];
-            const first = s.points.find(p => p.y != null);
-            const last = s.points.reduce((acc, p) => (p.y != null ? p : acc), null);
-            const delta = (first && last) ? (last.y - first.y) : 0;
-            const trend = delta > 0 ? '↑' : delta < 0 ? '↓' : '→';
-            return `<button type="button" class="an-legend-chip" data-name="${anAttr(s.name)}" onfocus="setTrajectoryHighlight(this)" onblur="setTrajectoryHighlight(null)" onmouseenter="setTrajectoryHighlight(this)" onmouseleave="setTrajectoryHighlight(null)">
-                <span class="an-legend-dot" style="background:${color}"></span>
-                <span class="an-legend-name">${anEsc(s.name)}</span>
-                <span class="an-legend-trend an-trend-${delta >= 0 ? 'up' : 'down'}">${trend}${delta != null ? Math.abs(delta) : 0}</span>
-            </button>`;
-        }).join('') +
-        '<div class="an-legend-note">Dashed grey line = class average.</div>';
-    }
-
-    anTrajectoryAriaDescribe(result, card, gridStops);
-    anBindTrajectoryInteractions(plot, card, result);
+    anRenderTrajectory(records || []);
 }
 
 function anSplitSegments(points) {

@@ -8,7 +8,11 @@ const os = require('node:os');
 const root = path.resolve(__dirname, '..');
 const phase = process.argv[2] || 'after';
 const out = path.join(root, 'artifacts', 'charts', phase);
-const read = p => fs.readFileSync(path.join(root, p), 'utf8');
+const read = p => {
+    const source=fs.readFileSync(path.join(root,p),'utf8');
+    if(p==='src/app/analytics-charts.js')return fs.readFileSync(path.join(root,'src/app/chart-system.js'),'utf8')+'\n'+source+'\n'+fs.readFileSync(path.join(root,'src/app/trajectory-chart.js'),'utf8');
+    return source;
+};
 const html = read('index.html');
 function between(start, end) { return html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start))); }
 const instructorCards = html.slice(html.indexOf('<!-- Charts Row -->'), html.indexOf('</div>', html.indexOf('Click any slice or legend row')) + 6) + '</div></div>';
