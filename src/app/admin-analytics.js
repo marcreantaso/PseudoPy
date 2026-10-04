@@ -142,6 +142,9 @@ async function loadSystemAnalytics() {
     const owner = currentUser;
     if (!owner || owner.role !== 'admin') return;
     setText('system-live-status', 'Loading system analytics…');
+    renderSystemActivityChart([]);
+    renderSystemErrorChart([]);
+    ['system-activity-svg','system-errors-svg'].forEach(id=>anChartState($id(id),'loading'));
     try {
         const records = await dbGetAll(activityRef);
         if (generation !== systemAnalyticsLoadGeneration || currentUser !== owner || currentPage !== 'system-analytics') return;
@@ -172,11 +175,8 @@ function systemRenderErrorState(message) {
 }
 
 function renderSystemAnalyticsError(message) {
-    systemRenderErrorState(message);
-    ['chart-system-activity', 'chart-system-errors'].forEach(id => {
-        const container = $id(id);
-        if (container) container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:2rem;">' + message + '</div>';
-    });
+    systemRenderErrorState('Unable to load system analytics. Please try again.');
+    ['system-activity-svg', 'system-errors-svg'].forEach(id => anChartState($id(id),'error','',()=>loadSystemAnalytics()));
     setText('system-live-status', 'System analytics unavailable.');
 }
 
@@ -184,6 +184,7 @@ function renderSystemAnalytics() {
     if (!currentUser || currentUser.role !== 'admin') return;
     const filtered = systemFilterByRange(cachedSystemActivity, systemTimeRange);
     const overview = systemComputeOverview(filtered);
+    $id('system-error-state')?.classList.add('hidden');
 
     // ── System Overview KPIs ──
     setText('adv-total-translations', formatMetricValue(overview.totalTranslations));
@@ -202,9 +203,9 @@ function renderSystemAnalytics() {
 
     // ── Charts ──
     try { renderSystemActivityChart(filtered); }
-    catch (e) { console.error('[SystemAnalytics] activity chart failed:', e); }
+    catch (e) { console.error('[SystemAnalytics] activity chart failed:', e); anChartState($id('system-activity-svg'),'error','',()=>renderSystemAnalytics()); }
     try { renderSystemErrorChart(filtered); }
-    catch (e) { console.error('[SystemAnalytics] error chart failed:', e); }
+    catch (e) { console.error('[SystemAnalytics] error chart failed:', e); anChartState($id('system-errors-svg'),'error','',()=>renderSystemAnalytics()); }
 }
 
 let systemActivityMetric = 'all';
@@ -244,68 +245,10 @@ function renderSystemActivityChart(records) {
     });
 }
 
+let systemErrorActiveName = null;
 function renderSystemErrorChart(records) {
-    const plot = $id('system-errors-svg');
-    if (!plot) return;
-    const distribution = buildErrorDistribution(records || []);
-    const totalElement = $id('system-error-total');
-    if (totalElement) totalElement.textContent = String(distribution.total) + ' recorded error(s)';
-
-    if (distribution.total === 0) {
-        plot.innerHTML = `
-            <div class="an-chart-empty">
-                <i data-lucide="pie-chart" style="width:48px;height:48px;opacity:0.3;margin-bottom:0.75rem;"></i>
-                <p class="an-chart-empty-title">No errors in this period</p>
-                <p class="an-chart-empty-hint">Recorded error types appear once activity contains failures.</p>
-            </div>`;
-        const legend = $id('system-error-legend');
-        if (legend) legend.innerHTML = '<div class="an-legend-note">Clean code — no errors recorded.</div>';
-        return;
-    }
-
-    const size = 220;
-    const cx = size / 2, cy = size / 2;
-    const outerR = 90, innerR = 54;
-    const palette = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
-
-    let cursor = 0;
-    const slices = distribution.categories.map((cat, i) => {
-        const sweep = (cat.count / distribution.total) * Math.PI * 2;
-        const start = -Math.PI / 2 + cursor;
-        const end = start + sweep;
-        cursor += sweep;
-        const color = palette[i % palette.length];
-        return {
-            cat,
-            path: arcPath(cx, cy, outerR, innerR, start, end),
-            color
-        };
-    });
-
-    const sliceMarkup = slices.map(slice =>
-        `<path d="${slice.path}" class="an-pie-slice" style="--slice-color:${slice.color}"/>`
-    ).join('');
-
-    plot.innerHTML = `
-        <svg class="an-svg an-pie-svg" viewBox="0 0 ${size} ${size}" role="img"
-             aria-label="${anAttr('Error distribution: ' + distribution.categories.map(c => c.name + ' ' + c.pct + '% (' + c.count + ')').join(', '))}"
-             preserveAspectRatio="xMidYMid meet">
-            ${sliceMarkup}
-            <text x="${cx}" y="${cy - 4}" text-anchor="middle" class="an-pie-center-num">${distribution.total}</text>
-            <text x="${cx}" y="${cy + 14}" text-anchor="middle" class="an-pie-center-label">errors</text>
-        </svg>`;
-
-    const legend = $id('system-error-legend');
-    if (legend) {
-        legend.innerHTML = distribution.categories.map((cat, i) => {
-            const color = palette[i % palette.length];
-            return `<div class="an-legend-chip-static">
-                <span class="an-legend-dot" style="background:${color}"></span>
-                <span class="an-legend-name">${anEsc(cat.name)}</span>
-                <span class="an-legend-val">${cat.pct}% (${cat.count})</span>
-            </div>`;
-        }).join('');
-    }
+    anRenderDonut('system-errors-svg',records || [],{title:'System Error Distribution',description:'Recorded translation errors across the system.',
+        active:systemErrorActiveName,onSelect:name=>{systemErrorActiveName=name;renderSystemErrorChart(records);}});
 }
 
 if (typeof module !== 'undefined' && module.exports) {
