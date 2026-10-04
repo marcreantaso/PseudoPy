@@ -11776,7 +11776,6 @@ const StudentWorkspace = (() => {
     let history = [], historyStatus = '', historyMode = false, selected = 'source', step = -1;
     let activePage = '', serial = 0, sessionEpoch = 0;
     const visible = new Set(['compilation', 'validation', 'cumulative']);
-    let chartResizeObserver = null, chartResizeRaf = 0, chartLayoutBin = 'tall';
     const guideState = { mode: 'beginner', category: 'Basics' };
     const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const userId = () => typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'student' ? String(currentUser._docId || currentUser.id || '') : '';
@@ -11784,8 +11783,6 @@ const StudentWorkspace = (() => {
     function reset() {
         sessionEpoch++;
         generation++; if (unsubscribe) unsubscribe(); unsubscribe = null;
-        if (chartResizeObserver) chartResizeObserver.disconnect(); chartResizeObserver = null;
-        chartLayoutBin = 'tall';
         owner = ''; attempts = []; executions = []; latest = null; history = []; historyStatus = ''; activePage = ''; step = -1; historyMode = false;
         document.querySelectorAll('.student-workspace').forEach(el => el.remove());
         document.querySelectorAll('[data-student-guide]').forEach(el => { el.dataset.owner = ''; });
@@ -12003,122 +12000,44 @@ const StudentWorkspace = (() => {
     function bindHistoryMode(card) {
         card.querySelectorAll('[data-history]').forEach(b => b.onclick = () => { historyMode = b.dataset.history === 'true'; render(); });
     }
-    function watchChartSize(card) {
-        if (typeof ResizeObserver === 'undefined') return;
-        try {
-            if (chartResizeObserver) chartResizeObserver.disconnect();
-            chartResizeObserver = new ResizeObserver(() => {
-                cancelAnimationFrame(chartResizeRaf);
-                chartResizeRaf = requestAnimationFrame(() => {
-                    if (!card.isConnected) return;
-                    // Only a layout-bin change (crossing the 480px deadband)
-                    // rebuilds the chart; plain width/height changes scale the
-                    // SVG via CSS and must not churn the DOM mid-scroll.
-                    if (chartLayout(card.clientWidth, chartLayoutBin).bin !== chartLayoutBin) renderChart(card);
-                });
-            });
-            chartResizeObserver.observe(card);
-        } catch (_) { /* best effort responsive redraw */ }
-    }
     function renderChart(card) {
-        const data = StudentLearningModel.trajectory(historyMode ? history : attempts);
-        const series = [['compilation', 'Compilation Success', 'var(--chart-1)'], ['validation', 'Validation Indicator', 'var(--chart-5)'], ['cumulative', 'Cumulative Success Rate', 'var(--chart-2)']];
-        const title = historyMode ? 'Your Learning Progress — Learning History' : 'Your Learning Progress';
-        const subtitle = historyMode ? 'Saved translation evidence from your account. ' + esc(historyStatus) : 'Based on your latest translation attempts.';
-        const focusKey = elementFocusKey(card);
-        card.innerHTML =
-            '<div class="an-chart-header">' +
-                '<div><div class="an-chart-title">' + esc(title) + '<button type="button" class="an-info-badge" data-info aria-label="How is this calculated?"></button></div>' +
-                '<div class="an-chart-subtitle">' + subtitle + '</div></div>' +
-            '</div>' +
-            '<div class="an-chart-controls">' +
-                '<div class="seg" role="group" aria-label="Source of chart data">' +
-                    '<button type="button" data-history="false" aria-pressed="' + !historyMode + '">Live Session</button>' +
-                    '<button type="button" data-history="true" aria-pressed="' + historyMode + '">Learning History</button>' +
-                '</div>' +
-                '<div class="seg sg-series" role="group" aria-label="Chart series">' +
-                    series.map(([key, label]) => '<button type="button" data-series="' + key + '" aria-pressed="' + visible.has(key) + '">' + label + '</button>').join('') +
-                '</div>' +
-            '</div>';
-        if (!data.length) {
-            card.innerHTML += '<p class="an-chart-empty">' + (historyMode ? 'No saved translation evidence is available for this account yet.' : 'Complete your first translation to begin tracking this session.') + '</p><div class="an-chart-footer">' + icon('info') + 'This chart fills in with your real translation attempts.</div>';
-            bindHistoryMode(card);
-            refreshIcons(card);
-            watchChartSize(card);
-            restoreFocus(card, focusKey);
-            return;
-        }
-        const W = 600;
-        const layout = chartLayout(card.clientWidth, chartLayoutBin);
-        chartLayoutBin = layout.bin;
-        const H = layout.h;
-        const left = 52, right = 24, top = 18, bottom = 32;
-        const plotW = W - left - right;
-        const plotWidth = card.clientWidth > 0 ? Math.max(0, card.clientWidth - left - right) : plotW;
-        const x = i => left + (data.length === 1 ? plotW / 2 : i * plotW / (data.length - 1));
-        const y = n => bottom + (1 - n / 100) * (H - top - bottom);
-        const units = m => Math.round(Number(m) * 10) / 10;
-        let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="group" aria-label="Learning progress, percentage by translation attempt" class="an-svg">';
-        [0, 25, 50, 75, 100].forEach(n => { svg += '<line class="an-grid-line" x1="' + left + '" x2="' + (W - right) + '" y1="' + y(n) + '" y2="' + y(n) + '"/><text x="' + (left - 8) + '" y="' + (y(n) + 3) + '" text-anchor="end" class="an-axis-label">' + n + '%</text>'; });
-        progressXTicks(data.length, plotWidth).forEach(i => svg += '<text class="an-axis-label" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + (i + 1) + '</text>');
-        svg += '<defs><linearGradient id="sw-compilation-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--chart-1)" stop-opacity="0.22"/><stop offset="100%" stop-color="var(--chart-1)" stop-opacity="0.02"/></linearGradient><clipPath id="sw-plot-clip"><rect x="' + left + '" y="' + bottom + '" width="' + plotW + '" height="' + (H - top - bottom) + '"/></clipPath></defs>';
-        const baseline = y(0);
-        series.forEach(([key, label, color]) => {
-            if (!visible.has(key)) return;
-            const pts = data.map((p, i) => ({ x: i, y: p[key] }));
-            const primary = key === 'compilation';
-            const dots = data.map((p, i) => '<circle tabindex="0" role="button" class="an-series-dot' + (primary ? '' : ' an-progress-aux-dot') + '" data-point="' + i + '" data-series="' + key + '" aria-label="Attempt ' + (i + 1) + ', ' + label + ': ' + units(p[key]) + ' percent (errors ' + p.errors + ')" cx="' + x(i) + '" cy="' + y(p[key]) + '" r="' + (primary ? 4.5 : 3) + '" fill="' + color + '"/>').join('');
-            svg += '<g clip-path="url(#sw-plot-clip)">' +
-                (primary ? '<path fill="url(#sw-compilation-grad)" d="' + areaPath(pts, x, y, baseline) + '"/>' : '') +
-                '<path fill="none" class="' + (primary ? 'an-progress-main' : 'an-progress-aux') + '" stroke="' + color + '" stroke-width="' + (primary ? 2 : 1.5) + '"' + (primary ? '' : ' stroke-dasharray="5 4"') + ' d="' + smoothPath(pts, x, y) + '"/></g>' + dots;
-        });
-        svg += '</svg>';
-        const legend = series.map(([key, label, color]) => '<button type="button" class="sg-legend-chip" data-legend="' + key + '" aria-pressed="' + visible.has(key) + '"><span class="sg-legend-dot" style="background:' + color + '"></span>' + label + '</button>').join('');
-        card.innerHTML +=
-            '<div class="an-chart-plot">' + svg + '</div>' +
-            '<div class="sg-legend">' + legend + '<span class="sg-mastery-note">Complete more exercises to unlock concept mastery insights.</span></div>' +
-            '<div class="an-chart-footer">' + icon('trending-up') + trendSummary(data) + '</div>' +
-            '<details class="sw-data-table"><summary>View chart data as a table</summary><div class="sw-table"><table><thead><tr><th scope="col">Attempt</th><th scope="col">Compilation %</th><th scope="col">Validation indicator %</th><th scope="col">Cumulative %</th><th scope="col">Errors</th></tr></thead><tbody>' + data.map((p, i) => '<tr><td>' + (i + 1) + '</td><td>' + p.compilation + '</td><td>' + p.validation + '</td><td>' + units(p.cumulative) + '</td><td>' + p.errors + '</td></tr>').join('') + '</tbody></table></div></details>';
-        const tip = anEnsureTooltip(card);
-        const toggleSeries = key => {
-            if (visible.has(key) && visible.size === 1) return;
-            visible.has(key) ? visible.delete(key) : visible.add(key);
-            renderChart(card);
-            card.querySelector('[data-series="' + key + '"]')?.focus();
-        };
-        card.querySelectorAll('[data-series]').forEach(b => b.onclick = () => toggleSeries(b.dataset.series));
-        card.querySelectorAll('[data-legend]').forEach(b => b.onclick = () => toggleSeries(b.dataset.legend));
+        const all=StudentLearningModel.trajectory(historyMode?history:attempts);
+        // Compute cumulative success before trimming; the displayed history cap
+        // must never change the denominator of the student's cumulative score.
+        const offset=Math.max(0,all.length-60),data=all.slice(offset);
+        const series=[['compilation','Compilation Success','var(--chart-1)'],['validation','Validation Indicator','var(--chart-5)'],['cumulative','Cumulative Success Rate','var(--chart-2)']];
+        const units=n=>Math.round(Number(n)*10)/10;
+        const focusKey=elementFocusKey(card);
+        const id='student-progress-'+(activePage || 'preview');
+        if(!card.querySelector('.an-chart-plot')){delete card.dataset.chartMounted;card.innerHTML='<div id="'+id+'"></div>';}
+        const controls='<div class="seg" role="group" aria-label="Source of chart data"><button data-history="false" aria-pressed="'+!historyMode+'">Live Session</button><button data-history="true" aria-pressed="'+historyMode+'">Learning History</button></div>'+
+            '<details data-chart-info><summary aria-label="How is this calculated?">ⓘ</summary><div class="an-popover">Validation indicator = max(0, 100 − 15 × errors − 5 × warnings − 2 × suggestions). A heuristic for feedback, not a grade. Cumulative success includes all attempts. Complete more exercises to unlock concept mastery insights.</div></details>';
+        const view=anMountChart(id,{title:'Your Learning Progress',description:historyMode?'Saved translation evidence from your account.':'Based on your latest translation attempts.',
+            stats:[{label:'Attempts',value:all.length},{label:'Latest success',value:all.length?units(all.at(-1).cumulative)+'%':'—'}],controls,
+            insight:historyMode?historyStatus:offset?'Showing the latest 60 attempts.':'',caption:trendSummary(data)+' Indicators are not instructor grades.'});
+        if(!view)return;
+        view.legend.innerHTML=series.map(([key,label,color])=>'<button class="an-legend-chip" data-series="'+key+'" aria-pressed="'+visible.has(key)+'"><span class="an-legend-dot" style="background:'+color+'"></span>'+label+'</button>').join('');
+        view.legend.querySelectorAll('[data-series]').forEach(b=>b.onclick=()=>{const key=b.dataset.series;if(visible.has(key)&&visible.size===1)return;visible.has(key)?visible.delete(key):visible.add(key);renderChart(card);card.querySelector('[data-series="'+key+'"]').focus();});
         bindHistoryMode(card);
-        const infoBtn = card.querySelector('[data-info]');
-        if (infoBtn) {
-            infoBtn.innerHTML = icon('info');
-            const infoHtml = '<div class="an-tt-header">How is this calculated?</div>' +
-                '<div class="an-tt-row">Validation indicator = max(0, 100 − 15 × errors − 5 × warnings − 2 × suggestions).</div>' +
-                '<div class="an-tt-row an-tt-muted">A heuristic for feedback, not a grade.</div>' +
-                '<div class="an-tt-row">Complete more exercises to unlock concept mastery insights.</div>';
-            infoBtn.onclick = () => { const r = infoBtn.getBoundingClientRect(); anShowTooltip(tip, { clientX: r.left + 4, clientY: r.top + 4 }, infoHtml, card); };
-            infoBtn.onblur = () => anHideTooltip(tip);
-            infoBtn.onkeydown = e => { if (e.key === 'Escape') anHideTooltip(tip); };
-        }
-        const tooltipHtml = (i, p) =>
-            '<div class="an-tt-header">Attempt ' + (i + 1) + '</div>' +
-            series.map(([key, label, color]) => visible.has(key) ? '<div class="an-tt-row"><span class="an-tt-dot" style="background:' + color + '"></span>' + label + ': ' + units(p[key]) + '%</div>' : '').join('') +
-            '<div class="an-tt-row an-tt-muted">Errors: ' + p.errors + '</div>';
-        card.querySelectorAll('[data-point]').forEach(dot => {
-            const i = Number(dot.dataset.point), p = data[i];
-            const show = e => anShowTooltip(tip, e, tooltipHtml(i, p), card);
-            const hide = () => anHideTooltip(tip);
-            dot.onmouseenter = show;
-            dot.onmousemove = show;
-            dot.onmouseleave = hide;
-            dot.onfocus = () => anShowTooltip(tip, { clientX: dot.getBoundingClientRect().left, clientY: dot.getBoundingClientRect().top }, tooltipHtml(i, p), card);
-            dot.onblur = hide;
-            dot.onclick = show;
-            dot.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(e); } else if (e.key === 'Escape') { hide(); } };
+        const info=card.querySelector('[data-chart-info]');info.onkeydown=e=>{if(e.key==='Escape'){info.open=false;info.querySelector('summary').focus();}};
+        view.data.innerHTML='<details><summary>View chart data as a table</summary><div class="an-table-scroll"><table><thead><tr><th scope="col">Attempt</th><th scope="col">Compilation %</th><th scope="col">Validation %</th><th scope="col">Cumulative %</th><th scope="col">Errors</th></tr></thead><tbody>'+data.map((p,i)=>'<tr><td>'+(offset+i+1)+'</td><td>'+p.compilation+'</td><td>'+p.validation+'</td><td>'+units(p.cumulative)+'</td><td>'+p.errors+'</td></tr>').join('')+'</tbody></table></div></details>';
+        anChartDraw(view,width=>{
+            if(!data.length){anChartState(view.plot,historyMode&&/Loading/.test(historyStatus)?'loading':'empty',historyMode?'No saved translation evidence yet.':'Complete your first translation to begin.');return;}
+            const x=i=>48+(data.length===1?(width-80)/2:i*(width-80)/(data.length-1)),y=linearScale([0,100],[216,16]);
+            const labels=data.map((_,i)=>String(offset+i+1));
+            let content=anChartGrid(width,[0,25,50,75,100],y,'%');
+            content+=chartTicks(labels,data.map((_,i)=>x(i))).map(i=>'<text class="an-axis-label" x="'+x(i)+'" y="236" text-anchor="middle">'+labels[i]+'</text>').join('');
+            const items=[];
+            series.forEach(([key,label,color],rank)=>{
+                if(!visible.has(key))return;
+                const line=data.map((p,i)=>(i?'L':'M')+' '+x(i)+' '+y(p[key])).join(' ');
+                content+='<path d="'+line+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-dasharray="'+(rank?'5 4':'none')+'"/>';
+                data.forEach((p,i)=>{const n=items.push({label:'Attempt '+(offset+i+1),rows:series.filter(([k])=>visible.has(k)).map(([k,name,c])=>({name,color:c,value:units(p[k])+'%'}))})-1;
+                    content+='<circle data-mark="'+n+'" tabindex="-1" aria-label="Attempt '+(offset+i+1)+', '+label+': '+units(p[key])+' percent" cx="'+x(i)+'" cy="'+y(p[key])+'" r="4" fill="'+color+'"/>';});
+            });
+            view.plot.innerHTML=anChartSvg(width,'Learning progress by translation attempt',content);anBindMarks(view.plot,card,items);
         });
-        refreshIcons(card);
-        watchChartSize(card);
-        restoreFocus(card, focusKey);
+        restoreFocus(card,focusKey);
     }
     function loadHistory() {
         const id = owner, ticket = generation;

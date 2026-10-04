@@ -94,12 +94,14 @@ test('learning progress hides formulas and mastery-unavailable jargon behind fri
     assert.match(workspaceSource, /How is this calculated\?/);
 });
 test('chart data points expose keyboard and labelled tooltip hooks', () => {
-    assert.match(workspaceSource, /role="button" class="an-series-dot/);
-    assert.match(workspaceSource, /dot\.onkeydown = e => \{ if \(e\.key === 'Enter' \|\| e\.key === ' '\) \{/);
+    assert.match(workspaceSource, /data-mark=/);
+    assert.match(workspaceSource, /aria-label="Attempt/);
+    assert.match(workspaceSource, /anBindMarks\(view\.plot,card,items\)/);
 });
-test('chart layout never falls back to window width and only re-renders on bin flips', () => {
+test('chart layout uses the shared measured, debounced renderer instead of scaling text', () => {
     assert.ok(!/Math\.min\(window\.innerWidth/.test(workspaceSource), 'window.innerWidth fallback removed');
-    assert.match(workspaceSource, /chartLayout\(card\.clientWidth, chartLayoutBin\)\.bin !== chartLayoutBin/, 'resize re-render guarded by layout bin');
+    assert.match(workspaceSource, /anChartDraw\(view,width=>/);
+    assert.match(workspaceSource, /anChartSvg\(width,/);
 });
 test('chart data table covers every series including cumulative success', () => {
     assert.match(workspaceSource, /<th scope="col">Cumulative %<\/th>/);
