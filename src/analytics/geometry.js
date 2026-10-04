@@ -4,6 +4,42 @@
    the hand-rolled Recharts-style SVG renderers. No DOM access.
    ============================================================ */
 
+/* Select ticks by their actual label extents, leaving minGap clear pixels.
+   Unlike forcing the final tick, this cannot collide at narrow widths. */
+function chartTicks(labels, positions, minGap = 32) {
+    const result = [];
+    let edge = -Infinity;
+    labels.forEach((label, i) => {
+        const half = String(label).length * 3.6;
+        if (positions[i] - half >= edge + minGap) {
+            result.push(i);
+            edge = positions[i] + half;
+        }
+    });
+    return result;
+}
+
+function groupedBarGeometry(series, attempts, width, options = {}) {
+    if (!series.length || attempts <= 0) return [];
+    const left = options.left ?? 48, right = options.right ?? 16;
+    const baseline = options.baseline ?? 216;
+    const y = linearScale(options.domain || [0, 100], [baseline, 16]);
+    const slot = Math.max(1, (width - left - right) / attempts);
+    const gap = 2, groupWidth = slot * 0.78;
+    const barWidth = Math.max(1, (groupWidth - gap * (series.length - 1)) / series.length);
+    return series.flatMap((s, student) => s.points.map(point => {
+        const ungraded = point.y == null;
+        const height = ungraded ? 10 : Math.max(2, baseline - y(point.y));
+        return {student, point, ungraded, x:left + slot * point.x + (slot-groupWidth)/2 + student*(barWidth+gap),
+            y:baseline-height, width:barWidth, height};
+    }));
+}
+
+function roundedBarPath(b, radius = 3) {
+    const r = Math.min(radius, b.width / 2, b.height);
+    return `M ${b.x} ${b.y+b.height} V ${b.y+r} Q ${b.x} ${b.y} ${b.x+r} ${b.y} H ${b.x+b.width-r} Q ${b.x+b.width} ${b.y} ${b.x+b.width} ${b.y+r} V ${b.y+b.height} Z`;
+}
+
 function linearScale(domain, range) {
     const [d0, d1] = domain;
     const [r0, r1] = range;
@@ -199,6 +235,9 @@ function chartBox(size) {
    ============================================================ */
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+        chartTicks,
+        groupedBarGeometry,
+        roundedBarPath,
         linearScale,
         niceCeil,
         smoothPath,

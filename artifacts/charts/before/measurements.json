@@ -1,0 +1,269 @@
+{
+  "measurements": [
+    {
+      "width": 320,
+      "theme": "light",
+      "ready": true,
+      "scrollWidth": 437,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 260
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 240
+        },
+        {
+          "id": "an-error-svg",
+          "height": 240
+        },
+        {
+          "id": "chart-system-activity",
+          "height": 360
+        },
+        {
+          "id": "chart-system-errors",
+          "height": 240
+        },
+        {
+          "id": "",
+          "height": 197.390625
+        }
+      ],
+      "smallText": 34
+    },
+    {
+      "width": 320,
+      "theme": "dark",
+      "ready": true,
+      "scrollWidth": 437,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 260
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 240
+        },
+        {
+          "id": "an-error-svg",
+          "height": 240
+        },
+        {
+          "id": "chart-system-activity",
+          "height": 360
+        },
+        {
+          "id": "chart-system-errors",
+          "height": 240
+        },
+        {
+          "id": "",
+          "height": 197.390625
+        }
+      ],
+      "smallText": 34
+    },
+    {
+      "width": 375,
+      "theme": "light",
+      "ready": true,
+      "scrollWidth": 437,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 260
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 240
+        },
+        {
+          "id": "an-error-svg",
+          "height": 240
+        },
+        {
+          "id": "chart-system-activity",
+          "height": 360
+        },
+        {
+          "id": "chart-system-errors",
+          "height": 240
+        },
+        {
+          "id": "",
+          "height": 240.46875
+        }
+      ],
+      "smallText": 35
+    },
+    {
+      "width": 375,
+      "theme": "dark",
+      "ready": true,
+      "scrollWidth": 437,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 260
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 240
+        },
+        {
+          "id": "an-error-svg",
+          "height": 240
+        },
+        {
+          "id": "chart-system-activity",
+          "height": 360
+        },
+        {
+          "id": "chart-system-errors",
+          "height": 240
+        },
+        {
+          "id": "",
+          "height": 240.46875
+        }
+      ],
+      "smallText": 35
+    },
+    {
+      "width": 768,
+      "theme": "light",
+      "ready": true,
+      "scrollWidth": 762,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 318.5
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 318.5
+        },
+        {
+          "id": "an-error-svg",
+          "height": 240
+        },
+        {
+          "id": "chart-system-activity",
+          "height": 360
+        },
+        {
+          "id": "chart-system-errors",
+          "height": 306.390625
+        },
+        {
+          "id": "",
+          "height": 365.859375
+        }
+      ],
+      "smallText": 36
+    },
+    {
+      "width": 768,
+      "theme": "dark",
+      "ready": true,
+      "scrollWidth": 762,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 318.5
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 318.5
+        },
+        {
+          "id": "an-error-svg",
+          "height": 240
+        },
+        {
+          "id": "chart-system-activity",
+          "height": 360
+        },
+        {
+          "id": "chart-system-errors",
+          "height": 306.390625
+        },
+        {
+          "id": "",
+          "height": 365.859375
+        }
+      ],
+      "smallText": 36
+    },
+    {
+      "width": 1440,
+      "theme": "light",
+      "ready": true,
+      "scrollWidth": 1434,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 573.84375
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 355.328125
+        },
+        {
+          "id": "an-error-svg",
+          "height": 240
+        },
+        {
+          "id": "chart-system-activity",
+          "height": 360
+        },
+        {
+          "id": "chart-system-errors",
+          "height": 306.390625
+        },
+        {
+          "id": "",
+          "height": 659.1875
+        }
+      ],
+      "smallText": 36
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "ready": true,
+      "scrollWidth": 1434,
+      "plots": [
+        {
+          "id": "an-trajectory-svg",
+          "height": 573.84375
+        },
+        {
+          "id": "an-submissions-svg",
+          "height": 355.328125
+        },
+        {
+          "id": "an-error-svg",
+          "height": 240
+        },
+        {
+          "id": "chart-system-activity",
+          "height": 360
+        },
+        {
+          "id": "chart-system-errors",
+          "height": 306.390625
+        },
+        {
+          "id": "",
+          "height": 659.1875
+        }
+      ],
+      "smallText": 36
+    }
+  ],
+  "errors": []
+}

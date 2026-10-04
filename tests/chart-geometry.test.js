@@ -4,6 +4,34 @@ const path = require('node:path');
 
 const geo = require(path.join(__dirname, '..', 'src', 'analytics', 'geometry.js'));
 
+test('grouped bars keep identical scores separate for one/five students and eight attempts', () => {
+    for (const count of [1,5]) {
+        const series=Array.from({length:count},()=>({points:Array.from({length:8},(_,x)=>({x,y:100}))}));
+        const bars=geo.groupedBarGeometry(series,8,680);
+        assert.equal(bars.length,count*8);
+        for(let attempt=0;attempt<8;attempt++){
+            const group=bars.filter(b=>b.point.x===attempt).sort((a,b)=>a.x-b.x);
+            group.forEach((b,i)=>{assert.equal(b.y,16);assert.equal(b.height,200);if(i)assert.ok(b.x>group[i-1].x+group[i-1].width);});
+        }
+    }
+});
+test('ungraded is a distinct stub, zero remains scored, absent points are not fabricated',()=>{
+    const bars=geo.groupedBarGeometry([{points:[{x:0,y:null},{x:1,y:0}]}],3,400);
+    assert.equal(bars.length,2);assert.equal(bars[0].ungraded,true);assert.equal(bars[0].height,10);
+    assert.equal(bars[1].ungraded,false);assert.equal(bars[1].height,2);
+    assert.deepEqual(geo.groupedBarGeometry([],0,400),[]);
+    assert.ok(!/NaN|Infinity/.test(geo.roundedBarPath(bars[0])));
+});
+test('chart ticks are unique and leave 32px between label extents even in narrow plots',()=>{
+    for(const width of [0,60,220,560]){
+        const labels=Array.from({length:8},(_,i)=>'Attempt '+(i+1));
+        const positions=labels.map((_,i)=>i*width/7);
+        const ticks=geo.chartTicks(labels,positions);
+        assert.equal(new Set(ticks).size,ticks.length);
+        ticks.forEach((t,i)=>{if(i)assert.ok(positions[t]-positions[ticks[i-1]]>=labels[t].length*7.2+32);});
+    }
+});
+
 test('linearScale maps domain onto range linearly', () => {
     const f = geo.linearScale([0, 10], [20, 40]);
     assert.equal(f(0), 20);

@@ -29,6 +29,7 @@
     "src/analytics/aggregation.js",
     "src/analytics/geometry.js",
     "src/app/analytics.js",
+    "src/app/chart-system.js",
     "src/app/analytics-charts.js",
     "src/app/student-settings.js",
     "src/app/password-history.js",
