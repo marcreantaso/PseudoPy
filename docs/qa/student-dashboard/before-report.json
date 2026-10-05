@@ -1,0 +1,92 @@
+{
+  "offline": {
+    "afterLoss": {
+      "reconnectBannerExists": true,
+      "bodyMentionsReconnecting": true,
+      "pillState": "offline",
+      "pillLabel": "Offline",
+      "pillAnimated": true,
+      "dismissibleNoticeVisible": false,
+      "signedIn": true
+    },
+    "coldBoot": {
+      "reconnectBannerExists": true,
+      "bodyMentionsReconnecting": false,
+      "pillState": "offline",
+      "pillLabel": "Offline",
+      "pillAnimated": true,
+      "dismissibleNoticeVisible": false,
+      "signedIn": true
+    }
+  },
+  "layout": [
+    {
+      "width": 320,
+      "viewport": 720,
+      "flow": {
+        "top": 2710,
+        "height": 45
+      },
+      "insights": {
+        "top": 2769,
+        "height": 45
+      },
+      "actionBar": {
+        "top": 577,
+        "height": 143
+      },
+      "overflowX": 0
+    },
+    {
+      "width": 375,
+      "viewport": 812,
+      "flow": {
+        "top": 2688,
+        "height": 45
+      },
+      "insights": {
+        "top": 2748,
+        "height": 45
+      },
+      "actionBar": {
+        "top": 669,
+        "height": 143
+      },
+      "overflowX": 0
+    },
+    {
+      "width": 768,
+      "viewport": 1024,
+      "flow": {
+        "top": 2343,
+        "height": 52
+      },
+      "insights": {
+        "top": 2410,
+        "height": 52
+      },
+      "actionBar": {
+        "top": 881,
+        "height": 143
+      },
+      "overflowX": 0
+    },
+    {
+      "width": 1440,
+      "viewport": 900,
+      "flow": {
+        "top": 1798,
+        "height": 52
+      },
+      "insights": {
+        "top": 1865,
+        "height": 52
+      },
+      "actionBar": {
+        "top": 802,
+        "height": 70
+      },
+      "overflowX": 0
+    }
+  ]
+}

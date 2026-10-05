@@ -1,0 +1,578 @@
+{
+  "layout": [
+    {
+      "width": 320,
+      "tabCount": 3,
+      "labels": [
+        "Workspace",
+        "How Your Algorithm Works",
+        "Session Insights"
+      ],
+      "selected": [
+        "sw-tab-workspace"
+      ],
+      "tabIndexes": [
+        0,
+        -1,
+        -1
+      ],
+      "controls": [
+        "sw-panel-workspace",
+        "sw-panel-flow",
+        "sw-panel-insights"
+      ],
+      "panelLabelledBy": [
+        "sw-tab-workspace",
+        "sw-tab-flow",
+        "sw-tab-insights"
+      ],
+      "panelHidden": [
+        false,
+        true,
+        true
+      ],
+      "editorInWorkspace": true,
+      "pythonInWorkspace": true,
+      "consoleInWorkspace": true,
+      "actionsInWorkspace": true,
+      "kpiCount": 6,
+      "flowStages": 9,
+      "chartWidth": 0,
+      "chartSvgWidth": -1,
+      "overflowX": 0,
+      "tabHeights": [
+        45,
+        45,
+        44
+      ],
+      "duplicateFlow": 1,
+      "duplicateKpis": 1
+    },
+    {
+      "width": 375,
+      "tabCount": 3,
+      "labels": [
+        "Workspace",
+        "How Your Algorithm Works",
+        "Session Insights"
+      ],
+      "selected": [
+        "sw-tab-workspace"
+      ],
+      "tabIndexes": [
+        0,
+        -1,
+        -1
+      ],
+      "controls": [
+        "sw-panel-workspace",
+        "sw-panel-flow",
+        "sw-panel-insights"
+      ],
+      "panelLabelledBy": [
+        "sw-tab-workspace",
+        "sw-tab-flow",
+        "sw-tab-insights"
+      ],
+      "panelHidden": [
+        false,
+        true,
+        true
+      ],
+      "editorInWorkspace": true,
+      "pythonInWorkspace": true,
+      "consoleInWorkspace": true,
+      "actionsInWorkspace": true,
+      "kpiCount": 6,
+      "flowStages": 9,
+      "chartWidth": 0,
+      "chartSvgWidth": -1,
+      "overflowX": 0,
+      "tabHeights": [
+        44,
+        44,
+        44
+      ],
+      "duplicateFlow": 1,
+      "duplicateKpis": 1
+    },
+    {
+      "width": 768,
+      "tabCount": 3,
+      "labels": [
+        "Workspace",
+        "How Your Algorithm Works",
+        "Session Insights"
+      ],
+      "selected": [
+        "sw-tab-workspace"
+      ],
+      "tabIndexes": [
+        0,
+        -1,
+        -1
+      ],
+      "controls": [
+        "sw-panel-workspace",
+        "sw-panel-flow",
+        "sw-panel-insights"
+      ],
+      "panelLabelledBy": [
+        "sw-tab-workspace",
+        "sw-tab-flow",
+        "sw-tab-insights"
+      ],
+      "panelHidden": [
+        false,
+        true,
+        true
+      ],
+      "editorInWorkspace": true,
+      "pythonInWorkspace": true,
+      "consoleInWorkspace": true,
+      "actionsInWorkspace": true,
+      "kpiCount": 6,
+      "flowStages": 9,
+      "chartWidth": 0,
+      "chartSvgWidth": -1,
+      "overflowX": 0,
+      "tabHeights": [
+        44,
+        44,
+        44
+      ],
+      "duplicateFlow": 1,
+      "duplicateKpis": 1
+    },
+    {
+      "width": 1440,
+      "tabCount": 3,
+      "labels": [
+        "Workspace",
+        "How Your Algorithm Works",
+        "Session Insights"
+      ],
+      "selected": [
+        "sw-tab-workspace"
+      ],
+      "tabIndexes": [
+        0,
+        -1,
+        -1
+      ],
+      "controls": [
+        "sw-panel-workspace",
+        "sw-panel-flow",
+        "sw-panel-insights"
+      ],
+      "panelLabelledBy": [
+        "sw-tab-workspace",
+        "sw-tab-flow",
+        "sw-tab-insights"
+      ],
+      "panelHidden": [
+        false,
+        true,
+        true
+      ],
+      "editorInWorkspace": true,
+      "pythonInWorkspace": true,
+      "consoleInWorkspace": true,
+      "actionsInWorkspace": true,
+      "kpiCount": 6,
+      "flowStages": 9,
+      "chartWidth": 0,
+      "chartSvgWidth": -1,
+      "overflowX": 0,
+      "tabHeights": [
+        44,
+        44,
+        44
+      ],
+      "duplicateFlow": 1,
+      "duplicateKpis": 1
+    }
+  ],
+  "tabs": {
+    "320": {
+      "tabCount": 3,
+      "labels": [
+        "Workspace",
+        "How Your Algorithm Works",
+        "Session Insights"
+      ],
+      "selected": [
+        "sw-tab-insights"
+      ],
+      "tabIndexes": [
+        -1,
+        -1,
+        0
+      ],
+      "controls": [
+        "sw-panel-workspace",
+        "sw-panel-flow",
+        "sw-panel-insights"
+      ],
+      "panelLabelledBy": [
+        "sw-tab-workspace",
+        "sw-tab-flow",
+        "sw-tab-insights"
+      ],
+      "panelHidden": [
+        true,
+        true,
+        false
+      ],
+      "editorInWorkspace": true,
+      "pythonInWorkspace": true,
+      "consoleInWorkspace": true,
+      "actionsInWorkspace": true,
+      "kpiCount": 6,
+      "flowStages": 9,
+      "chartWidth": 247,
+      "chartSvgWidth": 247,
+      "overflowX": 0,
+      "tabHeights": [
+        45,
+        45,
+        44
+      ],
+      "duplicateFlow": 1,
+      "duplicateKpis": 1
+    },
+    "375": {
+      "tabCount": 3,
+      "labels": [
+        "Workspace",
+        "How Your Algorithm Works",
+        "Session Insights"
+      ],
+      "selected": [
+        "sw-tab-insights"
+      ],
+      "tabIndexes": [
+        -1,
+        -1,
+        0
+      ],
+      "controls": [
+        "sw-panel-workspace",
+        "sw-panel-flow",
+        "sw-panel-insights"
+      ],
+      "panelLabelledBy": [
+        "sw-tab-workspace",
+        "sw-tab-flow",
+        "sw-tab-insights"
+      ],
+      "panelHidden": [
+        true,
+        true,
+        false
+      ],
+      "editorInWorkspace": true,
+      "pythonInWorkspace": true,
+      "consoleInWorkspace": true,
+      "actionsInWorkspace": true,
+      "kpiCount": 6,
+      "flowStages": 9,
+      "chartWidth": 302,
+      "chartSvgWidth": 302,
+      "overflowX": 0,
+      "tabHeights": [
+        44,
+        44,
+        44
+      ],
+      "duplicateFlow": 1,
+      "duplicateKpis": 1
+    },
+    "768": {
+      "tabCount": 3,
+      "labels": [
+        "Workspace",
+        "How Your Algorithm Works",
+        "Session Insights"
+      ],
+      "selected": [
+        "sw-tab-insights"
+      ],
+      "tabIndexes": [
+        -1,
+        -1,
+        0
+      ],
+      "controls": [
+        "sw-panel-workspace",
+        "sw-panel-flow",
+        "sw-panel-insights"
+      ],
+      "panelLabelledBy": [
+        "sw-tab-workspace",
+        "sw-tab-flow",
+        "sw-tab-insights"
+      ],
+      "panelHidden": [
+        true,
+        true,
+        false
+      ],
+      "editorInWorkspace": true,
+      "pythonInWorkspace": true,
+      "consoleInWorkspace": true,
+      "actionsInWorkspace": true,
+      "kpiCount": 6,
+      "flowStages": 9,
+      "chartWidth": 688,
+      "chartSvgWidth": 688,
+      "overflowX": 0,
+      "tabHeights": [
+        44,
+        44,
+        44
+      ],
+      "duplicateFlow": 1,
+      "duplicateKpis": 1
+    },
+    "1440": {
+      "tabCount": 3,
+      "labels": [
+        "Workspace",
+        "How Your Algorithm Works",
+        "Session Insights"
+      ],
+      "selected": [
+        "sw-tab-insights"
+      ],
+      "tabIndexes": [
+        -1,
+        -1,
+        0
+      ],
+      "controls": [
+        "sw-panel-workspace",
+        "sw-panel-flow",
+        "sw-panel-insights"
+      ],
+      "panelLabelledBy": [
+        "sw-tab-workspace",
+        "sw-tab-flow",
+        "sw-tab-insights"
+      ],
+      "panelHidden": [
+        true,
+        true,
+        false
+      ],
+      "editorInWorkspace": true,
+      "pythonInWorkspace": true,
+      "consoleInWorkspace": true,
+      "actionsInWorkspace": true,
+      "kpiCount": 6,
+      "flowStages": 9,
+      "chartWidth": 1088,
+      "chartSvgWidth": 1088,
+      "overflowX": 0,
+      "tabHeights": [
+        44,
+        44,
+        44
+      ],
+      "duplicateFlow": 1,
+      "duplicateKpis": 1
+    },
+    "afterUpdate": {
+      "tabCount": 3,
+      "labels": [
+        "Workspace",
+        "How Your Algorithm Works",
+        "Session Insights"
+      ],
+      "selected": [
+        "sw-tab-insights"
+      ],
+      "tabIndexes": [
+        -1,
+        -1,
+        0
+      ],
+      "controls": [
+        "sw-panel-workspace",
+        "sw-panel-flow",
+        "sw-panel-insights"
+      ],
+      "panelLabelledBy": [
+        "sw-tab-workspace",
+        "sw-tab-flow",
+        "sw-tab-insights"
+      ],
+      "panelHidden": [
+        true,
+        true,
+        false
+      ],
+      "editorInWorkspace": true,
+      "pythonInWorkspace": true,
+      "consoleInWorkspace": true,
+      "actionsInWorkspace": true,
+      "kpiCount": 6,
+      "flowStages": 9,
+      "chartWidth": 302,
+      "chartSvgWidth": 302,
+      "overflowX": 0,
+      "tabHeights": [
+        44,
+        44,
+        44
+      ],
+      "duplicateFlow": 1,
+      "duplicateKpis": 1
+    },
+    "afterRoute": {
+      "tabCount": 3,
+      "labels": [
+        "Workspace",
+        "How Your Algorithm Works",
+        "Session Insights"
+      ],
+      "selected": [
+        "sw-tab-insights"
+      ],
+      "tabIndexes": [
+        -1,
+        -1,
+        0
+      ],
+      "controls": [
+        "sw-panel-workspace",
+        "sw-panel-flow",
+        "sw-panel-insights"
+      ],
+      "panelLabelledBy": [
+        "sw-tab-workspace",
+        "sw-tab-flow",
+        "sw-tab-insights"
+      ],
+      "panelHidden": [
+        true,
+        true,
+        false
+      ],
+      "editorInWorkspace": true,
+      "pythonInWorkspace": true,
+      "consoleInWorkspace": true,
+      "actionsInWorkspace": true,
+      "kpiCount": 6,
+      "flowStages": 9,
+      "chartWidth": 302,
+      "chartSvgWidth": 302,
+      "overflowX": 0,
+      "tabHeights": [
+        44,
+        44,
+        44
+      ],
+      "duplicateFlow": 1,
+      "duplicateKpis": 1
+    }
+  },
+  "keyboard": {
+    "arrowRight": {
+      "active": "sw-tab-flow",
+      "selected": [
+        "sw-tab-flow"
+      ],
+      "panels": [
+        true,
+        false,
+        true
+      ]
+    },
+    "arrowRight2": {
+      "active": "sw-tab-insights",
+      "selected": [
+        "sw-tab-insights"
+      ],
+      "panels": [
+        true,
+        true,
+        false
+      ]
+    },
+    "end": {
+      "active": "sw-tab-insights",
+      "selected": [
+        "sw-tab-insights"
+      ],
+      "panels": [
+        true,
+        true,
+        false
+      ]
+    },
+    "home": {
+      "active": "sw-tab-workspace",
+      "selected": [
+        "sw-tab-workspace"
+      ],
+      "panels": [
+        false,
+        true,
+        true
+      ]
+    },
+    "arrowLeft": {
+      "active": "sw-tab-insights",
+      "selected": [
+        "sw-tab-insights"
+      ],
+      "panels": [
+        true,
+        true,
+        false
+      ]
+    }
+  },
+  "offline": {
+    "bannerExists": false,
+    "mentionsReconnecting": false,
+    "label": "Offline",
+    "state": "offline",
+    "animated": false,
+    "dismissibleVisible": false,
+    "signedIn": true,
+    "editorValue": 102,
+    "pythonValue": 67,
+    "tabStillThere": 3
+  },
+  "recovery": {
+    "queuedBeforeDrain": {
+      "queued": 1
+    },
+    "transitions": [
+      {
+        "label": "Syncing",
+        "state": "syncing",
+        "dot": "syncStatePulse"
+      },
+      {
+        "label": "Synced",
+        "state": "synced",
+        "dot": "none"
+      }
+    ],
+    "afterDrain": {
+      "label": "Synced",
+      "state": "synced",
+      "signedIn": true,
+      "pendingBadgeHidden": true
+    }
+  },
+  "offlineQueued": {
+    "state": "offline",
+    "title": "No network connection. Your work is saved on this device and will sync when you are back online.",
+    "animated": "none",
+    "dismissibleVisible": false
+  }
+}

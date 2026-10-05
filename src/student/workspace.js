@@ -1,21 +1,175 @@
-/* Student-only workspace. Consumes cached compiler results; never invokes devtools. */
+/* Student-only workspace. Consumes cached compiler results; never invokes devtools.
+
+   The dashboard is a three-tab surface. Workspace holds everything the
+   student already had (editor, Python output, console, Translate/Run/Submit),
+   and the two learning surfaces that used to sit far below the fold are now
+   reachable in one tap: "How Your Algorithm Works" and "Session Insights".
+
+   The tab shell is built ONCE per route and then left alone. Only the panel
+   contents are re-rendered, so the selection, the scroll position and the
+   editor nodes all survive a component update. */
 const StudentWorkspace = (() => {
     let owner = '', generation = 0, unsubscribe = null, attempts = [], executions = [], latest = null;
     let history = [], historyStatus = '', historyMode = false, selected = 'source', step = -1;
     let activePage = '', serial = 0, sessionEpoch = 0;
     const visible = new Set(['compilation', 'validation', 'cumulative']);
     const guideState = { mode: 'beginner', category: 'Basics' };
+    const TABS = [
+        { id: 'workspace', label: 'Workspace' },
+        { id: 'flow', label: 'How Your Algorithm Works' },
+        { id: 'insights', label: 'Session Insights' },
+    ];
+    const TAB_STORAGE_PREFIX = 'pseudopy.studentTab.';
     const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const userId = () => typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'student' ? String(currentUser._docId || currentUser.id || '') : '';
     const element = id => document.getElementById(id);
+
+    /** Selection is per student and per route, and survives reloads. */
+    function tabStorageKey() { return TAB_STORAGE_PREFIX + (owner || 'anon') + '.' + (activePage || 'preview'); }
+    function readStoredTab() {
+        try {
+            const value = sessionStorage.getItem(tabStorageKey());
+            return TABS.some(t => t.id === value) ? value : null;
+        } catch (e) { return null; }
+    }
+    function storeTab(id) {
+        try { sessionStorage.setItem(tabStorageKey(), id); } catch (e) { /* private browsing */ }
+    }
+
     function reset() {
         sessionEpoch++;
         generation++; if (unsubscribe) unsubscribe(); unsubscribe = null;
         owner = ''; attempts = []; executions = []; latest = null; history = []; historyStatus = ''; activePage = ''; step = -1; historyMode = false;
-        document.querySelectorAll('.student-workspace').forEach(el => el.remove());
+        // Panels are torn down with their route, never detached from it: the
+        // workspace panel owns the live editor, so removing it would take the
+        // student's text with it.
+        document.querySelectorAll('.sw-tabs, .student-workspace').forEach(el => el.remove());
         document.querySelectorAll('[data-student-guide]').forEach(el => { el.dataset.owner = ''; });
         document.querySelectorAll('.sg-context').forEach(el => { el.hidden = true; });
     }
+
+    /**
+     * Build the tab shell for a route and move the page's existing content
+     * into the Workspace panel. Moving real nodes (rather than re-creating
+     * them) is what keeps every inline HTML handler, the draft restore and the
+     * console wired up exactly as before.
+     */
+    function buildShell(root) {
+        if (root.querySelector(':scope > .student-workspace')) return root.querySelector(':scope > .student-workspace');
+        const shell = document.createElement('div');
+        shell.className = 'student-workspace';
+        shell.dataset.swShell = 'true';
+
+        const tablist = document.createElement('div');
+        tablist.className = 'sw-tabs';
+        tablist.setAttribute('role', 'tablist');
+        tablist.setAttribute('aria-label', 'Student dashboard sections');
+        TABS.forEach(t => {
+            const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.className = 'sw-tab';
+            tab.id = 'sw-tab-' + t.id;
+            tab.textContent = t.label;
+            tab.setAttribute('role', 'tab');
+            tab.setAttribute('aria-controls', 'sw-panel-' + t.id);
+            tab.tabIndex = -1;
+            tablist.appendChild(tab);
+        });
+
+        const panels = document.createElement('div');
+        panels.className = 'sw-panels';
+        TABS.forEach(t => {
+            const panel = document.createElement('div');
+            panel.className = 'sw-panel sw-panel-' + t.id;
+            panel.id = 'sw-panel-' + t.id;
+            panel.setAttribute('role', 'tabpanel');
+            panel.setAttribute('aria-labelledby', 'sw-tab-' + t.id);
+            panel.tabIndex = 0;
+            panel.hidden = true;
+            panels.appendChild(panel);
+        });
+
+        // Everything already rendered into this page becomes the Workspace
+        // panel's content; the learning panels start empty and are filled by
+        // render().
+        const workspacePanel = panels.querySelector('#sw-panel-workspace');
+        Array.from(root.children).forEach(child => {
+            if (child !== shell) workspacePanel.appendChild(child);
+        });
+
+        shell.appendChild(tablist);
+        shell.appendChild(panels);
+        root.insertBefore(shell, root.firstChild);
+
+        bindTabs(shell);
+        return shell;
+    }
+
+    /**
+     * Roving-tabindex keyboard support. Arrow keys and Home/End move between
+     * tabs; selection follows focus, so a keyboard user never has to reach for
+     * a second key press to see the panel they navigated to.
+     */
+    function bindTabs(shell) {
+        const tablist = shell.querySelector('.sw-tabs');
+        if (!tablist || tablist.dataset.swBound === 'true') return;
+        tablist.dataset.swBound = 'true';
+        const select = (id, focus) => selectTab(shell, id, { focus: focus });
+        tablist.addEventListener('click', event => {
+            const tab = event.target.closest('[role="tab"]');
+            if (tab && tab.parentNode === tablist) select(tab.id.replace('sw-tab-', ''), true);
+        });
+        tablist.addEventListener('keydown', event => {
+            const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+            const current = tabs.indexOf(document.activeElement);
+            if (current === -1) return;
+            let next = -1;
+            if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (current + 1) % tabs.length;
+            else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (current - 1 + tabs.length) % tabs.length;
+            else if (event.key === 'Home') next = 0;
+            else if (event.key === 'End') next = tabs.length - 1;
+            if (next === -1) return;
+            event.preventDefault();
+            select(tabs[next].id.replace('sw-tab-', ''), true);
+        });
+    }
+
+    /**
+     * Switch panels. Returns the id that is now visible. Charts measure
+     * themselves lazily, so an Insights panel that was hidden has a zero-width
+     * plot: it must be redrawn once it is actually on screen.
+     */
+    function selectTab(shell, id, options) {
+        const target = TABS.some(t => t.id === id) ? id : 'workspace';
+        shell.querySelectorAll('[role="tab"]').forEach(tab => {
+            const active = tab.id === 'sw-tab-' + target;
+            tab.setAttribute('aria-selected', String(active));
+            tab.tabIndex = active ? 0 : -1;
+            if (active && options && options.focus) tab.focus();
+        });
+        shell.querySelectorAll('[role="tabpanel"]').forEach(panel => {
+            panel.hidden = panel.id !== 'sw-panel-' + target;
+        });
+        storeTab(target);
+        if (target === 'insights') scheduleChartRedraw(shell);
+        if (typeof refreshIcons === 'function') refreshIcons(shell);
+        return target;
+    }
+
+    /** Redraw after layout has settled, so no chart is measured at zero width. */
+    function scheduleChartRedraw(shell) {
+        const plot = shell.querySelector('#sw-panel-insights .an-chart-plot') || shell.querySelector('#sw-panel-insights [id^="student-progress"]');
+        if (!plot) return;
+        const draw = () => {
+            if (plot.isConnected && plot.clientWidth > 0 && typeof anChartRedraw === 'function') anChartRedraw(plot);
+        };
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => requestAnimationFrame(draw));
+        } else {
+            setTimeout(draw, 0);
+        }
+    }
+
     function activate(page) {
         const id = userId();
         if (id !== owner) { reset(); owner = id; }
@@ -25,9 +179,10 @@ const StudentWorkspace = (() => {
         const root = element('page-' + page); if (!root) return;
         const editorId = page === 'translate' ? 'translate-input' : 'pseudocode-editor';
         setupGuide(root, editorId);
-        let workspace = root.querySelector('.student-workspace');
-        if (!workspace) {
-            workspace = document.createElement('div'); workspace.className = 'student-workspace'; root.appendChild(workspace);
+        const workspace = buildShell(root);
+        if (workspace) {
+            const restored = readStoredTab() || 'workspace';
+            selectTab(workspace, restored, { focus: false });
         }
         render(); loadHistory();
     }
@@ -125,8 +280,10 @@ const StudentWorkspace = (() => {
         latest = { ...StudentLearningModel.flow(source, result), editorId, id: point.id, stale: false, runtime: null };
         step = -1; selected = result.valid ? 'structure' : 'validation'; render();
         if (!result.valid) {
+            // Surface the problems rather than leaving them on a hidden tab.
             const root = element('page-' + activePage);
-            const panel = root && root.querySelector('.sw-flow'); if (panel) panel.open = true;
+            const shell = root && root.querySelector(':scope > .student-workspace');
+            if (shell) selectTab(shell, 'flow', { focus: false });
         }
     }
     function beginRun(outputId, code) {
@@ -162,23 +319,44 @@ const StudentWorkspace = (() => {
         const el = root.querySelector('[' + attr + '="' + value + '"]');
         if (el) el.focus();
     }
+    /**
+     * Refresh the two learning panels. The shell, the tab state and the
+     * workspace panel (which owns the live editor) are never touched here, so
+     * an update cannot move the student out of the tab they are reading.
+     */
     function render() {
         if (!owner || owner !== userId()) return;
-        const root = element('page-' + activePage), target = root && root.querySelector('.student-workspace'); if (!target) return;
+        const root = element('page-' + activePage), target = root && root.querySelector(':scope > .student-workspace'); if (!target) return;
         const scrollY = (typeof window !== 'undefined' && window.scrollY) || 0;
-        const openSummaries = new Set();
-        target.querySelectorAll('details[open]').forEach(d => { const s = d.querySelector('summary'); if (s) openSummaries.add(s.textContent.trim()); });
         const focusKey = elementFocusKey(target);
-        target.innerHTML = '<details class="sw-flow"><summary>How Your Algorithm Works</summary><div class="sw-flow-body"></div></details><details class="sw-insights"><summary>Session Insights</summary><p>Live session: this signed-in browser session only. Metrics update after translating or running code.</p><div class="sw-kpis"></div><details class="sw-glossary"><summary>What do these numbers mean?</summary><p class="sw-learning"></p></details><div class="sw-chart an-chart-card"></div></details>';
-        renderFlow(target.querySelector('.sw-flow-body'), root);
+
+        const flowPanel = target.querySelector('#sw-panel-flow');
+        const insightsPanel = target.querySelector('#sw-panel-insights');
+        if (!flowPanel || !insightsPanel) return;
+
+        const openSummaries = new Set();
+        [flowPanel, insightsPanel].forEach(panel => {
+            panel.querySelectorAll('details[open]').forEach(d => { const s = d.querySelector('summary'); if (s) openSummaries.add(s.textContent.trim()); });
+        });
+
+        // The flow panel keeps the same structure the accordion had, so no
+        // content is duplicated and nothing is lost by the move into a tab.
+        flowPanel.innerHTML = '<div class="sw-flow-body"></div>';
+        insightsPanel.innerHTML = '<p>Live session: this signed-in browser session only. Metrics update after translating or running code.</p><div class="sw-kpis"></div><details class="sw-glossary"><summary>What do these numbers mean?</summary><p class="sw-learning"></p></details><div class="sw-chart an-chart-card"></div>';
+
+        renderFlow(flowPanel.querySelector('.sw-flow-body'), root);
         const k = StudentLearningModel.kpis(attempts, executions);
-        target.querySelector('.sw-kpis').innerHTML = [ ['Total Translations', k.translations], ['Compilation Success Rate', k.success.toFixed(1) + '%'], ['Runtime Error Rate', k.runtime.toFixed(1) + '%'], ['Average Generation Time', k.average.toFixed(2) + ' ms'], ['Total Errors', k.errors], ['Total Executions', k.executions] ].map(([label, value]) => '<div><strong>' + value + '</strong><span>' + label + '</span></div>').join('');
+        insightsPanel.querySelector('.sw-kpis').innerHTML = [ ['Total Translations', k.translations], ['Compilation Success Rate', k.success.toFixed(1) + '%'], ['Runtime Error Rate', k.runtime.toFixed(1) + '%'], ['Average Generation Time', k.average.toFixed(2) + ' ms'], ['Total Errors', k.errors], ['Total Executions', k.executions] ].map(([label, value]) => '<div><strong>' + value + '</strong><span>' + label + '</span></div>').join('');
         const patterns = [...new Set(attempts.flatMap(a => a.patterns))];
-        target.querySelector('.sw-learning').textContent = 'Successful attempts: ' + attempts.filter(a => a.valid).length + '. Attempts with syntax/structure issues: ' + attempts.filter(a => a.categories.some(c => /syntax|structure/i.test(c))).length + '. Attempts with detected logic issues: ' + attempts.filter(a => a.categories.some(c => /logic/i.test(c))).length + '. Distinct patterns practiced: ' + patterns.length + ' (' + (patterns.join(', ') || 'none yet') + '). Generation time includes the complete translation pipeline. Total Errors counts compilation issues; runtime failures are shown separately.';
-        renderChart(target.querySelector('.sw-chart'));
-        target.querySelectorAll('details').forEach(d => { const s = d.querySelector('summary'); if (s && openSummaries.has(s.textContent.trim())) d.open = true; });
+        insightsPanel.querySelector('.sw-learning').textContent = 'Successful attempts: ' + attempts.filter(a => a.valid).length + '. Attempts with syntax/structure issues: ' + attempts.filter(a => a.categories.some(c => /syntax|structure/i.test(c))).length + '. Attempts with detected logic issues: ' + attempts.filter(a => a.categories.some(c => /logic/i.test(c))).length + '. Distinct patterns practiced: ' + patterns.length + ' (' + (patterns.join(', ') || 'none yet') + '). Generation time includes the complete translation pipeline. Total Errors counts compilation issues; runtime failures are shown separately.';
+        renderChart(insightsPanel.querySelector('.sw-chart'));
+        [flowPanel, insightsPanel].forEach(panel => {
+            panel.querySelectorAll('details').forEach(d => { const s = d.querySelector('summary'); if (s && openSummaries.has(s.textContent.trim())) d.open = true; });
+        });
         restoreFocus(target, focusKey);
         if ((typeof window !== 'undefined' && window.scrollTo) && ((window.scrollY || 0) !== scrollY)) window.scrollTo(window.scrollX || 0, scrollY);
+        // A chart rendered into a hidden panel has no width yet.
+        if (!insightsPanel.hidden) scheduleChartRedraw(target);
     }
     function renderFlow(container, root) {
         if (!latest) { container.textContent = 'Translate your pseudocode to explore what PseudoPy understood.'; return; }
@@ -192,7 +370,14 @@ const StudentWorkspace = (() => {
         else if (selected === 'validation' || selected === 'meaning') {
             const issues = selected === 'meaning' ? (latest.result.warnings || []).map(StudentLearningModel.feedback) : latest.feedback;
             body.innerHTML = issues.length ? issues.map(i => '<div class="sw-issue"><strong>Line ' + i.line + ': ' + esc(i.explanation) + '</strong><p>Fix: ' + esc(i.fix) + '</p><button type="button" data-example="' + esc(i.category) + '">Show Example</button></div>').join('') : '<p>No issues reported at this stage. This does not prove the algorithm solves the intended problem.</p>';
-            body.querySelectorAll('[data-example]').forEach(b => b.onclick = () => root.querySelector('.operator-guide').showCategory(b.dataset.example));
+            body.querySelectorAll('[data-example]').forEach(b => b.onclick = () => {
+                // The example lives in the Workspace tab's quick guide, so the
+                // student is taken there instead of being sent to a hidden one.
+                const root = element('page-' + activePage);
+                const shell = root && root.querySelector(':scope > .student-workspace');
+                if (shell) selectTab(shell, 'workspace', { focus: false });
+                root.querySelector('.operator-guide').showCategory(b.dataset.example);
+            });
         } else body.innerHTML = '<pre>' + esc(selected === 'python' ? latest.result.python || 'Python generation was not reached.' : ['execution', 'output'].includes(selected) ? latest.runtime?.output || 'Run the generated Python to see actual output. The structural preview does not execute code.' : latest.source) + '</pre>';
         if (selected === 'python') {
             body.innerHTML += '<h4>Pseudocode to Python mapping</h4><p>Unique statement matches from this translation. Ambiguous line matches are omitted.</p>' + latest.steps.filter(s => s.pythonLine).map(s => '<div class="sg-comparison"><pre>Line ' + s.line + ': ' + esc(s.label) + '</pre><pre>Python line ' + s.pythonLine + ': ' + esc(s.python) + '</pre></div>').join('');

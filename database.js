@@ -1523,6 +1523,9 @@ async function enqueueDocumentDelete(ref, docId) {
      a successful op marks Firestore reachable; a transient failure
      marks it unreachable. requireOnline() blocks security-sensitive
      writes until Firestore is genuinely reachable.
+   - While the browser reports itself offline, no background retry is
+     scheduled at all: the queue is durable, so there is nothing to
+     gain from polling a network the platform already says is down.
    ============================================================ */
 
 const SYNC_MAX_ATTEMPTS = 3;
@@ -1550,6 +1553,29 @@ const SYNC_RECOVERY_REASONS = ['startup', 'auth', 'sign-in', 'online', 'manual-r
 // explicit navigator.onLine === false hint). Never treated as proof of
 // connectivity on its own.
 let firestoreReachable = true;
+
+/**
+ * Announce an upload lifecycle transition. The status pill needs to
+ * distinguish "actively uploading" from "queued and waiting", which
+ * reachability alone cannot express. No detail is attached, so nothing
+ * sensitive travels through the DOM event.
+ */
+function notifySyncProgress(phase, summary) {
+    if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function' || typeof CustomEvent === 'undefined') return;
+    try {
+        window.dispatchEvent(new CustomEvent('pseudopy:sync-progress', { detail: { phase: phase, summary: summary || null } }));
+    } catch (e) { /* a UI listener must never break the transport */ }
+}
+
+/**
+ * True when the browser itself reports no network.
+ * Defined once in connection-status.js (loaded first) and reused here so the
+ * queue and the status pill cannot disagree about what "offline" means.
+ */
+function isPlatformOffline() {
+    if (typeof isBrowserOffline === 'function') return isBrowserOffline();
+    return typeof navigator !== 'undefined' && navigator && navigator.onLine === false;
+}
 
 /** Error text markers that mean "the server answered, and the answer is no". */
 const PERMISSION_DENIED_PATTERN = /permission[-_]denied|permission[-_]not[-_]granted|missing or insufficient permissions|unauthenticated|not authorized|unauthorized|insufficient permission/;
@@ -1698,8 +1724,14 @@ function syncBackoffDelay(attempt, randomFn) {
     return Math.max(250, Math.round(capped * (0.5 + 0.5 * Math.abs(rand % 1))));
 }
 
+/**
+ * Schedule one bounded retry. Nothing is scheduled while the browser is
+ * offline: the queue is durable and the `online` event is the single
+ * recovery trigger, so a timer would only burn battery re-failing.
+ */
 function scheduleSyncRetry(mutationId, attempt) {
     if (typeof setTimeout !== 'function' || syncRetryTimer !== null) return;
+    if (isPlatformOffline() || !cloudRequestsAllowed()) return;
     syncRetryTimer = setTimeout(function () {
         syncRetryTimer = null;
         syncNow('backoff').catch(function () {});
@@ -1789,11 +1821,16 @@ function syncNow(reason) {
 
 async function drainSyncQueue(reason) {
     const recovery = SYNC_RECOVERY_REASONS.includes(reason);
+    if (isPlatformOffline()) {
+        // No network: keep every record exactly as it is and do no work.
+        return { started: false, reason, offline: true };
+    }
     if (recovery) resetCloudCircuit();
-    if (syncPermissionBlocked || !firestoreReady() || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+    if (syncPermissionBlocked || !firestoreReady()) {
         return { started: false, reason };
     }
     syncInProgress = true;
+    notifySyncProgress('start', { reason });
     let synced = 0, failed = 0, skipped = 0;
     try {
         const records = await listAllMutations();
@@ -1815,7 +1852,13 @@ async function drainSyncQueue(reason) {
             else { failed++; blockedDocuments.add(key); }
             if (syncPermissionBlocked) break;
         }
-    } finally { syncInProgress = false; }
+    } finally {
+        syncInProgress = false;
+        // Report the finished state regardless of outcome: a failed upload
+        // falls back to the local pill, and a clean drain reports Synced only
+        // after the count is re-read.
+        notifySyncProgress('finish', { reason, synced, failed, skipped });
+    }
     return { started: true, synced, failed, skipped, reason };
 }
 
@@ -1823,19 +1866,27 @@ async function drainSyncQueue(reason) {
 function initSyncCoordinator() {
     if (initSyncCoordinator.__bound) return;
     initSyncCoordinator.__bound = true;
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) markFirestoreReachable(false);
+    if (isPlatformOffline()) markFirestoreReachable(false);
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
         window.addEventListener('online', function () {
+            // An `online` event is only a hint that the network returned. The
+            // queue still has to upload before anything reports Synced.
             markFirestoreReachable(true);
             syncNow('online');
         });
         window.addEventListener('pageshow', function () {
-            if (typeof navigator === 'undefined' || navigator.onLine !== false) syncNow('pageshow');
+            if (!isPlatformOffline()) syncNow('pageshow');
+        });
+        window.addEventListener('offline', function () {
+            // Stop retrying immediately: any in-flight backoff timer would
+            // otherwise keep waking up against a dead network.
+            if (syncRetryTimer !== null) { clearTimeout(syncRetryTimer); syncRetryTimer = null; }
+            markFirestoreReachable(false);
         });
     }
     if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
         document.addEventListener('visibilitychange', function () {
-            if (!document.hidden && (typeof navigator === 'undefined' || navigator.onLine !== false)) syncNow('visibility');
+            if (!document.hidden && !isPlatformOffline()) syncNow('visibility');
         });
     }
     // A new cloud session is the one event that can turn previously deferred
@@ -1858,9 +1909,14 @@ async function getSyncState() {
         pending: mutations.filter(m => m.status === MUTATION_STATUS.PENDING).length,
         syncing: mutations.filter(m => m.status === MUTATION_STATUS.SYNCING).length,
         failed: mutations.filter(m => m.status === MUTATION_STATUS.FAILED).length,
+        // Denied writes are permanently unsynced, so they are surfaced as
+        // their own bucket instead of being hidden or counted as failures.
+        blocked: mutations.filter(m => m.status === 'blocked-permission').length,
         queue: mutations,
         reachable: firestoreReachable,
-        syncInProgress
+        syncInProgress,
+        offline: isPlatformOffline(),
+        permissionBlocked: syncPermissionBlocked
     };
 }
 

@@ -77,6 +77,27 @@ function anChartDraw(view, render) {
     run();
 }
 
+/**
+ * Re-run a chart's last render pass on demand.
+ *
+ * A plot inside a hidden tab measures 0 x 0, so anChartDraw skips it; when the
+ * tab becomes visible the ResizeObserver usually catches up, but a panel that
+ * was hidden for the whole session may never have been observed at a real size.
+ * This gives the tab code a deterministic way to draw once layout is known.
+ * Returns true when a redraw actually ran.
+ */
+function anChartRedraw(plot) {
+    if (!plot) return false;
+    const job = anChartJobs.get(plot);
+    if (!job) return false;
+    const width = Math.floor(plot.clientWidth);
+    if (width <= 0 || !plot.isConnected) return false;
+    job.width = width;
+    try { job.run(); }
+    catch (e) { console.error('[Chart] redraw failed', e); return false; }
+    return true;
+}
+
 function anChartState(plot, state, message, retry) {
     if (!plot) return;
     plot.setAttribute('aria-busy', String(state === 'loading'));

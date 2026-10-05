@@ -7,13 +7,18 @@
  * the connection-status layer keeps ONE dismissible, once-per-session notice
  * (with a Retry action) instead of an un-dismissable red box that reappeared on
  * every keystroke-triggered save.
+ *
+ * A transient failure is not announced at all: the durable queue already holds
+ * the work and the permanent pill reports that it lives on the device. Only a
+ * permanent refusal earns a notice.
  */
 window.addEventListener('pseudopy:sync-error', event => {
     const detail = event.detail || {};
     hideLegacyCloudSaveNotice();
     const classification = typeof classifyDbError === 'function' ? classifyDbError(detail) : null;
     if (classification && classification.transient) {
-        if (typeof showReconnectingStatus === 'function') showReconnectingStatus();
+        // The queue keeps the work and the pill reports it; nothing to announce.
+        if (typeof renderSyncIndicator === 'function') renderSyncIndicator();
         return;
     }
     if (detail.code === 'queue-storage' && typeof showSyncNotice === 'function') {

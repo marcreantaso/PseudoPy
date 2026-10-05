@@ -131,11 +131,16 @@ test('init no longer seeds unconditionally and gates seeding behind the done fla
     assert.match(init, /async function refreshAuthoritativeCaches/, 'degraded-boot re-sync helper missing');
 });
 
-test('degraded boot surfaces a connection banner that is hidden on logout', () => {
+// A degraded boot reports through the permanent sync pill. There is no
+// reconnect banner to mount or retire, and the student stays signed in.
+test('degraded boot reports local status without any connection banner', () => {
     const session = read('src/app/session.js');
-    assert.ok(session.includes('showConnectionBanner'), 'degraded boot does not surface the banner');
-    assert.ok(session.includes('hideConnectionBanner'), 'banner cannot be dismissed on recovery');
-    assert.ok(session.includes("'connection-status-banner'"), 'banner element id not referenced');
+    assert.ok(session.includes('showConnectionBanner'), 'degraded boot does not surface the sync status');
+    assert.ok(session.includes('hideConnectionBanner'), 'status cannot be cleared on recovery');
+    assert.ok(!session.includes("'connection-status-banner'"), 'session must not reference a reconnect banner');
+    assert.ok(!/Reconnecting to the server/.test(session), 'session must not use reconnect copy');
+    // Offline boots must not schedule background profile probes.
+    assert.match(session, /isBrowserOffline\(\)\)\s*return;/, 'offline boot still schedules a Firestore probe');
     const auth = read('src/app/authentication.js');
-    assert.match(auth, /hideConnectionBanner/, 'logout does not clear the connection banner');
+    assert.match(auth, /hideConnectionBanner/, 'logout does not clear the sync status');
 });

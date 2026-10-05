@@ -196,9 +196,16 @@ test('the indicator ranks permission refusals above outages', () => {
     const src = read(path.join('src', 'app', 'connection-status.js'));
     const fn = src.slice(src.indexOf('function readSyncIndicatorState'));
     const deniedAt = fn.indexOf("key: 'denied'");
-    const reconnectAt = fn.indexOf("key: 'reconnecting'");
-    assert.ok(deniedAt > -1 && reconnectAt > -1);
-    assert.ok(deniedAt < reconnectAt, 'a refusal outranks an outage: the server answered');
+    // A Firestore outage is now reported as a calm local state rather than a
+    // "reconnecting" state, and the refusal must still be checked first.
+    const outageAt = fn.indexOf("key: 'local'");
+    assert.ok(deniedAt > -1, 'the refusal state still exists');
+    assert.ok(outageAt > -1, 'an outage maps to a calm local state');
+    assert.ok(deniedAt < outageAt, 'a refusal outranks an outage: the server answered');
+    // Being genuinely offline is a stronger fact than a refusal, so it wins.
+    assert.ok(fn.indexOf("key: 'offline'") < deniedAt, 'no network outranks every cloud state');
+    // No branch may reintroduce the removed reconnecting announcement.
+    assert.doesNotMatch(src, /key: 'reconnecting'/);
 });
 
 test('the indicator animation uses transform/opacity only', () => {

@@ -97,23 +97,18 @@ function settleBoot() {
 }
 
 // Session-level names kept for the existing callers (authentication logout,
-// renderSessionState). The behaviour lives in connection-status.js so the
-// transient "Reconnecting" state and the permanent "saved on this device"
-// state cannot be confused for one another.
+// renderSessionState). The behaviour lives in connection-status.js, which no
+// longer has a reconnect banner: a degraded boot reports itself through the
+// permanent sync pill and nothing else, so a student offline is never told
+// the app is "reconnecting".
 function showConnectionBanner() {
     if (typeof showReconnectingStatus === 'function') showReconnectingStatus();
-    else {
-        const banner = $id('connection-status-banner');
-        if (banner) banner.hidden = false;
-    }
+    else if (typeof renderSyncIndicator === 'function') renderSyncIndicator();
 }
 
 function hideConnectionBanner() {
     if (typeof hideReconnectingStatus === 'function') hideReconnectingStatus();
-    else {
-        const banner = $id('connection-status-banner');
-        if (banner) banner.hidden = true;
-    }
+    else if (typeof renderSyncIndicator === 'function') renderSyncIndicator();
 }
 
 function makeGoneError() {
@@ -148,15 +143,19 @@ function loadCachedProfileFor(snapshot) {
  *
  * A *permanent* refusal (rules/permissions) is not a connectivity problem, so
  * it switches to the dismissible "saved on this device" status and stops
- * probing instead of cycling the "Reconnecting" banner forever.
+ * probing. A browser that is offline schedules nothing at all: the queue and
+ * the local profile are durable, and `online` already triggers a drain.
  */
 function scheduleProfileRefresh(docId, fallbackRoute) {
     if (typeof dbGet !== 'function' || typeof checkAccess !== 'function') return;
     if (profileRefreshAttempts >= 3 || (typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed())) return;
+    // Never poll a network the platform reports as down.
+    if (typeof isBrowserOffline === 'function' && isBrowserOffline()) return;
     profileRefreshAttempts++;
     const backoffMs = [1500, 3000, 6000][profileRefreshAttempts - 1] || 6000;
     setTimeout(async () => {
         if (typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) return;
+        if (typeof isBrowserOffline === 'function' && isBrowserOffline()) return;
         try {
             const fresh = await dbGet(usersRef, docId, { strict: true });
             if (!fresh) { profileRefreshAttempts = 3; return; }

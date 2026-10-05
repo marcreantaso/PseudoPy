@@ -1,12 +1,17 @@
 /* ============================================================
    CLOUD CONNECTIVITY STATUS
-   Distinguishes a *transient* outage ("Reconnecting…", with an
-   automatic recovery probe) from a *permanent* refusal
-   ("saved on this device", with a dismiss button).
 
-   A Firestore rules denial is not an outage. The server answered.
-   Presenting it as a permanent reconnect loop is what made the
-   original banner impossible to dismiss.
+   There is no "Reconnecting to the server…" state. Being offline is
+   a normal, expected condition for this PWA: the student stays
+   signed in, keeps working, and every change is already saved on the
+   device. Telling them the app is "reconnecting" was wrong twice over
+   - it implied an outage they should wait out, and it animated
+   forever because a browser offline is not a server fault.
+
+   The UI now has exactly three calm shapes:
+     - a permanent pill reporting the current sync state, and
+     - a dismissible notice for a real cloud refusal, and
+     - nothing else.
    ============================================================ */
 
 const OFFLINE_SAVE_STATUS_ID = 'offline-save-status';
@@ -39,19 +44,24 @@ function resetOfflineSaveStatusForTests() {
     try { sessionStorage.setItem(OFFLINE_SAVE_SHOWN_KEY, '0'); } catch (e) {}
 }
 
+/**
+ * The retired reconnect banner. Kept as a no-op seam because the
+ * authentication, session and sync layers still call these names; they
+ * now resolve to the permanent pill instead of an alarming banner.
+ */
 function showReconnectingStatus() {
-    if (!isBrowserOffline() && typeof cloudRequestsAllowed === 'function' && !cloudRequestsAllowed()) return;
-    const banner = typeof $id === 'function' ? $id('connection-status-banner') : null;
-    if (banner) banner.hidden = false;
     if (typeof renderSyncIndicator === 'function') renderSyncIndicator();
 }
 
 function hideReconnectingStatus() {
-    const banner = typeof $id === 'function' ? $id('connection-status-banner') : null;
-    if (banner) banner.hidden = true;
     if (typeof renderSyncIndicator === 'function') renderSyncIndicator();
 }
 
+/**
+ * Offline is not an error, so it is never announced as a notice that
+ * needs dismissing: the always-visible pill already says where the work
+ * lives. Only a genuine cloud refusal earns a banner.
+ */
 function showOfflineSaveStatus(reason) {
     let previouslyShown = false;
     try { previouslyShown = sessionStorage.getItem(OFFLINE_SAVE_SHOWN_KEY) === '1'; } catch (e) {}
@@ -90,20 +100,18 @@ function isOfflineSaveStatusVisible() {
 
 /**
  * Transport hook invoked by the database layer on a permanent cloud-write
- * refusal. Shows the dismissible status at most once per session; transient
- * failures are intentionally ignored here because they already own the
- * "Reconnecting" banner.
+ * refusal. Shows the dismissible status at most once per session. A browser
+ * offline is a connectivity state, not a policy refusal, so it stays on the
+ * permanent pill and starts no retry work.
  */
 function reportCloudSaveDenied(context, classification) {
     if (!classification || classification.transient) return false;
-    if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
-        // Genuinely offline is a connectivity problem, not a policy refusal.
-        showReconnectingStatus();
+    if (isBrowserOffline()) {
+        // Genuinely offline: the pill already reports it and the durable queue
+        // keeps the work. A dismissible banner here would add noise, not clarity.
+        renderSyncIndicator();
         return false;
     }
-    // The server answered, so retire any "Reconnecting…" state first: leaving
-    // both on screen is what made the original notice look un-dismissable.
-    hideReconnectingStatus();
     let reason;
     if (context && context.pendingSignIn) {
         // Not a misconfiguration: the write is queued and will be replayed as
@@ -141,15 +149,13 @@ function retryCloudSyncNow() {
 /* ============================================================
    PERSISTENT CONNECTION INDICATOR
 
-   The two notices above are transient and easy to miss: once
-   dismissed, nothing tells you whether this browser is actually
-   talking to Firestore. This is a small always-visible pill that
-   reports the current state permanently.
+   The always-visible pill. It holds NO state of its own: every value
+   is derived from the sync manager's existing synchronous variables
+   and the same events the queue already dispatches, so the pill can
+   never disagree with the rest of the connectivity UI.
 
-   It holds NO state of its own. Every value is derived from the
-   sync manager's existing synchronous variables and the same
-   events the banners already listen to, so the pill can never
-   disagree with the rest of the connectivity UI.
+   Offline is reported as a calm, terminal-sounding state with no
+   animation. Only an actual upload animates.
    ============================================================ */
 
 const SYNC_INDICATOR_ID = 'sync-state-indicator';
@@ -164,25 +170,30 @@ let syncIndicatorCountTimer = null;
  * outage because the server answered, and the browser's own offline flag is
  * the weakest signal of all (navigator.onLine reports "online" on a captive
  * portal and "offline" on some working wifi).
+ *
+ * "Syncing" is reserved for a queue that is actively uploading. Everything
+ * that cannot currently reach Firestore reports where the work actually
+ * lives - on the device - instead of implying a retry is under way.
  */
 function readSyncIndicatorState() {
+    const localDetail = 'Your work is saved on this device and will sync when you are back online.';
     if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
-        return { key: 'offline', label: 'Offline', detail: 'No network connection. Changes are saved on this device.' };
+        return { key: 'offline', label: 'Offline', detail: 'No network connection. ' + localDetail };
     }
     if (typeof syncPermissionBlocked !== 'undefined' && syncPermissionBlocked) {
-        return { key: 'denied', label: 'Cloud denied', detail: 'Firestore refused a write. Changes are saved on this device.' };
+        return { key: 'denied', label: 'Synced locally', detail: 'This account cannot sync to the cloud yet. ' + localDetail };
     }
     if (typeof firestoreReady === 'function' && !firestoreReady()) {
-        return { key: 'local', label: 'Local only', detail: 'Firestore is unavailable. Changes are saved on this device.' };
+        return { key: 'local', label: 'Synced locally', detail: 'Firestore is unavailable. ' + localDetail };
     }
     if (typeof isFirestoreReachable === 'function' && !isFirestoreReachable()) {
-        return { key: 'reconnecting', label: 'Reconnecting', detail: 'Reaching Firestore. Changes are queued until it responds.' };
+        return { key: 'local', label: 'Synced locally', detail: 'The cloud is not reachable yet. ' + localDetail };
     }
     if (typeof syncInProgress !== 'undefined' && syncInProgress) {
-        return { key: 'syncing', label: 'Syncing', detail: 'Uploading saved changes.' };
+        return { key: 'syncing', label: 'Syncing', detail: 'Uploading saved changes to the cloud.' };
     }
     if (syncIndicatorPendingCount > 0) {
-        return { key: 'queued', label: 'Queued', detail: syncIndicatorPendingCount + ' change(s) waiting to sync.' };
+        return { key: 'queued', label: 'Saved on this device', detail: syncIndicatorPendingCount + ' change(s) waiting to upload.' };
     }
     return { key: 'synced', label: 'Synced', detail: 'All changes are saved to the cloud.' };
 }
@@ -221,7 +232,9 @@ function refreshSyncIndicatorCounts() {
     if (typeof getSyncState !== 'function') return Promise.resolve(null);
     return Promise.resolve(getSyncState()).then(function (state) {
         if (!state) return null;
-        syncIndicatorPendingCount = (state.pending || 0) + (state.failed || 0);
+        // Blocked-permission records are still unsynced work, so they belong
+        // in the count even though they will never retry on their own.
+        syncIndicatorPendingCount = (state.pending || 0) + (state.failed || 0) + (state.blocked || 0);
         renderSyncIndicator();
         return state;
     }, function () { return null; });
@@ -239,8 +252,15 @@ function initSyncIndicator() {
             renderSyncIndicator();
             scheduleSyncIndicatorCountRefresh();
         });
+        // Sync lifecycle (upload start/finish/failure) is what turns the pill
+        // into Syncing -> Synced; reachability alone cannot tell that apart
+        // from "nothing to do".
+        window.addEventListener('pseudopy:sync-progress', renderSyncIndicator);
         window.addEventListener('pseudopy:sync-error', function () {
             renderSyncIndicator();
+            scheduleSyncIndicatorCountRefresh();
+        });
+        window.addEventListener('pseudopy:sync-saved', function () {
             scheduleSyncIndicatorCountRefresh();
         });
     }
@@ -294,19 +314,17 @@ function initConnectionStatus() {
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape' && isOfflineSaveStatusVisible()) dismissOfflineSaveStatus();
         });
+        // Coming back online is a hint, not proof: the queue has to actually
+        // upload before the pill may say Synced. The sync manager owns that.
         window.addEventListener('online', function () {
-            hideReconnectingStatus();
             if (typeof resetCloudCircuit === 'function') resetCloudCircuit();
+            renderSyncIndicator();
         });
-        window.addEventListener('pseudopy:connection-state', function (event) {
-            if (event.detail.reachable) hideReconnectingStatus();
-            else showReconnectingStatus();
-        });
-        window.addEventListener('offline', function () {
-            showReconnectingStatus();
-        });
+        window.addEventListener('offline', renderSyncIndicator);
     }
-    if (isBrowserOffline()) showReconnectingStatus();
+    // Starting offline is not a fault to announce: the permanent pill already
+    // states that work is saved on the device.
+    renderSyncIndicator();
 }
 
 if (typeof document !== 'undefined') {

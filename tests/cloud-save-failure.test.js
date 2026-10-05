@@ -229,7 +229,6 @@ function uiHarness({ onLine = true } = {}) {
         syncNow: () => { },
         classifyDbError: e => e.classification
     };
-    makeEl('connection-status-banner');
     makeEl('offline-save-status');
     makeEl('offline-save-status-detail');
     makeEl('offline-save-dismiss');
@@ -275,29 +274,32 @@ test('resetOfflineSaveStatusForTests re-arms the session latch', () => {
     assert.equal(h.ctx.isOfflineSaveStatusVisible(), true);
 });
 
+// The app has no reconnect banner. Being offline is reported by the permanent
+// sync pill, and these tests pin that a transient outage or a plain offline
+// browser never produces any dismissible alert.
 test('a transient outage is never reported as a policy refusal', () => {
     const h = uiHarness();
     assert.equal(h.ctx.reportCloudSaveDenied({ ref: 'r' }, { category: 'FIRESTORE_UNAVAILABLE', transient: true }), false);
     assert.equal(h.ctx.isOfflineSaveStatusVisible(), false, 'an outage is not a policy refusal');
-    // The reconnecting banner is owned by the sync/session layer, not here.
+    // The retired seam must stay a no-op: nothing to show, nothing to dismiss.
     h.ctx.showReconnectingStatus();
-    assert.equal(h.elements['connection-status-banner'].hidden, false, 'a transient outage still uses the reconnecting banner');
     assert.equal(h.ctx.isOfflineSaveStatusVisible(), false);
 });
 
-test('a genuinely offline browser shows reconnecting, not a refusal', () => {
+test('a genuinely offline browser stays local, with no alert', () => {
     const h = uiHarness({ onLine: false });
     assert.equal(h.ctx.reportCloudSaveDenied({ ref: 'r' }, { category: 'PERMISSION_DENIED', transient: false }), false);
     assert.equal(h.ctx.isOfflineSaveStatusVisible(), false);
-    assert.equal(h.elements['connection-status-banner'].hidden, false);
 });
 
-test('recovery hides the reconnecting banner', () => {
+test('offline and recovery never mount a reconnect banner', () => {
     const h = uiHarness();
     h.ctx.showReconnectingStatus();
-    assert.equal(h.elements['connection-status-banner'].hidden, false);
+    assert.ok(!h.elements['connection-status-banner'], 'reconnect banner must not be part of the status region');
+    h.listeners.offline();
+    assert.ok(!h.elements['connection-status-banner']);
     h.listeners.online();
-    assert.equal(h.elements['connection-status-banner'].hidden, true);
+    assert.ok(!h.elements['connection-status-banner']);
 });
 
 test('initConnectionStatus wires the dismiss button and the online listener', () => {
@@ -319,11 +321,13 @@ test('index.html ships a dismissible offline-save status region', () => {
     assert.match(html, /id="offline-save-status"[^>]*role="status"|role="status"[^>]*id="offline-save-status"/, 'status region needs a live role');
 });
 
-test('the reconnecting banner and the refusal status are never both visible', () => {
-    const h = uiHarness();
-    h.ctx.showReconnectingStatus();
-    h.ctx.reportCloudSaveDenied({ ref: 'r' }, { category: 'PERMISSION_DENIED', transient: false });
-    assert.equal(h.elements['connection-status-banner'].hidden, true, 'a refusal must retire the reconnecting banner');
-    assert.equal(h.ctx.isOfflineSaveStatusVisible(), true);
+test('the reconnect banner is gone from the shipped markup', () => {
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    assert.ok(!/id="connection-status-banner"/.test(html), 'reconnect banner must not ship');
+    assert.ok(!/Reconnecting to the server/.test(html), 'reconnect copy must not ship');
+    const css = fs.readFileSync(path.join(__dirname, '..', 'style.css'), 'utf8');
+    assert.ok(!/\.connection-status-banner\s*\{/.test(css), 'reconnect banner styling must not ship');
+    // The permanent pill stays: it is the single place sync state is reported.
+    assert.match(html, /id="sync-state-indicator"/);
 });
 // CRUD persistence is exercised with the real queue/coordinator in sync-recovery.test.js.

@@ -1,8 +1,64 @@
 /* Student learning surfaces use the application's shared theme tokens. */
-.student-workspace { display: grid; gap: 1rem; margin-block: 1rem; min-width: 0; }
+.student-workspace { display: grid; gap: 1rem; margin-block: 1rem 0; min-width: 0; }
 .student-workspace > details { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); min-width: 0; }
 .student-workspace summary, .operator-guide summary { cursor: pointer; font-weight: 600; }
 .student-workspace p, .operator-guide p { line-height: 1.6; }
+
+/* ── Dashboard tabs ──
+   One horizontal rail that wraps instead of scrolling, so nothing is hidden
+   off-screen at 320px and no nested horizontal scroll container is created.
+   Labels wrap to two lines on narrow screens rather than shrinking below a
+   usable tap size. */
+.sw-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin: 0 0 1rem;
+  min-width: 0;
+}
+.sw-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: .6rem .9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: .85rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color var(--duration) var(--ease), background var(--duration) var(--ease), color var(--duration) var(--ease);
+}
+.sw-tab:hover { border-color: var(--border-accent); color: var(--text-primary); }
+.sw-tab[aria-selected="true"] {
+  border-color: var(--primary);
+  background: var(--accent-subtle);
+  color: var(--primary);
+}
+.sw-tab:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+/* Panels are plain flow containers: no overflow, no internal scrollbar, so
+   iOS never ends up with a second scrolling context inside the page. */
+.sw-panels { min-width: 0; }
+.sw-panel { min-width: 0; }
+.sw-panel[hidden] { display: none; }
+.sw-panel:focus-visible { outline: 3px solid var(--primary); outline-offset: 4px; border-radius: 8px; }
+/* The learning panels keep the card treatment the accordions had. */
+#sw-panel-flow, #sw-panel-insights {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+/* The Workspace panel must not clip the sticky action bar or the console. */
+#sw-panel-workspace { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 0; }
 
 /* Generic chip row (flow stages, step-through) — not the guide category rail. */
 .sg-tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: .75rem; }
@@ -103,5 +159,9 @@
     .an-chart-controls { align-items: flex-start; }
     .student-workspace > details { padding: .75rem; }
     .sw-chart { padding: .9rem; }
+    /* Two tabs per row keeps every label readable at 320px without a rail. */
+    .sw-tabs { gap: .4rem; }
+    .sw-tab { flex: 1 1 calc(50% - .4rem); font-size: .8rem; padding: .55rem .5rem; }
+    #sw-panel-flow, #sw-panel-insights { padding: .75rem; }
 }
 @media (max-width: 359px) { .sw-kpis { grid-template-columns: 1fr; } }

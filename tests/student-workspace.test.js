@@ -171,7 +171,9 @@ test('quick guide state machine persists mode, keeps the category, and never dup
         const modeButtons = [beginner, advanced];
         const editor = { value: '', dataset: {}, selectionStart: 0, selectionEnd: 0, parentElement: { insertAdjacentElement() {} },
             setRangeText() {}, focus() {}, dispatchEvent() {}, addEventListener() {}, setSelectionRange() {}, scrollTop: 0 };
-        const pageRoot = { querySelector(sel) { return sel === '.operator-guide' ? guideEl : null; }, appendChild() {}, insertAdjacentElement() {} };
+        // The dashboard builds a tab shell and moves the page's existing children into
+// the Workspace panel, so the page root must expose a child list.
+const pageRoot = { children: [], firstChild: null, querySelector(sel) { return sel === '.operator-guide' ? guideEl : null; }, appendChild() {}, insertBefore() {}, insertAdjacentElement() {} };
         const byId = { 'page-write-pseudocode': pageRoot, 'pseudocode-editor': editor };
         const sandbox = vm.createContext({
             console, StudentLearningModel: model, StudentGuide: guide, StudentWorkspace: undefined,
@@ -179,8 +181,10 @@ test('quick guide state machine persists mode, keeps the category, and never dup
             STORAGE_KEYS: { GUIDE_MODE: 'pseudopy_guide_mode' },
             localStorage: { getItem: k => (startMode && k === 'pseudopy_guide_mode') ? startMode : (persisted.get(k) || null), setItem: (k, v) => persisted.set(k, v), removeItem: k => persisted.delete(k) },
             document: { getElementById: id => byId[id] || null, querySelectorAll: () => [], createElement: () => ({
-                dataset: {}, classList: { add() {}, remove() {} }, setAttribute() {}, innerHTML: '', textContent: '',
-                hidden: false, className: '', onclick: null, querySelector: () => ({ onclick: null }),
+                dataset: {}, classList: { add() {}, remove() {}, contains: () => false }, setAttribute() {}, getAttribute: () => null,
+                innerHTML: '', textContent: '', children: [],
+                hidden: false, className: '', onclick: null,
+                querySelector: () => ({ onclick: null, dataset: {}, querySelectorAll: () => [], addEventListener() {}, focus() {}, classList: { add() {} } }),
                 querySelectorAll: () => [], appendChild() {}, addEventListener() {}, focus() {}, scrollIntoView() {}
             }),
                 getComputedStyle: () => ({ lineHeight: '22px' }) },

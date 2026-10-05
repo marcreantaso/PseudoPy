@@ -5,7 +5,7 @@ const vm=require('node:vm');
 const path=require('node:path');
 function harness(code='permission-denied') {
     let calls=0;
-    const elements={'connection-status-banner':{hidden:true},'offline-save-status':{hidden:true},'offline-save-status-detail':{textContent:''}};
+    const elements={'offline-save-status':{hidden:true},'offline-save-status-detail':{textContent:''}};
     const listeners={}; const store=new Map();
     const ctx=vm.createContext({console:{info(){},warn(){},log(){}},navigator:{onLine:true},
         setTimeout,clearTimeout, getLocalCollection:()=>[{_docId:'a',value:7}],setLocalCollection(){},
@@ -19,24 +19,34 @@ function harness(code='permission-denied') {
     vm.runInContext('firestore = fake;',ctx);ctx.initConnectionStatus();
     return {ctx,elements,calls:()=>calls,allow:()=>{code=null;},event:name=>(listeners[name]||[]).forEach(fn=>fn())};
 }
+// The reconnect banner is gone from the app entirely: these tests assert the
+// durable offline outcome instead (data kept locally, no repeated transport).
+function assertNoReconnectBanner(h){
+    const el=h.elements['connection-status-banner'];
+    assert.ok(!el, 'the reconnect banner must not exist in the status region');
+}
 test('denied collection refresh opens circuit and never shows Reconnecting',async()=>{
     const h=harness();
     for(let i=0;i<8;i++)assert.equal((await h.ctx.dbGetAll('work'))[0].value,7);
     assert.equal(h.calls(),1);
-    assert.equal(h.elements['connection-status-banner'].hidden,true);
+    assertNoReconnectBanner(h);
     assert.equal(h.elements['offline-save-status'].hidden,false);
     h.allow();await h.ctx.syncNow('manual-retry');await h.ctx.dbGetAll('work');assert.equal(h.calls(),2);
 });
-test('network failure shows Reconnecting; online recovery clears it',async()=>{
-    const h=harness('unavailable');await h.ctx.dbGetAll('work');
-    assert.equal(h.elements['connection-status-banner'].hidden,false);
+test('network failure keeps local data and shows no reconnect banner',async()=>{
+    const h=harness('unavailable');
+    // The cached copy survives the outage, and no alert is raised.
+    assert.equal((await h.ctx.dbGetAll('work'))[0].value,7);
+    assertNoReconnectBanner(h);
+    assert.equal(h.elements['offline-save-status'].hidden,true,'a transient outage needs no dismissal');
     h.ctx.navigator.onLine=false;h.event('offline');
+    assertNoReconnectBanner(h);
     h.ctx.navigator.onLine=true;h.allow();h.event('online');
-    assert.equal(h.elements['connection-status-banner'].hidden,true);
+    assertNoReconnectBanner(h);
 });
 test('unauthenticated reads stop until an explicit sign-in reset',async()=>{
     const h=harness('unauthenticated');
     await h.ctx.dbGetAll('work');await h.ctx.dbGetAll('work');
-    assert.equal(h.calls(),1);assert.equal(h.elements['connection-status-banner'].hidden,true);
+    assert.equal(h.calls(),1);assertNoReconnectBanner(h);
     h.allow();await h.ctx.syncNow('sign-in');await h.ctx.dbGetAll('work');assert.equal(h.calls(),2);
 });

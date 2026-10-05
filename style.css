@@ -6075,34 +6075,19 @@ tr.skeleton-tr td {
   border: 1px solid var(--border);
 }
 
-.connection-status-banner {
-  position: fixed;
-  top: 1rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 3000;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 999px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--warning);
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  font-weight: 600;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
-}
-
-.connection-status-banner[hidden] {
-  display: none;
-}
+/* The "Reconnecting to the server…" banner has been removed. Being offline is
+   an expected state for this PWA, so it is reported by the permanent sync pill
+   above and never as an alert. The rules are intentionally gone so the markup
+   cannot be reintroduced with stale styling. */
 
 /* ── Persistent sync indicator ──
    Always visible while signed in. State is carried entirely by
    data-state so the colour and copy can never disagree, and the
    dot uses transform/opacity only (never a layout property) so
-   switching state cannot shift the status bar. */
+   switching state cannot shift the status bar.
+
+   Offline is calm and static: no spinner, no pulse. Only an upload
+   that is genuinely in flight animates. */
 .sync-state-indicator {
   display: inline-flex;
   align-items: center;
@@ -6153,31 +6138,31 @@ tr.skeleton-tr td {
   background: var(--success, #22c55e);
 }
 
-.sync-state-indicator[data-state="syncing"] .sync-state-dot,
-.sync-state-indicator[data-state="queued"] .sync-state-dot {
+/* Only a real upload animates. */
+.sync-state-indicator[data-state="syncing"] .sync-state-dot {
   background: var(--warning, #f59e0b);
   opacity: 1;
   animation: syncStatePulse 1.4s ease-in-out infinite;
 }
 
-.sync-state-indicator[data-state="queued"] {
-  color: var(--text-primary);
-}
-
-.sync-state-indicator[data-state="reconnecting"] .sync-state-dot,
-.sync-state-indicator[data-state="offline"] .sync-state-dot {
+.sync-state-indicator[data-state="queued"] .sync-state-dot {
   background: var(--warning, #f59e0b);
-  opacity: 0.6;
-  animation: syncStatePulse 1.4s ease-in-out infinite;
+  opacity: 1;
 }
 
-.sync-state-indicator[data-state="denied"] .sync-state-dot,
-.sync-state-indicator[data-state="local"] .sync-state-dot {
-  background: var(--danger, #ef4444);
+/* Offline / local-only / denied are settled states, not progress. They must
+   never animate, otherwise the app still looks like it is trying. */
+.sync-state-indicator[data-state="offline"] .sync-state-dot,
+.sync-state-indicator[data-state="local"] .sync-state-dot,
+.sync-state-indicator[data-state="denied"] .sync-state-dot {
+  animation: none !important;
+  background: var(--text-muted);
+  opacity: 1;
 }
 
-.sync-state-indicator[data-state="denied"],
-.sync-state-indicator[data-state="local"] {
+.sync-state-indicator[data-state="offline"],
+.sync-state-indicator[data-state="local"],
+.sync-state-indicator[data-state="queued"] {
   color: var(--text-primary);
 }
 
@@ -9046,11 +9031,6 @@ tr.skeleton-tr td {
   padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
 }
 #app-status-region:has(> :not([hidden]):not(:empty)) { margin-block-end: 1rem; }
-#app-status-region .connection-status-banner {
-  position: relative; inset: auto; transform: none; z-index: auto;
-  max-width: 100%; overflow-wrap: anywhere; border-radius: .75rem;
-  padding-block-start: max(.5rem, env(safe-area-inset-top, 0px));
-}
 
 /* Sync notices and toasts share a flow layout, outside role-specific pages. */
 #app-status-region .sync-notice {
