@@ -9,8 +9,10 @@ const {test}=require('node:test');const assert=require('node:assert/strict');
 const fs=require('node:fs');const path=require('node:path');
 
 const ROOT=path.join(__dirname,'..');
-const index=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
-const css=fs.readFileSync(path.join(ROOT,'style.css'),'utf8');
+// Normalise to LF once at load: the file is CRLF on a Windows checkout but LF
+// in git and on Linux CI, and section() end-markers must not depend on that.
+const index=fs.readFileSync(path.join(ROOT,'index.html'),'utf8').replace(/\r\n/g,'\n');
+const css=fs.readFileSync(path.join(ROOT,'style.css'),'utf8').replace(/\r\n/g,'\n');
 
 function section(startMarker,endMarker) {
     const start=index.indexOf(startMarker);
@@ -34,7 +36,7 @@ function buttonShape(footerHtml) {
 
 test('each recovery step has exactly one footer: secondary left, primary right',()=>{
     for (const step of ['fp-step-1','fp-step-2','fp-step-3','fp-step-success']) {
-        const html=section('id="'+step+'"', step==='fp-step-success'?'</div>\r\n        </div>\r\n      </div>':'<!-- '+(step==='fp-step-1'?'Step 2':step==='fp-step-2'?'Step 3':'Step Success'));
+        const html=section('id="'+step+'"', step==='fp-step-success'?'</div>\n        </div>\n      </div>':'<!-- '+(step==='fp-step-1'?'Step 2':step==='fp-step-2'?'Step 3':'Step Success'));
         const footers=extractFooters(html);
         assert.equal(footers.length,1,step+' has exactly one auth-flow-footer');
         const shape=buttonShape(footers[0]);
