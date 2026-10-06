@@ -40,6 +40,7 @@
     "src/app/notifications.js",
     "src/app/admin-security.js",
     "src/app/editor-actions.js",
+    "src/app/editor-assistance.js",
     "src/app/validation.js",
     "src/app/editor-files.js",
     "src/app/realtime-validation.js",
