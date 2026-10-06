@@ -154,9 +154,9 @@ analyze(ast) {
         });
     }
 
-    typeWarn(node, code, problem, suggestion) {
+    typeWarn(node, code, problem, suggestion, opts) {
         const line = (node && node.line) || 1;
-        this.warnings.push({ line, code, severity: 'warning', stage: 'Semantic Analysis', message: problem, problem, suggestion });
+        this.warnings.push({ line, code, severity: 'warning', stage: 'Semantic Analysis', message: problem, problem, suggestion, ...(opts || {}) });
         if (simulationTracer.enabled) {
             this.emit(SIMULATION_TRACE_TYPES.TYPE_WARNING, line, { code: code, message: problem, suggestion: suggestion || null, symbol: node && node.id ? node.id : null });
         }
@@ -400,7 +400,8 @@ analyze(ast) {
                 if (!entry) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Variable '" + node.id + "' used without DECLARE.",
-                        'Add: DECLARE ' + node.id + ' AS INTEGER (or appropriate type)'
+                        'Add: DECLARE ' + node.id + ' AS INTEGER (or appropriate type)',
+                        { fixKind: 'declare', detail: { variable: node.id } }
                     );
                     this.declare(node.id, {
                         name: node.id,
@@ -431,7 +432,8 @@ analyze(ast) {
                 if (!entry) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Array '" + node.id + "' not declared.",
-                        'Add: DECLARE ' + node.id + ' AS ARRAY'
+                        'Add: DECLARE ' + node.id + ' AS ARRAY',
+                        { fixKind: 'declare', detail: { variable: node.id, kind: 'array' } }
                     );
                     this.declare(node.id, { name: node.id, type: 'array', inferredType: 'array', assigned: true, strict: false }, 'implicit_from_index_assignment', node.line);
                     break;
@@ -538,7 +540,8 @@ analyze(ast) {
                 if (!this.sym(node.id, node.line)) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Variable '" + node.id + "' not declared before increment/decrement.",
-                        'Add: DECLARE ' + node.id + ' AS INTEGER'
+                        'Add: DECLARE ' + node.id + ' AS INTEGER',
+                        { fixKind: 'declare', detail: { variable: node.id, kind: 'integer' } }
                     );
                 }
                 break;
@@ -549,7 +552,8 @@ analyze(ast) {
                 if (!this.sym(node.target, node.line)) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Array '" + node.target + "' not declared.",
-                        'Add: DECLARE ' + node.target + ' AS ARRAY'
+                        'Add: DECLARE ' + node.target + ' AS ARRAY',
+                        { fixKind: 'declare', detail: { variable: node.target, kind: 'array' } }
                     );
                 }
                 break;
@@ -569,7 +573,8 @@ analyze(ast) {
             if (!this.sym(t.value, exprNode.line)) this.typeWarn({ line: exprNode.line },
                 SEM__ERROR_CODES.undeclared,
                 "Undeclared variable '" + t.value + "' in expression.",
-                'Assign or declare ' + t.value + ' before using it.'
+                'Assign or declare ' + t.value + ' before using it.',
+                { fixKind: 'declare', detail: { variable: t.value } }
             );
         }
     }

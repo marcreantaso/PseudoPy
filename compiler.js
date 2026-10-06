@@ -836,6 +836,23 @@ class Parser {
         return frame;
     }
 
+    // Unclosed-block diagnostics carry a stable code and their block context so
+    // editor-level Quick Fixes can rebuild a missing closure without guessing.
+    // The parser itself NEVER inserts a repair — an explicit user action must.
+    reportUnclosed(blockType, line, column) {
+        const entry = {
+            line: line,
+            column: column === undefined ? null : column,
+            code: 'PARSE_UNCLOSED_BLOCK',
+            fixKind: 'close-block',
+            message: 'Unclosed ' + blockType + ' block (opened on line ' + line + ').',
+            suggestion: 'Add END ' + blockType + ' to close this block.',
+            detail: { blockType: blockType, openLine: line }
+        };
+        this.errors.push(entry);
+        return entry;
+    }
+
     peek(offset) {
         const idx = this.pos + (offset || 0);
         return idx < this.tokens.length ? this.tokens[idx] : { type: TOKEN_TYPES.EOF, value: '', line: -1, column: null };
@@ -892,7 +909,7 @@ class Parser {
                 const hint = suggestSentinel(firstNonNewline.value, ['BEGIN']);
                 if (hint) suggestion = 'Did you mean "' + hint + '"? ' + suggestion;
             }
-            this.errors.push({ line: firstNonNewline.line || 1, column: firstNonNewline.column === undefined ? null : firstNonNewline.column, message: 'Missing BEGIN statement.', suggestion: suggestion });
+            this.errors.push({ line: firstNonNewline.line || 1, column: firstNonNewline.column === undefined ? null : firstNonNewline.column, message: 'Missing BEGIN statement.', suggestion: suggestion, code: 'PARSE_MISSING_BEGIN', fixKind: 'structure' });
         }
         this.skipNewlines();
 
@@ -929,13 +946,13 @@ class Parser {
 
         this.skipNewlines();
         if (foundEnd && this.peek().type !== TOKEN_TYPES.EOF) {
-            this.errors.push({ line: this.peek().line, column: this.peek().column, message: 'Unexpected code after END.', suggestion: 'END must be the last statement.' });
+            this.errors.push({ line: this.peek().line, column: this.peek().column, message: 'Unexpected code after END.', suggestion: 'END must be the last statement.', code: 'PARSE_CODE_AFTER_END' });
         }
 
         // ▸ MANDATORY BOOKEND: Reject if END is missing
         if (!foundEnd) {
             const lastLine = this.tokens.length > 0 ? this.tokens[this.tokens.length - 1].line : 1;
-            this.errors.push({ line: lastLine, message: 'Missing END statement.', suggestion: 'Your pseudocode must end with END on the last line.' });
+            this.errors.push({ line: lastLine, message: 'Missing END statement.', suggestion: 'Your pseudocode must end with END on the last line.', code: 'PARSE_MISSING_END' });
         }
 
         // ▸ LIFO STACK VALIDATION: Report any unclosed blocks
@@ -948,12 +965,7 @@ class Parser {
                     depth: this.blockStack.length
                 });
             }
-            this.errors.push({
-                line: unclosed.line,
-                column: unclosed.column,
-                message: 'Unclosed ' + unclosed.type + ' block (opened on line ' + unclosed.line + ').',
-                suggestion: 'Add END ' + unclosed.type + ' to close this block.'
-            });
+            this.reportUnclosed(unclosed.type, unclosed.line, unclosed.column);
         }
 
         const astResult = { type: 'Program', body: body, errors: this.errors };
@@ -1156,7 +1168,7 @@ class Parser {
                     this.consume(); // skip the misspelled sentinel
                 }
             }
-            this.errors.push({ line: kw.line, column: kw.column, message: 'IF statement missing sentinel keyword THEN.', suggestion: suggestion });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'IF statement missing sentinel keyword THEN.', suggestion: suggestion, code: 'PARSE_IF_MISSING_THEN', fixKind: 'insert-sentinel', detail: { sentinel: 'THEN' } });
         }
         this.skipNewlines();
 
@@ -1168,7 +1180,7 @@ class Parser {
             const kwIf = this.consume(); // IF
             const cond = this.collectLineTokens(['THEN']);
             if (!this.match(TOKEN_TYPES.KEYWORD, 'THEN')) {
-                this.errors.push({ line: kwIf.line, column: kwIf.column, message: 'ELSE IF statement missing sentinel keyword THEN.', suggestion: 'Use: ELSE IF condition THEN' });
+                this.errors.push({ line: kwIf.line, column: kwIf.column, message: 'ELSE IF statement missing sentinel keyword THEN.', suggestion: 'Use: ELSE IF condition THEN', code: 'PARSE_ELSE_IF_MISSING_THEN', fixKind: 'insert-sentinel', detail: { sentinel: 'THEN' } });
             }
             this.skipNewlines();
             const elifBody = this.parseBlock(['ELSE', 'ENDIF', 'END']);
@@ -1185,18 +1197,19 @@ class Parser {
 
         // ▸ BLOCK CLOSURE: END IF or ENDIF required (LIFO pop)
         if (this.peek().value === 'ENDIF') {
-            this.consume();
-            this.popBlock('IF', kw.line);
+            const endTok = this.consume();
+            this.popBlock('IF', kw.line, kw.column, endTok.line);
         } else if (this.peek().value === 'END') {
             const next = this.peek(1);
             if (next.type === TOKEN_TYPES.KEYWORD && next.value === 'IF') {
-                this.consume(); this.consume();
-                this.popBlock('IF', kw.line);
+                const endTok = this.consume();
+                this.consume();
+                this.popBlock('IF', kw.line, kw.column, endTok.line);
             } else {
-                this.errors.push({ line: kw.line, column: kw.column, message: 'Unclosed IF block (opened on line ' + kw.line + ').', suggestion: 'Add END IF to close this block.' });
+                this.reportUnclosed('IF', kw.line, kw.column);
             }
         } else {
-            this.errors.push({ line: kw.line, column: kw.column, message: 'Unclosed IF block (opened on line ' + kw.line + ').', suggestion: 'Add END IF to close this block.' });
+            this.reportUnclosed('IF', kw.line, kw.column);
         }
 
         return { type: 'IfStatement', condition: cond, body: body, elseIfs: elseIfs, elseBody: elseBody, line: kw.line };
@@ -1221,7 +1234,7 @@ class Parser {
                     this.consume();
                 }
             }
-            this.errors.push({ line: kw.line, column: kw.column, message: 'WHILE statement missing sentinel keyword DO.', suggestion: suggestion });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'WHILE statement missing sentinel keyword DO.', suggestion: suggestion, code: 'PARSE_WHILE_MISSING_DO', fixKind: 'insert-sentinel', detail: { sentinel: 'DO' } });
         }
         this.skipNewlines();
 
@@ -1229,18 +1242,19 @@ class Parser {
 
         // ▸ BLOCK CLOSURE: END WHILE or ENDWHILE required (LIFO pop)
         if (this.peek().value === 'ENDWHILE') {
-            this.consume();
-            this.popBlock('WHILE', kw.line);
+            const endTok = this.consume();
+            this.popBlock('WHILE', kw.line, kw.column, endTok.line);
         } else if (this.peek().value === 'END') {
             const next = this.peek(1);
             if (next.type === TOKEN_TYPES.KEYWORD && next.value === 'WHILE') {
-                this.consume(); this.consume();
-                this.popBlock('WHILE', kw.line);
+                const endTok = this.consume();
+                this.consume();
+                this.popBlock('WHILE', kw.line, kw.column, endTok.line);
             } else {
-                this.errors.push({ line: kw.line, column: kw.column, message: 'Unclosed WHILE block (opened on line ' + kw.line + ').', suggestion: 'Add END WHILE to close this block.' });
+                this.reportUnclosed('WHILE', kw.line, kw.column);
             }
         } else {
-            this.errors.push({ line: kw.line, column: kw.column, message: 'Unclosed WHILE block (opened on line ' + kw.line + ').', suggestion: 'Add END WHILE to close this block.' });
+            this.reportUnclosed('WHILE', kw.line, kw.column);
         }
 
         return { type: 'WhileStatement', condition: cond, body: body, line: kw.line };
@@ -1258,7 +1272,7 @@ class Parser {
             if (!this.match(TOKEN_TYPES.KEYWORD, 'IN')) this.errors.push({ line: kw.line, column: kw.column, message: 'FOR EACH requires IN.' });
             const iterable = this.collectLineTokens(['DO']);
             if (!this.match(TOKEN_TYPES.KEYWORD, 'DO')) {
-                this.errors.push({ line: kw.line, column: kw.column, message: 'FOR EACH missing sentinel keyword DO.', suggestion: 'Use: FOR EACH item IN list DO' });
+                this.errors.push({ line: kw.line, column: kw.column, message: 'FOR EACH missing sentinel keyword DO.', suggestion: 'Use: FOR EACH item IN list DO', code: 'PARSE_FOR_EACH_MISSING_DO', fixKind: 'insert-sentinel', detail: { sentinel: 'DO' } });
             }
             this.skipNewlines();
             const body = this.parseBlock(['ENDFOR', 'END']);
@@ -1282,7 +1296,7 @@ class Parser {
         const endExpr = this.collectLineTokens(['STEP', 'DO']);
         const stepExpr = this.match(TOKEN_TYPES.KEYWORD, 'STEP') ? this.collectLineTokens(['DO']) : null;
         if (!this.match(TOKEN_TYPES.KEYWORD, 'DO')) {
-            this.errors.push({ line: kw.line, column: kw.column, message: 'FOR statement missing sentinel keyword DO.', suggestion: 'Use: FOR i FROM 1 TO 10 DO' });
+            this.errors.push({ line: kw.line, column: kw.column, message: 'FOR statement missing sentinel keyword DO.', suggestion: 'Use: FOR i FROM 1 TO 10 DO', code: 'PARSE_FOR_MISSING_DO', fixKind: 'insert-sentinel', detail: { sentinel: 'DO' } });
         }
         this.skipNewlines();
         const body = this.parseBlock(['ENDFOR', 'END']);
@@ -1385,30 +1399,33 @@ class Parser {
     consumeEndBlock(type, openLine, openColumn) {
         const endWord = 'END' + type;
         if (this.peek().value === endWord) {
-            this.consume();
-            this.popBlock(type, openLine);
+            const tok = this.consume();
+            this.popBlock(type, openLine, openColumn, tok.line);
         } else if (this.peek().value === 'END') {
             const next = this.peek(1);
             if (next.type === TOKEN_TYPES.KEYWORD && next.value === type) {
-                this.consume(); this.consume();
-                this.popBlock(type, openLine);
+                const tok = this.consume();
+                this.consume();
+                this.popBlock(type, openLine, openColumn, tok.line);
             } else {
-                this.errors.push({ line: openLine, column: openColumn === undefined ? null : openColumn, message: 'Unclosed ' + type + ' block (opened on line ' + openLine + ').', suggestion: 'Add END ' + type + ' to close this block.' });
+                this.reportUnclosed(type, openLine, openColumn);
             }
         } else {
-            this.errors.push({ line: openLine, column: openColumn === undefined ? null : openColumn, message: 'Unclosed ' + type + ' block (opened on line ' + openLine + ').', suggestion: 'Add END ' + type + ' to close this block.' });
+            this.reportUnclosed(type, openLine, openColumn);
         }
     }
 
     // ── LIFO stack pop with mismatch detection ──
-    popBlock(expectedType, openLine, openColumn) {
+    // closeLine/closeColumn identify WHERE the offending END sits in the
+    // student's editor, so diagnostics and Quick Fixes target that END line.
+    popBlock(expectedType, openLine, openColumn, closeLine, closeColumn) {
         if (this.blockStack.length === 0) {
-            const line = openLine === undefined ? 1 : openLine;
-            const column = openColumn === undefined ? null : openColumn;
+            const line = closeLine === undefined ? (openLine === undefined ? 1 : openLine) : closeLine;
+            const column = closeColumn === undefined ? (openColumn === undefined ? null : openColumn) : closeColumn;
             if (simulationTracer.enabled) {
                 this.emit(SIMULATION_TRACE_TYPES.BLOCK_MISMATCH, line, column, { blockType: expectedType, reason: 'orphan_end' });
             }
-            this.errors.push({ line: line, column: column, message: 'Unexpected END ' + expectedType + '. No matching ' + expectedType + ' block to close.' });
+            this.errors.push({ line: line, column: column, message: 'Unexpected END ' + expectedType + '. No matching ' + expectedType + ' block to close.', code: 'PARSE_ORPHAN_END', detail: { blockType: expectedType, closeLine: line } });
             return;
         }
         const top = this.blockStack[this.blockStack.length - 1];
@@ -1419,8 +1436,8 @@ class Parser {
             }
         } else {
             // Mismatch: e.g., opened FOR but closing IF
-            const line = openLine === undefined ? 1 : openLine;
-            const column = openColumn === undefined ? null : openColumn;
+            const line = closeLine === undefined ? (openLine === undefined ? 1 : openLine) : closeLine;
+            const column = closeColumn === undefined ? (openColumn === undefined ? null : openColumn) : closeColumn;
             if (simulationTracer.enabled) {
                 this.emit(SIMULATION_TRACE_TYPES.BLOCK_MISMATCH, line, column, { blockType: expectedType, expected: top.type, openedLine: top.line, reason: 'type_mismatch' });
             }
@@ -1428,7 +1445,10 @@ class Parser {
                 line: line,
                 column: column,
                 message: 'Block mismatch: Expected END ' + top.type + ' (opened on line ' + top.line + ') but found END ' + expectedType + '.',
-                suggestion: 'Close the innermost block first with END ' + top.type + '.'
+                suggestion: 'Close the innermost block first with END ' + top.type + '.',
+                code: 'PARSE_BLOCK_MISMATCH',
+                fixKind: 'rewrite-closing-keyword',
+                detail: { expected: top.type, found: expectedType, openLine: top.line, closeLine: line }
             });
         }
     }
@@ -1599,9 +1619,9 @@ analyze(ast) {
         });
     }
 
-    typeWarn(node, code, problem, suggestion) {
+    typeWarn(node, code, problem, suggestion, opts) {
         const line = (node && node.line) || 1;
-        this.warnings.push({ line, code, severity: 'warning', stage: 'Semantic Analysis', message: problem, problem, suggestion });
+        this.warnings.push({ line, code, severity: 'warning', stage: 'Semantic Analysis', message: problem, problem, suggestion, ...(opts || {}) });
         if (simulationTracer.enabled) {
             this.emit(SIMULATION_TRACE_TYPES.TYPE_WARNING, line, { code: code, message: problem, suggestion: suggestion || null, symbol: node && node.id ? node.id : null });
         }
@@ -1845,7 +1865,8 @@ analyze(ast) {
                 if (!entry) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Variable '" + node.id + "' used without DECLARE.",
-                        'Add: DECLARE ' + node.id + ' AS INTEGER (or appropriate type)'
+                        'Add: DECLARE ' + node.id + ' AS INTEGER (or appropriate type)',
+                        { fixKind: 'declare', detail: { variable: node.id } }
                     );
                     this.declare(node.id, {
                         name: node.id,
@@ -1876,7 +1897,8 @@ analyze(ast) {
                 if (!entry) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Array '" + node.id + "' not declared.",
-                        'Add: DECLARE ' + node.id + ' AS ARRAY'
+                        'Add: DECLARE ' + node.id + ' AS ARRAY',
+                        { fixKind: 'declare', detail: { variable: node.id, kind: 'array' } }
                     );
                     this.declare(node.id, { name: node.id, type: 'array', inferredType: 'array', assigned: true, strict: false }, 'implicit_from_index_assignment', node.line);
                     break;
@@ -1983,7 +2005,8 @@ analyze(ast) {
                 if (!this.sym(node.id, node.line)) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Variable '" + node.id + "' not declared before increment/decrement.",
-                        'Add: DECLARE ' + node.id + ' AS INTEGER'
+                        'Add: DECLARE ' + node.id + ' AS INTEGER',
+                        { fixKind: 'declare', detail: { variable: node.id, kind: 'integer' } }
                     );
                 }
                 break;
@@ -1994,7 +2017,8 @@ analyze(ast) {
                 if (!this.sym(node.target, node.line)) {
                     this.typeWarn(node, SEM__ERROR_CODES.undeclared,
                         "Array '" + node.target + "' not declared.",
-                        'Add: DECLARE ' + node.target + ' AS ARRAY'
+                        'Add: DECLARE ' + node.target + ' AS ARRAY',
+                        { fixKind: 'declare', detail: { variable: node.target, kind: 'array' } }
                     );
                 }
                 break;
@@ -2014,7 +2038,8 @@ analyze(ast) {
             if (!this.sym(t.value, exprNode.line)) this.typeWarn({ line: exprNode.line },
                 SEM__ERROR_CODES.undeclared,
                 "Undeclared variable '" + t.value + "' in expression.",
-                'Assign or declare ' + t.value + ' before using it.'
+                'Assign or declare ' + t.value + ' before using it.',
+                { fixKind: 'declare', detail: { variable: t.value } }
             );
         }
     }
