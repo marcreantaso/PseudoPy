@@ -9232,3 +9232,15 @@ tr.skeleton-tr td {
   .sync-notice .offline-save-retry { grid-column: 2; justify-self: start; }
   .sync-notice .offline-save-dismiss { grid-column: 3; justify-self: end; }
 }
+.source-assistance-host { position: relative; }
+.source-assistance-wand { position: absolute; inset-inline-end: 12px; top: 12px; z-index: 3; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border-color, #687083); background: var(--bg-card, #19243b); color: var(--text-primary, #fff); display: grid; place-items: center; cursor: pointer; }
+.source-assistance-host textarea { padding-right: 64px; }
+.source-assistance-gutter { position: absolute; left: 0; top: 0; bottom: 0; width: 48px; margin: 0; padding: 12px 8px; overflow: hidden; text-align: right; pointer-events: none; color: var(--text-secondary, #9ca3af); border-right: 1px solid var(--border-color, #687083); }
+.devtools-source-wrap .source-assistance-numbered, .source-assistance-gutter { font-family: monospace; font-size: 13px; line-height: 20px; box-sizing: border-box; tab-size: 4; }
+.devtools-source-wrap .source-assistance-numbered { padding: 12px 64px 12px 56px; white-space: pre; overflow: auto; }
+.source-assistance-dialog { box-sizing: border-box; width: min(640px, calc(100vw - 24px)); max-height: 85dvh; overflow: auto; border: 1px solid var(--border-color, #687083); border-radius: 16px; padding: 20px; background: var(--bg-card, #19243b); color: var(--text-primary, #fff); }
+.source-assistance-dialog::backdrop { background: #0009; }
+.source-assistance-dialog p { overflow-wrap: anywhere; line-height: 1.6; }
+.source-assistance-dialog pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.source-assistance-dialog button { min-height: 44px; margin: 4px; padding: 8px 12px; cursor: pointer; }
+.source-assistance-dialog section { padding: 12px 0; border-bottom: 1px solid var(--border-color, #687083); }
