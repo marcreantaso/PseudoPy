@@ -106,6 +106,50 @@ async function handleLogin() {
             return;
         }
 
+        // Step 3.4: Establish the Firebase Auth session BEFORE any access is
+        // granted. Firestore rules see `request.auth`, so without this every
+        // write is anonymous and is refused.
+        //
+        // The outcome is acted on explicitly rather than ignored:
+        //   - the server REJECTED the credentials -> no session, no access.
+        //     This is a final answer, never a connectivity problem, so it must
+        //     not start a reconnect loop or be reported as "check your
+        //     connection".
+        //   - no cloud account exists yet      -> the expected migration state.
+        //   - provider not enabled / no network -> the pre-existing offline-first
+        //     policy, surfaced honestly instead of silently.
+        if (typeof signInToCloud === 'function') {
+            let cloud = { ok: false, kind: 'unavailable' };
+            try {
+                cloud = await signInToCloud(userByUsername.email, password);
+            } catch (e) {
+                cloud = { ok: false, kind: 'unknown', code: 'auth/unknown' };
+            }
+
+            if (cloud && cloud.ok) {
+                console.info(`[Login] Cloud session established for ${userByUsername.username}.`);
+            } else if (cloud && cloud.kind === 'invalid') {
+                // Rejected by the server. Granting access here would bypass
+                // authentication, so the attempt ends here with no session.
+                showToast(cloud.code === 'auth/user-disabled'
+                    ? 'This account has been disabled. Please contact your administrator.'
+                    : 'Incorrect password.', 'error');
+                return;
+            } else if (cloud && cloud.kind === 'transient' && !isPlatformOffline()) {
+                // Online, but the server could not be reached. Reported as a
+                // connection problem, distinct from rejected credentials.
+                showToast('Could not reach the server. Check your connection and try again.', 'error');
+                return;
+            } else if (cloud && cloud.kind === 'config') {
+                // Requires a Firebase project-owner change; see
+                // docs/OWNER-ACTIONS.md. Sign-in continues locally so nobody is
+                // locked out by a provider setting.
+                console.warn(`[Login] Firebase sign-in unavailable for this project (${cloud.code}); continuing with the in-app account.`);
+            } else if (cloud && cloud.kind === 'transient') {
+                console.info('[Login] Offline: continuing with the in-app account.');
+            }
+        }
+
         // Step 3.5: Instructor Device Change Detection & Admin Approval
         if (userByUsername.role === 'instructor') {
             const currentDevice = getDeviceFingerprint();
@@ -189,23 +233,10 @@ async function handleLogin() {
         // Step 4: Role is auto-detected from the database record
         currentUser = userByUsername;
 
-        // Persist the session (browser-local) so refreshes never log the user out.
+        // Persist the session (browser-local) so refreshes never log the user
+        // out. This happens only after the cloud gate above has allowed the
+        // attempt through, so a rejected sign-in leaves no stored session.
         saveSession(currentUser);
-
-        // Step 4.5: Establish the Firebase Auth session for this account.
-        // Firestore rules see `request.auth`, so without this every write is
-        // anonymous and is refused. Best-effort and non-blocking: an account
-        // with no cloud counterpart yet keeps working exactly as before.
-        if (typeof signInToCloud === 'function') {
-            try {
-                const cloud = await signInToCloud(userByUsername.email, password);
-                if (cloud && cloud.ok) {
-                    console.info(`[Login] Cloud session established for ${userByUsername.username}.`);
-                }
-            } catch (e) {
-                console.warn('[Login] Cloud sign-in attempt failed:', e && e.message);
-            }
-        }
 
         // Record last login timestamp
         try {

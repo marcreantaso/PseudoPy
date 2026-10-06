@@ -23,9 +23,13 @@ test('unsupported statement recovers at the next line', () => {
     assert.equal(result.ast.body.length, 1);
 });
 function python(code, input = '') {
-    const result = spawnSync(process.env.PYTHON || 'python3', ['-I', '-c', code], { input, encoding: 'utf8', timeout: 3000 });
+    // -X utf8 keeps stdout on utf-8 instead of the Windows ANSI codepage, so a
+    // program that prints ≥ or ≠ does not die with UnicodeEncodeError.
+    const result = spawnSync(process.env.PYTHON || 'python3', ['-I', '-X', 'utf8', '-c', code], { input, encoding: 'utf8', timeout: 3000 });
     assert.equal(result.status, 0, result.stderr || String(result.error));
-    return result.stdout.trim();
+    // Windows Python writes CRLF on a pipe. Assertions state LF, so normalise
+    // here rather than in every expectation; a no-op on POSIX.
+    return result.stdout.replace(/\r\n/g, '\n').trim();
 }
 function run(body, input = '') {
     const result = compile('BEGIN\n' + body + '\nEND');

@@ -1,0 +1,67 @@
+{
+  "stringDependency": {
+    "requests": 1,
+    "scriptTags": 1,
+    "distinct": [
+      "http://127.0.0.1:8796/sw.js"
+    ]
+  },
+  "missing": {
+    "status": 404,
+    "type": "",
+    "body": "not found"
+  },
+  "sw": {
+    "keys": [
+      "pseudopy-shell-20261006-v23",
+      "pseudopy-vendor-20261006-v23"
+    ]
+  },
+  "controlled": true,
+  "cache": {
+    "names": [
+      "pseudopy-shell-20261006-v23",
+      "pseudopy-vendor-20261006-v23"
+    ],
+    "skulpt": true,
+    "stdlib": true,
+    "app": true
+  },
+  "before": {
+    "editor": 38,
+    "python": 18
+  },
+  "offlineTranslate": {
+    "offline": true,
+    "python": "x = 6 * 7\nprint(x)"
+  },
+  "offlineRun": {
+    "console": "42",
+    "realSkulpt": true
+  },
+  "offlineWrite": {
+    "rejection": {
+      "localOnly": true
+    },
+    "queued": 1
+  },
+  "retained": {
+    "editor": "BEGIN\n  SET x TO 6 * 7\n  DISPLAY x\nEND",
+    "local": {
+      "answer": 42,
+      "_docId": "draft"
+    },
+    "queued": 1,
+    "session": true,
+    "caches": [
+      "pseudopy-shell-20261006-v23",
+      "pseudopy-vendor-20261006-v23"
+    ]
+  },
+  "offline": true,
+  "environment": {
+    "network": "CDP Network.emulateNetworkConditions(offline=true)",
+    "hosting": "scripts/qa/serve.cjs static server (404 on missing files)",
+    "auth": "synthetic local profile; Firebase not contacted"
+  }
+}

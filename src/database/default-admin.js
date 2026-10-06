@@ -1,20 +1,45 @@
-// Shared default profile for the existing administrator account (u1).
-// Credentials use the same salted hash format as the current password flow.
+// The legacy administrator bootstrap.
+//
+// HISTORY / WHY THIS NO LONGER RESETS CREDENTIALS
+// ----------------------------------------------
+// This file used to ship a password hash + salt and a migration that rewrote
+// the administrator's profile on every local read. That could silently replace
+// a password the owner had changed, restoring default credentials, and it put a
+// credential in every browser bundle.
+//
+// The migration is now a NON-DESTRUCTIVE profile normalizer:
+//   * it never writes `password`, `passwordHash` or `passwordSalt`
+//   * it never overwrites `fullName` on an existing, renamed account
+//   * it never touches any account other than the legacy administrator (u1)
+//   * it is idempotent, so repeated reads cannot keep rewriting state
+//
+// Provisioning the first administrator is now an OWNER action performed in the
+// Firebase console (email/password Auth provider + a `pseudopy_users/u1`
+// record), documented in docs/OWNER-ACTIONS.md. No credential is bundled.
+
+/** Identity fields for the legacy administrator record. Not credentials. */
 function getDefaultAdminProfile() {
     return {
-        "fullName": "Admin",
-        "username": "Admin",
-        "password": null,
-        "passwordHash": "804f4cba316ed81a095847efadc18b169d745f54ada7b651c85c4913439fbfe7",
-        "passwordSalt": "9d9ad9d3642056bbff2c80d102f97610"
+        fullName: 'Admin',
+        username: 'Admin'
     };
 }
 
-// Only migrate the known legacy account. Renamed accounts (including later
-// password changes) and all other roles/accounts are left untouched.
+/**
+ * Normalize the legacy administrator record WITHOUT touching credentials.
+ *
+ * The migration previously rewrote the administrator's profile on every local
+ * read, which could restore a default password after the owner changed it. With
+ * the bundled credential gone there is nothing left to migrate, so this is now
+ * deliberately a pure no-op: it returns the record exactly as stored and is
+ * trivially idempotent. `getLocalCollection()` still calls it on every read, so
+ * keeping it a no-op guarantees a changed password can never drift back.
+ *
+ * Provisioning the first administrator is an OWNER action performed in the
+ * Firebase console; see docs/OWNER-ACTIONS.md.
+ */
 function upgradeDefaultAdminAccount(user) {
-    if (!user || (user._docId || user.id) !== 'u1' || user.role !== 'admin' || user.username !== 'mbautista_admin') return user;
-    return { ...user, ...getDefaultAdminProfile() };
+    return user;
 }
 
 if (typeof module !== 'undefined' && module.exports) {

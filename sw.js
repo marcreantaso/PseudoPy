@@ -3,10 +3,10 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-shell-20261006-v22';
+const CACHE_NAME = 'pseudopy-shell-20261006-v23';
 // Vendor cache name is versioned so the old-worker cleanup below can prune
 // superseded PDF worker generations instead of accumulating them.
-const VENDOR_CACHE_NAME = 'pseudopy-vendor-20261006-v22';
+const VENDOR_CACHE_NAME = 'pseudopy-vendor-20261006-v23';
 
 const LOCAL_ASSETS = [
     './',
@@ -117,9 +117,46 @@ self.addEventListener('activate', (event) => {
                         .map((name) => caches.delete(name))
                 );
             })
-        ).then(() => self.clients.claim())
+        )
+        // Recover caches poisoned by an earlier build that stored the SPA HTML
+        // shell in response to a missing script request. Those entries surface
+        // in the browser as "Uncaught SyntaxError: Unexpected token '<'" and
+        // survive every reload because the fetch handler is cache-first.
+        //
+        // Only the CACHE API is touched here. IndexedDB (the durable app store),
+        // localStorage (sessions and editor drafts) and the mutation queue are
+        // untouched, so unsaved work and queued writes are never lost.
+        .then(() => purgeHtmlAssetEntries(activeCaches))
+        .then(() => self.clients.claim())
     );
 });
+
+/**
+ * Delete cache entries for script/style requests whose stored body is HTML.
+ *
+ * The previous catch-all rewrite answered every unmatched path with
+ * index.html, and this worker then cached that 200 response for whatever URL
+ * had been requested. Removing only those mislabelled entries restores correct
+ * network behaviour for them; correctly cached assets are kept.
+ */
+async function purgeHtmlAssetEntries(activeCaches) {
+    for (const name of activeCaches) {
+        const cache = await caches.open(name);
+        const keys = await cache.keys();
+        for (const request of keys) {
+            const url = new URL(request.url);
+            const isNavigation = request.mode === 'navigate';
+            const isAsset = /\.(?:js|mjs|css|json|wasm)$/i.test(url.pathname);
+            if (!isAsset || isNavigation) continue;
+            const response = await cache.match(request);
+            if (!response) continue;
+            const type = response.headers.get('content-type') || '';
+            if (!/^text\/html\b/i.test(type)) continue;
+            console.warn('[SW] Discarding HTML cached for asset request:', url.pathname);
+            await cache.delete(request);
+        }
+    }
+}
 
 // Fetch — cache-first (shell, then vendor), fallback to network
 self.addEventListener('fetch', (event) => {
@@ -142,7 +179,17 @@ self.addEventListener('fetch', (event) => {
                     // Only same-origin GET successes are promoted to the runtime
                     // cache. Firestore/Auth and other third-party responses are
                     // never cached as static public app assets.
-                    if (isSameOrigin && event.request.method === 'GET' && networkResponse.status === 200) {
+                    //
+                    // A script or stylesheet answered with the SPA HTML shell is
+                    // a routing failure, not an asset. Caching it would make the
+                    // browser execute HTML as JavaScript ("Unexpected token '<'")
+                    // on every subsequent load, so it is passed through
+                    // uncached and left for the server to report as missing.
+                    const wantsAsset = isScriptOrStyleRequest(event.request);
+                    const isHtml = /^text\/html\b/i.test(networkResponse.headers.get('content-type') || '');
+                    if (isSameOrigin && event.request.method === 'GET'
+                        && networkResponse.status === 200
+                        && !(wantsAsset && isHtml)) {
                         const responseClone = networkResponse.clone();
                         caches.open(CACHE_NAME).then((cache) => {
                             cache.put(event.request, responseClone);
@@ -150,7 +197,9 @@ self.addEventListener('fetch', (event) => {
                     }
                     return networkResponse;
                 }).catch(() => {
-                    // Offline fallback for same-origin navigations only
+                    // Offline fallback applies ONLY to real page navigations.
+                    // A failed script/stylesheet fetch must surface as a load
+                    // error rather than being answered with index.html.
                     if (event.request.mode === 'navigate' && isSameOrigin) {
                         return caches.open(CACHE_NAME).then(cache => cache.match('./index.html'));
                     }
@@ -159,6 +208,12 @@ self.addEventListener('fetch', (event) => {
         })
     );
 });
+
+/** True when the request expects a script or stylesheet body. */
+function isScriptOrStyleRequest(request) {
+    if (request.destination === 'script' || request.destination === 'style') return true;
+    return /\.(?:js|mjs|css)$/i.test(new URL(request.url).pathname);
+}
 
 // Listen for the skipWaiting message from the UI
 self.addEventListener('message', (event) => {
