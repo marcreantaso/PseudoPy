@@ -44,6 +44,41 @@ test('sign-out does not delete the editor draft: it is saved with an account tag
     assert.ok(draft.text.includes('PRINT'),'draft content kept');
 });
 
+// The translated Python is derived from the pseudocode but is not re-derived on
+// load, so an offline reload used to restore the editor and drop the output.
+test('the draft carries the translated Python so a reload does not lose it',()=>{
+    const h=editorHarness({user:{username:'alice',id:'u1'}});
+    h.ctx.$id=id=>id==='pseudocode-editor'?{value:'BEGIN\nEND'}:id==='python-output'?{value:'score = 72\n'}:null;
+    assert.equal(h.ctx.maybeSaveEditorDraft(),true);
+    const draft=JSON.parse(h.storage.get('pseudopy_editor_draft'));
+    assert.equal(draft.python,'score = 72\n','draft does not carry the translated output');
+});
+
+test('restoring a draft also restores its translated Python',()=>{
+    const {ctx}=editorHarness({
+        storage:new Map([['pseudopy_editor_draft',JSON.stringify({exerciseId:'',text:'BEGIN\nEND',python:'score = 72\n',user:'alice',savedAt:'2026-01-01'})]]),
+        user:{username:'alice',id:'u1'}
+    });
+    const editor={value:''};
+    const output={value:''};
+    ctx.$id=id=>id==='pseudocode-editor'?editor:id==='python-output'?output:null;
+    ctx.maybeRestoreEditorDraft();
+    assert.equal(editor.value,'BEGIN\nEND','pseudocode restored');
+    assert.equal(output.value,'score = 72\n','translated python restored with the draft');
+});
+
+test('a draft never overwrites Python that already exists in this session',()=>{
+    const {ctx}=editorHarness({
+        storage:new Map([['pseudopy_editor_draft',JSON.stringify({exerciseId:'',text:'BEGIN\nEND',python:'stale = 1\n',user:'alice',savedAt:'2026-01-01'})]]),
+        user:{username:'alice',id:'u1'}
+    });
+    const editor={value:''};
+    const output={value:'fresh = 2\n'};
+    ctx.$id=id=>id==='pseudocode-editor'?editor:id==='python-output'?output:null;
+    ctx.maybeRestoreEditorDraft();
+    assert.equal(output.value,'fresh = 2\n','stale draft output overwrote current output');
+});
+
 test('another account on the same device never sees the previous account draft',()=>{
     const {ctx}=editorHarness({
         storage:new Map([['pseudopy_editor_draft',JSON.stringify({exerciseId:'',text:'alice work',user:'alice',savedAt:'2026-01-01'})]]),

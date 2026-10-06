@@ -65,9 +65,15 @@ function maybeSaveEditorDraft() {
         if (!editor || !editor.value || !editor.value.trim()) return false;
         const active = exerciseState && exerciseState.activeExercise;
         const activeId = active ? (active._docId || active.id || '') : '';
+        // The translated Python is derived from this pseudocode but is not
+        // re-derived on load, so it travels with the draft. Without it an
+        // offline reload would restore the editor and drop the output the
+        // student was reading.
+        const output = $id('python-output');
         localStorage.setItem(EDITOR_DRAFT_KEY, JSON.stringify({
             exerciseId: activeId,
             text: editor.value,
+            python: (output && output.value) ? output.value : '',
             savedAt: new Date().toISOString(),
             // UX Rule 2: the draft belongs to its author. Tagging it keeps
             // sign-out non-destructive (the draft survives) while the restore
@@ -112,6 +118,12 @@ function maybeRestoreEditorDraft() {
         editor.value = draft.text;
         updateGutter();
         setText('line-count', editor.value.split('\n').length + ' lines');
+        // Restore the translated output too, but only when nothing has been
+        // generated since load; it is derived from the pseudocode above.
+        const output = $id('python-output');
+        if (output && draft.python && !output.value.trim()) {
+            output.value = draft.python;
+        }
         showToast('Unsaved draft restored.', 'info');
     } catch (e) { /* non-critical */ }
 }

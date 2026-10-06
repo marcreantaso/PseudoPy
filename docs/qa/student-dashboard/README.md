@@ -14,10 +14,12 @@ Evidence for the two changes to the Student translation dashboard:
 - `scripts/qa/repro-student-dashboard.cjs` — baseline capture (run against
   `git worktree` of `HEAD` so `before-*` reflects the shipped build).
 - `scripts/qa/student-tabs-browser.cjs` — after capture and assertions.
+- `scripts/qa/offline-reload-browser.cjs` — offline reload durability.
 
 ```
 node scripts/qa/repro-student-dashboard.cjs   # in a HEAD worktree -> before-*
 node scripts/qa/student-tabs-browser.cjs      # in the working tree -> after-*
+node scripts/qa/offline-reload-browser.cjs    # offline reload durability
 ```
 
 Real Chrome, real Skulpt, a real translation was executed before measuring, and
@@ -33,7 +35,7 @@ offline was driven through CDP's network emulation rather than by stubbing
 | Pill animated while offline | yes | **no** |
 | Dismissible notice while offline | no | no |
 | Student stays signed in | yes | yes |
-| Editor + Python output preserved | yes | yes |
+| Editor + Python output still populated | yes | yes |
 
 Queue lifecycle with real work in flight, observed by polling the pill:
 
@@ -45,6 +47,44 @@ queue drained             -> state "synced",   no animation, pending badge hidde
 
 `Syncing` is only reachable during an actual upload. It never appears merely
 because the browser came online with nothing to send.
+
+### What the offline check does and does not prove
+
+`student-tabs-browser.cjs` drives `restoreSession()` on an already-loaded page, so
+it proves the *status UI* is correct while offline. Durability across a real
+reload is covered separately by `offline-reload-browser.cjs` below.
+
+## Offline reload durability
+
+`scripts/qa/offline-reload-browser.cjs` registers the service worker, reloads once
+online so the worker actually controls the page, signs in, translates real code,
+then cuts the network and performs a genuine `Page.reload` — all inside **one**
+storage context, so what it measures is real.
+
+| Signal | Before reload | After offline reload |
+| --- | --- | --- |
+| App booted | yes | yes |
+| Signed in | yes | yes |
+| Session in storage | yes | yes |
+| Editor draft | 44 chars | 44 chars |
+| Translated Python | 24 chars | 24 chars |
+| Tabs present | 3 | 3 |
+| Sync pill | — | `offline` / "Offline", not animated |
+| Page mentions "Reconnecting" | — | no |
+
+This run exposed a real pre-existing defect, present identically on the
+pre-change baseline `cca1adc`: with the browser offline, `dbGet(..., { strict:
+true })` skipped the Firestore branch entirely and fell through to the local
+cache, returning a **miss** that `restoreSession` could not distinguish from a
+deleted account. The result was `clearSession()` — a silent logout on every
+offline reload, with the session erased from storage. `src/database/collections.js`
+now surfaces the outage to strict readers instead of substituting a cache miss,
+so the degraded path that `session.js` already implemented (keep the session,
+retry in the background) is what actually runs.
+
+The translated Python is persisted alongside the editor draft in
+`src/app/editor-actions.js`. It is derived from the pseudocode but is not
+re-derived on load, so without this the editor came back and the output did not.
 
 ## Learning sections reachability
 
@@ -118,3 +158,9 @@ roving `tabindex`, and `hidden` on inactive panels.
   `scripts/qa/offline-scope-browser.cjs` require Playwright, which is not
   installed in this environment, so they could not be run here. They are not part
   of `npm test`.
+- Offline reload durability is covered by `offline-reload-browser.cjs`, but only
+  against emulated offline in Chrome. Browser back/forward cache and hard
+  process kills were not exercised.
+- `tests/compiler.test.js` needs CPython on `PATH`, which is unavailable in this
+  environment, so those 85 cases were not run here. They are unaffected by these
+  changes (no compiler source was touched).

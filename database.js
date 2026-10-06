@@ -2045,7 +2045,8 @@ async function dbGetAll(ref, limitCount = null, offsetCount = 0) {
  * really gone" from "temporarily offline". Other callers keep the fallback.
  */
 async function dbGet(ref, docId, opts = {}) {
-    if (firestoreReady() && (typeof cloudRequestsAllowed !== 'function' || cloudRequestsAllowed())) {
+    const cloudReachable = firestoreReady() && (typeof cloudRequestsAllowed !== 'function' || cloudRequestsAllowed());
+    if (cloudReachable) {
         try {
             const doc = await firestoreRetry(() => firestore.collection(ref).doc(docId).get(), { attempts: opts.attempts || 2, timeoutMs: opts.timeoutMs, backoffMs: opts.backoffMs });
             if (typeof markFirestoreReachable === 'function') markFirestoreReachable(true);
@@ -2062,6 +2063,17 @@ async function dbGet(ref, docId, opts = {}) {
             }
             console.info(`[Database] Firestore get error on ${ref}/${docId}:`, err.message);
         }
+    } else if (opts.strict) {
+        // A strict read asked for the authoritative answer and the cloud could
+        // not supply one (offline, circuit open, or Firestore not ready). Falling
+        // through to the local cache would return a miss that is indistinguishable
+        // from "the document does not exist" -- and callers that read a strict miss
+        // as a deletion would silently drop the session on a mere outage. Surface
+        // the unavailability instead so callers keep their persisted state and
+        // degrade; a permanent circuit error still reaches them as permanent.
+        const reason = cloudCircuitError || Object.assign(new Error(firestoreReady() ? 'Browser offline' : 'Firestore not initialized'), { code: 'unavailable' });
+        console.warn(`[Database] Strict get on ${ref}/${docId} skipped; cloud unreachable: ${reason.message}`);
+        throw reason;
     }
 
     // Local fallback / cache lookup (never used by strict identity reads)

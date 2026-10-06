@@ -71,6 +71,57 @@ test('strict dbGet rethrows the typed failure; non-strict returns the local fall
     assert.equal(fallback && fallback.role, 'instructor', 'non-strict dbGet should fall back to the cache');
 });
 
+// Regression: an offline boot used to be read as "Firestore confirms the account
+// is gone". With the browser offline the cloud branch was skipped entirely, so a
+// strict read fell through to the local cache and returned a miss that
+// restoreSession could not distinguish from a deletion -- silently clearing the
+// stored session and logging the student out on every offline reload.
+test('strict dbGet reports unavailability instead of a cache miss when the cloud read is skipped', async () => {
+    const { sandbox } = databaseSandbox({
+        navigator: { onLine: false },
+        fetch: () => Promise.reject(new Error('offline'))
+    });
+    sandbox.firebase = {
+        apps: [],
+        initializeApp() {},
+        firestore() {
+            return { collection() { return { doc() { return { get: () => Promise.reject(new Error('offline')) }; } }; } };
+        }
+    };
+    vm.runInContext(read('src/database/firebase.js'), sandbox);
+    vm.runInContext(read('src/database/sync-manager.js'), sandbox);
+    // An empty local cache is the common case: the profile was never cached.
+    sandbox.getLocalCollection = () => [];
+    sandbox.setLocalCollection = () => {};
+    sandbox.seedDatabase = async () => {};
+    sandbox.getInitialSeedActivity = () => [];
+    sandbox.getInitialSeedUsers = () => [];
+    vm.runInContext(read('src/database/collections.js'), sandbox);
+
+    assert.equal(sandbox.cloudRequestsAllowed(), false, 'the cloud must be unreachable while offline');
+    await assert.rejects(
+        () => sandbox.dbGet('pseudopy_users', 'u1', { strict: true, attempts: 1, timeoutMs: 50, backoffMs: 0 }),
+        err => err.name === 'FirestoreUnavailable' || err.code === 'unavailable',
+        'a strict read must surface the outage, never a cache miss that reads as a deletion'
+    );
+
+    // A permanent circuit error must still reach the caller as permanent so a
+    // ruleset refusal is not retried as if it were a flaky network.
+    const denied = Object.assign(new Error('Missing or insufficient permissions'), { name: 'FirestoreUnavailable' });
+    sandbox.recordCloudFailure(denied, { ref: 'pseudopy_users' });
+    await assert.rejects(
+        () => sandbox.dbGet('pseudopy_users', 'u1', { strict: true, attempts: 1, timeoutMs: 50, backoffMs: 0 }),
+        err => /insufficient permissions/.test(err.message),
+        'the underlying permanent refusal must stay reachable'
+    );
+
+    // Non-strict reads keep their documented silent cache fallback.
+    sandbox.resetCloudCircuit();
+    sandbox.getLocalCollection = () => [{ _docId: 'u1', id: 'u1', role: 'student', status: 'active' }];
+    const fallback = await sandbox.dbGet('pseudopy_users', 'u1', { attempts: 1, timeoutMs: 50, backoffMs: 0 });
+    assert.equal(fallback && fallback.role, 'student', 'non-strict dbGet must still serve from the cache while offline');
+});
+
 function sessionHarness({ dbGet, session = null, cached = null, schedule = true }) {
     const storage = new Map(session ? [['pseudopy_session_user', JSON.stringify(session)]] : []);
     const scheduled = [];
