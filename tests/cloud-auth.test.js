@@ -101,7 +101,37 @@ test('signInToCloud never throws and reports a missing account cleanly', async (
     const h = authHarness({ signInError: missing });
     const result = await h.ctx.signInToCloud('nobody@example.test', 'secret');
     assert.equal(result.ok, false, 'a missing cloud account must not break the in-app login');
-    assert.equal(result.reason, 'auth/user-not-found');
+    assert.equal(result.code, 'auth/user-not-found');
+    // A missing cloud account is the expected migration state, NOT a rejected
+    // credential: the caller may continue with the in-app account.
+    assert.equal(result.kind, 'invalid');
+});
+
+// The server rejecting the credentials must be distinguishable from every other
+// outcome, because the login flow must not grant access on it.
+test('signInToCloud separates rejected credentials, provider config and network failures', async () => {
+    const cases = [
+        ['auth/invalid-credential', 'invalid'],
+        ['auth/wrong-password', 'invalid'],
+        ['auth/user-disabled', 'invalid'],
+        ['auth/operation-not-allowed', 'config'],
+        ['auth/unauthorized-domain', 'config'],
+        ['auth/network-request-failed', 'transient'],
+        ['auth/too-many-requests', 'transient']
+    ];
+    for (const [code, kind] of cases) {
+        const h = authHarness({ signInError: Object.assign(new Error('x'), { code }) });
+        const result = await h.ctx.signInToCloud('a@b.test', 'secret');
+        assert.equal(result.kind, kind, code + ' must classify as ' + kind);
+        assert.equal(result.ok, false);
+    }
+});
+
+test('signInToCloud never returns a credential payload', async () => {
+    const h = authHarness({ signInError: Object.assign(new Error('x'), { code: 'auth/invalid-credential' }) });
+    const result = await h.ctx.signInToCloud('a@b.test', 'hunter2');
+    assert.equal('password' in result, false, 'password must never be echoed back');
+    assert.equal('email' in result, false, 'the result carries no account payload');
 });
 
 test('signInToCloud skips the call entirely without an Auth SDK', async () => {
@@ -109,7 +139,7 @@ test('signInToCloud skips the call entirely without an Auth SDK', async () => {
     const result = await h.ctx.signInToCloud('a@b.test', 'x');
     // Cross-realm object: compare fields, not identity.
     assert.equal(result.ok, false);
-    assert.equal(result.reason, 'unavailable');
+    assert.equal(result.kind, 'unavailable');
 });
 
 test('session changes notify listeners so the queue can be drained', () => {

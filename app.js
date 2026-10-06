@@ -351,29 +351,108 @@ const CDN_BASE_URLS = {
     skulpt: ['./vendor/skulpt/skulpt.min.js', './vendor/skulpt/skulpt-stdlib.js'],
     pdfjs: ['./vendor/pdfjs/pdf.min.js'],
     pdfWorker: './vendor/pdfjs/pdf.worker.min.js',
-    anime: 'https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js'
+    // A dependency LIST. Every loader input is a list, so a bare URL can never
+    // be indexed as a sequence of characters. (It was a bare string here, and
+    // loadScripts indexed it per character: one request each for "h", "t", "t",
+    // "p", "s", ":", "/" -- every one answered by the SPA HTML shell, so each
+    // produced "Uncaught SyntaxError: Unexpected token '<'".)
+    anime: ['https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js']
 };
 
-function loadScripts(srcList, onSuccess, onError) {
-    if (!srcList || !srcList.length) { if (onSuccess) onSuccess(); return; }
-    let index = 0;
-    function next() {
-        if (index >= srcList.length) {
-            if (onSuccess) onSuccess();
-            return;
+/**
+ * Coerce a loader argument into a validated, de-duplicated list of complete URLs.
+ *
+ * Accepts a single URL string or an array of them. A string is treated as ONE
+ * dependency -- never as something to iterate character by character. Entries
+ * that are not usable URLs are dropped with a warning instead of producing
+ * hundreds of nonsense requests.
+ */
+function normalizeScriptList(srcList) {
+    let raw;
+    if (typeof srcList === 'string') {
+        raw = [srcList];
+    } else if (Array.isArray(srcList)) {
+        raw = srcList;
+    } else if (srcList && typeof srcList[Symbol.iterator] === 'function') {
+        raw = Array.from(srcList);
+    } else {
+        return [];
+    }
+
+    const urls = [];
+    for (let i = 0; i < raw.length; i++) {
+        const entry = raw[i];
+        if (typeof entry !== 'string') {
+            console.warn('[OnDemand] Ignoring non-string dependency at index ' + i + '.');
+            continue;
         }
+        const url = entry.trim();
+        if (!url) continue;
+        // A real URL never contains raw whitespace or a newline. Anything that
+        // does is a malformed dependency list, not a URL to request.
+        if (/\s/.test(url)) {
+            console.warn('[OnDemand] Ignoring malformed dependency (contains whitespace) at index ' + i + '.');
+            continue;
+        }
+        if (urls.indexOf(url) === -1) urls.push(url);
+    }
+    return urls;
+}
+
+// One in-flight promise per URL. Concurrent callers share a single script
+// element instead of each injecting their own copy.
+const scriptLoadPromises = {};
+
+/**
+ * Load one script URL at most once per page. A settled promise is cached so a
+ * second call for the same URL does not re-request it. A FAILED load is evicted
+ * so an explicit later call can try once more -- a deliberate retry by a caller,
+ * never an automatic loop.
+ */
+function loadScriptOnce(url) {
+    const existing = scriptLoadPromises[url];
+    if (existing) return existing;
+
+    const pending = new Promise(function (resolve, reject) {
         const s = document.createElement('script');
         // No cache-busting query string: the service worker precaches these
         // exact URLs, so a query suffix would break the offline cache match.
-        s.src = srcList[index++];
-        s.async = true;
-        s.onload = next;
+        s.src = url;
+        // Classic scripts must execute in dependency order, so this is never
+        // async; loadScripts also awaits each URL before starting the next.
+        s.async = false;
+        s.onload = function () { resolve(url); };
         s.onerror = function () {
-            if (onError) onError(new Error('Failed to load script: ' + s.src));
+            reject(new Error('Failed to load script: ' + url));
         };
         document.head.appendChild(s);
+    });
+
+    pending.catch(function () { delete scriptLoadPromises[url]; });
+    scriptLoadPromises[url] = pending;
+    return pending;
+}
+
+/**
+ * Load a dependency list in order, calling onSuccess once every script has
+ * executed, or onError exactly once if any of them fails. Never throws, never
+ * retries on its own, and reports success only when the list really loaded.
+ */
+async function loadScripts(srcList, onSuccess, onError) {
+    const urls = normalizeScriptList(srcList);
+    if (!urls.length) {
+        console.warn('[OnDemand] No usable script dependencies to load.');
+        if (onSuccess) onSuccess();
+        return;
     }
-    next();
+    try {
+        for (let i = 0; i < urls.length; i++) {
+            await loadScriptOnce(urls[i]);
+        }
+        if (onSuccess) onSuccess();
+    } catch (err) {
+        if (onError) onError(err);
+    }
 }
 
 /**
@@ -1041,6 +1120,50 @@ async function handleLogin() {
             return;
         }
 
+        // Step 3.4: Establish the Firebase Auth session BEFORE any access is
+        // granted. Firestore rules see `request.auth`, so without this every
+        // write is anonymous and is refused.
+        //
+        // The outcome is acted on explicitly rather than ignored:
+        //   - the server REJECTED the credentials -> no session, no access.
+        //     This is a final answer, never a connectivity problem, so it must
+        //     not start a reconnect loop or be reported as "check your
+        //     connection".
+        //   - no cloud account exists yet      -> the expected migration state.
+        //   - provider not enabled / no network -> the pre-existing offline-first
+        //     policy, surfaced honestly instead of silently.
+        if (typeof signInToCloud === 'function') {
+            let cloud = { ok: false, kind: 'unavailable' };
+            try {
+                cloud = await signInToCloud(userByUsername.email, password);
+            } catch (e) {
+                cloud = { ok: false, kind: 'unknown', code: 'auth/unknown' };
+            }
+
+            if (cloud && cloud.ok) {
+                console.info(`[Login] Cloud session established for ${userByUsername.username}.`);
+            } else if (cloud && cloud.kind === 'invalid') {
+                // Rejected by the server. Granting access here would bypass
+                // authentication, so the attempt ends here with no session.
+                showToast(cloud.code === 'auth/user-disabled'
+                    ? 'This account has been disabled. Please contact your administrator.'
+                    : 'Incorrect password.', 'error');
+                return;
+            } else if (cloud && cloud.kind === 'transient' && !isPlatformOffline()) {
+                // Online, but the server could not be reached. Reported as a
+                // connection problem, distinct from rejected credentials.
+                showToast('Could not reach the server. Check your connection and try again.', 'error');
+                return;
+            } else if (cloud && cloud.kind === 'config') {
+                // Requires a Firebase project-owner change; see
+                // docs/OWNER-ACTIONS.md. Sign-in continues locally so nobody is
+                // locked out by a provider setting.
+                console.warn(`[Login] Firebase sign-in unavailable for this project (${cloud.code}); continuing with the in-app account.`);
+            } else if (cloud && cloud.kind === 'transient') {
+                console.info('[Login] Offline: continuing with the in-app account.');
+            }
+        }
+
         // Step 3.5: Instructor Device Change Detection & Admin Approval
         if (userByUsername.role === 'instructor') {
             const currentDevice = getDeviceFingerprint();
@@ -1124,23 +1247,10 @@ async function handleLogin() {
         // Step 4: Role is auto-detected from the database record
         currentUser = userByUsername;
 
-        // Persist the session (browser-local) so refreshes never log the user out.
+        // Persist the session (browser-local) so refreshes never log the user
+        // out. This happens only after the cloud gate above has allowed the
+        // attempt through, so a rejected sign-in leaves no stored session.
         saveSession(currentUser);
-
-        // Step 4.5: Establish the Firebase Auth session for this account.
-        // Firestore rules see `request.auth`, so without this every write is
-        // anonymous and is refused. Best-effort and non-blocking: an account
-        // with no cloud counterpart yet keeps working exactly as before.
-        if (typeof signInToCloud === 'function') {
-            try {
-                const cloud = await signInToCloud(userByUsername.email, password);
-                if (cloud && cloud.ok) {
-                    console.info(`[Login] Cloud session established for ${userByUsername.username}.`);
-                }
-            } catch (e) {
-                console.warn('[Login] Cloud sign-in attempt failed:', e && e.message);
-            }
-        }
 
         // Record last login timestamp
         try {

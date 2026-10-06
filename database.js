@@ -1,20 +1,45 @@
-// Shared default profile for the existing administrator account (u1).
-// Credentials use the same salted hash format as the current password flow.
+// The legacy administrator bootstrap.
+//
+// HISTORY / WHY THIS NO LONGER RESETS CREDENTIALS
+// ----------------------------------------------
+// This file used to ship a password hash + salt and a migration that rewrote
+// the administrator's profile on every local read. That could silently replace
+// a password the owner had changed, restoring default credentials, and it put a
+// credential in every browser bundle.
+//
+// The migration is now a NON-DESTRUCTIVE profile normalizer:
+//   * it never writes `password`, `passwordHash` or `passwordSalt`
+//   * it never overwrites `fullName` on an existing, renamed account
+//   * it never touches any account other than the legacy administrator (u1)
+//   * it is idempotent, so repeated reads cannot keep rewriting state
+//
+// Provisioning the first administrator is now an OWNER action performed in the
+// Firebase console (email/password Auth provider + a `pseudopy_users/u1`
+// record), documented in docs/OWNER-ACTIONS.md. No credential is bundled.
+
+/** Identity fields for the legacy administrator record. Not credentials. */
 function getDefaultAdminProfile() {
     return {
-        "fullName": "Admin",
-        "username": "Admin",
-        "password": null,
-        "passwordHash": "804f4cba316ed81a095847efadc18b169d745f54ada7b651c85c4913439fbfe7",
-        "passwordSalt": "9d9ad9d3642056bbff2c80d102f97610"
+        fullName: 'Admin',
+        username: 'Admin'
     };
 }
 
-// Only migrate the known legacy account. Renamed accounts (including later
-// password changes) and all other roles/accounts are left untouched.
+/**
+ * Normalize the legacy administrator record WITHOUT touching credentials.
+ *
+ * The migration previously rewrote the administrator's profile on every local
+ * read, which could restore a default password after the owner changed it. With
+ * the bundled credential gone there is nothing left to migrate, so this is now
+ * deliberately a pure no-op: it returns the record exactly as stored and is
+ * trivially idempotent. `getLocalCollection()` still calls it on every read, so
+ * keeping it a no-op guarantees a changed password can never drift back.
+ *
+ * Provisioning the first administrator is an OWNER action performed in the
+ * Firebase console; see docs/OWNER-ACTIONS.md.
+ */
 function upgradeDefaultAdminAccount(user) {
-    if (!user || (user._docId || user.id) !== 'u1' || user.role !== 'admin' || user.username !== 'mbautista_admin') return user;
-    return { ...user, ...getDefaultAdminProfile() };
+    return user;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -413,36 +438,79 @@ function awaitCloudAuth() {
     });
 }
 
-/** Codes that mean "no cloud account / wrong password" rather than a real fault. */
-const CLOUD_SIGNIN_SKIPPED_CODES = [
+/**
+ * Codes that mean "the server answered, and the answer is no". These are final:
+ * retrying cannot change them, so the caller must NOT enter a reconnect loop and
+ * must NOT present them as a connectivity problem.
+ */
+const CLOUD_SIGNIN_INVALID_CODES = [
     'auth/invalid-credential',
+    'auth/wrong-password',
     'auth/user-not-found',
     'auth/invalid-email',
-    'auth/operation-not-allowed',
-    'auth/network-request-failed',
-    'auth/too-many-requests'
+    'auth/user-disabled'
 ];
 
 /**
+ * Codes that mean "the provider is not configured for this project". Only the
+ * Firebase project owner can fix these (see docs/OWNER-ACTIONS.md).
+ */
+const CLOUD_SIGNIN_CONFIG_CODES = [
+    'auth/operation-not-allowed',
+    'auth/unsupported-first-factor',
+    'auth/unauthorized-domain'
+];
+
+/** Codes that are genuinely transient and may succeed on a later attempt. */
+const CLOUD_SIGNIN_TRANSIENT_CODES = [
+    'auth/network-request-failed',
+    'auth/too-many-requests',
+    'auth/internal-error'
+];
+
+/**
+ * Interpret a sign-in failure.
+ *
+ * Returns `invalid` (rejected credentials or account), `config` (provider or
+ * domain not enabled), `transient` (network or throttling) or `unknown`.
+ * `code` is the Firebase error code, never a credential payload.
+ */
+function classifyCloudSignInError(error) {
+    const code = (error && error.code) || 'auth/unknown';
+    if (CLOUD_SIGNIN_INVALID_CODES.indexOf(code) !== -1) return { kind: 'invalid', code };
+    if (CLOUD_SIGNIN_CONFIG_CODES.indexOf(code) !== -1) return { kind: 'config', code };
+    if (CLOUD_SIGNIN_TRANSIENT_CODES.indexOf(code) !== -1) return { kind: 'transient', code };
+    return { kind: 'unknown', code };
+}
+
+/**
  * Best-effort cloud session for an account that already passed the in-app
- * login. NEVER throws and never blocks the caller: if no matching Firebase
- * Auth account exists yet (the expected state during migration) the app keeps
- * working exactly as before.
+ * login. NEVER throws and never blocks the caller.
+ *
+ * The result is explicit so the caller can act on the difference:
+ *   - `ok: true`                  the cloud session is established
+ *   - `unprovisioned`             no Firebase Auth account exists for this user
+ *                                 (the expected state during migration)
+ *   - `invalid`                   the password was rejected by the server
+ *   - `config`                    provider/domain not enabled (owner action)
+ *   - `transient` / `unavailable` a network problem, retryable later
  */
 async function signInToCloud(email, password) {
-    if (!cloudAuthAvailable()) return { ok: false, reason: 'unavailable' };
-    if (!email || !password) return { ok: false, reason: 'missing-credentials' };
+    if (!cloudAuthAvailable()) return { ok: false, kind: 'unavailable', code: 'auth/unavailable' };
+    if (!email || !password) return { ok: false, kind: 'unprovisioned', code: 'auth/missing-credentials' };
     try {
         const credential = await cloudAuth.signInWithEmailAndPassword(email, password);
         return { ok: !!credential && !!credential.user, uid: cloudUid() };
     } catch (error) {
-        const code = (error && error.code) || 'auth/unknown';
-        if (CLOUD_SIGNIN_SKIPPED_CODES.indexOf(code) === -1) {
-            console.warn(`[CloudAuth] sign-in failed (${code}) for ${email}`);
+        const verdict = classifyCloudSignInError(error);
+        // The address is not a credential, but it is account data; log the code
+        // and the category only. No password, token or payload is ever logged.
+        if (verdict.kind === 'transient' || verdict.kind === 'unknown') {
+            console.warn(`[CloudAuth] sign-in failed (${verdict.code}) for ${email}`);
         } else {
-            console.info(`[CloudAuth] no cloud session for ${email} (${code}); continuing with the in-app account.`);
+            console.info(`[CloudAuth] no cloud session for ${email} (${verdict.code}); continuing with the in-app account.`);
         }
-        return { ok: false, reason: code };
+        return { ok: false, kind: verdict.kind, code: verdict.code };
     }
 }
 
