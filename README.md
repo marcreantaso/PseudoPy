@@ -30,9 +30,9 @@ Then open [http://localhost:8080](http://localhost:8080)
 
 | Role | Username | Password |
 |------|----------|----------|
-| Student | `mdaet` | `pass123` |
-| Instructor | `mreantaso` | `pass123` |
-| Admin | `Admin` | `pass123` |
+| Student | `student` | `pass123` |
+| Instructor | `instructor` | `pass123` |
+| Admin | `*****` | `*****` |
 
 ## 📱 Mobile / PWA
 
