@@ -2079,6 +2079,10 @@
             <button class="devtools-tab" data-tab="simulation" onclick="devToolsSwitchTab('simulation')">Simulation</button>
             <button class="devtools-tab" data-tab="rawjson" onclick="devToolsSwitchTab('rawjson')">Raw JSON</button>
             <button class="devtools-tab" data-tab="health" onclick="devToolsSwitchTab('health')">DB Health</button>
+            <button class="devtools-tab" data-tab="langguide" onclick="devToolsSwitchTab('langguide')">Language Guide</button>
+            <button class="devtools-tab" data-tab="normalize" onclick="devToolsSwitchTab('normalize')">Normalize/Format</button>
+            <button class="devtools-tab" data-tab="sop2" onclick="devToolsSwitchTab('sop2')">SOP2 Comparison</button>
+            <button class="devtools-tab" data-tab="impl" onclick="devToolsSwitchTab('impl')">Implementation</button>
           </div>
 
           <div class="devtools-tab-panel active" id="devtools-panel-tokens">
@@ -2226,7 +2230,66 @@
             <div class="devtools-health-grid" id="devtools-health-grid">
               <p class="devtools-health-empty">Run the checks to inspect the live Firestore, Auth, offline-queue and server-function state.</p>
             </div>
-            <pre id="devtools-health-json" class="devtools-raw-pre">—</pre>
+            <pre id="devtools-health-json" class="devtools-raw-pre">---</pre>
+          </div>
+          <div class="devtools-tab-panel" id="devtools-panel-langguide">
+            <div class="devtools-panel-toolbar"><span class="devtools-count">Accepted Pseudocode Format</span></div>
+            <div class="devtools-panel-body" style="padding:1rem;overflow:auto;max-height:70vh">
+              <h3>Program</h3><pre>BEGIN ... END</pre>
+              <h3>Declarations</h3><pre>DECLARE name AS INTEGER|FLOAT|REAL|STRING|CHAR|CHARACTER|BOOLEAN|BOOL|ARRAY</pre>
+              <h3>Assignment</h3><pre>x=5; SET x TO 5; arr[i]=10</pre>
+              <h3>I/O</h3><pre>INPUT/READ x; INPUT WITH PROMPT "..." x; DISPLAY/PRINT/OUTPUT expr</pre>
+              <h3>Control</h3><pre>IF cond THEN ... [ELSE IF cond THEN ...] [ELSE ...] END IF
+WHILE cond DO ... END WHILE
+FOR i FROM 1 TO 5 [STEP 2] DO ... END FOR
+FOR EACH item IN list DO ... END FOR EACH</pre>
+              <h3>Functions</h3><pre>FUNCTION f(a,b) ... RETURN x END FUNCTION
+PROCEDURE p() ... END PROCEDURE
+CALL f(1,2); f(1,2)</pre>
+              <p>Recursive calls supported; signature validation incomplete.</p>
+              <h3>Operators/Unicode</h3><p>+ - * / DIV MOD ^ ** // ; == != &lt;&gt; = &gt; &lt; &gt;= &lt;= IS NOT IN AND OR NOT; ≥≤≠≡×÷−→ normalized.</p>
+              <h3>Notes</h3><p>Input conversion limited; no preserved column mapping; Skulpt runtime.</p>
+            </div>
+          </div>
+          <div class="devtools-tab-panel" id="devtools-panel-normalize">
+            <div class="devtools-panel-toolbar"><span class="devtools-count">Normalize</span></div>
+            <div class="devtools-panel-body" style="padding:1rem">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div><h4>Original</h4><textarea id="norm-input" class="code-editor devtools-editor" spellcheck="false"></textarea></div>
+                <div><h4>Normalized</h4><textarea id="norm-output" class="code-editor devtools-editor" spellcheck="false" readonly></textarea></div>
+              </div>
+              <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+                <button class="btn btn-primary" id="norm-preview">Preview</button>
+                <button class="btn btn-secondary" id="norm-apply">Apply to editor</button>
+                <button class="btn btn-ghost" id="norm-copy">Copy</button>
+              </div>
+              <pre id="norm-diff" style="margin-top:0.75rem;white-space:pre-wrap"></pre>
+            </div>
+          </div>
+          <div class="devtools-tab-panel" id="devtools-panel-sop2">
+            <div class="devtools-panel-toolbar"><span class="devtools-count">SOP2 comparison</span></div>
+            <div class="devtools-panel-body" style="padding:1rem">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                <div><h4>Pseudocode</h4><textarea id="sop2-src" class="code-editor devtools-editor" spellcheck="false"></textarea></div>
+                <div><h4>Reference Python</h4><textarea id="sop2-ref" class="code-editor devtools-editor" spellcheck="false"></textarea></div>
+              </div>
+              <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+                <button class="btn btn-primary" id="sop2-compare">Compare</button>
+                <button class="btn btn-secondary" id="sop2-run">Run both</button>
+                <button class="btn btn-ghost" id="sop2-bench">Benchmark</button>
+                <button class="btn btn-ghost" id="sop2-export-json">Export JSON</button>
+                <button class="btn btn-ghost" id="sop2-export-csv">Export CSV</button>
+              </div>
+              <div id="sop2-result" style="margin-top:1rem;overflow:auto"></div>
+            </div>
+          </div>
+          <div class="devtools-tab-panel" id="devtools-panel-impl">
+            <div class="devtools-panel-toolbar"><span class="devtools-count">Attribution</span></div>
+            <div class="devtools-panel-body" style="padding:1rem;overflow:auto;max-height:70vh">
+              <h3>Researcher</h3><ul><li>Compiler integration</li><li>Editor assistance</li><li>DevTools</li><li>Research tooling</li></ul>
+              <h3>Third-party</h3><ul><li>Skulpt</li><li>PDF.js</li><li>Express/CORS</li><li>Firebase</li></ul>
+              <p>See docs/IMPLEMENTATION_COMPONENTS.md, docs/COMPILER_PIPELINE.md</p>
+            </div>
           </div>
         </div>
 
