@@ -1,4 +1,25 @@
 {
+  "metadata": {
+    "timestamp": "2026-10-08T05:40:12.073Z",
+    "cases": 30,
+    "compiler": "PseudoPy",
+    "baseline": "direct-line-based",
+    "metricsVersion": "1.0.0"
+  },
+  "summary": {
+    "pseudopy": {
+      "compileSuccess": 30,
+      "avgPrecision": 0.8073015873015875,
+      "avgRecall": 0.3122954444935868,
+      "avgF1": 0.4415945165945167
+    },
+    "baseline": {
+      "compileSuccess": 30,
+      "avgPrecision": 0.8073015873015875,
+      "avgRecall": 0.5568181818181818,
+      "avgF1": 0.6575579975579976
+    }
+  },
   "results": [
     {
       "caseId": "algo_1",
@@ -7,13 +28,13 @@
       "pseudopy": {
         "generatedPython": "# DECLARE maximum AS INTEGER\nmaximum = 0\nmaximum = 0\n# DECLARE i AS INTEGER\ni = 0\ni = 1\nwhile i < 90:\n    maximum = maximum + i\n    i = i + 2\nprint(maximum)",
         "compileSuccess": true,
-        "generationTimeMs": 32,
+        "generationTimeMs": 40,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE maximum AS INTEGER\nmaximum = 0\n# DECLARE i AS INTEGER\ni = 1\nwhile i < 90 :\n    maximum = maximum + i\n    i = i + 2\npass\nprint(maximum)\nEND",
+        "generatedPython": "# DECLARE maximum AS INTEGER\nmaximum = 0\n# DECLARE i AS INTEGER\ni = 1\nwhile i < 90:\n    maximum = maximum + i\n    i = i + 2\nprint(maximum)",
         "compileSuccess": true,
-        "generationTimeMs": 3
+        "generationTimeMs": 4
       },
       "metrics": {
         "pseudopy": {
@@ -22,9 +43,9 @@
           "f1": 0.7499999999999999
         },
         "baseline": {
-          "precision": 0.8333333333333334,
-          "recall": 0.45454545454545453,
-          "f1": 0.5882352941176471
+          "precision": 1,
+          "recall": 0.75,
+          "f1": 0.8571428571428571
         }
       }
     },
@@ -35,11 +56,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE count AS INTEGER\ncount = 0\ncount = 0\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(1, 16, 1):\n    if (i % 4) == 0:\n        count = count + 1\n    elif (i % 7) == 0:\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 9,
+        "generationTimeMs": 12,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(1,16+1):\n    if  i MOD 4 == 0 :\n        count = count + 1\n    elif  i MOD 7 == 0 :\n        count = count + 2\n    else:\n        count = count - 1\n    pass\npass\nprint(count)\nEND",
+        "generatedPython": "# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(1,17):\n    if i MOD 4 == 0:\n        count = count + 1\n    elif  i MOD 7 == 0 :\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
         "compileSuccess": true,
         "generationTimeMs": 1
       },
@@ -51,8 +72,8 @@
         },
         "baseline": {
           "precision": 0.6666666666666666,
-          "recall": 0.4,
-          "f1": 0.5
+          "recall": 0.5454545454545454,
+          "f1": 0.6
         }
       }
     },
@@ -63,13 +84,13 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE count AS INTEGER\ncount = 0\ncount = 0\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(1, 45, 1):\n    if (i % 4) == 0:\n        count = count + 1\n    elif (i % 7) == 0:\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 9,
+        "generationTimeMs": 21,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(1,45+1):\n    if  i MOD 4 == 0 :\n        count = count + 1\n    elif  i MOD 7 == 0 :\n        count = count + 2\n    else:\n        count = count - 1\n    pass\npass\nprint(count)\nEND",
+        "generatedPython": "# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(1,46):\n    if i MOD 4 == 0:\n        count = count + 1\n    elif  i MOD 7 == 0 :\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 1
+        "generationTimeMs": 0
       },
       "metrics": {
         "pseudopy": {
@@ -79,8 +100,8 @@
         },
         "baseline": {
           "precision": 0.6666666666666666,
-          "recall": 0.4,
-          "f1": 0.5
+          "recall": 0.5454545454545454,
+          "f1": 0.6
         }
       }
     },
@@ -91,11 +112,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE values AS ARRAY\nvalues = []\nvalues = [8, 4, 1, 6, 4, 13, 6]\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(0, 6, 1):\n    values[i] = values[i] * 4\nprint(values)",
         "compileSuccess": true,
-        "generationTimeMs": 8,
+        "generationTimeMs": 9,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE values AS ARRAY\nvalues = [8, 4, 1, 6, 4, 13, 6]\n# DECLARE i AS INTEGER\nfor i in range(0,6+1):\n    values[i] = values[i] * 4\npass\nprint(values)\nEND",
+        "generatedPython": "# DECLARE values AS ARRAY\nvalues = [8, 4, 1, 6, 4, 13, 6]\n# DECLARE i AS INTEGER\nfor i in range(0,7):\n    values[i] = values[i] * 4\nprint(values)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -107,8 +128,8 @@
         },
         "baseline": {
           "precision": 0.75,
-          "recall": 0.3333333333333333,
-          "f1": 0.46153846153846156
+          "recall": 0.5,
+          "f1": 0.6
         }
       }
     },
@@ -119,13 +140,13 @@
       "pseudopy": {
         "generatedPython": "# DECLARE count AS INTEGER\ncount = 0\ncount = 0\n# DECLARE i AS INTEGER\ni = 0\ni = 1\nwhile i < 95:\n    count = count + i\n    i = i + 2\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 9,
+        "generationTimeMs": 10,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\ni = 1\nwhile i < 95 :\n    count = count + i\n    i = i + 2\npass\nprint(count)\nEND",
+        "generatedPython": "# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\ni = 1\nwhile i < 95:\n    count = count + i\n    i = i + 2\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 0
+        "generationTimeMs": 1
       },
       "metrics": {
         "pseudopy": {
@@ -134,9 +155,9 @@
           "f1": 0.7499999999999999
         },
         "baseline": {
-          "precision": 0.8333333333333334,
-          "recall": 0.45454545454545453,
-          "f1": 0.5882352941176471
+          "precision": 1,
+          "recall": 0.75,
+          "f1": 0.8571428571428571
         }
       }
     },
@@ -147,11 +168,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE collection AS ARRAY\ncollection = []\ncollection = [11, 19, 15, 12]\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(0, 3, 1):\n    collection[i] = collection[i] * 5\nprint(collection)",
         "compileSuccess": true,
-        "generationTimeMs": 9,
+        "generationTimeMs": 7,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE collection AS ARRAY\ncollection = [11, 19, 15, 12]\n# DECLARE i AS INTEGER\nfor i in range(0,3+1):\n    collection[i] = collection[i] * 5\npass\nprint(collection)\nEND",
+        "generatedPython": "# DECLARE collection AS ARRAY\ncollection = [11, 19, 15, 12]\n# DECLARE i AS INTEGER\nfor i in range(0,4):\n    collection[i] = collection[i] * 5\nprint(collection)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -163,8 +184,8 @@
         },
         "baseline": {
           "precision": 0.75,
-          "recall": 0.3333333333333333,
-          "f1": 0.46153846153846156
+          "recall": 0.5,
+          "f1": 0.6
         }
       }
     },
@@ -175,11 +196,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE limit AS INTEGER\nlimit = 0\nlimit = 6\n# DECLARE factorial AS INTEGER\nfactorial = 0\nfactorial = 1\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(1, limit, 1):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
-        "generationTimeMs": 6,
+        "generationTimeMs": 13,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE limit AS INTEGER\nlimit = 6\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit+1):\n    factorial = factorial * i\npass\nprint(factorial)\nEND",
+        "generatedPython": "# DECLARE limit AS INTEGER\nlimit = 6\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -191,8 +212,8 @@
         },
         "baseline": {
           "precision": 0.8,
-          "recall": 0.36363636363636365,
-          "f1": 0.5000000000000001
+          "recall": 0.5,
+          "f1": 0.6153846153846154
         }
       }
     },
@@ -203,11 +224,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE limit AS INTEGER\nlimit = 0\nlimit = 6\n# DECLARE factorial AS INTEGER\nfactorial = 0\nfactorial = 1\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(1, limit, 1):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
-        "generationTimeMs": 6,
+        "generationTimeMs": 7,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE limit AS INTEGER\nlimit = 6\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit+1):\n    factorial = factorial * i\npass\nprint(factorial)\nEND",
+        "generatedPython": "# DECLARE limit AS INTEGER\nlimit = 6\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
         "generationTimeMs": 1
       },
@@ -219,8 +240,8 @@
         },
         "baseline": {
           "precision": 0.8,
-          "recall": 0.36363636363636365,
-          "f1": 0.5000000000000001
+          "recall": 0.5,
+          "f1": 0.6153846153846154
         }
       }
     },
@@ -231,11 +252,11 @@
       "pseudopy": {
         "generatedPython": "# DECLARE target AS INTEGER\ntarget = 0\ntarget = 0\n# DECLARE i AS INTEGER\ni = 0\ni = 1\nwhile i < 83:\n    target = target + i\n    i = i + 2\nprint(target)",
         "compileSuccess": true,
-        "generationTimeMs": 6,
+        "generationTimeMs": 9,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE target AS INTEGER\ntarget = 0\n# DECLARE i AS INTEGER\ni = 1\nwhile i < 83 :\n    target = target + i\n    i = i + 2\npass\nprint(target)\nEND",
+        "generatedPython": "# DECLARE target AS INTEGER\ntarget = 0\n# DECLARE i AS INTEGER\ni = 1\nwhile i < 83:\n    target = target + i\n    i = i + 2\nprint(target)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -246,9 +267,9 @@
           "f1": 0.7499999999999999
         },
         "baseline": {
-          "precision": 0.8333333333333334,
-          "recall": 0.45454545454545453,
-          "f1": 0.5882352941176471
+          "precision": 1,
+          "recall": 0.75,
+          "f1": 0.8571428571428571
         }
       }
     },
@@ -259,11 +280,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE values AS ARRAY\nvalues = []\nvalues = [1, 114, 145, 99, 105, 39, 136]\n# DECLARE threshold AS INTEGER\nthreshold = 0\nthreshold = 67\n# DECLARE count AS INTEGER\ncount = 0\ncount = 0\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(0, 6, 1):\n    if values[i] > threshold:\n        count = count + 1\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 9,
+        "generationTimeMs": 8,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE values AS ARRAY\nvalues = [1, 114, 145, 99, 105, 39, 136]\n# DECLARE threshold AS INTEGER\nthreshold = 67\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(0,6+1):\n    if  values[i] > threshold :\n        count = count + 1\n    pass\npass\nprint(count)\nEND",
+        "generatedPython": "# DECLARE values AS ARRAY\nvalues = [1, 114, 145, 99, 105, 39, 136]\n# DECLARE threshold AS INTEGER\nthreshold = 67\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(0,7):\n    if values[i] > threshold:\n        count = count + 1\nprint(count)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -274,9 +295,9 @@
           "f1": 0.42857142857142855
         },
         "baseline": {
-          "precision": 0.7142857142857143,
-          "recall": 0.3333333333333333,
-          "f1": 0.4545454545454545
+          "precision": 0.8571428571428571,
+          "recall": 0.5454545454545454,
+          "f1": 0.6666666666666665
         }
       }
     },
@@ -287,11 +308,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE limit AS INTEGER\nlimit = 0\nlimit = 9\n# DECLARE factorial AS INTEGER\nfactorial = 0\nfactorial = 1\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(1, limit, 1):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
-        "generationTimeMs": 8,
+        "generationTimeMs": 10,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE limit AS INTEGER\nlimit = 9\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit+1):\n    factorial = factorial * i\npass\nprint(factorial)\nEND",
+        "generatedPython": "# DECLARE limit AS INTEGER\nlimit = 9\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -303,8 +324,8 @@
         },
         "baseline": {
           "precision": 0.8,
-          "recall": 0.36363636363636365,
-          "f1": 0.5000000000000001
+          "recall": 0.5,
+          "f1": 0.6153846153846154
         }
       }
     },
@@ -315,13 +336,13 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE collection AS ARRAY\ncollection = []\ncollection = [41, 99, 122, 48, 65, 26, 49, 116]\n# DECLARE threshold AS INTEGER\nthreshold = 0\nthreshold = 10\n# DECLARE count AS INTEGER\ncount = 0\ncount = 0\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(0, 7, 1):\n    if collection[i] > threshold:\n        count = count + 1\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 10,
+        "generationTimeMs": 12,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE collection AS ARRAY\ncollection = [41, 99, 122, 48, 65, 26, 49, 116]\n# DECLARE threshold AS INTEGER\nthreshold = 10\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(0,7+1):\n    if  collection[i] > threshold :\n        count = count + 1\n    pass\npass\nprint(count)\nEND",
+        "generatedPython": "# DECLARE collection AS ARRAY\ncollection = [41, 99, 122, 48, 65, 26, 49, 116]\n# DECLARE threshold AS INTEGER\nthreshold = 10\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(0,8):\n    if collection[i] > threshold:\n        count = count + 1\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 1
+        "generationTimeMs": 0
       },
       "metrics": {
         "pseudopy": {
@@ -330,9 +351,9 @@
           "f1": 0.42857142857142855
         },
         "baseline": {
-          "precision": 0.7142857142857143,
-          "recall": 0.3333333333333333,
-          "f1": 0.4545454545454545
+          "precision": 0.8571428571428571,
+          "recall": 0.5454545454545454,
+          "f1": 0.6666666666666665
         }
       }
     },
@@ -343,13 +364,13 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE items AS ARRAY\nitems = []\nitems = [142, 132, 49, 117, 115, 110, 49, 138]\n# DECLARE threshold AS INTEGER\nthreshold = 0\nthreshold = 60\n# DECLARE count AS INTEGER\ncount = 0\ncount = 0\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(0, 7, 1):\n    if items[i] > threshold:\n        count = count + 1\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 7,
+        "generationTimeMs": 9,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE items AS ARRAY\nitems = [142, 132, 49, 117, 115, 110, 49, 138]\n# DECLARE threshold AS INTEGER\nthreshold = 60\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(0,7+1):\n    if  items[i] > threshold :\n        count = count + 1\n    pass\npass\nprint(count)\nEND",
+        "generatedPython": "# DECLARE items AS ARRAY\nitems = [142, 132, 49, 117, 115, 110, 49, 138]\n# DECLARE threshold AS INTEGER\nthreshold = 60\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(0,8):\n    if items[i] > threshold:\n        count = count + 1\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 1
+        "generationTimeMs": 0
       },
       "metrics": {
         "pseudopy": {
@@ -358,9 +379,9 @@
           "f1": 0.42857142857142855
         },
         "baseline": {
-          "precision": 0.7142857142857143,
-          "recall": 0.3333333333333333,
-          "f1": 0.4545454545454545
+          "precision": 0.8571428571428571,
+          "recall": 0.5454545454545454,
+          "f1": 0.6666666666666665
         }
       }
     },
@@ -371,11 +392,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE items AS ARRAY\nitems = []\nitems = [8, 8, 7, 5, 5, 12]\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(0, 5, 1):\n    items[i] = items[i] * 3\nprint(items)",
         "compileSuccess": true,
-        "generationTimeMs": 6,
+        "generationTimeMs": 9,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE items AS ARRAY\nitems = [8, 8, 7, 5, 5, 12]\n# DECLARE i AS INTEGER\nfor i in range(0,5+1):\n    items[i] = items[i] * 3\npass\nprint(items)\nEND",
+        "generatedPython": "# DECLARE items AS ARRAY\nitems = [8, 8, 7, 5, 5, 12]\n# DECLARE i AS INTEGER\nfor i in range(0,6):\n    items[i] = items[i] * 3\nprint(items)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -387,8 +408,8 @@
         },
         "baseline": {
           "precision": 0.75,
-          "recall": 0.3333333333333333,
-          "f1": 0.46153846153846156
+          "recall": 0.5,
+          "f1": 0.6
         }
       }
     },
@@ -403,7 +424,7 @@
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE source AS ARRAY\nsource = [63, 71, 119, 44, 88, 37]\n# DECLARE threshold AS INTEGER\nthreshold = 37\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(0,5+1):\n    if  source[i] > threshold :\n        count = count + 1\n    pass\npass\nprint(count)\nEND",
+        "generatedPython": "# DECLARE source AS ARRAY\nsource = [63, 71, 119, 44, 88, 37]\n# DECLARE threshold AS INTEGER\nthreshold = 37\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(0,6):\n    if source[i] > threshold:\n        count = count + 1\nprint(count)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -414,9 +435,9 @@
           "f1": 0.42857142857142855
         },
         "baseline": {
-          "precision": 0.7142857142857143,
-          "recall": 0.3333333333333333,
-          "f1": 0.4545454545454545
+          "precision": 0.8571428571428571,
+          "recall": 0.5454545454545454,
+          "f1": 0.6666666666666665
         }
       }
     },
@@ -427,11 +448,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE limit AS INTEGER\nlimit = 0\nlimit = 5\n# DECLARE factorial AS INTEGER\nfactorial = 0\nfactorial = 1\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(1, limit, 1):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
-        "generationTimeMs": 7,
+        "generationTimeMs": 8,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE limit AS INTEGER\nlimit = 5\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit+1):\n    factorial = factorial * i\npass\nprint(factorial)\nEND",
+        "generatedPython": "# DECLARE limit AS INTEGER\nlimit = 5\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -443,8 +464,8 @@
         },
         "baseline": {
           "precision": 0.8,
-          "recall": 0.36363636363636365,
-          "f1": 0.5000000000000001
+          "recall": 0.5,
+          "f1": 0.6153846153846154
         }
       }
     },
@@ -455,11 +476,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE count AS INTEGER\ncount = 0\ncount = 0\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(1, 21, 1):\n    if (i % 2) == 0:\n        count = count + 1\n    elif (i % 7) == 0:\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 9,
+        "generationTimeMs": 11,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(1,21+1):\n    if  i MOD 2 == 0 :\n        count = count + 1\n    elif  i MOD 7 == 0 :\n        count = count + 2\n    else:\n        count = count - 1\n    pass\npass\nprint(count)\nEND",
+        "generatedPython": "# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(1,22):\n    if i MOD 2 == 0:\n        count = count + 1\n    elif  i MOD 7 == 0 :\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -471,8 +492,8 @@
         },
         "baseline": {
           "precision": 0.6666666666666666,
-          "recall": 0.4,
-          "f1": 0.5
+          "recall": 0.5454545454545454,
+          "f1": 0.6
         }
       }
     },
@@ -483,11 +504,11 @@
       "pseudopy": {
         "generatedPython": "# DECLARE val AS INTEGER\nval = 0\nval = 0\n# DECLARE i AS INTEGER\ni = 0\ni = 1\nwhile i < 24:\n    val = val + i\n    i = i + 2\nprint(val)",
         "compileSuccess": true,
-        "generationTimeMs": 6,
+        "generationTimeMs": 9,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE val AS INTEGER\nval = 0\n# DECLARE i AS INTEGER\ni = 1\nwhile i < 24 :\n    val = val + i\n    i = i + 2\npass\nprint(val)\nEND",
+        "generatedPython": "# DECLARE val AS INTEGER\nval = 0\n# DECLARE i AS INTEGER\ni = 1\nwhile i < 24:\n    val = val + i\n    i = i + 2\nprint(val)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -498,9 +519,9 @@
           "f1": 0.7499999999999999
         },
         "baseline": {
-          "precision": 0.8333333333333334,
-          "recall": 0.45454545454545453,
-          "f1": 0.5882352941176471
+          "precision": 1,
+          "recall": 0.75,
+          "f1": 0.8571428571428571
         }
       }
     },
@@ -511,11 +532,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE limit AS INTEGER\nlimit = 0\nlimit = 9\n# DECLARE factorial AS INTEGER\nfactorial = 0\nfactorial = 1\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(1, limit, 1):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
-        "generationTimeMs": 6,
+        "generationTimeMs": 11,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE limit AS INTEGER\nlimit = 9\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit+1):\n    factorial = factorial * i\npass\nprint(factorial)\nEND",
+        "generatedPython": "# DECLARE limit AS INTEGER\nlimit = 9\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -527,8 +548,8 @@
         },
         "baseline": {
           "precision": 0.8,
-          "recall": 0.36363636363636365,
-          "f1": 0.5000000000000001
+          "recall": 0.5,
+          "f1": 0.6153846153846154
         }
       }
     },
@@ -539,11 +560,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE count AS INTEGER\ncount = 0\ncount = 0\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(1, 49, 1):\n    if (i % 4) == 0:\n        count = count + 1\n    elif (i % 6) == 0:\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 7,
+        "generationTimeMs": 8,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(1,49+1):\n    if  i MOD 4 == 0 :\n        count = count + 1\n    elif  i MOD 6 == 0 :\n        count = count + 2\n    else:\n        count = count - 1\n    pass\npass\nprint(count)\nEND",
+        "generatedPython": "# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(1,50):\n    if i MOD 4 == 0:\n        count = count + 1\n    elif  i MOD 6 == 0 :\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -555,8 +576,8 @@
         },
         "baseline": {
           "precision": 0.6666666666666666,
-          "recall": 0.4,
-          "f1": 0.5
+          "recall": 0.5454545454545454,
+          "f1": 0.6
         }
       }
     },
@@ -571,7 +592,7 @@
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE collection AS ARRAY\ncollection = [3, 8, 2, 10, 3, 11, 9, 1]\n# DECLARE i AS INTEGER\nfor i in range(0,7+1):\n    collection[i] = collection[i] * 3\npass\nprint(collection)\nEND",
+        "generatedPython": "# DECLARE collection AS ARRAY\ncollection = [3, 8, 2, 10, 3, 11, 9, 1]\n# DECLARE i AS INTEGER\nfor i in range(0,8):\n    collection[i] = collection[i] * 3\nprint(collection)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -583,8 +604,8 @@
         },
         "baseline": {
           "precision": 0.75,
-          "recall": 0.3333333333333333,
-          "f1": 0.46153846153846156
+          "recall": 0.5,
+          "f1": 0.6
         }
       }
     },
@@ -595,13 +616,13 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE limit AS INTEGER\nlimit = 0\nlimit = 4\n# DECLARE factorial AS INTEGER\nfactorial = 0\nfactorial = 1\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(1, limit, 1):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
-        "generationTimeMs": 6,
+        "generationTimeMs": 9,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE limit AS INTEGER\nlimit = 4\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit+1):\n    factorial = factorial * i\npass\nprint(factorial)\nEND",
+        "generatedPython": "# DECLARE limit AS INTEGER\nlimit = 4\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
-        "generationTimeMs": 1
+        "generationTimeMs": 0
       },
       "metrics": {
         "pseudopy": {
@@ -611,8 +632,8 @@
         },
         "baseline": {
           "precision": 0.8,
-          "recall": 0.36363636363636365,
-          "f1": 0.5000000000000001
+          "recall": 0.5,
+          "f1": 0.6153846153846154
         }
       }
     },
@@ -623,11 +644,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE list_vals AS ARRAY\nlist_vals = []\nlist_vals = [2, 14, 20, 7, 7, 18]\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(0, 5, 1):\n    list_vals[i] = list_vals[i] * 5\nprint(list_vals)",
         "compileSuccess": true,
-        "generationTimeMs": 7,
+        "generationTimeMs": 12,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE list_vals AS ARRAY\nlist_vals = [2, 14, 20, 7, 7, 18]\n# DECLARE i AS INTEGER\nfor i in range(0,5+1):\n    list_vals[i] = list_vals[i] * 5\npass\nprint(list_vals)\nEND",
+        "generatedPython": "# DECLARE list_vals AS ARRAY\nlist_vals = [2, 14, 20, 7, 7, 18]\n# DECLARE i AS INTEGER\nfor i in range(0,6):\n    list_vals[i] = list_vals[i] * 5\nprint(list_vals)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -639,8 +660,8 @@
         },
         "baseline": {
           "precision": 0.75,
-          "recall": 0.3333333333333333,
-          "f1": 0.46153846153846156
+          "recall": 0.5,
+          "f1": 0.6
         }
       }
     },
@@ -651,11 +672,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE items AS ARRAY\nitems = []\nitems = [115, 109, 138, 39, 121, 127, 146]\n# DECLARE threshold AS INTEGER\nthreshold = 0\nthreshold = 34\n# DECLARE count AS INTEGER\ncount = 0\ncount = 0\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(0, 6, 1):\n    if items[i] > threshold:\n        count = count + 1\nprint(count)",
         "compileSuccess": true,
-        "generationTimeMs": 9,
+        "generationTimeMs": 12,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE items AS ARRAY\nitems = [115, 109, 138, 39, 121, 127, 146]\n# DECLARE threshold AS INTEGER\nthreshold = 34\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(0,6+1):\n    if  items[i] > threshold :\n        count = count + 1\n    pass\npass\nprint(count)\nEND",
+        "generatedPython": "# DECLARE items AS ARRAY\nitems = [115, 109, 138, 39, 121, 127, 146]\n# DECLARE threshold AS INTEGER\nthreshold = 34\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(0,7):\n    if items[i] > threshold:\n        count = count + 1\nprint(count)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -666,9 +687,9 @@
           "f1": 0.42857142857142855
         },
         "baseline": {
-          "precision": 0.7142857142857143,
-          "recall": 0.3333333333333333,
-          "f1": 0.4545454545454545
+          "precision": 0.8571428571428571,
+          "recall": 0.5454545454545454,
+          "f1": 0.6666666666666665
         }
       }
     },
@@ -683,7 +704,7 @@
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(1,45+1):\n    if  i MOD 2 == 0 :\n        count = count + 1\n    elif  i MOD 6 == 0 :\n        count = count + 2\n    else:\n        count = count - 1\n    pass\npass\nprint(count)\nEND",
+        "generatedPython": "# DECLARE count AS INTEGER\ncount = 0\n# DECLARE i AS INTEGER\nfor i in range(1,46):\n    if i MOD 2 == 0:\n        count = count + 1\n    elif  i MOD 6 == 0 :\n        count = count + 2\n    else:\n        count = count - 1\nprint(count)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -695,8 +716,8 @@
         },
         "baseline": {
           "precision": 0.6666666666666666,
-          "recall": 0.4,
-          "f1": 0.5
+          "recall": 0.5454545454545454,
+          "f1": 0.6
         }
       }
     },
@@ -707,11 +728,11 @@
       "pseudopy": {
         "generatedPython": "# DECLARE maximum AS INTEGER\nmaximum = 0\nmaximum = 0\n# DECLARE i AS INTEGER\ni = 0\ni = 1\nwhile i < 66:\n    maximum = maximum + i\n    i = i + 2\nprint(maximum)",
         "compileSuccess": true,
-        "generationTimeMs": 7,
+        "generationTimeMs": 10,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE maximum AS INTEGER\nmaximum = 0\n# DECLARE i AS INTEGER\ni = 1\nwhile i < 66 :\n    maximum = maximum + i\n    i = i + 2\npass\nprint(maximum)\nEND",
+        "generatedPython": "# DECLARE maximum AS INTEGER\nmaximum = 0\n# DECLARE i AS INTEGER\ni = 1\nwhile i < 66:\n    maximum = maximum + i\n    i = i + 2\nprint(maximum)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -722,9 +743,9 @@
           "f1": 0.7499999999999999
         },
         "baseline": {
-          "precision": 0.8333333333333334,
-          "recall": 0.45454545454545453,
-          "f1": 0.5882352941176471
+          "precision": 1,
+          "recall": 0.75,
+          "f1": 0.8571428571428571
         }
       }
     },
@@ -739,7 +760,7 @@
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE data AS ARRAY\ndata = [4, 6, 11, 8, 3, 20, 3, 16]\n# DECLARE i AS INTEGER\nfor i in range(0,7+1):\n    data[i] = data[i] * 3\npass\nprint(data)\nEND",
+        "generatedPython": "# DECLARE data AS ARRAY\ndata = [4, 6, 11, 8, 3, 20, 3, 16]\n# DECLARE i AS INTEGER\nfor i in range(0,8):\n    data[i] = data[i] * 3\nprint(data)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -751,8 +772,8 @@
         },
         "baseline": {
           "precision": 0.75,
-          "recall": 0.3333333333333333,
-          "f1": 0.46153846153846156
+          "recall": 0.5,
+          "f1": 0.6
         }
       }
     },
@@ -767,7 +788,7 @@
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE data AS ARRAY\ndata = [1, 19, 12, 10, 13, 20, 18]\n# DECLARE i AS INTEGER\nfor i in range(0,6+1):\n    data[i] = data[i] * 5\npass\nprint(data)\nEND",
+        "generatedPython": "# DECLARE data AS ARRAY\ndata = [1, 19, 12, 10, 13, 20, 18]\n# DECLARE i AS INTEGER\nfor i in range(0,7):\n    data[i] = data[i] * 5\nprint(data)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -779,8 +800,8 @@
         },
         "baseline": {
           "precision": 0.75,
-          "recall": 0.3333333333333333,
-          "f1": 0.46153846153846156
+          "recall": 0.5,
+          "f1": 0.6
         }
       }
     },
@@ -791,11 +812,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE numbers AS ARRAY\nnumbers = []\nnumbers = [16, 7, 16, 9, 20, 12, 20]\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(0, 6, 1):\n    numbers[i] = numbers[i] * 5\nprint(numbers)",
         "compileSuccess": true,
-        "generationTimeMs": 9,
+        "generationTimeMs": 8,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE numbers AS ARRAY\nnumbers = [16, 7, 16, 9, 20, 12, 20]\n# DECLARE i AS INTEGER\nfor i in range(0,6+1):\n    numbers[i] = numbers[i] * 5\npass\nprint(numbers)\nEND",
+        "generatedPython": "# DECLARE numbers AS ARRAY\nnumbers = [16, 7, 16, 9, 20, 12, 20]\n# DECLARE i AS INTEGER\nfor i in range(0,7):\n    numbers[i] = numbers[i] * 5\nprint(numbers)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -807,8 +828,8 @@
         },
         "baseline": {
           "precision": 0.75,
-          "recall": 0.3333333333333333,
-          "f1": 0.46153846153846156
+          "recall": 0.5,
+          "f1": 0.6
         }
       }
     },
@@ -819,11 +840,11 @@
       "pseudopy": {
         "generatedPython": "def _pseudopy_range(start, stop, step):\n    if not all(isinstance(value, int) for value in (start, stop, step)):\n        raise TypeError(\"FOR bounds and STEP must be integers\")\n    if step == 0:\n        raise ValueError(\"FOR STEP must not be zero\")\n    return range(start, stop + (1 if step > 0 else -1), step)\n\n# DECLARE limit AS INTEGER\nlimit = 0\nlimit = 5\n# DECLARE factorial AS INTEGER\nfactorial = 0\nfactorial = 1\n# DECLARE i AS INTEGER\ni = 0\nfor i in _pseudopy_range(1, limit, 1):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
-        "generationTimeMs": 7,
+        "generationTimeMs": 15,
         "errors": []
       },
       "baseline": {
-        "generatedPython": "BEGIN\n# DECLARE limit AS INTEGER\nlimit = 5\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit+1):\n    factorial = factorial * i\npass\nprint(factorial)\nEND",
+        "generatedPython": "# DECLARE limit AS INTEGER\nlimit = 5\n# DECLARE factorial AS INTEGER\nfactorial = 1\n# DECLARE i AS INTEGER\nfor i in range(1,limit):\n    factorial = factorial * i\nprint(factorial)",
         "compileSuccess": true,
         "generationTimeMs": 0
       },
@@ -835,8 +856,8 @@
         },
         "baseline": {
           "precision": 0.8,
-          "recall": 0.36363636363636365,
-          "f1": 0.5000000000000001
+          "recall": 0.5,
+          "f1": 0.6153846153846154
         }
       }
     }
