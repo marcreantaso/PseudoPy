@@ -1,21 +1,9 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const path = require('path');
+const MetricsCore = require('./line-metrics');
 
 function lineMetrics(gen, exp) {
-  const g = (gen || '').split('\n').filter(x => x.trim().length > 0);
-  const e = (exp || '').split('\n').filter(x => x.trim().length > 0);
-  const gf = {};
-  const ef = {};
-  for (const x of g) gf[x] = (gf[x] || 0) + 1;
-  for (const x of e) ef[x] = (ef[x] || 0) + 1;
-  let m = 0;
-  for (const k of Object.keys(gf)) {
-    if (ef[k]) m += Math.min(gf[k], ef[k]);
-  }
-  const p = e.length ? m / e.length : (g.length ? 0 : 1);
-  const r = g.length ? m / g.length : (e.length ? 0 : 1);
-  const f1 = (p + r) === 0 ? 0 : (2 * p * r) / (p + r);
-  return { precision: p, recall: r, f1 };
+  return MetricsCore.lineMetrics(gen, exp);
 }
 
 function compare(source, refPython, opts) {
@@ -37,7 +25,7 @@ function compare(source, refPython, opts) {
     const { baselineTranslate } = require('./baseline-translator');
     baselineRes = baselineTranslate(source);
   } catch (e) {
-    baselineRes = { generatedPython: '', success: false };
+    baselineRes = { generatedPython: '', success: false, syntaxSuccess: false, runtimeSuccess: false };
   }
   const t2 = Date.now();
   return {
@@ -56,7 +44,8 @@ function runSeedComparison() {
   if (start < 0) return [];
   const s = db.indexOf('[', start);
   const end = db.indexOf('];', s);
-  const seeds = JSON.parse(db.slice(s, end + 1));
+  let seeds;
+  try { seeds = JSON.parse(db.slice(s, end + 1)); } catch (e) { return []; }
   const results = [];
   for (let i = 0; i < seeds.length && i < 30; i++) {
     const ex = seeds[i];
