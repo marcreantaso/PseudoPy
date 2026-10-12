@@ -104,6 +104,8 @@
     "src/devtools/file-io.js",
     "src/devtools/simulation.js",
     "src/devtools/health-panel.js",
+    "src/research/line-metrics.js",
+    "src/research/baseline-translator.js",
     "src/devtools/research-ui.js",
     "src/devtools/dom.js"
   ]

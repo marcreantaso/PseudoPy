@@ -3028,137 +3028,719 @@ if (document.readyState === 'loading') {
 } else {
     _devToolsHealthWatchTab();
 }
-﻿(function(){
-  const STATES={IDLE:'idle',VALIDATING:'validating',RUNNING:'running',COMPLETED:'completed',FAILED:'failed',CANCELLED:'cancelled'};
-  let state=STATES.IDLE;
-  let lastResult=null;
-  let isStale=false;
-  let currentOpId=0;
-  let benchAbort=false;
-  function $(id){ return document.getElementById(id); }
-  function setStatus(msg){ const el=$('sop2-status'); if(el) el.textContent=msg||''; }
-  function csvEscape(v){
-    let s=v==null?'':String(v);
-    if(/[",\n\r]/.test(s)){ s='"'+s.replace(/"/g,'""')+'"'; }
-    if(/^[=+\-@]/.test(s)) s="'"+s;
-    return s;
-  }
-  function markStale(){ isStale=true; if(lastResult&&$('sop2-result')) $('sop2-result').innerHTML='<div class="devtools-idle-message"><p>Results are stale. Re-run to refresh.</p></div>'; $('sop2-export-json').disabled=true; $('sop2-export-csv').disabled=true; }
-  function lineFreq(s){ const m={}; String(s||'').split(/\r?\n/).forEach(x=>{const t=x.trim(); if(t)m[t]=(m[t]||0)+1;}); return m; }
-  function lineMetrics(gen,exp){
-    const g=lineFreq(gen), e=lineFreq(exp);
-    let m=0; for(const k in g){ if(e[k]) m+=Math.min(g[k],e[k]); }
-    const elines=Object.values(e).reduce((a,b)=>a+b,0)||0;
-    const glines=Object.values(g).reduce((a,b)=>a+b,0)||0;
-    const p=elines? m/elines:(glines?0:1);
-    const r=glines? m/glines:(elines?0:1);
-    const f1=(p+r)===0?0:(2*p*r)/(p+r);
-    return {precision:p,recall:r,f1,matched:m,refLines:elines,genLines:glines, exactMatch: elines===glines && m===glines && glines>0 && elines>0 };
-  }
-  function pyCheck(py){
-    if(!py) return {ok:false,msg:'Empty'};
-    try{
-      if(typeof Sk==='undefined') return {ok:true,msg:'Skulpt not loaded (syntax check skipped)'};
-      Sk.parse(py,'<sop2-check>');
-      return {ok:true,msg:'OK'};
-    }catch(e){ return {ok:false,msg:e.toString()}; }
-  }
-  function norm(s){ let x=s||''; if(typeof normalizeUnicodeOperators==='function') x=normalizeUnicodeOperators(x); if(typeof normalizeLineNumbers==='function') x=normalizeLineNumbers(x); return x; }
-  function setBusy(b){
-    ['sop2-compare','sop2-run','sop2-bench','sop2-export-json','sop2-export-csv'].forEach(id=>{const el=$(id); if(el) el.disabled=b;});
-  }
-  function render(r){
-    lastResult=r; isStale=false; $('sop2-export-json').disabled=false; $('sop2-export-csv').disabled=false;
-    const pm=r.metrics.pseudopy,bm=r.metrics.baseline;
-    let html='<table style="width:100%;border-collapse:collapse"><tr><th>Metric</th><th>Baseline</th><th>PseudoPy</th><th>Diff</th></tr>';
-    html+='<tr><td>Precision</td><td>'+pm.precision.toFixed(3)+'</td><td>'+bm.precision.toFixed(3)+'</td><td>'+(pm.precision-bm.precision).toFixed(3)+'</td></tr>';
-    html+='<tr><td>Recall</td><td>'+pm.recall.toFixed(3)+'</td><td>'+bm.recall.toFixed(3)+'</td><td>'+(pm.recall-bm.recall).toFixed(3)+'</td></tr>';
-    html+='<tr><td>F1</td><td>'+pm.f1.toFixed(3)+'</td><td>'+bm.f1.toFixed(3)+'</td><td>'+(pm.f1-bm.f1).toFixed(3)+'</td></tr>';
-    html+='</table>';
-    $('sop2-result').innerHTML=html;
-  }
-  async function onCompare(){
-    const src=norm(($('sop2-src')||{}).value||(($('devtools-pseudocode')||{}).value)||'');
-    const ref=($('sop2-ref')||{}).value||'';
-    if(!src){ setStatus('Enter pseudocode'); return; }
-    if(!ref){ setStatus('Enter reference Python'); return; }
-    setBusy(true); setStatus('Comparing...');
-    try{
-      let baseRes, pseudoRes;
-      try{ const {baselineTranslate}=require('./src/research/baseline-translator'); baseRes=baselineTranslate(src); }catch(e){ baseRes={generatedPython:'',success:false}; }
-      try{ const c=require('./compiler'); pseudoRes=new c.PseudocodeCompiler().compile(src); }catch(e){ pseudoRes={valid:false,python:'',errors:[e.message]}; }
-      const m1=lineMetrics(pseudoRes.python||'',ref); const m2=lineMetrics(baseRes.generatedPython||'',ref);
-      const res={caseId:'ui',input:src,expectedPython:ref,pseudopy:{generatedPython:pseudoRes.python||'',compileSuccess:!!pseudoRes.valid},baseline:{generatedPython:baseRes.generatedPython||'',compileSuccess:!!baseRes.success},metrics:{pseudopy:m1,baseline:m2}};
-      render(res); setStatus('Done'); lastResult=res;
-    }catch(e){ setStatus('Error'); }
-    setBusy(false);
-  }
-  function wire(){
-    const c=$('sop2-compare'); if(c) c.addEventListener('click',onCompare);
-    const s=$('sop2-src'), r=$('sop2-ref');
-    if(s) s.addEventListener('input',markStale);
-    if(r) r.addEventListener('input',markStale);
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wire); else wire();
-  window.__sop2ui={};
-})();
-// Research UI for Developer Options
-(function(){
-  const STATES = { IDLE:'idle', VALIDATING:'validating', RUNNING:'running', COMPLETED:'completed', FAILED:'failed', CANCELLED:'cancelled' };
-  let state = STATES.IDLE;
-  let lastResult = null;
-  let isStale = false;
-  let currentOpId = 0;
-  let benchAbort = false;
+﻿const MetricsCore = {
+  normalizeCode(code) {
+    if (!code) return '';
+    return code
+      .split('\n')
+      .map(line => line.replace(/\t/g, '    '))
+      .map(line => {
+        let stripped = line.replace(/#.*$/, '').trimEnd();
+        const match = stripped.match(/^(\s*)(.*)/);
+        if (!match) return stripped;
+        const [, leading, rest] = match;
+        const spaces = leading.length;
+        const normalSpaces = Math.round(spaces / 4) * 4;
+        return ' '.repeat(normalSpaces) + rest;
+      })
+      .filter(line => line.trim().length > 0)
+      .join('\n')
+      .trimEnd();
+  },
 
-  function $(id){ return document.getElementById(id); }
-  function esc(s){ if(s==null) return ''; const d=document.createElement('div'); d.textContent=String(s); return d.innerHTML; }
-  function setStatus(msg){ const el=$('sop2-status'); if(el) el.textContent = msg||''; }
-  function csvEscape(v){
-    let s = v==null?'':String(v);
-    if(/[",\n\r]/.test(s)){ s = '"' + s.replace(/"/g,'""') + '"'; }
-    if(/^[=+\-@]/.test(s)) s = "'" + s;
+  lineMetrics(gen, exp) {
+    const normGen = this.normalizeCode(gen || '');
+    const normExp = this.normalizeCode(exp || '');
+    const g = normGen ? normGen.split('\n') : [];
+    const e = normExp ? normExp.split('\n') : [];
+    if (g.length === 0 && e.length === 0) {
+      return { precision: 1, recall: 1, f1: 1, matched: 0, genLines: 0, expLines: 0 };
+    }
+    if (g.length === 0 || e.length === 0) {
+      return { precision: 0, recall: 0, f1: 0, matched: 0, genLines: g.length, expLines: e.length };
+    }
+    const ef = {};
+    const gf = {};
+    for (const x of e) ef[x] = (ef[x] || 0) + 1;
+    for (const x of g) gf[x] = (gf[x] || 0) + 1;
+    let matched = 0;
+    for (const k in gf) {
+      if (ef[k]) matched += Math.min(gf[k], ef[k]);
+    }
+    const precision = matched / g.length;
+    const recall = matched / e.length;
+    const f1 = (precision + recall) > 0 ? (2 * precision * recall) / (precision + recall) : 0;
+    return { precision, recall, f1, matched, genLines: g.length, expLines: e.length };
+  }
+};
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = MetricsCore;
+}
+if (typeof window !== 'undefined') {
+  window.MetricsCore = MetricsCore;
+}
+﻿/**
+ * Resolve the syntax checker used to validate generated Python.
+ *
+ * - A caller-supplied function wins (used by the Node runner, which shells out
+ *   to CPython, and by the browser UI, which uses Skulpt).
+ * - `null`/`false` explicitly skips validation (timing-sensitive callers).
+ * - Otherwise Skulpt is used when it happens to be present in the page.
+ *
+ * Returns `null` when none is available; the caller then reports
+ * `syntaxSuccess: null` instead of claiming success it did not verify.
+ */
+function baselineResolveSyntaxCheck(option) {
+  if (typeof option === 'function') return option;
+  if (option === false || option === null) return null;
+  if (typeof Sk !== 'undefined' && Sk && typeof Sk.parse === 'function') {
+    return function (python) {
+      // Sk.parse is (filename, code), and Skulpt needs the python3 future flag
+      // configured before it can tokenize.
+      if (typeof Sk.configure === 'function' && !Sk.__future__) {
+        Sk.configure({ __future__: Sk.python3 });
+      }
+      Sk.parse('<baseline-translator>', python);
+      return true;
+    };
+  }
+  return null;
+}
+
+/**
+ * Pure rule-based translation. No validation, no I/O: callers that need to
+ * time generation in isolation (the SOP 2 comparison) use this directly so
+ * a syntax check can never leak into the measurement.
+ */
+function baselineTranslateRaw(source) {
+  if (source == null) source = '';
+  let s = String(source);
+  const lines = s.replace(/\r\n/g, '\n').split('\n');
+  const out = [];
+  let indent = 0;
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    line = line.replace(/^\s*(\d+(?:\.\d*)?(?:[):])?)\s+(?=[A-Za-z_])/, '');
+    line = line.replace(/^\s*(\d+)\s*$/, '');
+    const t = line.trim();
+    if (!t) continue;
+    if (t.startsWith('#') || t.startsWith('//')) {
+      out.push('    '.repeat(indent) + t);
+      continue;
+    }
+    const up = t.toUpperCase();
+    if (up === 'BEGIN' || up === 'START') { continue; }
+    if (up === 'END' || up === 'END.') {
+      if (indent > 0) indent--;
+      continue;
+    }
+    if (up.startsWith('END IF') || up === 'ENDIF') { if (indent > 0) indent--; continue; }
+    if (up.startsWith('END WHILE') || up === 'ENDWHILE') { if (indent > 0) indent--; continue; }
+    if (up.startsWith('END FOR') || up === 'ENDFOR') { if (indent > 0) indent--; continue; }
+    if (up.startsWith('END FUNCTION') || up.startsWith('END PROCEDURE') || up === 'ENDFUNCTION' || up === 'ENDPROCEDURE') { if (indent > 0) indent--; continue; }
+    if (up.startsWith('ELSE IF')) { out.push('    '.repeat(Math.max(0, indent - 1)) + 'elif ' + t.slice(7).replace(/\bTHEN\b/i, '') + ':'); continue; }
+    if (up.startsWith('ELSE')) { out.push('    '.repeat(Math.max(0, indent - 1)) + 'else:'); continue; }
+    if (up.startsWith('IF ')) {
+      let cond = t.slice(2);
+      cond = cond.replace(/\bTHEN\b/i, '');
+      out.push('    '.repeat(indent) + 'if ' + cond.trim() + ':');
+      indent++;
+      continue;
+    }
+    if (up.startsWith('WHILE ')) {
+      let cond = t.slice(6);
+      cond = cond.replace(/\bDO\b/i, '');
+      out.push('    '.repeat(indent) + 'while ' + cond.trim() + ':');
+      indent++;
+      continue;
+    }
+    if (up.startsWith('FOR EACH ')) {
+      const m = t.match(/FOR\s+EACH\s+([A-Za-z_][A-Za-z0-9_]*)\s+IN\s+(.+?)\s+DO\b/i);
+      if (m) { out.push('    '.repeat(indent) + 'for ' + m[1] + ' in ' + m[2] + ':'); indent++; continue; }
+    }
+    if (up.startsWith('FOR ')) {
+      const m = t.match(/FOR\s+([A-Za-z_][A-Za-z0-9_]*)\s+FROM\s+(.+?)\s+TO\s+(.+?)(?:\s+STEP\s+(.+?))?\s+DO\b/i);
+      if (m) {
+        const start = (m[2] || '').trim();
+        const end = (m[3] || '').trim();
+        const step = (m[4] || '').trim();
+        let startv = start, stopv = end, stepv = step || '1';
+        try {
+          const sv = parseFloat(start), ev = parseFloat(end), stv = step ? parseFloat(step) : 1;
+          if (!isNaN(sv) && !isNaN(ev)) {
+            if (stv <= 0) { stepv = '1'; }
+            if (stv > 0) {
+              if (sv <= ev) stopv = String(Math.floor(ev - sv) / stv >= 0 ? ev + 1 : ev);
+              else stopv = String(ev);
+            } else {
+              if (sv >= ev) stopv = String(ev - 1);
+              else stopv = String(ev);
+            }
+          }
+        } catch (e) {}
+        const rangeArgs = (stepv && stepv !== '1' && stepv !== '1.0') ? (startv + ',' + stopv + ',' + stepv) : (startv + ',' + stopv);
+        out.push('    '.repeat(indent) + 'for ' + m[1] + ' in range(' + rangeArgs + '):');
+        indent++;
+        continue;
+      }
+    }
+    if (up.startsWith('FUNCTION ') || up.startsWith('PROCEDURE ')) {
+      const m = t.match(/(FUNCTION|PROCEDURE)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)/i);
+      if (m) { out.push('    '.repeat(indent) + 'def ' + m[2] + '(' + m[3].replace(/\s+/g, '') + '):'); indent++; continue; }
+      const m2 = t.match(/(FUNCTION|PROCEDURE)\s+([A-Za-z_][A-Za-z0-9_]+)/i);
+      if (m2) { out.push('    '.repeat(indent) + 'def ' + m2[2] + '():'); indent++; continue; }
+    }
+    if (up.startsWith('RETURN')) { out.push('    '.repeat(indent) + t.replace(/\bRETURN\b/i, 'return')); continue; }
+    if (up.startsWith('CALL ')) { out.push('    '.repeat(indent) + t.replace(/\bCALL\b/i, '').trim()); continue; }
+    if (up.startsWith('DISPLAY') || up.startsWith('PRINT') || up.startsWith('OUTPUT')) { out.push('    '.repeat(indent) + 'print(' + t.replace(/^(DISPLAY|PRINT|OUTPUT)\s*/i, '') + ')'); continue; }
+    if (up.startsWith('INPUT') || up.startsWith('READ')) {
+      const m = t.match(/(INPUT|READ)(?:\s+WITH\s+PROMPT\s+(.+?))?\s+([A-Za-z_][A-Za-z0-9_]*)/i);
+      if (m) { out.push('    '.repeat(indent) + m[3] + ' = input(' + (m[2] || '') + ')'); continue; }
+    }
+    if (up.startsWith('DECLARE ')) { out.push('    '.repeat(indent) + '# ' + t); continue; }
+    if (up.startsWith('SET ')) { out.push('    '.repeat(indent) + t.replace(/\bSET\b/i, '').replace(/\bTO\b/i, '=').trim()); continue; }
+    if (up.startsWith('END ')) { if (indent > 0) indent--; continue; }
+    out.push('    '.repeat(indent) + t);
+  }
+  const generatedPython = out.join('\n');
+  return { generatedPython, translatorId: 'baseline-direct', translatorVersion: '0.1.3' };
+}
+
+/**
+ * Translate and — when a checker is available — verify that the generated
+ * Python actually parses. `success` is derived from that check; it is never
+ * reported true for output that was not validated.
+ */
+function baselineTranslate(source, options) {
+  const raw = baselineTranslateRaw(source);
+  const check = baselineResolveSyntaxCheck(options && options.syntaxCheck);
+  let syntaxSuccess = null;
+  let syntaxError = null;
+  if (check) {
+    try {
+      const r = check(raw.generatedPython);
+      if (r && typeof r === 'object' && typeof r.ok === 'boolean') {
+        syntaxSuccess = r.ok;
+        syntaxError = r.ok ? null : (r.error || r.msg || null);
+      } else {
+        syntaxSuccess = r === undefined ? true : !!r;
+      }
+    } catch (e) {
+      syntaxSuccess = false;
+      syntaxError = (e && e.message) || String(e);
+    }
+  }
+  return Object.assign({}, raw, {
+    success: syntaxSuccess === true,
+    syntaxSuccess,
+    syntaxError,
+    runtimeSuccess: null,
+    runtimeError: null
+  });
+}
+
+if (typeof module !== 'undefined' && module.exports) { module.exports = { baselineTranslate, baselineTranslateRaw }; }
+if (typeof window !== 'undefined') {
+  window.baselineTranslate = baselineTranslate;
+  window.baselineTranslateRaw = baselineTranslateRaw;
+}
+﻿/* ============================================================
+   SOP 2 — comparison panel (DevTools)
+   ------------------------------------------------------------
+   Wires the Compare / Run both / Benchmark / Export JSON /
+   Export CSV buttons to working handlers.
+
+   • Metrics come from the shared MetricsCore (src/research/
+     line-metrics.js), the single source of truth also used by the
+     Node harness. The panel no longer carries its own copy, so
+     precision/recall denominators cannot drift apart again.
+   • Both translators are judged in the SAME Skulpt runtime: syntax
+     via Sk.parse, then real execution via Sk.importMainWithBody.
+   • Generation time is measured around translation only; the
+     compiler instance is created once, outside the timer.
+   ============================================================ */
+(function () {
+  'use strict';
+
+  var METRICS_VERSION = '1.1.0';
+  var MAX_BENCH_CASES = 30;
+  var engineRef = null;
+  var lastDoc = null;
+  var isStale = false;
+
+  function $(id) { return document.getElementById(id); }
+  function setStatus(msg) { var el = $('sop2-status'); if (el) el.textContent = msg || ''; }
+
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = (s == null ? '' : String(s));
+    return d.innerHTML;
+  }
+
+  function round3(n) { return Math.round(n * 1000) / 1000; }
+
+  function download(name, content, mime) {
+    var blob = new Blob([content], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+  }
+
+  function csvCell(v) {
+    var s = (v == null ? '' : String(v));
+    if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
     return s;
   }
-  function markStale(){ isStale=true; if(lastResult && $('sop2-result')) $('sop2-result').innerHTML = '<div class="devtools-idle-message"><p>Results are stale. Re-run to refresh.</p></div>'; }
-  function lineFreq(s){ const map={}; (String(s||'').split(/\r?\n/)).forEach(x=>{const t=x.trim(); if(t) map[t]=(map[t]||0)+1;}); return map; }
-  function lineMetrics(gen,exp){
-    const g=lineFreq(gen), e=lineFreq(exp);
-    let m=0; for(const k in g){ if(e[k]) m += Math.min(g[k],e[k]); }
-    const elines = Object.values(e).reduce((a,b)=>a+b,0)||0;
-    const glines = Object.values(g).reduce((a,b)=>a+b,0)||0;
-    const p = elines? m/elines : (glines?0:1);
-    const r = glines? m/glines : (elines?0:1);
-    const f1 = (p+r)===0?0:(2*p*r)/(p+r);
-    return {precision:p,recall:r,f1,matched:m,refLines:elines,genLines:glines};
+
+  function flag(v) { return v === true ? '1' : v === false ? '0' : ''; }
+
+  function metricsOf(gen, exp) {
+    if (typeof MetricsCore === 'undefined' || !MetricsCore || typeof MetricsCore.lineMetrics !== 'function') {
+      throw new Error('MetricsCore not loaded (build the devtools bundle)');
+    }
+    return MetricsCore.lineMetrics(gen || '', exp || '');
   }
-  function pySyntaxCheck(py){
-    if(!py) return {ok:false,msg:'Empty Python'};
-    try{
-      if(typeof Sk==='undefined') return {ok:true,msg:'Skulpt not loaded (syntax check skipped)'};
-      Sk.parse(py,'<sop2-check>');
-      return {ok:true,msg:'OK'};
-    }catch(e){ return {ok:false,msg:e.toString()}; }
+
+  function norm(src) {
+    var s = src || '';
+    if (typeof normalizeUnicodeOperators === 'function') s = normalizeUnicodeOperators(s);
+    if (typeof normalizeLineNumbers === 'function') s = normalizeLineNumbers(s);
+    return s;
   }
-  function normalizeForCompare(src){ let s=src||''; if(typeof normalizeUnicodeOperators==='function') s=normalizeUnicodeOperators(s); if(typeof normalizeLineNumbers==='function') s=normalizeLineNumbers(s); return s; }
-  function setBusy(busy){
-    const ids=['sop2-compare','sop2-run','sop2-bench','sop2-export-json','sop2-export-csv','norm-preview','norm-apply','norm-copy'];
-    ids.forEach(id=>{const el=$(id); if(el) el.disabled=busy;});
+
+  function getEngine() {
+    if (engineRef) return engineRef;
+    if (typeof PseudocodeCompiler === 'undefined') throw new Error('Compiler not loaded');
+    engineRef = new PseudocodeCompiler();
+    return engineRef;
   }
-  function wire(){
-    const sSrc=$('sop2-src'), sRef=$('sop2-ref');
-    if(sSrc) sSrc.addEventListener('input',markStale);
-    if(sRef) sRef.addEventListener('input',markStale);
+
+  function readSource() {
+    var a = $('sop2-src');
+    if (a && a.value) return a.value;
+    var b = $('devtools-pseudocode');
+    return (b && b.value) || '';
+  }
+  function readRef() { var r = $('sop2-ref'); return (r && r.value) || ''; }
+
+  // ── Skulpt: one runtime for both translators ────────────────
+  function ensureSk() {
+    return new Promise(function (resolve) {
+      if (typeof Sk !== 'undefined') { resolve(true); return; }
+      if (typeof ensureSkulptLoaded !== 'function') { resolve(false); return; }
+      ensureSkulptLoaded(function () { resolve(true); }, function () { resolve(false); });
+    });
+  }
+
+  function skSyntax(py) {
+    if (typeof Sk === 'undefined' || typeof Sk.parse !== 'function') {
+      return { ok: null, error: 'Skulpt runtime unavailable' };
+    }
+    try {
+      // Skulpt needs the python3 future flag before Sk.parse; without it the
+      // tokenizer dereferences an unset Sk.__future__. Argument order is
+      // Sk.parse(filename, code).
+      if (typeof Sk.configure === 'function' && !Sk.__future__) {
+        Sk.configure({ __future__: Sk.python3 });
+      }
+      Sk.parse('<sop2-syntax>', py);
+      return { ok: true, error: null };
+    } catch (e) {
+      return { ok: false, error: (e && e.toString) ? e.toString() : String(e) };
+    }
+  }
+
+  function skRun(py) {
+    if (typeof Sk === 'undefined') {
+      return Promise.resolve({ ok: null, error: 'Skulpt runtime unavailable', stdout: '' });
+    }
+    var out = [];
+    var limitOpts = (typeof skulptExecLimitOptions === 'function')
+      ? skulptExecLimitOptions()
+      : { execLimit: 15000 };
+    Sk.configure(Object.assign({
+      output: function (text) { out.push(text); },
+      read: function (x) {
+        if (Sk.builtinFiles === undefined || Sk.builtinFiles['files'][x] === undefined) {
+          throw "File not found: '" + x + "'";
+        }
+        return Sk.builtinFiles['files'][x];
+      },
+      inputfun: function () { return ''; },
+      inputfunTakesPrompt: true,
+      __future__: Sk.python3
+    }, limitOpts));
+    return Sk.misceval.asyncToPromise(function () {
+      return Sk.importMainWithBody('<sop2>', false, py, true);
+    }).then(function () {
+      return { ok: true, error: null, stdout: out.join('') };
+    }).catch(function (e) {
+      return { ok: false, error: (e && e.toString) ? e.toString() : String(e), stdout: out.join('') };
+    });
+  }
+
+  // ── Case construction ───────────────────────────────────────
+  function buildCase(src, ref, withRuntime) {
+    var engine = getEngine();
+
+    var p0 = performance.now();
+    var pRes;
+    try {
+      pRes = engine.compile(src);
+    } catch (e) {
+      pRes = { valid: false, python: '', errors: [e.message || String(e)] };
+    }
+    var p1 = performance.now();
+
+    var rawFn = (typeof baselineTranslateRaw === 'function') ? baselineTranslateRaw : baselineTranslate;
+    var bGen = '';
+    var b0 = performance.now();
+    try {
+      bGen = (rawFn(src) || {}).generatedPython || '';
+    } catch (e) { bGen = ''; }
+    var b1 = performance.now();
+
+    var ppPython = pRes.python || '';
+    var ppSyntax = skSyntax(ppPython);
+    var blSyntax = skSyntax(bGen);
+
+    var result = {
+      caseId: 'ui',
+      title: null,
+      input: src,
+      expectedPython: ref,
+      pseudopy: {
+        generatedPython: ppPython,
+        compileSuccess: !!pRes.valid,
+        syntaxSuccess: ppSyntax.ok,
+        syntaxError: ppSyntax.error,
+        runtimeSuccess: null,
+        runtimeError: null,
+        stdout: '',
+        generationTimeMs: round3(p1 - p0),
+        errors: pRes.errors || []
+      },
+      baseline: {
+        generatedPython: bGen,
+        compileSuccess: blSyntax.ok === true,
+        syntaxSuccess: blSyntax.ok,
+        syntaxError: blSyntax.error,
+        runtimeSuccess: null,
+        runtimeError: null,
+        stdout: '',
+        generationTimeMs: round3(b1 - b0)
+      },
+      metrics: {
+        pseudopy: metricsOf(ppPython, ref),
+        baseline: metricsOf(bGen, ref)
+      }
+    };
+
+    if (!withRuntime) return Promise.resolve(result);
+
+    var jobs = [];
+    if (result.pseudopy.syntaxSuccess === true) {
+      jobs.push(skRun(ppPython).then(function (r) {
+        result.pseudopy.runtimeSuccess = r.ok;
+        result.pseudopy.runtimeError = r.error;
+        result.pseudopy.stdout = r.stdout;
+      }));
+    }
+    if (result.baseline.syntaxSuccess === true) {
+      jobs.push(skRun(bGen).then(function (r) {
+        result.baseline.runtimeSuccess = r.ok;
+        result.baseline.runtimeError = r.error;
+        result.baseline.stdout = r.stdout;
+      }));
+    }
+    return Promise.all(jobs).then(function () { return result; });
+  }
+
+  // ── Summary / documents ─────────────────────────────────────
+  function average(values) {
+    if (!values.length) return 0;
+    var total = 0;
+    for (var i = 0; i < values.length; i++) total += values[i];
+    return total / values.length;
+  }
+
+  function summarize(results) {
+    function side(key) {
+      var rows = results.map(function (r) { return r[key]; });
+      var mets = results.map(function (r) { return r.metrics[key]; });
+      return {
+        cases: rows.length,
+        compileSuccess: rows.filter(function (r) { return r.compileSuccess; }).length,
+        syntaxSuccess: rows.filter(function (r) { return r.syntaxSuccess === true; }).length,
+        runtimeSuccess: rows.filter(function (r) { return r.runtimeSuccess === true; }).length,
+        avgPrecision: average(mets.map(function (m) { return m.precision; })),
+        avgRecall: average(mets.map(function (m) { return m.recall; })),
+        avgF1: average(mets.map(function (m) { return m.f1; })),
+        avgGenerationTimeMs: round3(average(rows.map(function (r) { return r.generationTimeMs; })))
+      };
+    }
+    return { cases: results.length, pseudopy: side('pseudopy'), baseline: side('baseline') };
+  }
+
+  function buildDoc(results, kind) {
+    return {
+      metadata: {
+        timestamp: new Date().toISOString(),
+        cases: results.length,
+        kind: kind || 'compare',
+        compiler: 'PseudoPy',
+        baseline: 'direct-line-based',
+        runtime: 'Skulpt',
+        metricsVersion: METRICS_VERSION
+      },
+      summary: summarize(results),
+      results: results
+    };
+  }
+
+  var CSV_COLUMNS = [
+    'caseId', 'title',
+    'pp_compile', 'pp_syntax', 'pp_runtime', 'pp_p', 'pp_r', 'pp_f1', 'pp_time_ms',
+    'bl_compile', 'bl_syntax', 'bl_runtime', 'bl_p', 'bl_r', 'bl_f1', 'bl_time_ms'
+  ];
+
+  function toCSV(doc) {
+    var results = doc.results || [];
+    var lines = [CSV_COLUMNS.join(',')];
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      lines.push([
+        r.caseId, r.title,
+        flag(r.pseudopy.compileSuccess), flag(r.pseudopy.syntaxSuccess), flag(r.pseudopy.runtimeSuccess),
+        r.metrics.pseudopy.precision, r.metrics.pseudopy.recall, r.metrics.pseudopy.f1, r.pseudopy.generationTimeMs,
+        flag(r.baseline.compileSuccess), flag(r.baseline.syntaxSuccess), flag(r.baseline.runtimeSuccess),
+        r.metrics.baseline.precision, r.metrics.baseline.recall, r.metrics.baseline.f1, r.baseline.generationTimeMs
+      ].map(csvCell).join(','));
+    }
+    return lines.join('\n') + '\n';
+  }
+
+  // ── Rendering ───────────────────────────────────────────────
+  function boolCell(v) {
+    if (v === true) return '<span class="sop2-ok">yes</span>';
+    if (v === false) return '<span class="sop2-bad">no</span>';
+    return '<span class="sop2-na">n/a</span>';
+  }
+
+  function numCell(v, digits) {
+    return (typeof v === 'number' ? v.toFixed(digits) : 'n/a');
+  }
+
+  function renderCase(r) {
+    var pm = r.metrics.pseudopy, bm = r.metrics.baseline;
+    var pp = r.pseudopy, bl = r.baseline;
+    var html = '<table class="sop2-table"><tr><th>Metric</th><th>Baseline</th><th>PseudoPy</th><th>Diff (PseudoPy &minus; Baseline)</th></tr>';
+    html += '<tr><td>Precision</td><td>' + numCell(bm.precision, 3) + '</td><td>' + numCell(pm.precision, 3) + '</td><td>' + (pm.precision - bm.precision).toFixed(3) + '</td></tr>';
+    html += '<tr><td>Recall</td><td>' + numCell(bm.recall, 3) + '</td><td>' + numCell(pm.recall, 3) + '</td><td>' + (pm.recall - bm.recall).toFixed(3) + '</td></tr>';
+    html += '<tr><td>F1</td><td>' + numCell(bm.f1, 3) + '</td><td>' + numCell(pm.f1, 3) + '</td><td>' + (pm.f1 - bm.f1).toFixed(3) + '</td></tr>';
+    html += '<tr><td>Compile success</td><td>' + boolCell(bl.compileSuccess) + '</td><td>' + boolCell(pp.compileSuccess) + '</td><td></td></tr>';
+    html += '<tr><td>Syntax valid</td><td>' + boolCell(bl.syntaxSuccess) + '</td><td>' + boolCell(pp.syntaxSuccess) + '</td><td></td></tr>';
+    html += '<tr><td>Runtime success</td><td>' + boolCell(bl.runtimeSuccess) + '</td><td>' + boolCell(pp.runtimeSuccess) + '</td><td></td></tr>';
+    html += '<tr><td>Generation time (ms)</td><td>' + numCell(bl.generationTimeMs, 3) + '</td><td>' + numCell(pp.generationTimeMs, 3) + '</td><td></td></tr>';
+    html += '</table>';
+    var errors = [];
+    if (pp.syntaxError) errors.push('PseudoPy syntax: ' + pp.syntaxError);
+    if (pp.runtimeError) errors.push('PseudoPy runtime: ' + pp.runtimeError);
+    if (bl.syntaxError) errors.push('Baseline syntax: ' + bl.syntaxError);
+    if (bl.runtimeError) errors.push('Baseline runtime: ' + bl.runtimeError);
+    if (errors.length) {
+      html += '<pre class="sop2-errors">' + errors.map(esc).join('\n') + '</pre>';
+    }
+    return html;
+  }
+
+  function renderSummary(doc) {
+    var pp = doc.summary.pseudopy, bl = doc.summary.baseline;
+    var html = '<p class="sop2-caption">' + doc.results.length + ' cases &middot; ' + esc(doc.metadata.kind) + '</p>';
+    html += '<table class="sop2-table"><tr><th>Metric</th><th>Baseline</th><th>PseudoPy</th></tr>';
+    html += '<tr><td>Avg precision</td><td>' + numCell(bl.avgPrecision, 3) + '</td><td>' + numCell(pp.avgPrecision, 3) + '</td></tr>';
+    html += '<tr><td>Avg recall</td><td>' + numCell(bl.avgRecall, 3) + '</td><td>' + numCell(pp.avgRecall, 3) + '</td></tr>';
+    html += '<tr><td>Avg F1</td><td>' + numCell(bl.avgF1, 3) + '</td><td>' + numCell(pp.avgF1, 3) + '</td></tr>';
+    html += '<tr><td>Compile success</td><td>' + bl.compileSuccess + '/' + bl.cases + '</td><td>' + pp.compileSuccess + '/' + pp.cases + '</td></tr>';
+    html += '<tr><td>Syntax valid</td><td>' + bl.syntaxSuccess + '/' + bl.cases + '</td><td>' + pp.syntaxSuccess + '/' + pp.cases + '</td></tr>';
+    html += '<tr><td>Runtime success</td><td>' + bl.runtimeSuccess + '/' + bl.cases + '</td><td>' + pp.runtimeSuccess + '/' + pp.cases + '</td></tr>';
+    html += '<tr><td>Avg generation time (ms)</td><td>' + numCell(bl.avgGenerationTimeMs, 3) + '</td><td>' + numCell(pp.avgGenerationTimeMs, 3) + '</td></tr>';
+    html += '</table>';
+    return html;
+  }
+
+  function renderDoc(doc) {
+    lastDoc = doc;
+    isStale = false;
+    var host = $('sop2-result');
+    if (host) host.innerHTML = doc.results.length === 1 ? renderCase(doc.results[0]) : renderSummary(doc);
+    updateExportState();
+  }
+
+  function updateExportState() {
+    var enabled = !!lastDoc && !isStale;
+    ['sop2-export-json', 'sop2-export-csv'].forEach(function (id) {
+      var el = $(id);
+      if (el) el.disabled = !enabled;
+    });
+  }
+
+  function setBusy(busy) {
+    ['sop2-compare', 'sop2-run', 'sop2-bench', 'sop2-export-json', 'sop2-export-csv'].forEach(function (id) {
+      var el = $(id);
+      if (el) el.disabled = busy;
+    });
+    if (!busy) updateExportState();
+  }
+
+  function markStale() {
+    isStale = true;
+    var host = $('sop2-result');
+    if (host && lastDoc) {
+      host.innerHTML = '<div class="devtools-idle-message"><p>Results are stale. Re-run to refresh.</p></div>';
+    }
+    updateExportState();
+  }
+
+  // ── Handlers ────────────────────────────────────────────────
+  function runCompare(withRuntime) {
+    var src = norm(readSource());
+    var ref = readRef();
+    if (!src) { setStatus('Enter pseudocode'); return; }
+    if (!ref) { setStatus('Enter reference Python'); return; }
+    setBusy(true);
+    setStatus(withRuntime ? 'Translating and running...' : 'Translating...');
+    return ensureSk().then(function () {
+      return buildCase(src, ref, withRuntime);
+    }).then(function (result) {
+      var doc = buildDoc([result], withRuntime ? 'run' : 'compare');
+      renderDoc(doc);
+      setStatus(withRuntime ? 'Ran both in Skulpt' : 'Compared');
+      return doc;
+    }).catch(function (e) {
+      setStatus('Error: ' + ((e && e.message) || e));
+      return null;
+    }).then(function (doc) { setBusy(false); return doc; });
+  }
+
+  function runBenchmark() {
+    if (typeof SEED_EXERCISES_LIST === 'undefined' || !SEED_EXERCISES_LIST.length) {
+      setStatus('Seed exercises unavailable');
+      return;
+    }
+    var seeds = SEED_EXERCISES_LIST.slice(0, MAX_BENCH_CASES);
+    setBusy(true);
+    setStatus('Benchmarking ' + seeds.length + ' cases...');
+    return ensureSk().then(function () {
+      var results = [];
+      function step(i) {
+        if (i >= seeds.length) return Promise.resolve(results);
+        var ex = seeds[i];
+        var src = ex.pseudocode || ex.code || '';
+        var ref = ex.python_code || ex.solution || ex.pythonCode || '';
+        if (!src) return step(i + 1);
+        setStatus('Benchmarking ' + (i + 1) + '/' + seeds.length + '...');
+        return buildCase(src, ref, false).then(function (r) {
+          r.caseId = ex.id || ('case_' + (i + 1));
+          r.title = ex.title || null;
+          results.push(r);
+          return step(i + 1);
+        });
+      }
+      return step(0);
+    }).then(function (results) {
+      var doc = buildDoc(results, 'benchmark');
+      renderDoc(doc);
+      setStatus('Benchmark done (' + results.length + ' cases)');
+      return doc;
+    }).catch(function (e) {
+      setStatus('Error: ' + ((e && e.message) || e));
+      return null;
+    }).then(function (doc) { setBusy(false); return doc; });
+  }
+
+  function exportJSON() {
+    if (!lastDoc || isStale) return;
+    download('sop2-comparison-results.json', JSON.stringify(lastDoc, null, 2) + '\n', 'application/json');
+    setStatus('Exported JSON');
+  }
+
+  function exportCSV() {
+    if (!lastDoc || isStale) return;
+    download('sop2-comparison-results.csv', toCSV(lastDoc), 'text/csv');
+    setStatus('Exported CSV');
+  }
+
+  function bind(id, handler) {
+    var el = $(id);
+    if (el) el.addEventListener('click', function () { handler(); });
+  }
+
+  function setupNorm() {
+    var normIn = $('norm-input'), normOut = $('norm-output'), normPrev = $('norm-preview'),
+      normApply = $('norm-apply'), normCopy = $('norm-copy'), normDiff = $('norm-diff');
+    if (normPrev) {
+      normPrev.addEventListener('click', function () {
+        if (!normIn) return;
+        var s = norm(normIn.value || '');
+        if (normOut) normOut.value = s;
+        if (normDiff) normDiff.textContent = (normIn.value === s) ? 'No changes.' : 'Normalized.';
+      });
+    }
+    if (normApply) {
+      normApply.addEventListener('click', function () {
+        var src = $('devtools-pseudocode');
+        if (src && normOut && normOut.value) {
+          src.value = normOut.value;
+          if (typeof showToast === 'function') showToast('Applied normalized source to editor.', 'success');
+          markStale();
+        }
+      });
+    }
+    if (normCopy) {
+      normCopy.addEventListener('click', function () {
+        if (normOut && normOut.value && navigator.clipboard) {
+          navigator.clipboard.writeText(normOut.value).then(function () {
+            if (typeof showToast === 'function') showToast('Copied.', 'success');
+          }).catch(function () {});
+        }
+      });
+    }
+    if (normIn) {
+      normIn.addEventListener('input', function () { if (normDiff) normDiff.textContent = ''; });
+    }
+  }
+
+  function wire() {
+    bind('sop2-compare', function () { runCompare(false); });
+    bind('sop2-run', function () { runCompare(true); });
+    bind('sop2-bench', runBenchmark);
+    bind('sop2-export-json', exportJSON);
+    bind('sop2-export-csv', exportCSV);
+    var s = $('sop2-src'), r = $('sop2-ref');
+    if (s) s.addEventListener('input', markStale);
+    if (r) r.addEventListener('input', markStale);
+    setBusy(false);
+    updateExportState();
     setupNorm();
   }
-  function setupNorm(){
-    const normIn=$('norm-input'), normOut=$('norm-output'), normPrev=$('norm-preview'), normApply=$('norm-apply'), normCopy=$('norm-copy'), normDiff=$('norm-diff');
-    if(normPrev){ normPrev.addEventListener('click',function(){ if(!normIn)return; let s=normIn.value||''; s=normalizeForCompare(s); if(normOut) normOut.value=s; if(normDiff) normDiff.textContent=(normIn.value===s)?'No changes.':'Normalized.'; }); }
-    if(normApply){ normApply.addEventListener('click',function(){ const src=$('devtools-pseudocode'); if(src&&normOut&&normOut.value){ src.value=normOut.value; if(typeof showToast==='function') showToast('Applied normalized source to editor.','success'); markStale(); }}); }
-    if(normCopy){ normCopy.addEventListener('click',async function(){ if(normOut&&normOut.value){ try{await navigator.clipboard.writeText(normOut.value); if(showToast) showToast('Copied.','success');}catch(e){} }}); }
-    if(normIn) normIn.addEventListener('input',()=>{ if(normDiff) normDiff.textContent=''; });
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wire); else wire();
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
+  else wire();
+
+  // Small debug surface for the console / tooling.
+  window.__sop2ui = {
+    compare: function () { return runCompare(false); },
+    runBoth: function () { return runCompare(true); },
+    benchmark: runBenchmark,
+    lastDoc: function () { return lastDoc; }
+  };
 })();
 function _esc(str) {
     if (str === null || str === undefined) return '';

@@ -7339,6 +7339,42 @@ tr.skeleton-tr td {
   color: var(--dt-text-subtle);
 }
 
+/* SOP2 comparison panel */
+.sop2-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.sop2-table th,
+.sop2-table td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}
+
+.sop2-table th {
+  color: var(--dt-text-subtle);
+  font-weight: 600;
+}
+
+.sop2-ok { color: var(--success, #2e7d32); }
+.sop2-bad { color: var(--danger, #c62828); }
+.sop2-na { color: var(--dt-text-subtle); }
+
+.sop2-caption {
+  margin: 0 0 0.5rem;
+  color: var(--dt-text-subtle);
+  font-size: 0.85rem;
+}
+
+.sop2-errors {
+  margin-top: 0.75rem;
+  white-space: pre-wrap;
+  color: var(--danger, #c62828);
+  font-size: 0.8rem;
+}
+
 /* Runtime Console */
 .devtools-console {
   background: var(--dt-surface);

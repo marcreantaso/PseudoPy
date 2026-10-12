@@ -1,4 +1,37 @@
-﻿function baselineTranslate(source) {
+﻿/**
+ * Resolve the syntax checker used to validate generated Python.
+ *
+ * - A caller-supplied function wins (used by the Node runner, which shells out
+ *   to CPython, and by the browser UI, which uses Skulpt).
+ * - `null`/`false` explicitly skips validation (timing-sensitive callers).
+ * - Otherwise Skulpt is used when it happens to be present in the page.
+ *
+ * Returns `null` when none is available; the caller then reports
+ * `syntaxSuccess: null` instead of claiming success it did not verify.
+ */
+function baselineResolveSyntaxCheck(option) {
+  if (typeof option === 'function') return option;
+  if (option === false || option === null) return null;
+  if (typeof Sk !== 'undefined' && Sk && typeof Sk.parse === 'function') {
+    return function (python) {
+      // Sk.parse is (filename, code), and Skulpt needs the python3 future flag
+      // configured before it can tokenize.
+      if (typeof Sk.configure === 'function' && !Sk.__future__) {
+        Sk.configure({ __future__: Sk.python3 });
+      }
+      Sk.parse('<baseline-translator>', python);
+      return true;
+    };
+  }
+  return null;
+}
+
+/**
+ * Pure rule-based translation. No validation, no I/O: callers that need to
+ * time generation in isolation (the SOP 2 comparison) use this directly so
+ * a syntax check can never leak into the measurement.
+ */
+function baselineTranslateRaw(source) {
   if (source == null) source = '';
   let s = String(source);
   const lines = s.replace(/\r\n/g, '\n').split('\n');
@@ -77,19 +110,56 @@
       if (m2) { out.push('    '.repeat(indent) + 'def ' + m2[2] + '():'); indent++; continue; }
     }
     if (up.startsWith('RETURN')) { out.push('    '.repeat(indent) + t.replace(/\bRETURN\b/i, 'return')); continue; }
-    if (up.startsWith('CALL ')) { out.push('    '.repeat(indent) + t.replace(/\bCALL\b/i, '')); continue; }
+    if (up.startsWith('CALL ')) { out.push('    '.repeat(indent) + t.replace(/\bCALL\b/i, '').trim()); continue; }
     if (up.startsWith('DISPLAY') || up.startsWith('PRINT') || up.startsWith('OUTPUT')) { out.push('    '.repeat(indent) + 'print(' + t.replace(/^(DISPLAY|PRINT|OUTPUT)\s*/i, '') + ')'); continue; }
     if (up.startsWith('INPUT') || up.startsWith('READ')) {
       const m = t.match(/(INPUT|READ)(?:\s+WITH\s+PROMPT\s+(.+?))?\s+([A-Za-z_][A-Za-z0-9_]*)/i);
       if (m) { out.push('    '.repeat(indent) + m[3] + ' = input(' + (m[2] || '') + ')'); continue; }
     }
     if (up.startsWith('DECLARE ')) { out.push('    '.repeat(indent) + '# ' + t); continue; }
-    if (up.startsWith('SET ')) { out.push('    '.repeat(indent) + t.replace(/\bSET\b/i, '').replace(/\bTO\b/i, '=')); continue; }
+    if (up.startsWith('SET ')) { out.push('    '.repeat(indent) + t.replace(/\bSET\b/i, '').replace(/\bTO\b/i, '=').trim()); continue; }
     if (up.startsWith('END ')) { if (indent > 0) indent--; continue; }
     out.push('    '.repeat(indent) + t);
   }
   const generatedPython = out.join('\n');
-  return { generatedPython, success: true, syntaxSuccess: null, runtimeSuccess: null, translatorId: 'baseline-direct', translatorVersion: '0.1.1' };
+  return { generatedPython, translatorId: 'baseline-direct', translatorVersion: '0.1.3' };
 }
-if (typeof module !== 'undefined' && module.exports) { module.exports = { baselineTranslate }; }
-if (typeof window !== 'undefined') { window.baselineTranslate = baselineTranslate; }
+
+/**
+ * Translate and — when a checker is available — verify that the generated
+ * Python actually parses. `success` is derived from that check; it is never
+ * reported true for output that was not validated.
+ */
+function baselineTranslate(source, options) {
+  const raw = baselineTranslateRaw(source);
+  const check = baselineResolveSyntaxCheck(options && options.syntaxCheck);
+  let syntaxSuccess = null;
+  let syntaxError = null;
+  if (check) {
+    try {
+      const r = check(raw.generatedPython);
+      if (r && typeof r === 'object' && typeof r.ok === 'boolean') {
+        syntaxSuccess = r.ok;
+        syntaxError = r.ok ? null : (r.error || r.msg || null);
+      } else {
+        syntaxSuccess = r === undefined ? true : !!r;
+      }
+    } catch (e) {
+      syntaxSuccess = false;
+      syntaxError = (e && e.message) || String(e);
+    }
+  }
+  return Object.assign({}, raw, {
+    success: syntaxSuccess === true,
+    syntaxSuccess,
+    syntaxError,
+    runtimeSuccess: null,
+    runtimeError: null
+  });
+}
+
+if (typeof module !== 'undefined' && module.exports) { module.exports = { baselineTranslate, baselineTranslateRaw }; }
+if (typeof window !== 'undefined') {
+  window.baselineTranslate = baselineTranslate;
+  window.baselineTranslateRaw = baselineTranslateRaw;
+}
