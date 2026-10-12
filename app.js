@@ -80,7 +80,8 @@ const STORAGE_KEYS = {
     UPDATE_DISMISSED: 'pseudopy_update_dismissed',
     GUIDE_MODE: 'pseudopy_guide_mode',
     LOCAL_PREFIX: 'pseudopy_local_'
-};﻿/* ============================================================
+};
+﻿/* ============================================================
    PSEUDOPY — APP.JS
    Automated Code Generation System
    Powered by Offline LocalStorage Database
@@ -126,7 +127,7 @@ let editingInstructorId = null;
 
 /* ============================================================
    APP VERSION — injected at build time from package.json
-   The build substitutes 1.0.0 with the package
+   The build substitutes the version placeholder with the package
    version so the version is never hardcoded in this repo.
    ============================================================ */
 
@@ -162,7 +163,8 @@ function renderSystemInfo() {
         const value = appInfoField(window.APP_INFO.contactEmail, 'contactEmail');
         contact.textContent = value || '—';
     }
-}/* ============================================================
+}
+/* ============================================================
    APP / SYSTEM IDENTITY — single source of truth
    Used by the Privacy, Terms and About surfaces. Do not put
    secrets or confidential material here; it ships to browsers.
@@ -255,7 +257,8 @@ function appInfoField(value, key) {
 /** True while any owner-facing configuration is still missing. */
 function appInfoPending() {
     return appInfoMissingFields().length > 0;
-}/* ============================================================
+}
+/* ============================================================
    PYTHON OUTPUT — LINE NUMBER RENDERER
    Renders Python code with a styled line-number gutter.
    Used by all translation output panels.
@@ -538,7 +541,8 @@ function ensurePdfJsLoaded() {
         }, reject);
     });
     return ensureLoadedPromises.pdfjs;
-}/* ============================================================
+}
+/* ============================================================
    INITIALIZATION
    ============================================================ */
 
@@ -2006,7 +2010,8 @@ async function restoreSession() {
         settleBoot();
         return { state: BOOT_UNAUTHENTICATED, user: null, route: '' };
     }
-}/* ============================================================
+}
+/* ============================================================
    NAVIGATION
    ============================================================ */
 
@@ -4572,7 +4577,8 @@ if (typeof document !== 'undefined') {
     } else {
         initStudentDeletionUi();
     }
-}/* ============================================================
+}
+/* ============================================================
    USER MANAGEMENT (Admin) — Manage Instructors
    ============================================================ */
 
@@ -5902,7 +5908,8 @@ async function runStudentNumberMigration() {
             runBtn.innerHTML = '{{ui:CheckCheck}} Migrate Now';
         }
     }
-}/* ============================================================
+}
+/* ============================================================
    ANALYTICS AGGREGATION — pure data builders
    No DOM access. Suite-testable in Node and shared by the
    browser chart renderer (analytics-charts.js).
@@ -10258,7 +10265,8 @@ function setupRealtimeValidation() {
     editor.addEventListener('input', run);
     editor.addEventListener('compositionstart', () => { editor.dataset.composing = 'true'; });
     editor.addEventListener('compositionend', () => { editor.dataset.composing = 'false'; run(); });
-}/* ============================================================
+}
+/* ============================================================
    PSEUDOPY LEARNING LAYER — Shared Types & Constants
    ------------------------------------------------------------
    Structured, deterministic model used by the validation engine,
@@ -10598,7 +10606,8 @@ PseudoPyLearning.types = {
     makeDetectedPattern: makeDetectedPattern,
     makeFeedbackCluster: makeFeedbackCluster,
     defaultCategoryForType: defaultCategoryForType
-};/* ============================================================
+};
+/* ============================================================
    PSEUDOPY LEARNING LAYER — Validation Engine
    ------------------------------------------------------------
    Converts the compiler pipeline output (errors + warnings + AST
@@ -11092,7 +11101,8 @@ PseudoPyLearning.register.validationEngine = {
     summarizeValidation: summarizeValidation,
     gapCategoryForResultType: gapCategoryForResultType,
     computeAstMaxNesting: computeAstMaxNesting
-};/* ============================================================
+};
+/* ============================================================
    PSEUDOPY LEARNING LAYER — Pattern Detector
    ------------------------------------------------------------
    Walks the parser AST and recognises the common algorithmic
@@ -11557,7 +11567,8 @@ PseudoPyLearning.register.patternDetector = {
         }
         return 0;
     }
-};/* ============================================================
+};
+/* ============================================================
    PSEUDOPY LEARNING LAYER — Feedback Clustering
    ------------------------------------------------------------
    Groups the structured ValidationResults and DetectedPatterns
@@ -11682,7 +11693,8 @@ PseudoPyLearning.register.feedbackClusterer = {
     clusterState: clusterState,
     overallVerdict: overallVerdict,
     LEARNING_CATEGORY_ORDER: LEARNING_CATEGORY_ORDER
-};/* ============================================================
+};
+/* ============================================================
    PSEUDOPY LEARNING LAYER — Feedback Pipeline
    ------------------------------------------------------------
    Orchestrates validation → pattern detection → clustering into
@@ -11742,7 +11754,8 @@ function uniqueSorted(arr) {
 PseudoPyLearning.register.pipeline = {
     run: runLearningPipeline,
     uniqueSorted: uniqueSorted
-};/* ============================================================
+};
+/* ============================================================
    PSEUDOPY LEARNING LAYER — Learning UI
    ------------------------------------------------------------
    Renders the post-translation Learning Panel on the Write
@@ -11864,7 +11877,8 @@ PseudoPyLearning.register.learningUi = {
     clearLearningPanel: clearLearningPanel,
     buildClusterCard: buildClusterCard,
     suggestNextStep: suggestNextStep
-};/* ============================================================
+};
+/* ============================================================
    TOUR STEP DEFINITIONS — data only (no DOM, no state, no I/O)
    Each step may declare a `page` (navigation route) containing its
    target, so the tutorial controller can navigate students there
@@ -11924,7 +11938,8 @@ const TOUR_STEPS = [
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { TOUR_STEPS };
-}/* ============================================================
+}
+/* ============================================================
    TOUR MODEL — pure step progression (no DOM, no state, no I/O)
    The controller keeps one model instance per tutorial run so all
    boundary/skip logic is testable under Node.
@@ -11954,7 +11969,8 @@ function createTourModel(steps) {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { createTourModel };
-}/* ============================================================
+}
+/* ============================================================
    PSEUDOPY LEARNING LAYER — Beginner Tutorial (Onboarding)
    ------------------------------------------------------------
    A step-by-step guided tour of the Write Pseudocode page for
@@ -12300,7 +12316,8 @@ PseudoPyLearning.register.onboarding = {
     stop: onbStop,
     autoStart: maybeAutoStartTutorial,
     isCompleted: onbGetCompleted
-};/* ============================================================
+};
+/* ============================================================
    PSEUDOPY TOUR POSITIONING — pure viewport-aware geometry
    ------------------------------------------------------------
    Kept free of DOM so it can be unit-tested under Node. The
@@ -12399,7 +12416,8 @@ function rectOf(c, width, height) {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { computeTourBubbleRect };
-}/* ============================================================
+}
+/* ============================================================
    PSEUDOPY LEARNING LAYER — Evidence Store
    ------------------------------------------------------------
    Persists one EvidenceRecord per translation attempt for
@@ -12795,7 +12813,8 @@ const StudentGuide = (() => {
     }
     return { entries, operators, tip, insert };
 })();
-if (typeof module !== 'undefined' && module.exports) module.exports = StudentGuide;/* Student-only workspace. Consumes cached compiler results; never invokes devtools.
+if (typeof module !== 'undefined' && module.exports) module.exports = StudentGuide;
+/* Student-only workspace. Consumes cached compiler results; never invokes devtools.
 
    The dashboard is a three-tab surface. Workspace holds everything the
    student already had (editor, Python output, console, Translate/Run/Submit),
@@ -13341,7 +13360,8 @@ function masteryInfo(accuracy) {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { formatPercent, formatDuration, formatMetricValue, MASTERY_LEVELS, masteryInfo };
-}/* ============================================================
+}
+/* ============================================================
    COMPILER METRICS DASHBOARD (Panel 1 — Evaluation)
    Benchmark runner, session metrics, and improvement tracking
    ============================================================ */
@@ -14212,7 +14232,8 @@ if (typeof document !== 'undefined') {
     } else {
         initA11y();
     }
-}/* ============================================================
+}
+/* ============================================================
    LEGAL / ABOUT PAGES (Privacy Policy, Terms of Use)
    In-app document views reachable before and after sign-in.
    Content lives in the index.html #legal-pages sections and

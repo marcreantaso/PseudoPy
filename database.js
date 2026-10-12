@@ -1335,7 +1335,8 @@ async function ensureOfflineDataMigration() {
     } catch (e) {
         console.info('[Offline] Migration skipped (best-effort):', e && e.message);
     }
-}/* ============================================================
+}
+/* ============================================================
    OFFLINE MUTATION QUEUE
    Durable record of writes that could not reach Firestore, so a
    temporary outage never silently loses a local change and every
@@ -1580,7 +1581,8 @@ async function clearPendingForDocument(ref, docId) {
 /** When a document is deleted locally the sync engine records a final DELETE. */
 async function enqueueDocumentDelete(ref, docId) {
     return await enqueueMutation('DELETE', ref, docId, null);
-}/* ============================================================
+}
+/* ============================================================
    SYNCHRONIZATION COORDINATOR
    Replays the durable offline mutation queue whenever connectivity
    returns, with a lock, bounded retries and deterministic order.
@@ -1993,7 +1995,8 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
     else initSyncCoordinator();
 } else if (typeof window !== 'undefined') {
     initSyncCoordinator();
-}// ══════════════════════════════════════════════════════════════
+}
+// ══════════════════════════════════════════════════════════════
 //  CORE CRUD FUNCTIONS (Firestore + Local Sync)
 // ══════════════════════════════════════════════════════════════
 
@@ -2952,7 +2955,8 @@ if (typeof module !== 'undefined' && module.exports) {
         deleteStudentProfile,
         undoStudentDeletion
     };
-}/* ============================================================
+}
+/* ============================================================
    STUDENT NUMBER SERVICE — '230xxxx' allocation
    Canonical field: users.studentNumber  (/^230\d{4}$/)
    Numbers are allocated sequentially via an atomic Firestore
@@ -3248,7 +3252,8 @@ if (typeof module !== 'undefined' && module.exports) {
         STUDENT_NUMBER_PATTERN,
         STUDENT_NUMBER_MAX
     };
-}// ============================================================
+}
+// ============================================================
 // USERNAME CLAIMS
 //
 // Why this exists
@@ -3414,7 +3419,8 @@ if (typeof module !== 'undefined' && module.exports) {
         UsernameClaimError,
         CLAIMS_COLLECTION
     };
-}// ══════════════════════════════════════════════════════════════
+}
+// ══════════════════════════════════════════════════════════════
 //  AUTOMATIC SEEDING LOGIC
 // ══════════════════════════════════════════════════════════════
 

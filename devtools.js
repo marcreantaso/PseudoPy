@@ -504,7 +504,8 @@ function runtimeConsoleClear() {
 
 function devToolsAbortRun() {
     if (typeof runtimeConsole !== 'undefined') runtimeConsole.abort();
-}/* ============================================================
+}
+/* ============================================================
    PSEUDOPY — DEVELOPER OPTIONS (devtools.js)
    ────────────────────────────────────────────────────────────
    Admin-only Compiler Debugger & Algorithm Flow Visualizer.
@@ -1834,7 +1835,8 @@ function devToolsInitFileDrop() {
         const file = input.files && input.files[0];
         if (file) devToolsOnSourceFileSelected(file);
     });
-}/* ============================================================
+}
+/* ============================================================
    COMPILER PIPELINE SIMULATION (devtools Simulation tab)
    Admin-only views inside Developer Options built exclusively
    from REAL compiler data:
@@ -2629,7 +2631,8 @@ function _updateSimulation(result) {
         const btn = document.getElementById(id);
         if (btn) btn.disabled = !hasEvents;
     });
-}// ============================================================
+}
+// ============================================================
 // DATABASE HEALTH PANEL — PseudoPy Developer Options
 //
 // Reports the live state of the pieces that are otherwise
@@ -3024,7 +3027,8 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _devToolsHealthWatchTab);
 } else {
     _devToolsHealthWatchTab();
-}﻿(function(){
+}
+﻿(function(){
   const STATES={IDLE:'idle',VALIDATING:'validating',RUNNING:'running',COMPLETED:'completed',FAILED:'failed',CANCELLED:'cancelled'};
   let state=STATES.IDLE;
   let lastResult=null;
@@ -3155,7 +3159,8 @@ if (document.readyState === 'loading') {
     if(normIn) normIn.addEventListener('input',()=>{ if(normDiff) normDiff.textContent=''; });
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wire); else wire();
-})();function _esc(str) {
+})();
+function _esc(str) {
     if (str === null || str === undefined) return '';
     const div = document.createElement('div');
     div.textContent = String(str);

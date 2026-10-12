@@ -1,6 +1,6 @@
 /* ============================================================
    APP VERSION — injected at build time from package.json
-   The build substitutes __PSEUDOPY_VERSION__ with the package
+   The build substitutes the version placeholder with the package
    version so the version is never hardcoded in this repo.
    ============================================================ */
 

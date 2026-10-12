@@ -202,7 +202,8 @@ const simulationTracer = new SimulationTracer();
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { SimulationTracer, simulationTracer, SIMULATION_TRACE_TYPES, SIMULATION_TRACE_LIMITS, simulationDetach };
-}/* ============================================================
+}
+/* ============================================================
    Pseudocode-to-Python Compiler Engine
    ────────────────────────────────────────────────────────────
    4-Stage Syntax-Directed Translation (SDT) Pipeline:
