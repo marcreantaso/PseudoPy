@@ -3,6 +3,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const bundles = require('../src/bundles.json');
+const VERSION_PLACEHOLDER = '__PSEUDOPY_VERSION__';
 
 /** Ordered classic-script modules preserve the existing HTML handler contract. */
 function build({ check = false } = {}) {
@@ -13,26 +14,45 @@ function build({ check = false } = {}) {
         let content = sources.map(source => {
             const text = fs.readFileSync(path.join(root, source), 'utf8');
             new vm.Script(text, { filename: source });
-            return text;
+            // Concatenated modules share one script, so guarantee a statement
+            // boundary: a module that does not end in a newline would otherwise
+            // glue onto the next one (automatic semicolon insertion hazard).
+            return text.endsWith('\n') ? text : text + '\n';
         }).join('');
-        // Inject the single source-of-truth app version (package.json) into the
-        // main bundle so it is never hardcoded across the app.
+        // Inject the source-of-truth app version (package.json) into the main
+        // bundle so it is never hardcoded across the app. At least one
+        // placeholder must exist: zero means version injection was silently
+        // removed from every source.
         if (target === 'app.js') {
-            content = content.split('__PSEUDOPY_VERSION__').join(packageVersion);
+            const placeholders = content.split(VERSION_PLACEHOLDER).length - 1;
+            if (placeholders < 1) {
+                throw new Error(
+                    `${target} contains no ${VERSION_PLACEHOLDER} placeholder; version injection was removed.`
+                );
+            }
+            content = content.split(VERSION_PLACEHOLDER).join(packageVersion);
         }
         new vm.Script(content, { filename: target });
         return { target, content };
     });
     // Validate every module before writing any output.
+    const stale = [];
     for (const { target, content } of outputs) {
         const filename = path.join(root, target);
         if (check) {
             if (!fs.existsSync(filename) || fs.readFileSync(filename, 'utf8') !== content) {
-                throw new Error(`${target} is stale. Run npm run build and commit the generated bundles.`);
+                stale.push(target);
             }
         } else {
-            fs.writeFileSync(filename, content);
+            // Write through a temp file and rename so a crash cannot leave a
+            // half-written bundle that later gets committed.
+            const tmp = `${filename}.tmp`;
+            fs.writeFileSync(tmp, content);
+            fs.renameSync(tmp, filename);
         }
+    }
+    if (stale.length) {
+        throw new Error(`${stale.join(', ')} ${stale.length === 1 ? 'is' : 'are'} stale. Run npm run build and commit the generated bundles.`);
     }
     return outputs.map(({ target }) => target);
 }

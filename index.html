@@ -2077,6 +2077,7 @@
             <button class="devtools-tab" data-tab="eventlog" onclick="devToolsSwitchTab('eventlog')">Event Log</button>
             <button class="devtools-tab" data-tab="metrics" onclick="devToolsSwitchTab('metrics')">Metrics</button>
             <button class="devtools-tab" data-tab="simulation" onclick="devToolsSwitchTab('simulation')">Simulation</button>
+            <button class="devtools-tab" data-tab="grammar" onclick="devToolsSwitchTab('grammar')">CFG → AST → SDT</button>
             <button class="devtools-tab" data-tab="rawjson" onclick="devToolsSwitchTab('rawjson')">Raw JSON</button>
             <button class="devtools-tab" data-tab="health" onclick="devToolsSwitchTab('health')">DB Health</button>
             <button class="devtools-tab" data-tab="langguide" onclick="devToolsSwitchTab('langguide')">Language Guide</button>
@@ -2209,6 +2210,49 @@
             </div>
           </div>
 
+          <div class="devtools-tab-panel" id="devtools-panel-grammar">
+            <div class="sim-walk">
+              <div class="devtools-panel-header">
+                <h3>{{ui:Radio}} CFG → AST → SDT</h3>
+                <span class="devtools-count" id="sim-walk-count">no steps</span>
+              </div>
+              <p class="sim-walk-intro">One program, moving through grammar recognition (CFG), the tree representation (AST), and Python generation (SDT). Step or play to advance all three stages together.</p>
+
+              <div class="sim-walk-columns">
+                <div class="sim-walk-col" data-walk="cfg">
+                  <div class="sim-walk-col-head"><h4>{{ui:Radio}} Grammar recognition</h4><span>matched productions</span></div>
+                  <div class="sim-walk-list" id="sim-walk-cfg"><div class="devtools-idle-message"><p>Run the pipeline to move one program through grammar recognition, the AST, and SDT code generation.</p></div></div>
+                </div>
+                <div class="sim-walk-col" data-walk="ast">
+                  <div class="sim-walk-col-head"><h4>{{ui:Files}} AST</h4><span>real recognized nodes</span></div>
+                  <div class="sim-walk-list" id="sim-walk-ast"><div class="devtools-idle-message"><p>Run the pipeline to move one program through grammar recognition, the AST, and SDT code generation.</p></div></div>
+                </div>
+                <div class="sim-walk-col" data-walk="sdt">
+                  <div class="sim-walk-col-head"><h4>{{ui:ClipboardList}} SDT → Python</h4><span>emitted per node</span></div>
+                  <div class="sim-walk-list" id="sim-walk-sdt"><div class="devtools-idle-message"><p>Run the pipeline to move one program through grammar recognition, the AST, and SDT code generation.</p></div></div>
+                </div>
+              </div>
+
+              <div class="sim-walk-source">
+                <div class="sim-walk-col-head"><h4>Pseudocode</h4><span>current line highlighted</span></div>
+                <div class="sim-walk-source-list" id="sim-walk-cursor"><div class="devtools-idle-message"><p>Run the pipeline to move one program through grammar recognition, the AST, and SDT code generation.</p></div></div>
+              </div>
+
+              <div class="sim-walk-controls">
+                <div class="devtools-panel-header"><h3>{{ui:Zap}} Walkthrough</h3><span class="devtools-count">one program, one step at a time</span></div>
+                <div class="sim-step-buttons">
+                  <button class="btn btn-ghost btn-sm" id="sim-walk-begin" onclick="devToolsWalkStepBegin()" disabled title="First step" aria-label="First step"><i data-lucide="skip-back" aria-hidden="true"></i></button>
+                  <button class="btn btn-ghost btn-sm" id="sim-walk-back" onclick="devToolsWalkStepBack()" disabled title="Previous step" aria-label="Previous step"><i data-lucide="chevron-left" aria-hidden="true"></i></button>
+                  <button class="btn btn-primary btn-sm" id="sim-walk-play" onclick="devToolsWalkPlay()" disabled title="Play through the stages" aria-label="Play through the stages"><i data-lucide="play" aria-hidden="true"></i> Play</button>
+                  <button class="btn btn-secondary btn-sm" id="sim-walk-pause" onclick="devToolsWalkPause()" disabled title="Pause" aria-label="Pause"><i data-lucide="pause" aria-hidden="true"></i> Pause</button>
+                  <button class="btn btn-ghost btn-sm" id="sim-walk-fwd" onclick="devToolsWalkStepFwd()" disabled title="Next step" aria-label="Next step"><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+                  <button class="btn btn-ghost btn-sm" id="sim-walk-end" onclick="devToolsWalkStepEnd()" disabled title="Last step" aria-label="Last step"><i data-lucide="skip-forward" aria-hidden="true"></i></button>
+                  <button class="btn btn-ghost btn-sm" onclick="devToolsWalkReset()" title="Reset highlights" aria-label="Reset highlights">{{ui:RefreshCw}}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="devtools-tab-panel" id="devtools-panel-rawjson">
             <div class="devtools-raw-sections">
               <details class="devtools-raw-detail"><summary>Raw Tokens</summary><pre id="devtools-raw-tokens" class="devtools-raw-pre">—</pre></details>
@@ -2281,6 +2325,7 @@ CALL f(1,2); f(1,2)</pre>
                 <button class="btn btn-ghost" id="sop2-export-csv">Export CSV</button>
               </div>
               <div id="sop2-result" style="margin-top:1rem;overflow:auto"></div>
+              <div id="sop2-status" class="devtools-hint" role="status" aria-live="polite"></div>
             </div>
           </div>
           <div class="devtools-tab-panel" id="devtools-panel-impl">

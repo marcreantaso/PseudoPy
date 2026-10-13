@@ -19,6 +19,8 @@ const devToolsState = {
     simulationEvents: [],  // normalized simulation-tracer events (Simulation tab)
     simulationTrace: null, // raw simulation-trace envelope (source map + limits)
     simulationStepIndex: -1, // step cursor for the Simulation tab event ledger
+    walkSteps: [],         // ordered CFG → AST → SDT steps for the walkthrough tab
+    walkStepIndex: -1,     // step cursor for the CFG → AST → SDT tab
     allErrors: [],         // classified errors across all stages
     importedSourceName: null, // uploaded pseudocode filename (for .py export)
     expectedOutput: null,  // admin-supplied expected stdout for the Simulation verdict

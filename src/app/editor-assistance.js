@@ -75,9 +75,10 @@ function pseudopyLineIndent(text) {
     return m ? m[0] : '';
 }
 
-function pseudopySentinelInsertFix(lines, line, sentinel, issue) {
-    if (!line || line < 1 || line > lines.length) return null;
-    const original = lines[line - 1];
+// Split a physical line into its code body, trailing comment and EOL marker.
+// Returns null when a quoted string is left open, so an edit can never land
+// inside a literal.
+function pseudopySplitLine(original) {
     const eol = original.endsWith('\r') ? '\r' : '';
     const text = eol ? original.slice(0, -1) : original;
     let quote = null, commentAt = text.length;
@@ -89,8 +90,17 @@ function pseudopySentinelInsertFix(lines, line, sentinel, issue) {
         else if (text[i] === '#') { commentAt = i; break; }
     }
     if (quote) return null;
-    const body = text.slice(0, commentAt).trimEnd();
-    const comment = text.slice(commentAt);
+    return { text: text, body: text.slice(0, commentAt), comment: text.slice(commentAt), eol: eol };
+}
+
+function pseudopySentinelInsertFix(lines, line, sentinel, issue) {
+    if (!line || line < 1 || line > lines.length) return null;
+    const original = lines[line - 1];
+    const split = pseudopySplitLine(original);
+    if (!split) return null;
+    const eol = split.eol;
+    const body = split.body.trimEnd();
+    const comment = split.comment;
     if (!body.trim()) return null;
     // If the very next non-blank line already carries the sentinel, inserting
     // one now would only duplicate it. Leave that shape to the user.
@@ -197,6 +207,103 @@ function pseudopyGenericTypoFix(lines, issue) {
     };
 }
 
+// ── Statement-header keywords ───────────────────────────────────────────────
+// The compiler classifies a broken header (code + fixKind + detail) but never
+// edits it; this builder turns that classification into one exact line edit.
+// A candidate is only qualified when re-compiling the rewritten line clears
+// the diagnostic it came from AND leaves that line free of errors, so a "safe
+// fix" can neither trade one error for another nor auto-apply a partial
+// repair. No student code is executed — the compiler is only re-run.
+
+const PSEUDOPY_HEADER_CODES = ['PARSE_FOR_MISSING_FROM', 'PARSE_DECLARE_MISSING_AS', 'PARSE_SET_MISSING_TO'];
+
+// Is the rewritten source actually repaired? `code` names the diagnostic the
+// edit targeted; `line` is where the edit landed.
+function pseudopyHeaderFixResolves(source, code, line) {
+    let after;
+    try { after = pseudopyReviewSource(source); }
+    catch (_) { return false; }
+    const remaining = ((after.errors) || []).filter(e => e && e.line === line);
+    if (remaining.some(e => e.code === code)) return false;
+    return remaining.length === 0;
+}
+
+function pseudopyHeaderKeywordFix(lines, issue) {
+    const detail = (issue && issue.detail) || {};
+    const code = issue && issue.code;
+    const expected = detail.expected;
+    const line = issue && issue.line;
+    if (!expected || !code || !line || line < 1 || line > lines.length) return null;
+    if (issue.fixKind !== 'insert-keyword' && issue.fixKind !== 'rewrite-header') return null;
+
+    const split = pseudopySplitLine(lines[line - 1]);
+    if (!split) return null;
+    // <indent><statement keyword><space><name><space><rest>
+    const match = /^(\s*)([A-Za-z_]+)(\s+)([A-Za-z_]\w*)(\s+)([\s\S]*)$/.exec(split.body);
+    if (!match) return null;
+    const statement = match[2].toUpperCase();
+    const rest = match[6];
+    if (code === 'PARSE_FOR_MISSING_FROM' && statement !== 'FOR') return null;
+    if (code === 'PARSE_DECLARE_MISSING_AS' && statement !== 'DECLARE') return null;
+    if (code === 'PARSE_SET_MISSING_TO' && statement !== 'SET') return null;
+
+    const expectedText = String(expected);
+    let replacement;
+    if (issue.fixKind === 'rewrite-header') {
+        if (!detail.found) return null;
+        const tokenPattern = new RegExp('^' + pseudopyEscapeRegExp(String(detail.found)) + '(?![A-Za-z0-9_])');
+        if (!tokenPattern.test(rest)) return null;
+        replacement = expectedText + rest.replace(tokenPattern, '');
+    } else {
+        replacement = expectedText + ' ' + rest;
+    }
+
+    const original = lines[line - 1];
+    const after = split.body.slice(0, split.body.length - rest.length) + replacement + split.comment + split.eol;
+    if (after === original) return null;
+
+    const candidateLines = lines.slice();
+    candidateLines[line - 1] = after;
+    if (!pseudopyHeaderFixResolves(candidateLines.join('\n'), code, line)) return null;
+
+    const reason = code === 'PARSE_FOR_MISSING_FROM'
+        ? 'Restore the FOR range header so it reads FROM <start> TO <end> DO.'
+        : code === 'PARSE_DECLARE_MISSING_AS'
+            ? 'Add AS between the variable name and its declared type.'
+            : 'Restore the TO keyword between the variable name and its value.';
+    return {
+        id: 'qf-header-' + code + '-' + line,
+        kind: 'header',
+        code: 'QF_HEADER_KEYWORD',
+        severity: 'error',
+        qualified: true,
+        line: line,
+        before: original,
+        after: after,
+        reason: reason,
+        suggestion: issue.suggestion,
+        detail: { expected: expectedText, found: detail.found || null, sourceCode: code }
+    };
+}
+
+// Why an unclassified header is left to the student. The parser's own
+// suggestion already states the valid form; this explains the decision.
+function pseudopyHeaderGuidance(issue) {
+    const detail = (issue && issue.detail) || {};
+    if (issue.code === 'PARSE_FOR_MISSING_FROM') {
+        if (!detail.hasTo) return 'This reads like a condition, which belongs in a WHILE loop (WHILE … DO … END WHILE). It is not rewritten automatically because the loop body and its closer must change too.';
+        if (!detail.found || String(detail.found).toUpperCase() === 'TO') return 'There is no start value to sit behind FROM, so nothing can be inserted safely. Choose it yourself, for example FOR ' + (detail.iterator || 'i') + ' FROM 1 TO 10 DO.';
+        return 'Inserting FROM here would not make the header valid on its own, so the repair is left to you. Check the range, for example FOR ' + (detail.iterator || 'i') + ' FROM 1 TO 10 DO.';
+    }
+    if (issue.code === 'PARSE_DECLARE_MISSING_AS') {
+        return 'No recognised type follows the name yet, so AS cannot be placed. Add the type first, for example DECLARE ' + (detail.variable || 'x') + ' AS INTEGER.';
+    }
+    if (issue.code === 'PARSE_SET_MISSING_TO') {
+        return 'The right-hand side does not read as one value, so inserting TO would not repair the line. Check the value, for example SET ' + (detail.variable || 'x') + ' TO 5.';
+    }
+    return null;
+}
+
 /**
  * Turn a compile result and the ORIGINAL editor source into Quick Fix
  * candidates. Only `qualified: true` candidates are ever applied; the rest
@@ -286,7 +393,33 @@ function pseudopyQuickFixCandidates(source, result) {
         if (err && /Unrecognized statement:/.test(err.message || '')) pushFix(pseudopyGenericTypoFix(lines, err));
     }
 
-    // 5) Undeclared-variable guidance: surfaced, NEVER auto-applied (the type
+    // 5) Statement-header keywords the parser could classify (FOR … FROM,
+    //    DECLARE … AS, SET … TO). Only offered as a safe fix when recompiling
+    //    the rewritten line clears that diagnostic and leaves the line clean;
+    //    otherwise the parser's own suggestion remains the student's guidance.
+    for (const err of errors) {
+        if (!err || PSEUDOPY_HEADER_CODES.indexOf(err.code) === -1) continue;
+        const fix = pseudopyHeaderKeywordFix(lines, err);
+        if (fix) { pushFix(fix); continue; }
+        const hint = pseudopyHeaderGuidance(err);
+        if (!hint) continue;
+        pushFix({
+            id: 'qf-header-guidance-' + err.code + '-' + err.line,
+            kind: 'header-guidance',
+            code: 'QF_HEADER_GUIDANCE',
+            severity: 'error',
+            qualified: false,
+            line: err.line,
+            before: null,
+            after: null,
+            hint: hint,
+            reason: err.message || 'This header needs a manual correction.',
+            suggestion: err.suggestion,
+            detail: { sourceCode: err.code }
+        });
+    }
+
+    // 6) Undeclared-variable guidance: surfaced, NEVER auto-applied (the type
     //    and insertion point are the user's decision).
     const warnings = pseudopyDedupeDiagnostics(result && result.warnings);
     for (const w of warnings) {
@@ -385,6 +518,17 @@ function pseudopyApplyQuickFix(source, fix) {
     return pseudopyApplyBatch(source, [fix]).source;
 }
 
+// Lines an applied batch actually touched, so the editor can jump to the
+// repair. Insertions report the line they were placed before.
+function pseudopyChangedLines(applied) {
+    const lines = new Set();
+    for (const fix of applied || []) {
+        const line = fix.insertBeforeLine || fix.line;
+        if (line > 0) lines.add(line);
+    }
+    return [...lines].sort((a, b) => a - b);
+}
+
 // ── Refresh of Python/console results (never executes) ─────────────────────
 
 function pseudopyMarkStale(element) {
@@ -428,7 +572,7 @@ function pseudopyRefreshOutcome(source, target) {
             setPythonOutput(outputId, '# Translation failed due to errors in your pseudocode.\n# Check the panel below for details.');
         }
         if (consoleEl) {
-            consoleEl.innerHTML = typeof renderHtmlErrors === 'function' ? renderHtmlErrors(result.errors || []) : JSON.stringify(result.errors || []);
+            consoleEl.innerHTML = typeof renderHtmlErrors === 'function' ? renderHtmlErrors(result.errors || [], target.editorId) : JSON.stringify(result.errors || []);
             consoleEl.className = 'output-content error';
         }
         if (runBtn) runBtn.disabled = true;
@@ -480,6 +624,51 @@ function pseudopyInsertSvgIcon(node, paths) {
     node.appendChild(svg);
 }
 
+// ── Pending correction (host-level Undo) ───────────────────────────────────
+// Applying a fix closes the dialog so the editor can show the repaired line,
+// which removes the dialog footer's Undo. One pending record per editor keeps
+// the last correction undoable from the wand host instead.
+
+let pseudopyPendingUndo = null;
+
+function pseudopyUpdateUndoButton(editorState) {
+    if (!editorState || !editorState.undoButton) return;
+    const pending = pseudopyPendingUndo && pseudopyPendingUndo.editorState === editorState;
+    editorState.undoButton.classList.toggle('hidden', !pending);
+    editorState.undoButton.disabled = !pending;
+}
+
+function pseudopySetPendingUndo(editorState, before, after, target) {
+    pseudopyPendingUndo = { editorState: editorState, before: before, after: after, target: target };
+    pseudopyUpdateUndoButton(editorState);
+}
+
+function pseudopyClearPendingUndo(editorState) {
+    if (!pseudopyPendingUndo) return;
+    if (editorState && pseudopyPendingUndo.editorState !== editorState) return;
+    const previous = pseudopyPendingUndo.editorState;
+    pseudopyPendingUndo = null;
+    pseudopyUpdateUndoButton(previous);
+}
+
+function pseudopyUndoLastCorrection(editorState) {
+    const pending = pseudopyPendingUndo && pseudopyPendingUndo.editorState === editorState ? pseudopyPendingUndo : null;
+    if (!pending || !editorState) return false;
+    const editor = editorState.editor;
+    // Edits since the correction are never discarded: undo simply lapses.
+    if (editor.value !== pending.after) { pseudopyClearPendingUndo(editorState); return false; }
+    editor.value = pending.before;
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    if (pending.target && pending.target.consoleId) {
+        const c = document.getElementById(pending.target.consoleId);
+        if (c) pseudopyMarkStale(c);
+    }
+    pseudopyRefreshOutcome(pending.before, pending.target);
+    pseudopyClearPendingUndo(editorState);
+    editor.focus();
+    return true;
+}
+
 // ── Managed review dialog ──────────────────────────────────────────────────
 
 function pseudopyShowReview(editorState) {
@@ -514,13 +703,11 @@ function pseudopyShowReview(editorState) {
     body.append(status, cards);
 
     const footer = pseudopyEl('footer', 'source-assistance-footer');
-    const undoBtn = pseudopyEl('button', 'btn btn-ghost btn-sm', 'Undo');
-    undoBtn.disabled = true;
     const applyAllBtn = pseudopyEl('button', 'btn btn-primary', 'Apply all safe fixes');
     applyAllBtn.disabled = true;
     const closeFooter = pseudopyEl('button', 'btn btn-secondary btn-sm', 'Close');
     closeFooter.addEventListener('click', () => dialog.close());
-    footer.append(undoBtn, applyAllBtn, closeFooter);
+    footer.append(applyAllBtn, closeFooter);
 
     dialog.append(header, body, footer);
 
@@ -528,50 +715,31 @@ function pseudopyShowReview(editorState) {
 
     const state = {
         editor: editor,
-        undo: null,
         qualifiedFixes: [],
         target: editor.id === 'pseudocode-editor'
-            ? { outputId: 'python-output', consoleId: 'console-output', runBtnSelector: '#btn-run-code' }
+            ? { outputId: 'python-output', consoleId: 'console-output', runBtnSelector: '#btn-run-code', editorId: 'pseudocode-editor' }
             : editor.id === 'translate-input'
-                ? { outputId: 'translate-output', consoleId: 'translate-console', runBtnSelector: '#btn-run-translate' }
-                : null
+                ? { outputId: 'translate-output', consoleId: 'translate-console', runBtnSelector: '#btn-run-translate', editorId: 'translate-input' }
+                : { editorId: editor.id }
     };
 
-    const commit = newSource => {
+    // Applying a fix closes the dialog and jumps to the repaired line, so Undo
+    // lives on the editor host instead of the dialog footer.
+    const commit = (newSource, applied) => {
         const before = editor.value;
         editor.value = newSource;
         editor.dispatchEvent(new Event('input', { bubbles: true }));
-        state.undo = { before: before, after: newSource };
-        undoBtn.disabled = false;
         if (state.target && state.target.consoleId) {
             const c = document.getElementById(state.target.consoleId);
             if (c) pseudopyMarkStale(c);
         }
         pseudopyRefreshOutcome(newSource, state.target);
+        pseudopySetPendingUndo(editorState, before, newSource, state.target);
         notice('Corrections applied and revalidated. Python was refreshed without running it.');
         render();
+        const changed = pseudopyChangedLines(applied);
+        if (changed.length) goToLine(changed[0]);
     };
-
-    const undo = () => {
-        const u = state.undo;
-        if (!u) { notice('Nothing to undo yet.'); return; }
-        if (editor.value !== u.after) {
-            notice('Source changed since the correction. Undo was skipped to preserve your edits.');
-            return;
-        }
-        editor.value = u.before;
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
-        state.undo = null;
-        undoBtn.disabled = true;
-        if (state.target && state.target.consoleId) {
-            const c = document.getElementById(state.target.consoleId);
-            if (c) pseudopyMarkStale(c);
-        }
-        pseudopyRefreshOutcome(u.before, state.target);
-        notice('Previous source restored. Revalidated without running Python.');
-        render();
-    };
-    undoBtn.addEventListener('click', undo);
 
     applyAllBtn.addEventListener('click', () => {
         const fixes = state.qualifiedFixes;
@@ -580,13 +748,13 @@ function pseudopyShowReview(editorState) {
         try { next = pseudopyApplyBatch(editor.value, fixes); }
         catch (error) { notice(error.message); render(); return; }
         if (!next.applied.length) { notice('Nothing to apply — the suggestions no longer match the source.'); render(); return; }
-        commit(next.source);
+        commit(next.source, next.applied);
     });
 
     const applyOne = fix => {
         try {
             const next = pseudopyApplyBatch(editor.value, [fix]);
-            commit(next.source);
+            commit(next.source, next.applied);
         } catch (error) { notice(error.message); render(); }
     };
 
@@ -643,7 +811,7 @@ function pseudopyShowReview(editorState) {
             const guidance = fixes.find(f => !f.qualified && f.line === line);
             if (guidance) {
                 const note = pseudopyEl('div', 'assistance-guidance');
-                note.textContent = 'Guidance only — this needs your input.';
+                note.textContent = guidance.hint || 'Guidance only — this needs your input.';
                 card.append(note);
             }
             if (line > 0) {
@@ -749,6 +917,40 @@ function pseudopyReviewRefreshGutter(editorState) {
 // revalidates on open so this is advisory, not authoritative.
 let pseudopyLiveValidation = null;
 
+// Mirrors the count of safe fixes onto the wand, so a broken header is
+// discoverable without opening the dialog. Uses the debounced snapshot only
+// (and only when it matches the editor) to avoid extra compiles while typing.
+function pseudopyUpdateWandBadge(editorState) {
+    const badge = editorState && editorState.badge;
+    if (!badge) return;
+    let count = 0;
+    const snapshot = pseudopyLiveValidation;
+    if (snapshot && snapshot.result && snapshot.source === editorState.editor.value && (snapshot.result.errors || []).length) {
+        try { count = pseudopyQuickFixCandidates(snapshot.source, snapshot.result).filter(f => f.qualified).length; }
+        catch (_) { count = 0; }
+    }
+    if (count > 0) {
+        badge.textContent = String(count);
+        badge.classList.remove('hidden');
+        editorState.button.setAttribute('aria-label', 'Review pseudocode — ' + count + ' safe fix' + (count === 1 ? '' : 'es') + ' available');
+    } else {
+        badge.textContent = '';
+        badge.classList.add('hidden');
+        editorState.button.setAttribute('aria-label', 'Review pseudocode and suggested corrections');
+    }
+}
+
+// Entry point for the "Fix pseudocode" button printed in the console errors, so
+// the dialog is reachable straight from the message, not only via the wand.
+function pseudopyOpenAssistanceFor(editorId) {
+    const states = typeof window !== 'undefined' ? window.__pseudopyAssistanceStates : null;
+    const editorState = states && states[editorId];
+    if (!editorState) return;
+    const openDialog = document.querySelector('.source-assistance-dialog[open]');
+    if (openDialog) openDialog.close();
+    pseudopyShowReview(editorState);
+}
+
 function pseudopyRestoreHighlights(editorState) {
     const editor = editorState.editor;
     if (typeof window !== 'undefined' && window.__pseudopyActiveErrorLines) {
@@ -775,9 +977,29 @@ function setupPseudopyAssistance() {
         button.setAttribute('aria-label', 'Review pseudocode and suggested corrections');
         button.title = 'Review pseudocode';
         button.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 20 13-13 3 3L7 23zM14 10l3 3M5 3v6M2 6h6M19 1v4M17 3h4"/></svg>';
+        const badge = document.createElement('span');
+        badge.className = 'source-assistance-badge hidden';
+        badge.setAttribute('aria-hidden', 'true');
+        button.append(badge);
         host.append(button);
 
-        const editorState = { editor: editor, button: button, priorErrorLines: [], syncGutter: null };
+        const editorState = { editor: editor, button: button, badge: badge, priorErrorLines: [], syncGutter: null };
+
+        // Undo for the last auto-applied fix, kept on the host because applying
+        // a fix closes the dialog (which then jumps to the repaired line).
+        const undoButton = document.createElement('button');
+        undoButton.type = 'button';
+        undoButton.className = 'source-assistance-undo btn btn-secondary btn-sm hidden';
+        undoButton.textContent = 'Undo fix';
+        undoButton.title = 'Undo the last applied correction';
+        undoButton.addEventListener('click', () => pseudopyUndoLastCorrection(editorState));
+        host.append(undoButton);
+        editorState.undoButton = undoButton;
+
+        if (typeof window !== 'undefined') {
+            if (!window.__pseudopyAssistanceStates) window.__pseudopyAssistanceStates = {};
+            window.__pseudopyAssistanceStates[id] = editorState;
+        }
 
         if (id === 'devtools-pseudocode') {
             const gutter = document.createElement('pre');
@@ -818,7 +1040,10 @@ function setupPseudopyAssistance() {
         button.addEventListener('click', () => pseudopyShowReview(editorState));
 
         if (id === 'pseudocode-editor' && typeof setRealtimeValidationHandler === 'function') {
-            setRealtimeValidationHandler(entry => { pseudopyLiveValidation = entry; });
+            setRealtimeValidationHandler(entry => {
+                pseudopyLiveValidation = entry;
+                pseudopyUpdateWandBadge(editorState);
+            });
         }
     });
 }

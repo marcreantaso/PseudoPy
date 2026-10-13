@@ -171,3 +171,100 @@ test('quick fixes preserve CRLF line endings', () => {
     assert.equal(/[^\r]\n/.test(closed), false);
     assert.equal(compile(closed).valid, true);
 });
+
+// ── Statement-header keywords (FOR … FROM, DECLARE … AS, SET … TO) ──────────
+
+test('a FOR header missing FROM is repaired to a compiling program', () => {
+    const shapes = [
+        ['BEGIN\nFOR i 1 TO 10 DO\nDISPLAY i\nEND FOR\nEND', 'FOR i FROM 1 TO 10 DO'],
+        ['BEGIN\nFOR i IN 1 TO 10 DO\nDISPLAY i\nEND FOR\nEND', 'FOR i FROM 1 TO 10 DO'],
+        ['BEGIN\nFOR i = 1 TO 10 DO\nDISPLAY i\nEND FOR\nEND', 'FOR i FROM 1 TO 10 DO'],
+        ['BEGIN\nFOR i FRO 1 TO 10 DO\nDISPLAY i\nEND FOR\nEND', 'FOR i FROM 1 TO 10 DO']
+    ];
+    for (const [source, expected] of shapes) {
+        const fix = qualifiedFixes(source, compile(source)).find(f => f.kind === 'header');
+        assert.ok(fix, 'expected a header fix for ' + JSON.stringify(source));
+        assert.equal(fix.line, 2);
+        assert.equal(fix.after, expected);
+        const applied = context.pseudopyApplyQuickFix(source, fix);
+        assert.equal(applied.split('\n')[1], expected);
+        assert.equal(compile(applied).valid, true);
+    }
+});
+
+test('header repairs keep indentation, trailing comments and CRLF', () => {
+    const indented = 'BEGIN\n  FOR i 1 TO 10 DO\n  DISPLAY i\n  END FOR\nEND';
+    const indentFix = qualifiedFixes(indented, compile(indented)).find(f => f.kind === 'header');
+    assert.equal(indentFix.after, '  FOR i FROM 1 TO 10 DO');
+
+    const commented = 'BEGIN\nFOR i 1 TO 10 DO # loop\nDISPLAY i\nEND FOR\nEND';
+    const commentFix = qualifiedFixes(commented, compile(commented)).find(f => f.kind === 'header');
+    assert.equal(commentFix.after, 'FOR i FROM 1 TO 10 DO # loop');
+    assert.equal(compile(context.pseudopyApplyQuickFix(commented, commentFix)).valid, true);
+
+    const crlf = 'BEGIN\r\nFOR i 1 TO 10 DO\r\nDISPLAY i\r\nEND FOR\r\nEND';
+    const crlfFix = qualifiedFixes(crlf, compile(crlf)).find(f => f.kind === 'header');
+    const crlfApplied = context.pseudopyApplyQuickFix(crlf, crlfFix);
+    assert.equal(/[^\r]\n/.test(crlfApplied), false);
+    assert.equal(compile(crlfApplied).valid, true);
+});
+
+test('condition-style and start-less FOR headers stay guidance, never invented', () => {
+    const shapes = [
+        'BEGIN\nFOR i TO 10 DO\nDISPLAY i\nEND FOR\nEND',
+        'BEGIN\nFOR i <= 10 DO\nDISPLAY i\nEND FOR\nEND',
+        'BEGIN\nFOR i 1 2 TO 10 DO\nDISPLAY i\nEND FOR\nEND'
+    ];
+    for (const source of shapes) {
+        const fixes = context.pseudopyQuickFixCandidates(source, compile(source));
+        assert.equal(fixes.filter(f => f.qualified).length, 0, 'no safe fix for ' + JSON.stringify(source));
+        const guidance = fixes.find(f => !f.qualified && f.kind === 'header-guidance');
+        assert.ok(guidance, 'expected guidance for ' + JSON.stringify(source));
+        assert.equal(typeof guidance.hint, 'string');
+        assert.equal(guidance.after, null);
+    }
+});
+
+test('a FOR header missing TO never produces a bogus DO sentinel fix', () => {
+    const source = 'BEGIN\nFOR i FROM 1 DO\nDISPLAY i\nEND FOR\nEND';
+    const fixes = context.pseudopyQuickFixCandidates(source, compile(source));
+    assert.equal(fixes.filter(f => f.qualified).length, 0);
+});
+
+test('DECLARE without AS and SET without TO are repaired to compiling programs', () => {
+    const declare = 'BEGIN\nDECLARE x INTEGER\nSET x TO 1\nEND';
+    const declareFix = qualifiedFixes(declare, compile(declare)).find(f => f.kind === 'header');
+    assert.equal(declareFix.after, 'DECLARE x AS INTEGER');
+    assert.equal(compile(context.pseudopyApplyQuickFix(declare, declareFix)).valid, true);
+
+    const setMissing = 'BEGIN\nDECLARE x AS INTEGER\nSET x 5\nEND';
+    const setFix = qualifiedFixes(setMissing, compile(setMissing)).find(f => f.kind === 'header');
+    assert.equal(setFix.after, 'SET x TO 5');
+    assert.equal(compile(context.pseudopyApplyQuickFix(setMissing, setFix)).valid, true);
+
+    const setTypo = 'BEGIN\nDECLARE x AS INTEGER\nSET x t0 5\nEND';
+    const typoFix = qualifiedFixes(setTypo, compile(setTypo)).find(f => f.kind === 'header');
+    assert.equal(typoFix.after, 'SET x TO 5');
+    assert.equal(compile(context.pseudopyApplyQuickFix(setTypo, typoFix)).valid, true);
+});
+
+test('a header repair is withheld when it would not repair the line', () => {
+    const cases = [
+        'BEGIN\nDECLARE x AS INTEGER\nSET x total 5\nEND',
+        'BEGIN\nDECLARE x AS INTEGER\nSET x < 5\nEND',
+        'BEGIN\nDECLARE x\nEND',
+        'BEGIN\nDECLARE x foo\nEND'
+    ];
+    for (const source of cases) {
+        const fixes = context.pseudopyQuickFixCandidates(source, compile(source));
+        assert.equal(fixes.filter(f => f.qualified && f.kind === 'header').length, 0, 'unexpected safe fix for ' + JSON.stringify(source));
+    }
+});
+
+test('applied batches report the lines that changed', () => {
+    const source = 'BEGIN\nFOR i 1 TO 10 DO\nDISPLAY i\nEND FOR\nEND';
+    const fix = qualifiedFixes(source, compile(source)).find(f => f.kind === 'header');
+    assert.equal(context.pseudopyChangedLines([fix]).join(','), '2');
+    assert.equal(context.pseudopyChangedLines([fix]).length, 1);
+});
+

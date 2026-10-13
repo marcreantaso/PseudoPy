@@ -52,3 +52,30 @@ test('structural fixes require matching source (regression)', () => {
     ctx.pseudopyApplyBatch('IF FALSE', cands);
   }, /changed|revision/i);
 });
+
+test('header repairs are verified against the compiler before they qualify (regression)', () => {
+  const ctx = loadContext();
+  const source = 'BEGIN\nFOR i 1 TO 10 DO\nDISPLAY i\nEND FOR\nEND';
+  const result = ctx.pseudopyReviewSource(source);
+  const diag = result.errors.find(e => e.code === 'PARSE_FOR_MISSING_FROM');
+  assert.ok(diag);
+  assert.equal(diag.fixKind, 'insert-keyword');
+  assert.equal(diag.detail.expected, 'FROM');
+  assert.equal(diag.detail.hasTo, true);
+
+  const fix = ctx.pseudopyQuickFixCandidates(source, result).find(f => f.kind === 'header');
+  assert.ok(fix);
+  assert.equal(fix.qualified, true);
+  assert.equal(ctx.pseudopyApplyQuickFix(source, fix).split('\n')[1], 'FOR i FROM 1 TO 10 DO');
+});
+
+test('an unverifiable header repair degrades to guidance (regression)', () => {
+  const ctx = loadContext();
+  const source = 'BEGIN\nDECLARE x AS INTEGER\nSET x total 5\nEND';
+  const cands = ctx.pseudopyQuickFixCandidates(source, ctx.pseudopyReviewSource(source));
+  assert.equal(cands.some(c => c.qualified && c.kind === 'header'), false);
+  const guidance = cands.find(c => c.kind === 'header-guidance');
+  assert.ok(guidance);
+  assert.equal(guidance.qualified, false);
+  assert.equal(typeof guidance.hint, 'string');
+});
