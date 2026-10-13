@@ -793,6 +793,38 @@ function instrumentErrorList(list) {
     return list;
 }
 
+// ── Header-keyword repair classification ───────────────────────────────────
+// The parser only classifies a malformed statement header; it never rewrites
+// one. These helpers tell the editor-assistance layer which single-token
+// repair (if any) is worth offering:
+//   'insert-keyword' — add the expected keyword just before the next token.
+//   'rewrite-header' — replace that next token with the expected keyword.
+// Anything unclassified stays a plain diagnostic (guidance for the student).
+const PARSER_FOR_FROM_ALIASES = ['IN', 'INTO', '=', ':=', '<-', '\u2190'];
+const PARSER_DECLARE_TYPES = ['INTEGER', 'FLOAT', 'REAL', 'STRING', 'CHAR', 'CHARACTER', 'BOOLEAN', 'BOOL', 'ARRAY'];
+
+function parserTokenStartsValue(token) {
+    if (!token) return false;
+    if (token.type === TOKEN_TYPES.NUMBER || token.type === TOKEN_TYPES.STRING || token.type === TOKEN_TYPES.IDENTIFIER) return true;
+    if (token.type === TOKEN_TYPES.KEYWORD) return ['TRUE', 'FALSE', 'NOT', 'NULL'].includes(String(token.value).toUpperCase());
+    if (token.type === TOKEN_TYPES.OPERATOR) return ['(', '[', '-', '+'].includes(token.value);
+    return false;
+}
+
+// `FOR i <found> … TO … DO`: IN/= are aliases for FROM, near-misses are typos.
+function parserForFromRepair(found, hasTo) {
+    if (!found || !hasTo) return null;
+    if (found.type === TOKEN_TYPES.KEYWORD || found.type === TOKEN_TYPES.IDENTIFIER) {
+        if (suggestSentinel(String(found.value), ['FROM'])) return 'rewrite-header';
+    }
+    const alias = found.type === TOKEN_TYPES.KEYWORD
+        ? PARSER_FOR_FROM_ALIASES.includes(String(found.value).toUpperCase())
+        : found.type === TOKEN_TYPES.OPERATOR && PARSER_FOR_FROM_ALIASES.includes(found.value);
+    if (alias) return 'rewrite-header';
+    if (parserTokenStartsValue(found)) return 'insert-keyword';
+    return null;
+}
+
 class Parser {
     constructor(tokens) {
         this.tokens = tokens;
@@ -890,6 +922,19 @@ class Parser {
             collected.push(this.consume());
         }
         return { type: 'Expression', tokens: collected, line: line };
+    }
+
+    // Does the current (still unconsumed) line hold `keyword` as a token? Used
+    // to tell a repairable range header (… TO …) from a condition-style header
+    // before the rest of the line is collected as an expression.
+    lineHasKeyword(keyword) {
+        const target = String(keyword).toUpperCase();
+        for (let i = this.pos; i < this.tokens.length; i++) {
+            const token = this.tokens[i];
+            if (token.type === TOKEN_TYPES.EOF || token.type === TOKEN_TYPES.NEWLINE) return false;
+            if (token.type === TOKEN_TYPES.KEYWORD && token.value.toUpperCase() === target) return true;
+        }
+        return false;
     }
 
     // ── CFG Rule: Program → BEGIN StatementList END ──
@@ -1037,10 +1082,16 @@ class Parser {
             return null;
         }
         if (!this.match(TOKEN_TYPES.KEYWORD, 'AS')) {
-            this.errors.push({ line: kw.line, column: kw.column, message: 'Expected AS after variable name in DECLARE.', suggestion: 'Example: DECLARE ' + id.value + ' AS INTEGER' });
+            const found = this.peek();
+            const atLineEnd = found.type === TOKEN_TYPES.NEWLINE || found.type === TOKEN_TYPES.EOF;
+            const detail = { expected: 'AS', variable: id.value, found: atLineEnd ? null : found.value, foundType: found.type };
+            const entry = { line: kw.line, column: kw.column, message: 'Expected AS after variable name in DECLARE.', suggestion: 'Example: DECLARE ' + id.value + ' AS INTEGER', code: 'PARSE_DECLARE_MISSING_AS', detail: detail };
+            // Only classify when a real type follows, so the repair is "insert AS".
+            if (!atLineEnd && PARSER_DECLARE_TYPES.includes(String(found.value).toUpperCase())) entry.fixKind = 'insert-keyword';
+            this.errors.push(entry);
         }
         const typeToken = this.peek();
-        if (['INTEGER', 'FLOAT', 'REAL', 'STRING', 'CHAR', 'CHARACTER', 'BOOLEAN', 'BOOL', 'ARRAY'].includes(typeToken.value)) this.consume();
+        if (PARSER_DECLARE_TYPES.includes(typeToken.value)) this.consume();
         else this.errors.push({ line: kw.line, column: kw.column, message: 'Unsupported or missing declaration type.', suggestion: 'Use INTEGER, FLOAT, REAL, STRING, BOOLEAN or ARRAY.' });
         return { type: 'DeclareStatement', id: id.value, varType: typeToken ? typeToken.value : 'UNKNOWN', line: kw.line };
     }
@@ -1065,17 +1116,23 @@ class Parser {
             if (!this.match(TOKEN_TYPES.OPERATOR, '=')) {
                 // Levenshtein: did they misspell TO?
                 const nextTok = this.peek();
-                if (nextTok.type !== TOKEN_TYPES.KEYWORD && nextTok.type !== TOKEN_TYPES.IDENTIFIER) {
-                    this.errors.push({ line: kw.line, column: kw.column, message: 'Expected TO or = after variable name.' });
-                }
+                const atLineEnd = nextTok.type === TOKEN_TYPES.NEWLINE || nextTok.type === TOKEN_TYPES.EOF;
+                const detail = { expected: 'TO', variable: id.value, found: atLineEnd ? null : nextTok.value, foundType: nextTok.type };
                 if (nextTok.type === TOKEN_TYPES.KEYWORD || nextTok.type === TOKEN_TYPES.IDENTIFIER) {
                     const hint = suggestSentinel(nextTok.value, ['TO']);
                     if (hint) {
-                        this.errors.push({ line: kw.line, column: kw.column, message: 'Expected TO in SET assignment.', suggestion: 'Did you mean "' + hint + '"? Use: SET ' + id.value + ' TO value' });
+                        this.errors.push({ line: kw.line, column: kw.column, message: 'Expected TO in SET assignment.', suggestion: 'Did you mean "' + hint + '"? Use: SET ' + id.value + ' TO value', code: 'PARSE_SET_MISSING_TO', fixKind: 'rewrite-header', detail: detail });
                         this.consume(); // skip the misspelled word
+                    } else if (parserTokenStartsValue(nextTok)) {
+                        this.errors.push({ line: kw.line, column: kw.column, message: 'Expected TO after variable name.', suggestion: 'Use: SET ' + id.value + ' TO value', code: 'PARSE_SET_MISSING_TO', fixKind: 'insert-keyword', detail: detail });
                     } else {
-                        this.errors.push({ line: kw.line, column: kw.column, message: 'Expected TO after variable name.', suggestion: 'Use: SET ' + id.value + ' TO value' });
+                        this.errors.push({ line: kw.line, column: kw.column, message: 'Expected TO after variable name.', suggestion: 'Use: SET ' + id.value + ' TO value', code: 'PARSE_SET_MISSING_TO', detail: detail });
                     }
+                } else if (parserTokenStartsValue(nextTok)) {
+                    // `SET x 5` / `SET x "hi"` — the value is already present.
+                    this.errors.push({ line: kw.line, column: kw.column, message: 'Expected TO or = after variable name.', suggestion: 'Use: SET ' + id.value + ' TO value', code: 'PARSE_SET_MISSING_TO', fixKind: 'insert-keyword', detail: detail });
+                } else {
+                    this.errors.push({ line: kw.line, column: kw.column, message: 'Expected TO or = after variable name.', code: 'PARSE_SET_MISSING_TO', detail: detail });
                 }
             }
         }
@@ -1285,7 +1342,14 @@ class Parser {
         const id = this.match(TOKEN_TYPES.IDENTIFIER);
         if (!id) this.errors.push({ line: kw.line, column: kw.column, message: 'FOR requires an iterator name.' });
         if (!this.match(TOKEN_TYPES.KEYWORD, 'FROM')) {
-            this.errors.push({ line: kw.line, column: kw.column, message: 'Invalid FOR header: expected FROM after the iterator.', suggestion: 'Use FOR x FROM 1 TO 10 DO, or WHILE x <= 10 DO with END WHILE for a condition.' });
+            const found = this.peek();
+            const atLineEnd = found.type === TOKEN_TYPES.NEWLINE || found.type === TOKEN_TYPES.EOF;
+            const hasTo = this.lineHasKeyword('TO');
+            const fixKind = parserForFromRepair(atLineEnd ? null : found, hasTo);
+            const detail = { expected: 'FROM', iterator: id ? id.value : null, found: atLineEnd ? null : found.value, foundType: found.type, hasTo: hasTo };
+            const entry = { line: kw.line, column: kw.column, message: 'Invalid FOR header: expected FROM after the iterator.', suggestion: 'Use FOR x FROM 1 TO 10 DO, or WHILE x <= 10 DO with END WHILE for a condition.', code: 'PARSE_FOR_MISSING_FROM', detail: detail };
+            if (fixKind) entry.fixKind = fixKind;
+            this.errors.push(entry);
             this.collectLineTokens();
             this.skipNewlines();
             this.parseBlock(['ENDFOR', 'END']);
@@ -1293,10 +1357,18 @@ class Parser {
             return null;
         }
         const startExpr = this.collectLineTokens(['TO']);
-        if (!this.match(TOKEN_TYPES.KEYWORD, 'TO')) this.errors.push({ line: kw.line, column: kw.column, message: 'FOR requires TO.' });
+        let missingTo = false;
+        if (!this.match(TOKEN_TYPES.KEYWORD, 'TO')) {
+            missingTo = true;
+            this.errors.push({ line: kw.line, column: kw.column, message: 'FOR requires TO.', suggestion: 'Use FOR i FROM 1 TO 10 DO, and add STEP for a custom step.', code: 'PARSE_FOR_MISSING_TO', detail: { expected: 'TO', iterator: id ? id.value : null } });
+        }
         const endExpr = this.collectLineTokens(['STEP', 'DO']);
         const stepExpr = this.match(TOKEN_TYPES.KEYWORD, 'STEP') ? this.collectLineTokens(['DO']) : null;
-        if (!this.match(TOKEN_TYPES.KEYWORD, 'DO')) {
+        // A header with no TO already consumed the rest of the line as the start
+        // expression, so the DO check would report a sentinel that is not really
+        // missing — and offer to append a second one. Only report DO when the
+        // range header itself parsed.
+        if (!this.match(TOKEN_TYPES.KEYWORD, 'DO') && !missingTo) {
             this.errors.push({ line: kw.line, column: kw.column, message: 'FOR statement missing sentinel keyword DO.', suggestion: 'Use: FOR i FROM 1 TO 10 DO', code: 'PARSE_FOR_MISSING_DO', fixKind: 'insert-sentinel', detail: { sentinel: 'DO' } });
         }
         this.skipNewlines();

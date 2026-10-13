@@ -7,6 +7,8 @@ const { launchChrome, newPage, closePage, waitFor, sleep } = require('./cdp.cjs'
 
 const OUT = process.env.QA_OUT || path.join(os.tmpdir(), 'opencode', 'pseudopy-assistance');
 const SOURCE = 'BEGIN\nIF x = 1\nDISPLAY 1\nEND IF\nEND';
+const FOR_SOURCE = 'BEGIN\nFOR i 1 TO 10 DO\nDISPLAY i\nEND FOR\nEND';
+const FOR_CONDITION = 'BEGIN\nFOR i <= 10 DO\nDISPLAY i\nEND FOR\nEND';
 
 (async () => {
     const server = await start(0);
@@ -58,30 +60,103 @@ const SOURCE = 'BEGIN\nIF x = 1\nDISPLAY 1\nEND IF\nEND';
                 await page.screenshot(path.join(OUT, `${theme}-${width}-before.png`));
                 const applied = await page.run(`
                     document.querySelector('.source-assistance-footer .btn-primary').click();
-                    return { source: document.getElementById('pseudocode-editor').value,
+                    const editor = document.getElementById('pseudocode-editor');
+                    return { source: editor.value,
                         python: document.getElementById('python-output').value,
                         console: document.getElementById('console-output').textContent,
                         traceUnchanged: window.__qaTraceBefore === JSON.stringify([compilerTrace.events, simulationTracer.events]),
                         tracing: compilerTrace.enabled && simulationTracer.enabled,
-                        valid: pseudopyReviewSource(document.getElementById('pseudocode-editor').value).valid };
+                        dialogClosed: !document.querySelector('.source-assistance-dialog'),
+                        focused: document.activeElement === editor,
+                        selected: editor.value.slice(editor.selectionStart, editor.selectionEnd),
+                        undoVisible: !document.querySelector('.source-assistance-undo').classList.contains('hidden'),
+                        valid: pseudopyReviewSource(editor.value).valid };
                 `);
                 assert.equal(applied.source, SOURCE.replace('IF x = 1', 'IF x = 1 THEN'));
                 assert.ok(applied.valid && applied.python.includes('print('));
                 assert.match(applied.console, /Run the updated program/);
                 assert.ok(applied.traceUnchanged && applied.tracing, 'refresh preserves active debugger traces');
+                assert.equal(applied.dialogClosed, true, 'applying closes the dialog');
+                assert.equal(applied.focused, true, 'focus returns to the corrected editor');
+                assert.equal(applied.selected, 'IF x = 1 THEN', 'the repaired line is selected');
+                assert.equal(applied.undoVisible, true, 'host Undo is offered');
                 await page.screenshot(path.join(OUT, `${theme}-${width}-after.png`));
                 const undone = await page.run(`
-                    document.querySelector('.source-assistance-footer .btn-ghost').click();
-                    return document.getElementById('pseudocode-editor').value;
+                    const editor = document.getElementById('pseudocode-editor');
+                    document.querySelector('.source-assistance-undo').click();
+                    return { source: editor.value,
+                        hidden: document.querySelector('.source-assistance-undo').classList.contains('hidden') };
                 `);
-                assert.equal(undone, SOURCE);
+                assert.equal(undone.source, SOURCE);
+                assert.equal(undone.hidden, true, 'Undo lapses once used');
+                await page.run(`document.querySelector('.source-assistance-wand').click(); return true;`);
+                await waitFor(page, 'document.querySelector(".source-assistance-dialog[open]")');
                 await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
                 await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
                 await waitFor(page, '!document.querySelector(".source-assistance-dialog")');
                 assert.equal(await page.run('return document.activeElement.classList.contains("source-assistance-wand");'), true);
-                console.log(`${theme} ${width}: layout, separate warning, Apply, Undo, trace preservation, Escape/focus passed`);
+                console.log(`${theme} ${width}: layout, separate warning, Apply+close+jump, host Undo, Escape/focus passed`);
             }
         }
+        // The console error card routes straight into the review dialog.
+        await page.setViewport(1280, 900, 1);
+        await page.run(`
+            const editor = document.getElementById('pseudocode-editor');
+            editor.value = ${JSON.stringify(SOURCE)};
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+            document.getElementById('btn-translate-pseudocode').click();
+            return true;
+        `);
+        await waitFor(page, 'document.querySelector("#console-output .console-fix-btn")');
+        await page.run('document.querySelector("#console-output .console-fix-btn").click(); return true;');
+        await waitFor(page, 'document.querySelector(".source-assistance-dialog[open]")');
+        assert.equal(await page.run('return document.querySelectorAll(".source-assistance-dialog[open] .assistance-card-fix").length;'), 1);
+        await page.run('document.querySelector(".source-assistance-close").click(); return true;');
+        await waitFor(page, '!document.querySelector(".source-assistance-dialog")');
+        console.log('console error card opens the review dialog');
+        // A broken FOR header is repaired in place and the editor jumps to it.
+        const forRepair = await page.run(`
+            const editor = document.getElementById('pseudocode-editor');
+            editor.value = ${JSON.stringify(FOR_SOURCE)};
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+            editor.parentElement.querySelector('.source-assistance-wand').click();
+            const card = document.querySelector('.source-assistance-dialog[open] .assistance-card-fix');
+            const preview = card ? card.querySelector('.assistance-preview').textContent : '';
+            document.querySelector('.source-assistance-footer .btn-primary').click();
+            return { preview: preview,
+                line: editor.value.split('\\n')[1],
+                selected: editor.value.slice(editor.selectionStart, editor.selectionEnd),
+                valid: pseudopyReviewSource(editor.value).valid };
+        `);
+        assert.match(forRepair.preview, /After: {2}FOR i FROM 1 TO 10 DO/);
+        assert.equal(forRepair.line, 'FOR i FROM 1 TO 10 DO');
+        assert.equal(forRepair.selected, 'FOR i FROM 1 TO 10 DO', 'editor selects the repaired header');
+        assert.equal(forRepair.valid, true);
+        // Condition-style FOR stays guidance: no Apply button, and a hint saying why.
+        const guidance = await page.run(`
+            const editor = document.getElementById('pseudocode-editor');
+            editor.value = ${JSON.stringify(FOR_CONDITION)};
+            editor.parentElement.querySelector('.source-assistance-wand').click();
+            const dialog = document.querySelector('.source-assistance-dialog[open]');
+            const hint = dialog.querySelector('.assistance-guidance');
+            const result = { fixCards: dialog.querySelectorAll('.assistance-card-fix').length,
+                hint: hint ? hint.textContent : '' };
+            dialog.close();
+            return result;
+        `);
+        assert.equal(guidance.fixCards, 0, 'condition-style FOR offers no safe fix');
+        assert.match(guidance.hint, /WHILE/);
+        console.log('FOR header repair jumps to the fixed line; condition-style FOR stays guidance');
+        // The wand badge advertises the available safe fixes from live validation.
+        await page.run(`
+            const editor = document.getElementById('pseudocode-editor');
+            editor.value = ${JSON.stringify(FOR_SOURCE)};
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+            return true;
+        `);
+        await waitFor(page, '!document.querySelector(".source-assistance-badge").classList.contains("hidden")');
+        assert.equal(await page.run('return document.querySelector(".source-assistance-badge").textContent;'), '1');
+        console.log('wand badge reports the safe fix count');
         // Other editor targets, including DevTools: refresh must never invoke execution.
         for (const id of ['translate-input', 'devtools-pseudocode']) {
             const result = await page.run(`
@@ -89,11 +164,11 @@ const SOURCE = 'BEGIN\nIF x = 1\nDISPLAY 1\nEND IF\nEND';
                 editor.value = ${JSON.stringify(SOURCE)};
                 editor.parentElement.querySelector('.source-assistance-wand').click();
                 document.querySelector('.source-assistance-footer .btn-primary').click();
-                const valid = pseudopyReviewSource(editor.value).valid;
-                document.querySelector('.source-assistance-close').click();
-                return valid;
+                return { valid: pseudopyReviewSource(editor.value).valid,
+                    closed: !document.querySelector('.source-assistance-dialog') };
             `);
-            assert.equal(result, true, id);
+            assert.equal(result.valid, true, id);
+            assert.equal(result.closed, true, id + ' closes after applying');
             await waitFor(page, '!document.querySelector(".source-assistance-dialog")');
         }
         await sleep(1100);

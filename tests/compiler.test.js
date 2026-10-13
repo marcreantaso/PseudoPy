@@ -17,6 +17,45 @@ test('condition-style FOR reports one actionable header error', () => {
     assert.equal(result.errors.length, 1, JSON.stringify(result.errors));
     assert.match(result.errors[0].suggestion, /WHILE/);
 });
+test('FOR header diagnostics classify one exact repair', () => {
+    const header = source => compile(source).errors.find(e => e.code === 'PARSE_FOR_MISSING_FROM');
+    const insert = header('BEGIN\nFOR i 1 TO 10 DO\nDISPLAY i\nEND FOR\nEND');
+    assert.equal(insert.fixKind, 'insert-keyword');
+    assert.equal(insert.detail.expected, 'FROM');
+    assert.equal(insert.detail.found, '1');
+    assert.equal(insert.detail.hasTo, true);
+
+    const rewrite = header('BEGIN\nFOR i IN 1 TO 10 DO\nDISPLAY i\nEND FOR\nEND');
+    assert.equal(rewrite.fixKind, 'rewrite-header');
+    assert.equal(rewrite.detail.found, 'IN');
+
+    const condition = header('BEGIN\nFOR i <= 10 DO\nDISPLAY i\nEND FOR\nEND');
+    assert.equal(condition.fixKind, undefined);
+    assert.equal(condition.detail.hasTo, false);
+});
+test('a FOR header missing TO does not also report the DO sentinel', () => {
+    const broken = compile('BEGIN\nFOR i FROM 1 DO\nDISPLAY i\nEND FOR\nEND');
+    assert.equal(broken.errors.some(e => e.code === 'PARSE_FOR_MISSING_TO'), true);
+    assert.equal(broken.errors.some(e => e.code === 'PARSE_FOR_MISSING_DO'), false);
+
+    const parsed = compile('BEGIN\nFOR i FROM 1 TO 10\nDISPLAY i\nEND FOR\nEND');
+    assert.equal(parsed.errors.some(e => e.code === 'PARSE_FOR_MISSING_DO'), true);
+});
+test('DECLARE and SET header keywords are classified for repair', () => {
+    const declare = compile('BEGIN\nDECLARE x INTEGER\nSET x TO 1\nEND').errors.find(e => e.code === 'PARSE_DECLARE_MISSING_AS');
+    assert.equal(declare.fixKind, 'insert-keyword');
+    assert.equal(declare.detail.expected, 'AS');
+    assert.equal(declare.detail.found, 'INTEGER');
+
+    const setInsert = compile('BEGIN\nDECLARE x AS INTEGER\nSET x 5\nEND').errors.find(e => e.code === 'PARSE_SET_MISSING_TO');
+    assert.equal(setInsert.fixKind, 'insert-keyword');
+    assert.equal(setInsert.detail.expected, 'TO');
+    assert.equal(setInsert.detail.found, '5');
+
+    const setTypo = compile('BEGIN\nDECLARE x AS INTEGER\nSET x t0 5\nEND').errors.find(e => e.code === 'PARSE_SET_MISSING_TO');
+    assert.equal(setTypo.fixKind, 'rewrite-header');
+    assert.equal(setTypo.detail.found, 't0');
+});
 test('unsupported statement recovers at the next line', () => {
     const result = compile('BEGIN\nBOGUS 1 TO x\nDISPLAY 2\nEND');
     assert.equal(result.errors.length, 1);

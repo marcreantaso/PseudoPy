@@ -25,7 +25,7 @@ function validatePseudocode(code) {
     return { valid: result.valid, errors: result.errors, warnings: result.warnings };
 }
 
-function renderHtmlErrors(errors) {
+function renderHtmlErrors(errors, editorId) {
     const list = Array.isArray(errors) ? errors : [];
     const hasSemantic = list.some(e => e && e.stage === 'Semantic Analysis');
     const header = hasSemantic
@@ -59,6 +59,15 @@ function renderHtmlErrors(errors) {
             '<div><span style="color: var(--text-muted);">#</span></div></div>';
     }
     output += '<div style="margin-top: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># Fix the errors in your pseudocode before translation.</span></div>';
+    // A direct route into the Fix Pseudocode review, so a student does not have
+    // to find the wand. The dialog decides what is safely fixable.
+    if (editorId && list.length) {
+        const safeId = String(editorId).replace(/[^A-Za-z0-9_-]/g, '');
+        if (safeId) {
+            output += '<div style="margin-top: 0.75rem; font-family: \'JetBrains Mono\', monospace;">' +
+                '<button type="button" class="btn btn-primary btn-sm console-fix-btn" onclick="pseudopyOpenAssistanceFor(\'' + safeId + '\')">{{ui:Wrench}} Fix pseudocode</button></div>';
+        }
+    }
     return output;
 }
 

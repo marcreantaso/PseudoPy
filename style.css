@@ -7904,6 +7904,160 @@ tr.skeleton-tr td {
   background: var(--focus-ring);
 }
 
+/* ── CFG → AST → SDT walkthrough tab ─────────────────────── */
+
+.sim-walk {
+  background: var(--dt-surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+}
+
+.sim-walk-intro {
+  margin: 0 0 0.8rem;
+  font-size: 0.8rem;
+  color: var(--dt-text-subtle);
+}
+
+.sim-walk-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.sim-walk-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.sim-walk-col-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.3rem;
+}
+
+.sim-walk-col-head h4 {
+  margin: 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dt-text-subtle);
+}
+
+.sim-walk-col-head span {
+  font-size: 0.68rem;
+  color: var(--dt-text-subtle);
+}
+
+.sim-walk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-height: 22rem;
+  overflow: auto;
+}
+
+.sim-walk-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--dt-text);
+  cursor: pointer;
+}
+
+.sim-walk-row.sim-walk-current {
+  border-color: var(--dt-accent);
+  background: var(--focus-ring);
+  outline: 2px solid var(--dt-accent);
+  outline-offset: -2px;
+}
+
+.sim-walk-row:focus-visible {
+  outline: 2px solid var(--dt-accent);
+  outline-offset: 1px;
+}
+
+.sim-walk-prod {
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 0.72rem;
+  white-space: normal;
+}
+
+.sim-walk-lineno {
+  font-family: 'Courier New', Consolas, monospace;
+  color: var(--dt-text-subtle);
+  min-width: 2rem;
+}
+
+.sim-walk-pseudo {
+  color: var(--dt-text-subtle);
+  font-size: 0.7rem;
+  margin-left: auto;
+  text-align: right;
+}
+
+.sim-walk-python {
+  margin: 0;
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--code-fg);
+}
+
+.sim-walk-none {
+  font-size: 0.7rem;
+  color: var(--dt-text-subtle);
+  font-style: italic;
+}
+
+.sim-walk-source {
+  margin-top: 0.9rem;
+}
+
+.sim-walk-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 12rem;
+  overflow: auto;
+}
+
+.sim-walk-source-line {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  font-size: 0.75rem;
+}
+
+.sim-walk-source-line.sim-walk-current {
+  border-color: var(--dt-accent);
+  background: var(--focus-ring);
+}
+
+.sim-walk-source-no {
+  color: var(--dt-text-subtle);
+  font-family: 'Courier New', Consolas, monospace;
+  min-width: 1.6rem;
+  text-align: right;
+}
+
+.sim-walk-controls {
+  margin-top: 1rem;
+}
+
 /* Responsive: single-column Simulation layout on narrow screens */
 @media (max-width: 1024px) {
   .sim-layout {
@@ -7911,6 +8065,10 @@ tr.skeleton-tr td {
   }
 
   .sim-nlp-cols {
+    grid-template-columns: 1fr;
+  }
+
+  .sim-walk-columns {
     grid-template-columns: 1fr;
   }
 }
@@ -9274,6 +9432,9 @@ tr.skeleton-tr td {
 .source-assistance-wand:focus-visible { outline: 2px solid var(--accent, #4f8cff); outline-offset: 2px; }
 .source-assistance-wand:active { transform: scale(0.96); }
 .source-assistance-host textarea { padding-right: 64px; }
+.source-assistance-badge { position: absolute; top: -4px; inset-inline-end: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent, #4f8cff); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; pointer-events: none; }
+.source-assistance-undo { position: absolute; inset-inline-end: 12px; top: 64px; z-index: 3; white-space: nowrap; }
+.console-fix-btn { display: inline-flex; align-items: center; gap: 6px; }
 .source-assistance-gutter { position: absolute; left: 0; top: 0; bottom: 0; width: 48px; margin: 0; padding: 12px 8px; overflow: hidden; text-align: right; pointer-events: none; color: var(--text-secondary, #9ca3af); border-right: 1px solid var(--border-color, #687083); }
 .source-assistance-gutter div { line-height: 20px; }
 .source-assistance-gutter .assistance-error-line { color: var(--error, #f87171); font-weight: 600; }

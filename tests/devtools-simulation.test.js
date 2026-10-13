@@ -581,3 +581,187 @@ test('metrics chart and stage statuses degrade cleanly without metrics or events
     assert.equal(after.find(s => s.stage === 'LEXICAL_ANALYSIS').status, 'SUCCESS');
     assert.equal(after.find(s => s.stage === 'EXECUTION').status, 'ERROR');
 });
+
+// ── CFG → AST → SDT walkthrough (dedicated tab) ────────────────
+
+test('walk steps move one program through grammar, AST and real emitted Python', () => {
+    const sandbox = loadCompilerAndSimulation();
+    sandbox.simulationTracer.enable();
+    const source = [
+        'BEGIN',
+        'DECLARE total AS INTEGER',
+        'FOR i FROM 1 TO 3 DO',
+        'SET total TO total + i',
+        'END FOR',
+        'DISPLAY total',
+        'END'
+    ].join('\n');
+    const result = sandbox.engine.compile(source);
+    assert.equal(result.valid, true, JSON.stringify(result.errors));
+
+    const steps = sandbox._buildWalkSteps(result.ast, result.simulation.sourceMap);
+
+    assert.equal(steps[0].nodeType, 'Program', 'the root derivation is listed first');
+    assert.equal(steps[0].production, 'Program → BEGIN StatementList END');
+
+    const forStep = steps.find(s => s.nodeType === 'ForStatement');
+    assert.ok(forStep, 'the FOR construct is recognized');
+    assert.match(forStep.production, /^Statement → FOR /);
+    assert.ok(forStep.python.some(l => l.includes('_pseudopy_range(')), 'the FOR row carries its real Python');
+
+    const assign = steps.find(s => s.nodeType === 'AssignmentStatement');
+    assert.ok(assign, 'the loop body assignment is recognized');
+    assert.ok(assign.python.some(l => l.includes('total = total + i')), 'the assignment row carries its real Python');
+
+    // Synthetic helper preambles are never attributed to a user construct.
+    steps.forEach(s => s.python.forEach(line => {
+        assert.ok(!line.includes('def _pseudopy_range('), 'helper preamble is not a translation');
+    }));
+
+    // The walkthrough and the SDT table agree node-for-node (same key + order).
+    const sdtKeys = sandbox._buildSdtRows(result.ast, result.symbolTable || {})
+        .map(r => r.nodeType + ':' + r.line);
+    const walkKeys = steps.slice(1).map(s => s.nodeType + ':' + s.line);
+    assert.deepEqual(walkKeys, sdtKeys, 'the walkthrough and the SDT table agree node-for-node');
+});
+
+test('walk steps still show recognition up to the point a program fails', () => {
+    const sandbox = loadCompilerAndSimulation();
+    sandbox.simulationTracer.enable();
+    const result = sandbox.engine.compile('BEGIN\nIF x > 1 THEN\nDISPLAY 1\nEND');
+    assert.equal(result.valid, false);
+    const steps = sandbox._buildWalkSteps(result.ast, result.simulation.sourceMap);
+    assert.ok(steps.length >= 2, 'recognition is shown up to the failure');
+    assert.equal(steps[0].nodeType, 'Program');
+    assert.ok(steps.every(s => typeof s.production === 'string' && s.production.length > 0));
+});
+
+test('walk builders degrade cleanly without an AST or source map', () => {
+    const sandbox = loadSimulation();
+    assert.equal(sandbox._buildWalkSteps(null, null).length, 0);
+    assert.equal(sandbox._buildWalkSteps(undefined, undefined).length, 0);
+    assert.equal(sandbox._walkProduction('ForStatement').startsWith('Statement → FOR'), true);
+    assert.equal(sandbox._walkProduction('MysteryNode'), 'Statement → MysteryNode');
+    assert.equal(sandbox._walkPythonText(null, 'PrintStatement', 3).length, 0);
+});
+
+test('the CFG → AST → SDT tab exists and is wired to its renderer', () => {
+    const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+    assert.ok(index.includes('data-tab="grammar"'), 'the tab button is registered');
+    assert.ok(index.includes('id="devtools-panel-grammar"'), 'the tab panel exists');
+    ['sim-walk-cfg', 'sim-walk-ast', 'sim-walk-sdt', 'sim-walk-cursor', 'sim-walk-play']
+        .forEach(id => assert.ok(index.includes('id="' + id + '"'), id + ' is present'));
+    const sim = fs.readFileSync(path.join(root, 'src/devtools/simulation.js'), 'utf8');
+    assert.ok(sim.includes('_renderSimWalk('), 'the renderer is called from the pipeline update');
+    assert.ok(sim.includes('_buildWalkSteps('), 'steps are derived from the real AST');
+});
+
+// ── Walkthrough rendering: three synchronized columns ─────────
+
+// Loads the real renderers with a minimal DOM so the full
+// _updateSimulation -> _renderSimWalk path can be exercised.
+function loadWalkRender(sourceText) {
+    const files = [
+        '../mapper.js',
+        '../compiler.js',
+        '../src/devtools/dom.js',
+        '../src/devtools/simulation.js'
+    ];
+    const src = files.map(f => fs.readFileSync(path.resolve(__dirname, f), 'utf8')).join('\n');
+
+    const elements = {};
+    const queried = {};
+    const selectors = [];
+    const makeNode = () => {
+        const classes = new Set();
+        return {
+            classList: { add: c => classes.add(c), remove: c => classes.delete(c), contains: c => classes.has(c) },
+            scrollIntoView() {}
+        };
+    };
+    [
+        'sim-walk-cfg', 'sim-walk-ast', 'sim-walk-sdt', 'sim-walk-cursor', 'sim-walk-count',
+        'sim-walk-begin', 'sim-walk-back', 'sim-walk-play', 'sim-walk-pause', 'sim-walk-fwd', 'sim-walk-end',
+        'devtools-pseudocode'
+    ].forEach(id => { elements[id] = { id, innerHTML: '', textContent: '', value: '', disabled: false }; });
+    elements['devtools-pseudocode'].value = sourceText;
+
+    const sandbox = vm.createContext({
+        console: { log() {}, warn() {}, info() {}, error() {} },
+        performance: { now: () => 0 },
+        document: {
+            getElementById: id => elements[id] || null,
+            querySelectorAll: selector => {
+                selectors.push(selector);
+                const nodes = queried[selector] || (queried[selector] = [makeNode()]);
+                return { forEach: fn => nodes.forEach(fn), length: nodes.length, map: fn => nodes.map(fn) };
+            },
+            addEventListener() {},
+            createElement: () => {
+                let text = '';
+                return {
+                    set textContent(v) { text = String(v); },
+                    get textContent() { return text; },
+                    get innerHTML() {
+                        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    }
+                };
+            }
+        },
+        clearInterval() {},
+        setInterval: () => 1,
+        __elements: elements,
+        __queried: queried,
+        __selectors: selectors
+    });
+    vm.runInContext(src +
+        '\nglobalThis.engine = new PseudocodeCompiler();' +
+        '\nglobalThis.simulationTracer = simulationTracer;' +
+        '\nglobalThis.devToolsState = { simulationStepIndex: -1, simulationEvents: [], stepEvents: [], walkSteps: [], walkStepIndex: -1 };',
+        sandbox);
+    return sandbox;
+}
+
+test('the walkthrough renders three synchronized columns from a real compile', () => {
+    const program = ['BEGIN', 'DECLARE n AS INTEGER', 'DISPLAY n', 'END'].join('\n');
+    const sandbox = loadWalkRender(program);
+    sandbox.simulationTracer.enable();
+    const result = sandbox.engine.compile(program);
+    assert.equal(result.valid, true, JSON.stringify(result.errors));
+
+    sandbox._updateSimulation(result);
+
+    const el = sandbox.__elements;
+    const nums = h => (h.match(/data-walk-num="(\d+)"/g) || []).map(s => s.match(/\d+/)[0]);
+    const cfg = nums(el['sim-walk-cfg'].innerHTML);
+    const ast = nums(el['sim-walk-ast'].innerHTML);
+    const sdt = nums(el['sim-walk-sdt'].innerHTML);
+
+    assert.ok(cfg.length >= 3, 'the grammar column lists the recognized productions');
+    assert.deepEqual(ast, cfg, 'the AST column is in lockstep with the grammar column');
+    assert.deepEqual(sdt, cfg, 'the SDT column is in lockstep with the grammar column');
+    assert.equal(el['sim-walk-count'].textContent, cfg.length + ' step(s)');
+    assert.equal(el['sim-walk-fwd'].disabled, false, 'transport is enabled once there are steps');
+
+    // Stepping highlights the same key in every column, plus the source line.
+    const state = sandbox.devToolsState;
+    assert.equal(state.walkSteps.length, cfg.length);
+    sandbox.devToolsWalkStepFwd();
+    assert.equal(state.walkStepIndex, 0);
+    assert.ok(sandbox.__queried['.sim-walk-row[data-walk-num="1"]'][0].classList.contains('sim-walk-current'),
+        'the first step is highlighted in the row columns');
+
+    // A step that maps to a source line also drives the pseudocode cursor.
+    const linedStep = state.walkSteps.find(s => s.line != null);
+    assert.ok(linedStep, 'at least one step maps to a source line');
+    sandbox.devToolsWalkGoto(linedStep.num);
+    assert.equal(state.walkStepIndex, state.walkSteps.indexOf(linedStep));
+    assert.ok(sandbox.__selectors.some(s => s.indexOf('.sim-walk-source-line[data-walk-line="' + linedStep.line + '"]') === 0),
+        'the matching pseudocode cursor line is highlighted');
+
+    // Reset clears the cursor and re-walks the highlight lists.
+    sandbox.devToolsWalkReset();
+    assert.equal(state.walkStepIndex, -1);
+    assert.ok(sandbox.__queried['.sim-walk-row.sim-walk-current'].length > 0, 'reset clears prior highlights');
+});

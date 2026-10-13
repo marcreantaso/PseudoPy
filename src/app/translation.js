@@ -117,7 +117,7 @@ function translatePseudocodeGeneric(inputId, outputId, consoleId, runBtnSelector
         if (!validation.valid) {
             setPythonOutput(outputId, '# Translation failed due to errors in your pseudocode.\n# Please check the console below for details.');
             if (consoleEl) {
-                consoleEl.innerHTML = renderHtmlErrors(validation.errors);
+                consoleEl.innerHTML = renderHtmlErrors(validation.errors, inputId);
                 consoleEl.className = 'output-content error';
             }
             if (runBtn) runBtn.disabled = true;

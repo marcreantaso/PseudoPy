@@ -554,6 +554,272 @@ function _renderSimNlp(original, mapped) {
         : 'NLP mapping produced no changes for this program.';
 }
 
+// ══════════════════════════════════════════════════════════════
+// CFG → AST → SDT WALKTHROUGH (dedicated DevTools "CFG → AST → SDT" tab)
+//
+// One ordered step list, derived entirely from the real AST and the real
+// Python source map. Each step carries the grammar production that
+// recognized the construct, the AST node that recognition produced, and the
+// Python line(s) the SDT emitted for that node. Because every step carries
+// the same key (nodeType + line) in all three columns, the transport moves
+// them in lockstep. Nothing is fabricated: a node with no attributed Python
+// line shows none rather than a guess, and synthetic helper lines are never
+// attributed to a user construct.
+// ══════════════════════════════════════════════════════════════
+
+// Productions mirror the recursive-descent parseX() methods in parser.js and
+// the grammar documented in the manuscript. Derived at read time from the real
+// node type; the parser is never re-run and no production is invented.
+const DEV_WALK_PRODUCTIONS = {
+    Program: 'Program → BEGIN StatementList END',
+    DeclareStatement: 'Statement → DECLARE id AS Type',
+    AssignmentStatement: 'Statement → SET id TO Expression',
+    ArrayAssignStatement: 'Statement → SET id [ Expression ] TO Expression',
+    PrintStatement: 'Statement → DISPLAY Expression',
+    InputStatement: 'Statement → INPUT id [ WITH PROMPT "text" ]',
+    IfStatement: 'Statement → IF Expression THEN Block { ELSE IF Expression THEN Block } [ ELSE Block ] END IF',
+    ElseIfHead: 'Statement → ELSE IF Expression THEN Block',
+    WhileStatement: 'Statement → WHILE Expression DO Block END WHILE',
+    ForStatement: 'Statement → FOR id FROM Expression TO Expression [ STEP Expression ] DO Block END FOR',
+    ForEachStatement: 'Statement → FOR EACH id IN Expression DO Block END FOR',
+    FunctionDef: 'Statement → FUNCTION id ( Params ) Block END FUNCTION',
+    ReturnStatement: 'Statement → RETURN Expression',
+    CallStatement: 'Statement → CALL id ( Arguments )',
+    IncDecStatement: 'Statement → INCREMENT id | DECREMENT id',
+    AppendStatement: 'Statement → APPEND Expression TO id'
+};
+
+function _walkProduction(nodeType) {
+    return DEV_WALK_PRODUCTIONS[nodeType] || ('Statement → ' + nodeType);
+}
+
+// Attribute real emitted Python lines to the node that owns them. The synthetic
+// helper preambles are excluded. An `elif` line is emitted with its branch
+// object (which has no `.type`), so a null nodeType is accepted when the source
+// line matches — this keeps ELSE IF in lockstep without altering the generator.
+function _walkPythonText(sourceMap, nodeType, line) {
+    if (!sourceMap || line == null) return [];
+    return sourceMap.filter(function (entry) {
+        return !entry.synthetic && entry.sourceLine === line &&
+            (entry.nodeType === nodeType || entry.nodeType == null);
+    }).map(function (entry) { return entry.text; });
+}
+
+function _buildWalkSteps(ast, sourceMap) {
+    const steps = [];
+    if (!ast) return steps;
+    let num = 1;
+    const map = sourceMap || [];
+
+    const push = function (nodeType, line, depth, pseudo) {
+        steps.push({
+            num: num++,
+            line: (line == null ? null : line),
+            nodeType: nodeType,
+            depth: depth,
+            production: _walkProduction(nodeType),
+            pseudo: pseudo || '',
+            python: _walkPythonText(map, nodeType, line)
+        });
+    };
+
+    push('Program', ast.line || null, 0, 'BEGIN … END');
+
+    const visit = function (nodes, depth) {
+        if (!nodes) return;
+        for (const node of nodes) {
+            push(node.type, node.line, depth, _sdtPseudoLabel(node));
+            if (node.body) visit(node.body, depth + 1);
+            for (const branch of node.elseIfs || []) {
+                push('ElseIfHead', branch.line, depth, 'ELSE IF <condition> THEN');
+                visit(branch.body, depth + 1);
+            }
+            if (node.elseBody) visit(node.elseBody, depth + 1);
+        }
+    };
+    visit(ast.body, 1);
+    return steps;
+}
+
+let _walkPlayTimer = null;
+
+function _renderSimWalk(steps, original, state) {
+    const cfgEl = document.getElementById('sim-walk-cfg');
+    const astEl = document.getElementById('sim-walk-ast');
+    const sdtEl = document.getElementById('sim-walk-sdt');
+    const cursorEl = document.getElementById('sim-walk-cursor');
+    const countEl = document.getElementById('sim-walk-count');
+
+    if (state) {
+        state.walkSteps = steps || [];
+        state.walkStepIndex = -1;
+    }
+    // A new run supersedes any autoplay loop still advancing the old steps.
+    if (_walkPlayTimer) {
+        clearInterval(_walkPlayTimer);
+        _walkPlayTimer = null;
+    }
+    if (!cfgEl && !astEl && !sdtEl) return;
+
+    const idle = '<div class="devtools-idle-message"><p>Run the pipeline to move one program through grammar recognition, the AST, and SDT code generation.</p></div>';
+
+    if (!steps || steps.length === 0) {
+        if (cfgEl) cfgEl.innerHTML = idle;
+        if (astEl) astEl.innerHTML = idle;
+        if (sdtEl) sdtEl.innerHTML = idle;
+        if (cursorEl) cursorEl.innerHTML = idle;
+        if (countEl) countEl.textContent = 'no steps';
+        _simUpdateWalkTransport(false);
+        return;
+    }
+
+    const indent = function (depth) { return 'style="padding-left:' + (depth * 14) + 'px"'; };
+    const row = function (step, inner) {
+        return '<div class="sim-walk-row" role="button" tabindex="0"' +
+            ' data-walk-num="' + step.num + '"' +
+            ' data-walk-line="' + (step.line == null ? '' : step.line) + '"' +
+            ' onclick="devToolsWalkGoto(' + step.num + ')"' +
+            ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();devToolsWalkGoto(' + step.num + ');}"' +
+            ' aria-label="Step ' + step.num + ': ' + _esc(step.nodeType) + '" ' +
+            indent(step.depth) + '>' + inner + '</div>';
+    };
+
+    if (cfgEl) {
+        cfgEl.innerHTML = steps.map(function (s) {
+            return row(s, '<code class="sim-walk-prod">' + _esc(s.production) + '</code>');
+        }).join('');
+    }
+    if (astEl) {
+        astEl.innerHTML = steps.map(function (s) {
+            return row(s,
+                '<span class="sim-walk-lineno">' + (s.line == null ? '—' : 'L' + s.line) + '</span>' +
+                '<span class="ast-type">' + _esc(s.nodeType) + '</span>' +
+                (s.pseudo ? '<span class="sim-walk-pseudo">' + _esc(s.pseudo) + '</span>' : ''));
+        }).join('');
+    }
+    if (sdtEl) {
+        sdtEl.innerHTML = steps.map(function (s) {
+            const body = s.python.length
+                ? '<pre class="sim-walk-python">' + _esc(s.python.join('\n')) + '</pre>'
+                : '<span class="sim-walk-none">— no Python attributed to this node —</span>';
+            return row(s, body);
+        }).join('');
+    }
+    if (cursorEl) {
+        const lines = String(original || '').split('\n');
+        cursorEl.innerHTML = lines.map(function (text, i) {
+            return '<div class="sim-walk-source-line" data-walk-line="' + (i + 1) + '">' +
+                '<span class="sim-walk-source-no">' + (i + 1) + '</span><code>' + _esc(text) + '</code></div>';
+        }).join('');
+    }
+    if (countEl) countEl.textContent = steps.length + ' step(s)';
+    _simUpdateWalkTransport(true);
+}
+
+function _simClearWalkHighlights() {
+    document.querySelectorAll('.sim-walk-row.sim-walk-current').forEach(function (n) { n.classList.remove('sim-walk-current'); });
+    document.querySelectorAll('.sim-walk-source-line.sim-walk-current').forEach(function (n) { n.classList.remove('sim-walk-current'); });
+}
+
+function _simApplyWalkStep(step) {
+    _simClearWalkHighlights();
+    if (!step) return;
+    document.querySelectorAll('.sim-walk-row[data-walk-num="' + step.num + '"]').forEach(function (n) {
+        n.classList.add('sim-walk-current');
+        if (typeof n.scrollIntoView === 'function') n.scrollIntoView({ block: 'nearest' });
+    });
+    if (step.line != null) {
+        document.querySelectorAll('.sim-walk-source-line[data-walk-line="' + step.line + '"]').forEach(function (n) {
+            n.classList.add('sim-walk-current');
+        });
+    }
+}
+
+function _simUpdateWalkTransport(enabled) {
+    ['sim-walk-begin', 'sim-walk-back', 'sim-walk-play', 'sim-walk-fwd', 'sim-walk-end'].forEach(function (id) {
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = !enabled;
+    });
+    const pause = document.getElementById('sim-walk-pause');
+    if (pause) pause.disabled = true;
+}
+
+function devToolsWalkStepFwd() {
+    devToolsWalkPause();
+    const state = typeof devToolsState !== 'undefined' ? devToolsState : null;
+    if (!state || !state.walkSteps || state.walkSteps.length === 0) return;
+    state.walkStepIndex = Math.min((state.walkStepIndex == null ? -1 : state.walkStepIndex) + 1, state.walkSteps.length - 1);
+    _simApplyWalkStep(state.walkSteps[state.walkStepIndex]);
+}
+
+function devToolsWalkStepBack() {
+    devToolsWalkPause();
+    const state = typeof devToolsState !== 'undefined' ? devToolsState : null;
+    if (!state || !state.walkSteps || state.walkSteps.length === 0) return;
+    state.walkStepIndex = Math.max((state.walkStepIndex == null ? 0 : state.walkStepIndex) - 1, 0);
+    _simApplyWalkStep(state.walkSteps[state.walkStepIndex]);
+}
+
+function devToolsWalkStepBegin() {
+    devToolsWalkPause();
+    const state = typeof devToolsState !== 'undefined' ? devToolsState : null;
+    if (!state || !state.walkSteps || state.walkSteps.length === 0) return;
+    state.walkStepIndex = 0;
+    _simApplyWalkStep(state.walkSteps[0]);
+}
+
+function devToolsWalkStepEnd() {
+    devToolsWalkPause();
+    const state = typeof devToolsState !== 'undefined' ? devToolsState : null;
+    if (!state || !state.walkSteps || state.walkSteps.length === 0) return;
+    state.walkStepIndex = state.walkSteps.length - 1;
+    _simApplyWalkStep(state.walkSteps[state.walkStepIndex]);
+}
+
+function devToolsWalkGoto(num) {
+    devToolsWalkPause();
+    const state = typeof devToolsState !== 'undefined' ? devToolsState : null;
+    if (!state || !state.walkSteps) return;
+    const step = state.walkSteps.find(function (s) { return s.num === num; });
+    if (!step) return;
+    state.walkStepIndex = state.walkSteps.indexOf(step);
+    _simApplyWalkStep(step);
+}
+
+function devToolsWalkPlay() {
+    if (_walkPlayTimer) return;
+    const state = typeof devToolsState !== 'undefined' ? devToolsState : null;
+    if (!state || !state.walkSteps || state.walkSteps.length === 0) return;
+    _walkPlayTimer = setInterval(function () {
+        if (state.walkStepIndex >= state.walkSteps.length - 1) {
+            devToolsWalkPause();
+            return;
+        }
+        devToolsWalkStepFwd();
+    }, 700);
+    const playBtn = document.getElementById('sim-walk-play');
+    if (playBtn) playBtn.disabled = true;
+    const pauseBtn = document.getElementById('sim-walk-pause');
+    if (pauseBtn) pauseBtn.disabled = false;
+}
+
+function devToolsWalkPause() {
+    if (_walkPlayTimer) {
+        clearInterval(_walkPlayTimer);
+        _walkPlayTimer = null;
+    }
+    const playBtn = document.getElementById('sim-walk-play');
+    if (playBtn) playBtn.disabled = false;
+    const pauseBtn = document.getElementById('sim-walk-pause');
+    if (pauseBtn) pauseBtn.disabled = true;
+}
+
+function devToolsWalkReset() {
+    devToolsWalkPause();
+    _simClearWalkHighlights();
+    if (typeof devToolsState !== 'undefined') devToolsState.walkStepIndex = -1;
+}
+
 function devToolsSimPopulateFilters() {
     const events = _simEvents(typeof devToolsState !== 'undefined' ? devToolsState : null);
     const stageSel = document.getElementById('sim-ledger-stage');
@@ -781,6 +1047,11 @@ function _updateSimulation(result) {
     const originalEl = document.getElementById('devtools-pseudocode');
     const original = originalEl ? originalEl.value : '';
     _renderSimNlp(original, (result && result.mappedCode) || '');
+    _renderSimWalk(
+        _buildWalkSteps(ast, (result && result.simulation && result.simulation.sourceMap) || []),
+        original,
+        (typeof devToolsState !== 'undefined') ? devToolsState : null
+    );
     _renderSimMetrics(result);
     _renderSimVerdict();
 
