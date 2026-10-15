@@ -674,14 +674,16 @@ function _renderSimWalk(steps, original, state) {
     }
 
     const indent = function (depth) { return 'style="padding-left:' + (depth * 14) + 'px"'; };
+    // A real <button> rather than a div imitating one: focusability,
+    // Enter/Space activation and the non-selectable chrome rules then come
+    // from the platform instead of inline key handlers.
     const row = function (step, inner) {
-        return '<div class="sim-walk-row" role="button" tabindex="0"' +
+        return '<button type="button" class="sim-walk-row"' +
             ' data-walk-num="' + step.num + '"' +
             ' data-walk-line="' + (step.line == null ? '' : step.line) + '"' +
             ' onclick="devToolsWalkGoto(' + step.num + ')"' +
-            ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();devToolsWalkGoto(' + step.num + ');}"' +
             ' aria-label="Step ' + step.num + ': ' + _esc(step.nodeType) + '" ' +
-            indent(step.depth) + '>' + inner + '</div>';
+            indent(step.depth) + '>' + inner + '</button>';
     };
 
     if (cfgEl) {
