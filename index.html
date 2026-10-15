@@ -364,18 +364,18 @@
         <!-- Student Nav -->
         <div id="nav-student" class="hidden">
           <div class="nav-section-label">Student</div>
-          <button class="nav-item active" onclick="navigateTo('write-pseudocode')">
+          <button type="button" class="nav-item active" aria-current="page" onclick="navigateTo('write-pseudocode')">
             <span class="nav-icon"><i data-lucide="pencil" aria-hidden="true"></i></span> Write Pseudocode
           </button>
 
-          <button class="nav-item" onclick="navigateTo('feedback')">
+          <button type="button" class="nav-item" onclick="navigateTo('feedback')">
             <span class="nav-icon"><i data-lucide="lightbulb" aria-hidden="true"></i></span> Feedback &amp; Suggestions
           </button>
-          <button class="nav-item" onclick="navigateTo('exercises-student')">
+          <button type="button" class="nav-item" onclick="navigateTo('exercises-student')">
             <span class="nav-icon"><i data-lucide="notebook-pen" aria-hidden="true"></i></span> Exercises &amp; Tasks
           </button>
 
-          <button class="nav-item" onclick="navigateTo('student-settings')">
+          <button type="button" class="nav-item" onclick="navigateTo('student-settings')">
             <span class="nav-icon"><i data-lucide="settings" aria-hidden="true"></i></span> Settings
           </button>
         </div>
@@ -383,22 +383,22 @@
         <!-- Instructor Nav -->
         <div id="nav-instructor" class="hidden">
           <div class="nav-section-label">Instructor</div>
-          <button class="nav-item active" onclick="navigateTo('analytics')">
+          <button type="button" class="nav-item active" aria-current="page" onclick="navigateTo('analytics')">
             <span class="nav-icon"><i data-lucide="chart-column" aria-hidden="true"></i></span> Learning Analytics
           </button>
-          <button class="nav-item" onclick="navigateTo('manage-students')">
+          <button type="button" class="nav-item" onclick="navigateTo('manage-students')">
             <span class="nav-icon"><i data-lucide="users" aria-hidden="true"></i></span> Manage Students
           </button>
-          <button class="nav-item" onclick="navigateTo('manage-exercises')">
+          <button type="button" class="nav-item" onclick="navigateTo('manage-exercises')">
             <span class="nav-icon"><i data-lucide="clipboard-list" aria-hidden="true"></i></span> Manage Exercises
           </button>
-          <button class="nav-item" onclick="navigateTo('generate-code')">
+          <button type="button" class="nav-item" onclick="navigateTo('generate-code')">
             <span class="nav-icon"><i data-lucide="code-2" aria-hidden="true"></i></span> Generate Python Code
           </button>
-          <button class="nav-item" onclick="navigateTo('compiler-metrics')">
+          <button type="button" class="nav-item" onclick="navigateTo('compiler-metrics')">
             <span class="nav-icon"><i data-lucide="flask-conical" aria-hidden="true"></i></span> Compiler Metrics
           </button>
-          <button class="nav-item" onclick="navigateTo('password-recovery')" style="position:relative;">
+          <button type="button" class="nav-item" onclick="navigateTo('password-recovery')" style="position:relative;">
             <span class="nav-icon"><i data-lucide="key-round" aria-hidden="true"></i></span> Password Recovery
             <span id="nav-recovery-badge" style="display:none; position:absolute; right:0.75rem; top:50%; transform:translateY(-50%); background:var(--danger); color:#fff; border-radius:999px; font-size:0.7rem; font-weight:700; min-width:18px; height:18px; align-items:center; justify-content:center; padding:0 4px;"></span>
           </button>
@@ -407,20 +407,20 @@
         <!-- Admin Nav -->
         <div id="nav-admin" class="hidden">
           <div class="nav-section-label">Administration</div>
-          <button class="nav-item active" onclick="navigateTo('manage-users')">
+          <button type="button" class="nav-item active" aria-current="page" onclick="navigateTo('manage-users')">
             <span class="nav-icon"><i data-lucide="users" aria-hidden="true"></i></span> Manage Instructors
           </button>
-          <button class="nav-item" onclick="navigateTo('system-analytics')">
+          <button type="button" class="nav-item" onclick="navigateTo('system-analytics')">
             <span class="nav-icon"><i data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span> System Analytics
           </button>
-          <button class="nav-item" onclick="navigateTo('password-requests')" style="position:relative;">
+          <button type="button" class="nav-item" onclick="navigateTo('password-requests')" style="position:relative;">
             <span class="nav-icon"><i data-lucide="key-round" aria-hidden="true"></i></span> Password Requests
             <span id="nav-admin-recovery-badge" style="display:none; position:absolute; right:0.75rem; top:50%; transform:translateY(-50%); background:var(--danger); color:#fff; border-radius:999px; font-size:0.7rem; font-weight:700; min-width:18px; height:18px; align-items:center; justify-content:center; padding:0 4px;"></span>
           </button>
-          <button class="nav-item" onclick="navigateTo('admin-execute')">
+          <button type="button" class="nav-item" onclick="navigateTo('admin-execute')">
             <span class="nav-icon"><i data-lucide="play-circle" aria-hidden="true"></i></span> Execute Code
           </button>
-          <button class="nav-item" onclick="navigateTo('developer-options')">
+          <button type="button" class="nav-item" onclick="navigateTo('developer-options')">
             <span class="nav-icon"><i data-lucide="bug" aria-hidden="true"></i></span> Developer Options
           </button>
 
@@ -2063,27 +2063,27 @@
 
         <!-- Tabbed Inspector Panels -->
         <div class="devtools-tabs">
-          <div class="devtools-tab-bar" id="devtools-tab-bar">
-            <button class="devtools-tab active" data-tab="tokens" onclick="devToolsSwitchTab('tokens')">Tokens</button>
-            <button class="devtools-tab" data-tab="ast" onclick="devToolsSwitchTab('ast')">AST</button>
-            <button class="devtools-tab" data-tab="symboltable" onclick="devToolsSwitchTab('symboltable')">Symbol Table</button>
-            <button class="devtools-tab" data-tab="parser" onclick="devToolsSwitchTab('parser')">Parser State</button>
-            <button class="devtools-tab" data-tab="semantic" onclick="devToolsSwitchTab('semantic')">Semantic</button>
-            <button class="devtools-tab" data-tab="translation" onclick="devToolsSwitchTab('translation')">Translation</button>
-            <button class="devtools-tab" data-tab="errors" onclick="devToolsSwitchTab('errors')">Errors</button>
-            <button class="devtools-tab" data-tab="runtime" onclick="devToolsSwitchTab('runtime')">Runtime</button>
-            <button class="devtools-tab" data-tab="trace" onclick="devToolsSwitchTab('trace')">Exec Trace</button>
-            <button class="devtools-tab" data-tab="attempts" onclick="devToolsSwitchTab('attempts')">Attempts</button>
-            <button class="devtools-tab" data-tab="eventlog" onclick="devToolsSwitchTab('eventlog')">Event Log</button>
-            <button class="devtools-tab" data-tab="metrics" onclick="devToolsSwitchTab('metrics')">Metrics</button>
-            <button class="devtools-tab" data-tab="simulation" onclick="devToolsSwitchTab('simulation')">Simulation</button>
-            <button class="devtools-tab" data-tab="grammar" onclick="devToolsSwitchTab('grammar')">CFG → AST → SDT</button>
-            <button class="devtools-tab" data-tab="rawjson" onclick="devToolsSwitchTab('rawjson')">Raw JSON</button>
-            <button class="devtools-tab" data-tab="health" onclick="devToolsSwitchTab('health')">DB Health</button>
-            <button class="devtools-tab" data-tab="langguide" onclick="devToolsSwitchTab('langguide')">Language Guide</button>
-            <button class="devtools-tab" data-tab="normalize" onclick="devToolsSwitchTab('normalize')">Normalize/Format</button>
-            <button class="devtools-tab" data-tab="sop2" onclick="devToolsSwitchTab('sop2')">SOP2 Comparison</button>
-            <button class="devtools-tab" data-tab="impl" onclick="devToolsSwitchTab('impl')">Implementation</button>
+          <div class="devtools-tab-bar" id="devtools-tab-bar" role="tablist" aria-label="Developer Options panels">
+            <button type="button" role="tab" aria-selected="true" tabindex="0" class="devtools-tab active" data-tab="tokens" onclick="devToolsSwitchTab('tokens')">Tokens</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="ast" onclick="devToolsSwitchTab('ast')">AST</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="symboltable" onclick="devToolsSwitchTab('symboltable')">Symbol Table</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="parser" onclick="devToolsSwitchTab('parser')">Parser State</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="semantic" onclick="devToolsSwitchTab('semantic')">Semantic</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="translation" onclick="devToolsSwitchTab('translation')">Translation</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="errors" onclick="devToolsSwitchTab('errors')">Errors</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="runtime" onclick="devToolsSwitchTab('runtime')">Runtime</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="trace" onclick="devToolsSwitchTab('trace')">Exec Trace</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="attempts" onclick="devToolsSwitchTab('attempts')">Attempts</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="eventlog" onclick="devToolsSwitchTab('eventlog')">Event Log</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="metrics" onclick="devToolsSwitchTab('metrics')">Metrics</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="simulation" onclick="devToolsSwitchTab('simulation')">Simulation</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="grammar" onclick="devToolsSwitchTab('grammar')">CFG → AST → SDT</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="rawjson" onclick="devToolsSwitchTab('rawjson')">Raw JSON</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="health" onclick="devToolsSwitchTab('health')">DB Health</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="langguide" onclick="devToolsSwitchTab('langguide')">Language Guide</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="normalize" onclick="devToolsSwitchTab('normalize')">Normalize/Format</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="sop2" onclick="devToolsSwitchTab('sop2')">SOP2 Comparison</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" class="devtools-tab" data-tab="impl" onclick="devToolsSwitchTab('impl')">Implementation</button>
           </div>
 
           <div class="devtools-tab-panel active" id="devtools-panel-tokens">
@@ -2293,6 +2293,7 @@ CALL f(1,2); f(1,2)</pre>
               <p>Recursive calls supported; signature validation incomplete.</p>
               <h3>Operators/Unicode</h3><p>+ - * / DIV MOD ^ ** // ; == != &lt;&gt; = &gt; &lt; &gt;= &lt;= IS NOT IN AND OR NOT; ≥≤≠≡×÷−→ normalized.</p>
               <h3>Notes</h3><p>Input conversion limited; no preserved column mapping; Skulpt runtime.</p>
+              <h3>Interface tips</h3><p>If you see a blinking text cursor moving through menus, buttons or labels, your browser's caret browsing is on. Press <kbd>F7</kbd> to switch it off, or turn off "Navigate pages with a text cursor" in the browser's accessibility settings.</p>
             </div>
           </div>
           <div class="devtools-tab-panel" id="devtools-panel-normalize">
@@ -2434,6 +2435,17 @@ CALL f(1,2); f(1,2)</pre>
               <i data-lucide="refresh-cw" aria-hidden="true"></i> Replay Tutorial
             </button>
             <span style="font-size:0.75rem;color:var(--text-muted)">Replay the guided tour of the Write Pseudocode page.</span>
+          </div>
+        </div>
+
+        <!-- Display & Accessibility Section -->
+        <div class="settings-section">
+          <div class="section-header">
+            <h3><i data-lucide="monitor" aria-hidden="true"></i> Display &amp; Accessibility</h3>
+            <p>Interface text is locked so menus, labels and buttons cannot be selected by accident. Editors, console output, feedback and table values stay copyable.</p>
+          </div>
+          <div class="form-group" style="margin-top:0.5rem">
+            <p style="font-size:0.8rem;color:var(--text-muted);max-width:60ch">If you see a blinking text cursor moving through menus, buttons or labels, caret browsing is switched on in your browser. Press <kbd>F7</kbd> to turn it off, or disable "Navigate pages with a text cursor" in the browser's accessibility settings.</p>
           </div>
         </div>
 

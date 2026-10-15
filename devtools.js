@@ -547,19 +547,72 @@ function initDevTools() {
     // Wire file upload / drag & drop and the export button state.
     if (typeof devToolsInitFileDrop === 'function') devToolsInitFileDrop();
     if (typeof devToolsSyncPythonExportButton === 'function') devToolsSyncPythonExportButton();
+    // Give the tab strip its ARIA tablist semantics and keyboard support.
+    if (typeof devToolsInitTabs === 'function') devToolsInitTabs();
 }
 
 // ══════════════════════════════════════════════════════════════
 // TAB SWITCHING
 // ══════════════════════════════════════════════════════════════
 
-function devToolsSwitchTab(tabId) {
-    document.querySelectorAll('#devtools-tab-bar .devtools-tab').forEach(t => t.classList.remove('active'));
+function devToolsSwitchTab(tabId, options) {
+    const shouldFocus = !!(options && options.focus);
+    const tabs = document.querySelectorAll('#devtools-tab-bar .devtools-tab');
+    tabs.forEach(t => {
+        const active = t.getAttribute('data-tab') === tabId;
+        t.classList.toggle('active', active);
+        // A CSS class alone is invisible to assistive tech: keep the ARIA
+        // selected state and the roving tabindex in step with the panel.
+        t.setAttribute('aria-selected', String(active));
+        t.tabIndex = active ? 0 : -1;
+        if (active && shouldFocus && typeof t.focus === 'function') t.focus();
+    });
     document.querySelectorAll('.devtools-tab-panel').forEach(p => p.classList.remove('active'));
-    const btn = document.querySelector(`#devtools-tab-bar .devtools-tab[data-tab="${tabId}"]`);
-    if (btn) btn.classList.add('active');
     const panel = document.getElementById('devtools-panel-' + tabId);
     if (panel) panel.classList.add('active');
+}
+
+/**
+ * Turn the static tab buttons into a real ARIA tablist. Ids and
+ * aria-controls/aria-labelledby are derived from data-tab so the markup only
+ * has to declare the tab once, and arrow/Home/End keys move between tabs
+ * (selection follows focus) for keyboard users.
+ */
+function devToolsInitTabs() {
+    const bar = document.getElementById('devtools-tab-bar');
+    if (!bar || bar.dataset.dtTabsBound === 'true') return;
+    bar.dataset.dtTabsBound = 'true';
+
+    const tabs = Array.from(bar.querySelectorAll('.devtools-tab'));
+    tabs.forEach(tab => {
+        const id = tab.getAttribute('data-tab');
+        if (!id) return;
+        tab.id = 'devtools-tab-' + id;
+        tab.setAttribute('aria-controls', 'devtools-panel-' + id);
+        const panel = document.getElementById('devtools-panel-' + id);
+        if (panel) {
+            panel.setAttribute('role', 'tabpanel');
+            panel.setAttribute('aria-labelledby', tab.id);
+            if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '0');
+        }
+    });
+
+    bar.addEventListener('keydown', event => {
+        const current = tabs.indexOf(document.activeElement);
+        if (current === -1) return;
+        let next = -1;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (current + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (current - 1 + tabs.length) % tabs.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = tabs.length - 1;
+        if (next === -1) return;
+        event.preventDefault();
+        devToolsSwitchTab(tabs[next].getAttribute('data-tab'), { focus: true });
+    });
+
+    // The tab marked active in the HTML owns the single tab stop.
+    const active = bar.querySelector('.devtools-tab.active') || tabs[0];
+    if (active) devToolsSwitchTab(active.getAttribute('data-tab'));
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2514,14 +2567,16 @@ function _renderSimWalk(steps, original, state) {
     }
 
     const indent = function (depth) { return 'style="padding-left:' + (depth * 14) + 'px"'; };
+    // A real <button> rather than a div imitating one: focusability,
+    // Enter/Space activation and the non-selectable chrome rules then come
+    // from the platform instead of inline key handlers.
     const row = function (step, inner) {
-        return '<div class="sim-walk-row" role="button" tabindex="0"' +
+        return '<button type="button" class="sim-walk-row"' +
             ' data-walk-num="' + step.num + '"' +
             ' data-walk-line="' + (step.line == null ? '' : step.line) + '"' +
             ' onclick="devToolsWalkGoto(' + step.num + ')"' +
-            ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();devToolsWalkGoto(' + step.num + ');}"' +
             ' aria-label="Step ' + step.num + ': ' + _esc(step.nodeType) + '" ' +
-            indent(step.depth) + '>' + inner + '</div>';
+            indent(step.depth) + '>' + inner + '</button>';
     };
 
     if (cfgEl) {

@@ -7971,8 +7971,15 @@ tr.skeleton-tr td {
   border: 1px solid transparent;
   border-radius: 0.4rem;
   font-size: 0.75rem;
+  font-family: inherit;
   color: var(--dt-text);
+  background: none;
   cursor: pointer;
+  /* A real <button> must not inherit the mobile 44px tap-target
+     minimum: the walkthrough is a dense, scrolling step list. */
+  width: 100%;
+  min-height: 0;
+  text-align: left;
 }
 
 .sim-walk-row.sim-walk-current {
@@ -8247,6 +8254,135 @@ tr.skeleton-tr td {
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 3px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SELECTION & CARET POLICY
+   ───────────────────────────────────────────────────────────
+   Browser caret browsing (Chrome/Edge F7 — "Navigate pages with
+   a text cursor") drops a blinking text caret into interface
+   chrome, which reads as a broken input. A page cannot turn
+   caret browsing off, so chrome is made non-selectable and its
+   caret transparent, while the content users actually copy is
+   explicitly kept selectable. Order matters:
+     1. chrome       — selection and caret off
+     2. allowlist    — explicit opt-in for copyable content
+     3. escape hatch — real editable controls keep a normal caret
+   ═══════════════════════════════════════════════════════════ */
+
+/* 1 ── Interface chrome: not selectable, no blinking caret. */
+.sidebar,
+.topbar,
+.app-header,
+.sidebar-footer,
+.user-info,
+.nav-section-label,
+.nav-item,
+.page-header,
+.panel-header,
+.card-header,
+.modal-header,
+.modal-footer,
+.devtools-tab-bar,
+.devtools-tab,
+.pagination-wrapper,
+.pagination-controls,
+.pagination-info,
+.an-pagination-row,
+.sync-state-indicator,
+.sync-notice,
+.toast,
+.toast-container,
+.badge,
+.chip,
+.pill,
+.stat-label,
+.detail-label,
+.skip-link,
+th,
+.btn,
+button,
+label {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  caret-color: transparent;
+}
+
+/* 2 ── Content users copy: explicitly selectable. Declared after
+   the chrome rule so a deliberate opt-in wins any specificity tie. */
+.selectable,
+.code-editor,
+.output-content,
+.feedback-list,
+.feedback-container,
+.devtools-raw-pre,
+.devtools-panel-body,
+.devtools-table td,
+td,
+pre,
+code,
+samp,
+kbd,
+#console-output,
+#translate-console,
+#execute-console,
+#instructor-console,
+#admin-console,
+#python-output {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+}
+
+/* 3 ── Escape hatch: editable controls always keep a caret and
+   text selection, whatever chrome they happen to sit inside. */
+input,
+textarea,
+select,
+[contenteditable],
+[contenteditable='true'],
+[role='textbox'] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+  caret-color: auto;
+}
+
+/* 4 ── Non-actionable chrome reads as a label, not a link. */
+.nav-section-label,
+.stat-label,
+.detail-label,
+.pagination-info,
+.sync-state-indicator,
+.toast-container,
+.devtools-tab-bar {
+  cursor: default;
+}
+
+/* Nav and tab buttons must never be dragged out of the page. */
+.nav-item,
+.devtools-tab,
+[role='tab'],
+.sidebar-nav a {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+
+/* 5 ── Deliberate selection colours, readable in both themes. */
+:root {
+  --selection-bg: #bfdbfe;
+  --selection-fg: #0b1220;
+}
+
+[data-theme='dark'] {
+  --selection-bg: #1d4ed8;
+  --selection-fg: #f8fafc;
+}
+
+::selection {
+  background: var(--selection-bg);
+  color: var(--selection-fg);
 }
 
 .operator-guide {

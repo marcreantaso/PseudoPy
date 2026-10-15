@@ -35,11 +35,15 @@ currentPage = pageId;
 
     closeMobileSidebar();
 
-    $qsa('.nav-item').forEach(el => el.classList.remove('active'));
+    // Reflect the active route on the nav buttons. The match is exact on the
+    // onclick call so 'analytics' can never also light up 'system-analytics';
+    // aria-current="page" is kept in sync with the .active class because a
+    // CSS class alone is invisible to assistive tech.
     $qsa('.nav-item').forEach(item => {
-        if (item.getAttribute('onclick')?.includes(pageId)) {
-            item.classList.add('active');
-        }
+        const isActive = item.getAttribute('onclick') === `navigateTo('${pageId}')`;
+        item.classList.toggle('active', isActive);
+        if (isActive) item.setAttribute('aria-current', 'page');
+        else item.removeAttribute('aria-current');
     });
 
     // Update topbar title
