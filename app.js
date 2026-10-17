@@ -8027,8 +8027,10 @@ if (typeof module !== 'undefined' && module.exports) {
 
 /**
  * Records an audit action. NEVER logs passwords or hashes.
+ * `reason` is optional; when present it is stored verbatim so the event
+ * detail view can explain why the action happened.
  */
-async function logAuditAction({ action, studentId, studentName, username, instructorId, instructorName, requestId }) {
+async function logAuditAction({ action, studentId, studentName, username, instructorId, instructorName, requestId, reason }) {
     try {
         const logId = 'al_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
         await dbSet(auditLogRef, logId, {
@@ -8040,6 +8042,7 @@ async function logAuditAction({ action, studentId, studentName, username, instru
             instructorId: instructorId || null,
             instructorName: instructorName || null,
             requestId: requestId || null,
+            reason: reason || null,
             timestamp: new Date().toISOString()
         });
     } catch (e) {
@@ -8881,6 +8884,7 @@ let auditLogPage = 1;
 let auditLogCategory = '';
 let auditLogBusy = false;
 const AUDIT_LOG_PAGE_SIZE = 8;
+const AUDIT_CLEAR_CONFIRM_WORD = 'DELETE';
 
 /** Escape a value for use inside a quoted HTML attribute. */
 function auditEscapeAttribute(value) {
@@ -9088,25 +9092,132 @@ function closeAuditDetail() {
     hide('audit-detail-drawer');
 }
 
-async function clearSecurityAuditHistory() {
-    if (!window.confirm('Clear all security audit history? Password recovery requests will remain unchanged.')) return;
-    const button = document.querySelector('[onclick="clearSecurityAuditHistory()"]');
-    if (button) button.disabled = true;
+/* ── Clear history (archive first, typed confirmation) ───────── */
+
+function openAuditClearModal() {
+    if (auditLogBusy) return;
+    const count = auditLogAllRecords.length;
+    const summary = $id('audit-clear-summary');
+    if (summary) {
+        summary.textContent = count === 0
+            ? 'There are no security events to clear.'
+            : `This permanently deletes ${count} security event${count === 1 ? '' : 's'} from this device and the cloud. Password recovery requests are not affected.`;
+    }
+    const input = $id('audit-clear-confirm-input');
+    if (input) input.value = '';
+    const confirmBtn = $id('audit-clear-confirm-btn');
+    if (confirmBtn) confirmBtn.disabled = true;
+    show('audit-clear-modal');
+}
+
+function closeAuditClearModal() {
+    hide('audit-clear-modal');
+}
+
+function auditClearInputChanged() {
+    const input = $id('audit-clear-confirm-input');
+    const confirmBtn = $id('audit-clear-confirm-btn');
+    if (confirmBtn) {
+        confirmBtn.disabled = !(input && input.value.trim().toUpperCase() === AUDIT_CLEAR_CONFIRM_WORD);
+    }
+}
+
+async function performClearAuditHistory() {
+    if (auditLogBusy) return;
+    const input = $id('audit-clear-confirm-input');
+    if (!input || input.value.trim().toUpperCase() !== AUDIT_CLEAR_CONFIRM_WORD) return;
+
+    auditLogBusy = true;
+    const confirmBtn = $id('audit-clear-confirm-btn');
+    if (confirmBtn) { confirmBtn.classList.add('is-loading'); confirmBtn.disabled = true; }
+
+    const clearedCount = auditLogAllRecords.length;
     try {
         await dbClearCollection(auditLogRef);
+        const actorId = currentUser ? (currentUser._docId || currentUser.id) : 'admin';
+        const actorName = currentUser ? currentUser.fullName : 'Administrator';
+        // One new record documents who cleared the history and when.
+        await logAuditAction({
+            action: 'audit.history-cleared',
+            studentId: actorId,
+            studentName: actorName,
+            instructorId: actorId,
+            instructorName: actorName,
+            reason: clearedCount > 0
+                ? `Cleared ${clearedCount} audit event${clearedCount === 1 ? '' : 's'}.`
+                : 'No events were present.'
+        });
+        closeAuditClearModal();
         showToast('Security audit history cleared.', 'success');
         await loadPasswordRequests();
     } catch (error) {
         console.error('[Audit] Clear history failed:', error);
         showToast('Unable to clear security audit history.', 'error');
     } finally {
-        if (button) button.disabled = false;
+        auditLogBusy = false;
+        if (confirmBtn) { confirmBtn.classList.remove('is-loading'); confirmBtn.disabled = false; }
     }
+}
+
+/* ── CSV archive ─────────────────────────────────────────────── */
+
+function auditCsvCell(value) {
+    const s = String(value == null ? '' : value);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function buildAuditCsv(records) {
+    const headers = ['timestamp', 'action_code', 'action_label', 'category',
+        'account', 'username', 'authorized_by', 'record_id'];
+    const lines = [headers.join(',')];
+    (records || []).forEach(r => {
+        const meta = formatAuditAction(r.action);
+        const category = AUDIT_ACTION_CATEGORIES[meta.category]
+            ? AUDIT_ACTION_CATEGORIES[meta.category].label
+            : meta.category;
+        lines.push([
+            r.timestamp || '',
+            meta.code || r.action || '',
+            meta.label,
+            category,
+            auditRecordAccountName(r),
+            auditRecordUsername(r),
+            resolveAuditAuthorizedBy(r, meta),
+            r._docId || r.id || ''
+        ].map(auditCsvCell).join(','));
+    });
+    return lines.join('\r\n');
+}
+
+function downloadAuditCsv() {
+    const csv = buildAuditCsv(auditLogAllRecords);
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'pseudopy-security-audit-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('Audit history exported as CSV.', 'success');
 }
 
 /* ── UI wiring ───────────────────────────────────────────────── */
 
 function initAuditLogUi() {
+    const clearBtn = $id('audit-clear-history-btn');
+    if (clearBtn && !clearBtn.dataset.auditBound) {
+        clearBtn.dataset.auditBound = '1';
+        clearBtn.addEventListener('click', openAuditClearModal);
+    }
+    const confirmBtn = $id('audit-clear-confirm-btn');
+    if (confirmBtn) confirmBtn.addEventListener('click', performClearAuditHistory);
+    const exportBtn = $id('audit-export-csv-btn');
+    if (exportBtn) exportBtn.addEventListener('click', downloadAuditCsv);
+    const input = $id('audit-clear-confirm-input');
+    if (input) input.addEventListener('input', auditClearInputChanged);
+
     ['audit-search', 'audit-date-from', 'audit-date-to'].forEach(id => {
         const el = $id(id);
         if (el) {
@@ -9116,6 +9227,7 @@ function initAuditLogUi() {
     });
 
     if (typeof document.querySelectorAll === 'function') {
+        document.querySelectorAll('[data-audit-clear-close]').forEach(el => el.addEventListener('click', closeAuditClearModal));
         document.querySelectorAll('[data-audit-close]').forEach(el => el.addEventListener('click', closeAuditDetail));
     }
 
@@ -9146,8 +9258,10 @@ function initAuditLogUi() {
     if (typeof document.addEventListener === 'function') {
         document.addEventListener('keydown', event => {
             if (event.key !== 'Escape') return;
+            const modal = $id('audit-clear-modal');
             const drawer = $id('audit-detail-drawer');
-            if (drawer && !drawer.classList.contains('hidden')) closeAuditDetail();
+            if (modal && !modal.classList.contains('hidden')) closeAuditClearModal();
+            else if (drawer && !drawer.classList.contains('hidden')) closeAuditDetail();
         });
     }
 }

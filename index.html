@@ -2675,9 +2675,6 @@ CALL f(1,2); f(1,2)</pre>
           <div class="panel-header audit-panel-header">
             <h3>{{ui:LockKeyhole}} Security Audit Log</h3>
             <span class="audit-count" id="audit-count-label" role="status" aria-live="polite"></span>
-            <button class="btn btn-danger btn-sm" onclick="clearSecurityAuditHistory()" title="Clear security audit history">
-              {{ui:Trash2}} Clear History
-            </button>
           </div>
           <div class="audit-toolbar">
             <div class="audit-chips" id="audit-category-chips" role="group" aria-label="Filter audit events by category"></div>
@@ -2706,6 +2703,17 @@ CALL f(1,2); f(1,2)</pre>
           <div class="audit-pagination" id="audit-pagination"></div>
         </div>
 
+        <!-- Danger zone: destructive, visually separated from normal actions -->
+        <div class="audit-danger-zone">
+          <div class="audit-danger-copy">
+            <h4>{{ui:TriangleAlert}} Danger zone</h4>
+            <p>Clearing the audit history permanently removes every recorded security event from this device and the cloud. Export a CSV copy first if you need a record.</p>
+          </div>
+          <button class="btn btn-danger btn-sm" id="audit-clear-history-btn" type="button">
+            {{ui:Trash2}} Clear history
+          </button>
+        </div>
+
         <!-- Audit event detail drawer -->
         <div id="audit-detail-drawer" class="drawer-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="audit-detail-title">
           <div class="drawer-panel">
@@ -2716,6 +2724,28 @@ CALL f(1,2); f(1,2)</pre>
             <div class="drawer-body" id="audit-detail-body"></div>
             <div class="drawer-footer">
               <button class="btn btn-secondary" type="button" data-audit-close>Close</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clear audit history confirmation modal -->
+        <div id="audit-clear-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="audit-clear-title">
+          <div class="modal" style="max-width:480px">
+            <div class="modal-header">
+              <h3 id="audit-clear-title">{{ui:TriangleAlert}} Clear security audit history</h3>
+              <button class="btn btn-ghost btn-icon" type="button" data-audit-clear-close aria-label="Close clear history dialog">{{ui:X}}</button>
+            </div>
+            <div class="modal-body">
+              <p id="audit-clear-summary" role="alert"></p>
+              <p class="audit-clear-hint">This cannot be undone. Export a CSV copy first if you may need these events.</p>
+              <button class="btn btn-secondary btn-sm" id="audit-export-csv-btn" type="button">{{ui:Download}} Export CSV first</button>
+              <label class="audit-clear-label" for="audit-clear-confirm-input">Type <strong>DELETE</strong> to confirm</label>
+              <input id="audit-clear-confirm-input" class="form-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="audit-clear-hint">
+              <p id="audit-clear-hint" class="audit-clear-hint">A record of who cleared the history will be kept.</p>
+            </div>
+            <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:0.6rem">
+              <button class="btn btn-ghost" type="button" data-audit-clear-close>Cancel</button>
+              <button class="btn btn-danger" id="audit-clear-confirm-btn" type="button" disabled>{{ui:Trash2}} Clear history</button>
             </div>
           </div>
         </div>
