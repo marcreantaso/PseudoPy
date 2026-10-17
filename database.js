@@ -3498,11 +3498,15 @@ function normalizeAuditRecord(record) {
     };
 }
 
-async function refreshAuditLog() {
+async function refreshAuditLog(options = {}) {
+    const includeUnidentified = options.includeUnidentified === true;
     const records = await dbGetAll(auditLogRef);
     return records.map(normalizeAuditRecord)
-        // Legacy partial writes must never appear as a fake Unknown event.
-        .filter(record => record.action && record.action !== 'unknown' && record.actorId && record.actorName);
+        // Legacy partial writes must never appear as a fake Unknown event, but
+        // the admin log can opt in to show them as "Unknown account" rather
+        // than silently hiding events.
+        .filter(record => record.action && record.action !== 'unknown'
+            && (includeUnidentified || (record.actorId && record.actorName)));
 }
 
 function subscribeCollection(ref, onChange, onError) {

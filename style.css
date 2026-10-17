@@ -2412,6 +2412,321 @@ svg.lucide {
   border-color: var(--status-neutral-border);
 }
 
+.audit-log-container .audit-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.audit-count {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.audit-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1.1rem;
+  border-bottom: 1px solid var(--border-divider);
+}
+
+.audit-toolbar-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.audit-chips {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.audit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-input);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.audit-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.audit-chip.is-active {
+  background: var(--status-info-bg);
+  color: var(--status-info-fg);
+  border-color: var(--status-info-border);
+}
+
+.audit-chip-count {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius-full);
+  background: var(--bg-input-soft);
+  color: var(--text-muted);
+}
+
+.audit-chip.is-active .audit-chip-count {
+  background: rgba(0, 0, 0, 0.12);
+  color: inherit;
+}
+
+.audit-search {
+  min-width: 12rem;
+}
+
+.audit-date {
+  min-width: 8.5rem;
+}
+
+/* Fixed layout so pagination does not shift column sizes between pages. */
+.audit-log-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.audit-log-table th:nth-child(1) { width: 34%; }
+.audit-log-table th:nth-child(2) { width: 30%; }
+.audit-log-table th:nth-child(3) { width: 18%; }
+.audit-log-table th:nth-child(4) { width: 14%; }
+.audit-log-table th:nth-child(5) { width: 4%; }
+
+.audit-log-table .user-cell > div {
+  min-width: 0;
+}
+
+.audit-account-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audit-account-username {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audit-account-unknown {
+  color: var(--text-disabled, var(--text-muted));
+  font-style: italic;
+  font-weight: 500;
+}
+
+.audit-authorized,
+.audit-when {
+  font-size: 0.83rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.audit-details-cell {
+  text-align: right;
+}
+
+.audit-detail-btn {
+  color: var(--text-muted);
+}
+
+.audit-detail-btn:hover {
+  color: var(--text-accent);
+}
+
+.audit-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted);
+}
+
+.audit-pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1.1rem;
+}
+
+.audit-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--status-danger-border);
+  border-radius: var(--radius-lg);
+  background: var(--status-danger-bg);
+}
+
+.audit-danger-copy h4 {
+  margin: 0 0 0.3rem;
+  font-size: 0.95rem;
+  color: var(--status-danger-fg);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.audit-danger-copy p {
+  margin: 0;
+  font-size: 0.83rem;
+  color: var(--text-secondary);
+  max-width: 60ch;
+}
+
+/* Event detail drawer */
+.audit-detail-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.audit-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.audit-detail-row dt {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.audit-detail-row dd {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.audit-mono {
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: var(--text-accent);
+  background: var(--bg-input-soft);
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.audit-code-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.audit-muted {
+  color: var(--text-muted);
+}
+
+/* Mobile: rows become cards and never overflow the viewport. */
+@media (max-width: 640px) {
+  .audit-log-table,
+  .audit-log-table tbody,
+  .audit-log-table tr,
+  .audit-log-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .audit-log-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .audit-log-table tr {
+    border: 1px solid var(--border-divider);
+    border-radius: var(--radius-lg);
+    margin: 0 0 0.75rem;
+    padding: 0.5rem;
+    background: var(--bg-card);
+  }
+
+  .audit-log-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.35rem 0.5rem;
+    border: none;
+    text-align: left;
+  }
+
+  .audit-log-table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+
+  .audit-log-table .audit-details-cell {
+    justify-content: flex-end;
+  }
+
+  .audit-log-table .audit-details-cell::before {
+    content: none;
+  }
+
+  .audit-toolbar,
+  .audit-toolbar-filters {
+    width: 100%;
+  }
+
+  .audit-search,
+  .audit-date {
+    flex: 1 1 8rem;
+    min-width: 0;
+  }
+
+  .audit-danger-zone {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-overlay,
+  .drawer-panel {
+    animation: none;
+  }
+}
+
 /* ── Chart Placeholder ── */
 .chart-container {
   background: var(--bg-card);
