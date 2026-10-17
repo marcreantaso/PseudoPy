@@ -16,7 +16,10 @@
    ============================================================ */
 const { spawnSync } = require('child_process');
 
-const SYNTAX_PROBE = 'import ast, sys; ast.parse(sys.stdin.read())';
+// `compile()` rather than `ast.parse`: only the compile step runs the
+// symbol-table pass, so inputs like `return 5` at module level (valid AST,
+// invalid program) are correctly reported as compile errors.
+const SYNTAX_PROBE = 'import sys; compile(sys.stdin.read(), "<generated>", "exec")';
 
 function pythonCommand() {
   return process.env.PYTHON || 'python3';

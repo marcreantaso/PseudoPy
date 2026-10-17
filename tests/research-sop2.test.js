@@ -87,7 +87,7 @@ test('runSeedComparison writes real JSON and CSV files', { skip: !PYTHON_OK }, (
 
   const json = JSON.parse(fs.readFileSync(path.join(dir, 'sop2-comparison-results.json'), 'utf8'));
   assert.equal(json.results.length, 2);
-  assert.equal(json.metadata.metricsVersion, '1.1.0');
+  assert.equal(json.metadata.metricsVersion, '2.0.0');
 
   const csvRaw = fs.readFileSync(path.join(dir, 'sop2-comparison-results.csv'), 'utf8');
   assert.equal((csvRaw.match(/\\n/g) || []).length, 0);

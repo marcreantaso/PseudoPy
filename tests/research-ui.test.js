@@ -19,10 +19,21 @@ function makeElement(id, values) {
     innerHTML: '',
     className: '',
     style: {},
+    hidden: false,
+    label: '',
+    classList: {
+      _set: {},
+      add: function (c) { this._set[c] = true; },
+      remove: function (c) { delete this._set[c]; },
+      contains: function (c) { return !!this._set[c]; },
+      toggle: function (c, force) { if (force === undefined) force = !this._set[c]; if (force) this._set[c] = true; else delete this._set[c]; return force; }
+    },
+    setAttribute: function () {},
     addEventListener: function () {},
     appendChild: function () {},
     removeChild: function () {},
     querySelector: function () { return null; },
+    focus: function () {},
     click: function () {}
   };
 }
@@ -46,11 +57,16 @@ function loadUi() {
   ctx.Blob = function (parts, opts) { return { parts: parts, opts: opts }; };
   ctx.navigator = {};
   // Serve the real vendored Skulpt runtime, so the panel's syntax and runtime
-  // checks are exercised for real rather than against a stub.
+  // checks are exercised for real rather than against a stub. The shared
+  // research modules are loaded in the same order as the devtools bundle.
   for (const f of [
     'mapper.js', 'compiler.js',
     'vendor/skulpt/skulpt.min.js', 'vendor/skulpt/skulpt-stdlib.js',
-    'src/research/line-metrics.js', 'src/research/baseline-translator.js',
+    'src/research/line-metrics.js', 'src/research/stats.js',
+    'src/research/functional-metrics.js', 'src/research/error-taxonomy.js',
+    'src/research/error-injection.js', 'src/research/holdout-cases.js',
+    'src/research/dataset.js', 'src/research/timing.js', 'src/research/report.js',
+    'src/research/baseline-translator.js',
     'src/devtools/research-ui.js'
   ]) {
     vm.runInContext(read(f), ctx, { filename: f });
@@ -58,14 +74,15 @@ function loadUi() {
   return ctx;
 }
 
-test('research-ui wires every SOP2 button and shares the metrics core', () => {
+test('research-ui wires every SOP2 button and avoids a duplicate metrics implementation', () => {
   const src = read('src/devtools/research-ui.js');
-  for (const id of ['sop2-compare', 'sop2-run', 'sop2-bench', 'sop2-export-json', 'sop2-export-csv']) {
+  for (const id of ['sop2-compare', 'sop2-run', 'sop2-bench', 'sop2-export-json', 'sop2-export-csv', 'sop2-export-md']) {
     assert.ok(src.includes("bind('" + id + "'"), id + ' has no click handler');
   }
   assert.doesNotMatch(src, /require\(/, 'browser UI must not call require');
-  assert.match(src, /MetricsCore\.lineMetrics/, 'must use the shared metrics core');
+  assert.match(src, /Sop2Functional/, 'must use the shared functional/taxonomy modules');
   assert.doesNotMatch(src, /function lineMetrics\(/, 'must not carry a duplicate metrics implementation');
+  assert.doesNotMatch(src, /function classify\(/, 'must not carry a duplicate taxonomy implementation');
 });
 
 test('vendored Skulpt parses with the (filename, code) argument order the UI uses', () => {
