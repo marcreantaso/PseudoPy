@@ -3407,6 +3407,1887 @@ if (typeof module !== 'undefined' && module.exports) {
 if (typeof window !== 'undefined') {
   window.MetricsCore = MetricsCore;
 }
+/* ============================================================
+   SOP 2 — statistics (pure, dependency-free, deterministic)
+
+   Implements exactly what the SOP 2 report needs and nothing more:
+   • wilson()        — Wilson score interval for a binomial proportion
+   • mcnemarExact()  — exact (binomial) two-sided McNemar test for
+                       paired pass/fail outcomes
+   • wilcoxon()      — Wilcoxon signed-rank test for paired times
+                       (exact for small n, normal approximation beyond)
+   • median / quantile / iqr — order statistics for the timing report
+
+   Usable from Node (`module.exports`) and the browser (`window.Sop2Stats`)
+   exactly like src/research/line-metrics.js. No randomness, no I/O, no
+   third-party code, so the numbers are reproducible across machines.
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  var Z_95 = 1.959963984540054;
+  var SQRT2 = Math.sqrt(2);
+
+  /* ---------- binomial helpers ---------- */
+
+  function logChoose(n, k) {
+    if (k < 0 || k > n) return -Infinity;
+    if (k > n - k) k = n - k;
+    var r = 0;
+    for (var i = 1; i <= k; i++) r += Math.log(n - k + i) - Math.log(i);
+    return r;
+  }
+
+  function binomPmf(k, n, p) {
+    if (k < 0 || k > n) return 0;
+    if (p === 0) return k === 0 ? 1 : 0;
+    if (p === 1) return k === n ? 1 : 0;
+    return Math.exp(logChoose(n, k) + k * Math.log(p) + (n - k) * Math.log(1 - p));
+  }
+
+  /* ---------- normal CDF (Zelen & Severo approximation, ~1e-7) ---------- */
+
+  function erf(z) {
+    var sign = z < 0 ? -1 : 1;
+    var x = Math.abs(z);
+    var p = 0.3275911;
+    var a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
+      a4 = -1.453152027, a5 = 1.061405429;
+    var t = 1 / (1 + p * x);
+    var y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+    return sign * y;
+  }
+
+  function normalCdf(z) {
+    return 0.5 * (1 + erf(z / SQRT2));
+  }
+
+  /* ---------- Wilson score interval ---------- */
+
+  /**
+   * Wilson score interval for `successes` out of `n`.
+   * @returns {{p:number, low:number, high:number, n:number, successes:number, z:number}}
+   */
+  function wilson(successes, n, z) {
+    z = z || Z_95;
+    n = n || 0;
+    successes = successes || 0;
+    if (n <= 0) return { p: 0, low: 0, high: 0, n: 0, successes: 0, z: z };
+    var p = successes / n;
+    var z2 = z * z;
+    var denom = 1 + z2 / n;
+    var centre = (p + z2 / (2 * n)) / denom;
+    var margin = (z * Math.sqrt((p * (1 - p) + z2 / (4 * n)) / n)) / denom;
+    return {
+      p: p,
+      low: Math.max(0, centre - margin),
+      high: Math.min(1, centre + margin),
+      n: n,
+      successes: successes,
+      z: z
+    };
+  }
+
+  /* ---------- McNemar exact test ---------- */
+
+  /**
+   * Exact two-sided McNemar test on the discordant pair counts.
+   * `b` = cases where side A passed and side B failed;
+   * `c` = cases where side A failed and side B passed.
+   * p = 2 * P(X <= min(b,c)) with X ~ Binomial(b+c, 0.5), capped at 1.
+   */
+  function mcnemarExact(b, c) {
+    b = b || 0;
+    c = c || 0;
+    var n = b + c;
+    if (n === 0) return { b: b, c: c, n: 0, p: 1 };
+    var k = Math.min(b, c);
+    var tail = 0;
+    for (var i = 0; i <= k; i++) tail += binomPmf(i, n, 0.5);
+    return { b: b, c: c, n: n, p: Math.min(1, 2 * tail) };
+  }
+
+  /* ---------- order statistics ---------- */
+
+  /** Sorted copy. */
+  function sorted(values) {
+    return values.slice().sort(function (a, b) { return a - b; });
+  }
+
+  /**
+   * Linear-interpolation percentile (R type 7), 0 <= q <= 1.
+   */
+  function quantile(values, q) {
+    var v = sorted(values);
+    if (!v.length) return 0;
+    if (v.length === 1) return v[0];
+    var pos = (v.length - 1) * q;
+    var lo = Math.floor(pos);
+    var hi = Math.ceil(pos);
+    if (lo === hi) return v[lo];
+    return v[lo] + (v[hi] - v[lo]) * (pos - lo);
+  }
+
+  function median(values) { return quantile(values, 0.5); }
+
+  /** Interquartile range = Q3 - Q1. */
+  function iqr(values) { return quantile(values, 0.75) - quantile(values, 0.25); }
+
+  function mean(values) {
+    if (!values.length) return 0;
+    var t = 0;
+    for (var i = 0; i < values.length; i++) t += values[i];
+    return t / values.length;
+  }
+
+  /** Descriptive timing summary used by timing.js. */
+  function describe(values) {
+    return {
+      n: values.length,
+      median: median(values),
+      q1: quantile(values, 0.25),
+      q3: quantile(values, 0.75),
+      iqr: iqr(values),
+      mean: mean(values),
+      min: values.length ? sorted(values)[0] : 0,
+      max: values.length ? sorted(values)[values.length - 1] : 0
+    };
+  }
+
+  /* ---------- Wilcoxon signed-rank ---------- */
+
+  /** Midranks (average ranks for ties) for an array of values. */
+  function midranks(values) {
+    var n = values.length;
+    var order = values.map(function (v, i) { return { v: v, i: i }; });
+    order.sort(function (a, b) { return a.v - b.v; });
+    var ranks = new Array(n);
+    var i = 0;
+    while (i < n) {
+      var j = i;
+      while (j + 1 < n && order[j + 1].v === order[i].v) j++;
+      var avg = (i + j + 2) / 2; // ranks are 1..n
+      for (var k = i; k <= j; k++) ranks[order[k].i] = avg;
+      i = j + 1;
+    }
+    return ranks;
+  }
+
+  /** Exact null distribution of W+ via subset-sum DP over the given ranks. */
+  function exactWPlusDistribution(ranks) {
+    var total = ranks.reduce(function (a, b) { return a + b; }, 0);
+    var counts = new Array(total + 1);
+    for (var i = 0; i <= total; i++) counts[i] = 0;
+    counts[0] = 1;
+    for (var r = 0; r < ranks.length; r++) {
+      var w = ranks[r];
+      for (var s = total - w; s >= 0; s--) {
+        if (counts[s] !== 0) counts[s + w] += counts[s];
+      }
+    }
+    return { counts: counts, total: total };
+  }
+
+  /**
+   * Wilcoxon signed-rank test on paired differences.
+   *
+   * @param {number[]} diffs paired differences (A - B); zeros are dropped
+   * @returns {{n:number, wPlus:number, wMinus:number, statistic:number,
+   *            p:number, method:string, hasTies:boolean}}
+   */
+  function wilcoxon(diffs) {
+    var d = diffs.filter(function (x) { return x !== 0 && isFinite(x); });
+    var n = d.length;
+    if (n === 0) {
+      return { n: 0, wPlus: 0, wMinus: 0, statistic: 0, p: 1, method: 'none', hasTies: false };
+    }
+    var abs = d.map(Math.abs);
+    var ranks = midranks(abs);
+    var hasTies = ranks.some(function (r) { return r !== Math.round(r); });
+    var wPlus = 0, wMinus = 0;
+    for (var i = 0; i < n; i++) {
+      if (d[i] > 0) wPlus += ranks[i]; else wMinus += ranks[i];
+    }
+    var statistic = Math.min(wPlus, wMinus);
+
+    // Exact when there are no ties and n is small enough for the DP to be cheap.
+    if (!hasTies && n <= 25) {
+      var dist = exactWPlusDistribution(ranks);
+      var denom = Math.pow(2, n);
+      var tail = 0;
+      for (var s = 0; s <= statistic; s++) tail += dist.counts[s];
+      var p = Math.min(1, 2 * (tail / denom));
+      return { n: n, wPlus: wPlus, wMinus: wMinus, statistic: statistic, p: p, method: 'exact', hasTies: false };
+    }
+
+    // Normal approximation with tie correction.
+    var total = ranks.reduce(function (a, b) { return a + b; }, 0);
+    var mean = total / 2;
+    var tieSum = 0;
+    rankTieGroups(abs).forEach(function (g) {
+      if (g > 1) tieSum += g * g * g - g;
+    });
+    var variance = (n * (n + 1) * (2 * n + 1)) / 24 - tieSum / 48;
+    if (variance <= 0) return { n: n, wPlus: wPlus, wMinus: wMinus, statistic: statistic, p: 1, method: 'normal', hasTies: hasTies };
+    var z = (wPlus - mean) / Math.sqrt(variance);
+    var zc = Math.abs(z) - 0.5 / Math.sqrt(variance); // continuity correction
+    var p2 = 2 * (1 - normalCdf(Math.max(0, zc)));
+    return { n: n, wPlus: wPlus, wMinus: wMinus, statistic: statistic, p: Math.min(1, p2), method: 'normal', hasTies: hasTies };
+  }
+
+  function rankTieGroups(values) {
+    var s = sorted(values);
+    var groups = [];
+    var i = 0;
+    while (i < s.length) {
+      var j = i;
+      while (j + 1 < s.length && s[j + 1] === s[i]) j++;
+      groups.push(j - i + 1);
+      i = j + 1;
+    }
+    return groups;
+  }
+
+  var Sop2Stats = {
+    Z_95: Z_95,
+    wilson: wilson,
+    mcnemarExact: mcnemarExact,
+    wilcoxon: wilcoxon,
+    median: median,
+    quantile: quantile,
+    iqr: iqr,
+    mean: mean,
+    describe: describe,
+    normalCdf: normalCdf,
+    binomPmf: binomPmf
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = Sop2Stats;
+  if (root) root.Sop2Stats = Sop2Stats;
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+/* ============================================================
+   SOP 2 — functional correctness + text similarity (pure)
+
+   Two clearly separated notions, because conflating them is the
+   methodological flaw this module exists to remove:
+
+   1) FUNCTIONAL CORRECTNESS (the real SOP 2a measure)
+      A translation is correct only when the generated program runs
+      in the shared runtime AND prints exactly what the reference
+      program prints for the same input. stdout equality is the
+      criterion; nothing here inspects the generated source.
+
+   2) TEXT SIMILARITY (secondary, explicitly NOT correctness)
+      Frequency-based line precision/recall/F1. Reported twice:
+        • raw        — the original line-metrics output, unchanged
+        • normalized — comments, blank lines, indentation-only
+                       differences, and compiler-generated declaration
+                       initializers removed, so a translator is no
+                       longer penalised for harmless structural lines.
+
+   Usable from Node (`module.exports`) and the browser (`window.Sop2Functional`).
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  function metricsCore() {
+    if (root && root.MetricsCore) return root.MetricsCore;
+    if (typeof require === 'function') {
+      try { return require('./line-metrics'); } catch (e) { /* browser */ }
+    }
+    return null;
+  }
+
+  /* ---------- stdout normalisation ---------- */
+
+  /** Canonical stdout: CRLF -> LF, strip trailing spaces, trim ends. */
+  function normalizeOutput(text) {
+    if (text == null) return '';
+    return String(text)
+      .replace(/\r\n?/g, '\n')
+      .split('\n')
+      .map(function (line) { return line.replace(/[ \t]+$/, ''); })
+      .join('\n')
+      .replace(/^\n+/, '')
+      .replace(/\n+$/, '');
+  }
+
+  /**
+   * Do two programs print the same thing?
+   * @returns {boolean}
+   */
+  function outputsMatch(a, b) {
+    return normalizeOutput(a) === normalizeOutput(b);
+  }
+
+  /* ---------- text similarity normalisation ---------- */
+
+  var DECL_INIT = /^(?:0|0\.0|""|''|\[\]|False|None)$/;
+
+  /**
+   * Remove non-semantic lines and canonicalise the rest:
+   *   • strip `# …` comments (outside the line-metrics normaliser)
+   *   • drop `# DECLARE name …` preludes together with the single
+   *     `name = <default>` initializer the code generator emits for them
+   *   • drop blank lines
+   *   • collapse whitespace runs and strip spaces around punctuation
+   */
+  function normalizeSemantic(code) {
+    var lines = String(code == null ? '' : code).replace(/\r\n?/g, '\n').split('\n');
+    var drop = new Array(lines.length).fill(false);
+
+    // Pass 1: pair `# DECLARE name` with the following default initializer.
+    for (var i = 0; i < lines.length; i++) {
+      var m = /^\s*#\s*DECLARE\s+([A-Za-z_][A-Za-z0-9_]*)/i.exec(lines[i]);
+      if (!m) continue;
+      var name = m[1];
+      for (var j = i + 1; j < lines.length; j++) {
+        var t = lines[j].trim();
+        if (t === '') continue;
+        var init = new RegExp('^' + name + '\\s*=\\s*(.+)$');
+        var im = init.exec(t);
+        if (im && DECL_INIT.test(im[1].trim())) { drop[j] = true; }
+        break;
+      }
+      drop[i] = true;
+    }
+
+    var out = [];
+    for (var k = 0; k < lines.length; k++) {
+      if (drop[k]) continue;
+      var line = lines[k];
+      // Remove inline/whole-line comments () unless the # is inside a string.
+      line = stripComment(line);
+      if (line.trim() === '') continue;
+      out.push(canonicalizeLine(line));
+    }
+    return out.join('\n');
+  }
+
+  function stripComment(line) {
+    var inSingle = false, inDouble = false;
+    for (var i = 0; i < line.length; i++) {
+      var ch = line[i];
+      if (ch === '\\') { i++; continue; }
+      if (ch === "'" && !inDouble) inSingle = !inSingle;
+      else if (ch === '"' && !inSingle) inDouble = !inDouble;
+      else if (ch === '#' && !inSingle && !inDouble) return line.slice(0, i);
+    }
+    return line;
+  }
+
+  /** Normalise a line's whitespace/indentation without changing its tokens. */
+  function canonicalizeLine(line) {
+    var leading = (line.match(/^\s*/) || [''])[0].length;
+    var body = line.trim();
+    body = body
+      .replace(/\s+/g, ' ')
+      .replace(/\s*([=+\-*/%<>!&|^]+)\s*/g, ' $1 ')
+      .replace(/\s*([(),:\[\]])\s*/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+    var indentLevels = Math.round(leading / 4);
+    return '    '.repeat(Math.max(0, indentLevels)) + body;
+  }
+
+  /**
+   * Text similarity for one generated/expected pair.
+   * @returns {{raw:object, normalized:object}} line-metric objects
+   */
+  function textSimilarity(gen, exp) {
+    var core = metricsCore();
+    if (!core || typeof core.lineMetrics !== 'function') {
+      throw new Error('MetricsCore unavailable for textSimilarity');
+    }
+    return {
+      raw: core.lineMetrics(gen || '', exp || ''),
+      normalized: core.lineMetrics(normalizeSemantic(gen), normalizeSemantic(exp))
+    };
+  }
+
+  /* ---------- functional verdict ---------- */
+
+  /**
+   * Functional outcome for one side of one case.
+   * @param {{rejected?:boolean, emitted?:boolean, syntaxOk:boolean|null,
+   *          runtimeOk:boolean|null, stdout?:string}} side
+   * @param {string} referenceStdout
+   */
+  function functionalOutcome(side, referenceStdout) {
+    var ran = side.runtimeOk === true;
+    var matches = ran && outputsMatch(side.stdout, referenceStdout);
+    return {
+      ran: ran,
+      outputMatches: matches,
+      correct: matches
+    };
+  }
+
+  var Sop2Functional = {
+    normalizeOutput: normalizeOutput,
+    outputsMatch: outputsMatch,
+    normalizeSemantic: normalizeSemantic,
+    canonicalizeLine: canonicalizeLine,
+    stripComment: stripComment,
+    textSimilarity: textSimilarity,
+    functionalOutcome: functionalOutcome
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = Sop2Functional;
+  if (root) root.Sop2Functional = Sop2Functional;
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+/* ============================================================
+   SOP 2 — error taxonomy (pure)
+
+   Every (case, translator) pair lands in exactly one class so the
+   SOP 2b answers can be stated per failure mode instead of as a
+   single blended "error rate":
+
+     rejected      — the translator declined the input and said so
+                     (PseudoPy's validation mechanism). A handled,
+                     WARNED outcome — not a silent failure.
+     syntax_error  — the translator emitted Python that does not
+                     compile.
+     runtime_error — emitted Python compiles but raises when run.
+     wrong_output  — emitted Python runs but prints something other
+                     than the reference output.
+     correct       — runs and prints exactly the reference output.
+     unverified    — the shared interpreter was unavailable, so no
+                     verdict could be reached (never counted as a
+                     failure).
+
+   "Silent failure" = syntax_error | runtime_error | wrong_output on a
+   side that issued NO warning. This is where a validation mechanism is
+   supposed to matter, so it is reported separately from raw errors.
+
+   Usable from Node (`module.exports`) and the browser (`window.Sop2Taxonomy`).
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  var CLASSES = ['correct', 'wrong_output', 'runtime_error', 'syntax_error', 'rejected', 'unverified'];
+  var FAILURE_CLASSES = { syntax_error: true, runtime_error: true, wrong_output: true };
+
+  /**
+   * @param {{rejected?:boolean, hasWarning?:boolean, syntaxOk:boolean|null,
+   *          runtimeOk:boolean|null, outputMatches?:boolean}} side
+   * @returns {string} one of CLASSES
+   */
+  function classify(side) {
+    side = side || {};
+    if (side.rejected === true) return 'rejected';
+    if (side.syntaxOk === null || side.syntaxOk === undefined) return 'unverified';
+    if (side.syntaxOk === false) return 'syntax_error';
+    if (side.runtimeOk === null || side.runtimeOk === undefined) return 'unverified';
+    if (side.runtimeOk === false) return 'runtime_error';
+    if (side.outputMatches === true) return 'correct';
+    return 'wrong_output';
+  }
+
+  function isFailure(cls) { return FAILURE_CLASSES[cls] === true; }
+
+  /** A failure the translator did not warn about. */
+  function isSilentFailure(cls, hasWarning) {
+    return isFailure(cls) && hasWarning !== true;
+  }
+
+  /** Percentage reduction from `from` to `to` (null when `from` is 0). */
+  function reductionPct(from, to) {
+    if (!from) return null;
+    return ((from - to) / from) * 100;
+  }
+
+  function emptyCounts() {
+    var c = {};
+    CLASSES.forEach(function (k) { c[k] = 0; });
+    return c;
+  }
+
+  /**
+   * Aggregate a list of side verdicts.
+   * @param {Array<{class:string, hasWarning:boolean}>} sides
+   * @returns {object} counts + derived rates
+   */
+  function summarize(sides) {
+    var counts = emptyCounts();
+    var silent = 0;
+    var cases = sides.length;
+    sides.forEach(function (s) {
+      var cls = s.class;
+      if (counts[cls] === undefined) counts[cls] = 0;
+      counts[cls]++;
+      if (isSilentFailure(cls, s.hasWarning)) silent++;
+    });
+    var evaluated = cases - counts.unverified;
+    return {
+      cases: cases,
+      counts: counts,
+      evaluated: evaluated,
+      correct: counts.correct,
+      wrongOutput: counts.wrong_output,
+      runtimeErrors: counts.runtime_error,
+      syntaxErrors: counts.syntax_error,
+      rejected: counts.rejected,
+      unverified: counts.unverified,
+      failures: counts.wrong_output + counts.runtime_error + counts.syntax_error,
+      silentFailures: silent,
+      // denominators are the evaluable cases, never the raw case count
+      correctnessRate: evaluated ? counts.correct / evaluated : 0,
+      syntaxErrorRate: evaluated ? counts.syntax_error / evaluated : 0,
+      runtimeErrorRate: evaluated ? counts.runtime_error / evaluated : 0,
+      wrongOutputRate: evaluated ? counts.wrong_output / evaluated : 0,
+      rejectedRate: evaluated ? counts.rejected / evaluated : 0,
+      silentFailureRate: evaluated ? silent / evaluated : 0
+    };
+  }
+
+  var Sop2Taxonomy = {
+    CLASSES: CLASSES,
+    classify: classify,
+    isFailure: isFailure,
+    isSilentFailure: isSilentFailure,
+    reductionPct: reductionPct,
+    summarize: summarize,
+    emptyCounts: emptyCounts
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = Sop2Taxonomy;
+  if (root) root.Sop2Taxonomy = Sop2Taxonomy;
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+/* ============================================================
+   SOP 2 — error injection (pure)
+
+   Builds deliberately broken variants of a pseudocode case so the
+   comparison can measure ERROR DETECTION — the one thing a validation
+   mechanism is supposed to add. Each injector is deterministic and
+   self-guarding: it returns null when the target construct is absent,
+   and the skipped count is reported rather than hidden.
+
+   Injection types:
+     keyword_typo          misspell a statement keyword
+     missing_end_if        remove one END IF / ENDIF sentinel
+     undefined_variable    use an identifier that is never declared
+     wrong_argument_count  give a call one more argument than it takes
+     return_outside_function  put RETURN at the top level
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  var INJECTION_TYPES = [
+    'keyword_typo',
+    'missing_end_if',
+    'undefined_variable',
+    'wrong_argument_count',
+    'return_outside_function'
+  ];
+
+  var KEYWORD_TYPOS = {
+    DISPLAY: 'DISPLAI',
+    PRINT: 'PRNT',
+    OUTPUT: 'OUTPU',
+    WHILE: 'WHLE',
+    DECLARE: 'DECALRE',
+    SET: 'SETT',
+    CALL: 'CALLL'
+  };
+
+  function splitLines(source) { return String(source == null ? '' : source).replace(/\r\n?/g, '\n').split('\n'); }
+  function joinLines(lines) { return lines.join('\n'); }
+
+  function isComment(line) { var t = line.trim(); return t.startsWith('#') || t.startsWith('//'); }
+
+  function findEndIndex(lines) {
+    for (var i = lines.length - 1; i >= 0; i--) {
+      if (/^\s*END\s*\.?\s*$/i.test(lines[i])) return i;
+    }
+    return lines.length;
+  }
+
+  /* ---------- keyword typo ---------- */
+
+  function injectKeywordTypo(source) {
+    var lines = splitLines(source);
+    for (var i = 0; i < lines.length; i++) {
+      if (isComment(lines[i])) continue;
+      var m = /^(\s*)([A-Za-z]+)\b/.exec(lines[i]);
+      if (!m) continue;
+      var word = m[2].toUpperCase();
+      if (KEYWORD_TYPOS[word]) {
+        lines[i] = m[1] + KEYWORD_TYPOS[word] + lines[i].slice(m[1].length + m[2].length);
+        return { source: joinLines(lines), detail: word + ' -> ' + KEYWORD_TYPOS[word] };
+      }
+    }
+    return null;
+  }
+
+  /* ---------- missing END IF ---------- */
+
+  function injectMissingEndIf(source) {
+    var lines = splitLines(source);
+    var hasIf = false, lastEndIf = -1;
+    for (var i = 0; i < lines.length; i++) {
+      if (isComment(lines[i])) continue;
+      if (/^\s*IF\b.*\bTHEN\b/i.test(lines[i])) hasIf = true;
+      if (/^\s*END\s*IF\s*$/i.test(lines[i]) || /^\s*ENDIF\s*$/i.test(lines[i])) lastEndIf = i;
+    }
+    if (!hasIf || lastEndIf < 0) return null;
+    var detail = lines[lastEndIf].trim();
+    lines.splice(lastEndIf, 1);
+    return { source: joinLines(lines), detail: 'removed ' + detail + ' on line ' + (lastEndIf + 1) };
+  }
+
+  /* ---------- undefined variable ---------- */
+
+  function declaredNames(lines) {
+    var names = {};
+    lines.forEach(function (line) {
+      var m = /^\s*DECLARE\s+([A-Za-z_][A-Za-z0-9_]*)/i.exec(line);
+      if (m) names[m[1]] = true;
+    });
+    return names;
+  }
+
+  function injectUndefinedVariable(source) {
+    var lines = splitLines(source);
+    var declared = declaredNames(lines);
+    // Find the first assignment and reference an undeclared name in it.
+    for (var i = 0; i < lines.length; i++) {
+      if (isComment(lines[i])) continue;
+      var m = /^(\s*)(?:SET\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|TO|\u2190|<-|:=)\s*(.+?)\s*$/i.exec(lines[i]);
+      if (!m) continue;
+      var indent = m[1];
+      var target = m[2];
+      var rhs = m[3];
+      if (!declared[target] && !/^\s*$/.test(target)) {
+        // still fine: the target itself may be undeclared, but prefer a clean
+        // injected name so the intent is unambiguous
+      }
+      lines[i] = indent + (/\bTO\b/i.test(lines[i]) ? 'SET ' + target + ' TO ' : target + ' = ') +
+        'ghost_value_1 + (' + rhs + ')';
+      return { source: joinLines(lines), detail: 'referenced undeclared ghost_value_1 in assignment to ' + target };
+    }
+    return null;
+  }
+
+  /* ---------- wrong argument count ---------- */
+
+  function injectWrongArgumentCount(source) {
+    var lines = splitLines(source);
+    // Perhaps a CALL from the docs.
+    for (var i = 0; i < lines.length; i++) {
+      if (isComment(lines[i])) continue;
+      var c = /^(\s*)CALL\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*$/i.exec(lines[i]);
+      if (c) {
+        var args = c[3].trim();
+        lines[i] = c[1] + 'CALL ' + c[2] + '(' + (args ? args + ', 0' : '0') + ')';
+        return { source: joinLines(lines), detail: 'added an extra argument to CALL ' + c[2] };
+      }
+    }
+    // Fall back to a function definition's call site in an expression.
+    var defined = null;
+    for (var d = 0; d < lines.length; d++) {
+      var f = /^\s*(?:FUNCTION|PROCEDURE)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/i.exec(lines[d]);
+      if (f) { defined = f[1]; break; }
+    }
+    if (defined) {
+      for (var k = 0; k < lines.length; k++) {
+        if (isComment(lines[k])) continue;
+        var call = new RegExp('\\b' + defined + '\\s*\\(([^)]*)\\)');
+        var m = call.exec(lines[k]);
+        if (m && k !== 0) {
+          var inner = m[1].trim();
+          lines[k] = lines[k].replace(call, defined + '(' + (inner ? inner + ', 0' : '0') + ')');
+          return { source: joinLines(lines), detail: 'added an extra argument to ' + defined + '()' };
+        }
+      }
+    }
+    return null;
+  }
+
+  /* ---------- RETURN outside function ---------- */
+
+  function injectReturnOutsideFunction(source) {
+    var lines = splitLines(source);
+    var at = findEndIndex(lines);
+    lines.splice(at, 0, '  RETURN 0');
+    return { source: joinLines(lines), detail: 'inserted RETURN 0 at the top level' };
+  }
+
+  var INJECTORS = {
+    keyword_typo: injectKeywordTypo,
+    missing_end_if: injectMissingEndIf,
+    undefined_variable: injectUndefinedVariable,
+    wrong_argument_count: injectWrongArgumentCount,
+    return_outside_function: injectReturnOutsideFunction
+  };
+
+  /**
+   * Inject one error type into a source.
+   * @returns {{source:string, detail:string}|null} null when not applicable
+   */
+  function inject(source, type) {
+    var fn = INJECTORS[type];
+    if (!fn) throw new Error('unknown injection type: ' + type);
+    return fn(source);
+  }
+
+  /**
+   * All applicable injections for a source.
+   * @returns {{applicable:Array<{type:string,source:string,detail:string}>, skipped:string[]}}
+   */
+  function injectAll(source, types) {
+    var list = types || INJECTION_TYPES;
+    var applicable = [];
+    var skipped = [];
+    list.forEach(function (type) {
+      var r;
+      try { r = inject(source, type); } catch (e) { r = null; }
+      if (r && r.source !== source) applicable.push({ type: type, source: r.source, detail: r.detail });
+      else skipped.push(type);
+    });
+    return { applicable: applicable, skipped: skipped };
+  }
+
+  var Sop2Injection = {
+    INJECTION_TYPES: INJECTION_TYPES,
+    INJECTORS: INJECTORS,
+    inject: inject,
+    injectAll: injectAll
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = Sop2Injection;
+  if (root) root.Sop2Injection = Sop2Injection;
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+/* ============================================================
+   SOP 2 — holdout dataset (30 independently written cases)
+   ------------------------------------------------------------
+   Provenance and rules (see docs/SOP2_DATASET_AUDIT.md):
+
+   • Written independently of src/database/seed-data.js. The seed set
+     was used while designing the compiler; this set is not, so it is
+     the generalisation check.
+   • Every case uses only constructs documented in
+     docs/compiler-language.md. No case relies on unsupported syntax.
+   • Deliberately varied style: different keyword spellings
+     (SET/…TO, `<-`, `:=`, `=`), sentinel spellings (END IF / ENDIF,
+     END FOR / ENDFOR, END WHILE / END WHILE), OUTPUT/PRINT/DISPLAY,
+     numbered lines, comments, and different naming conventions.
+   • No student names, no classroom identifiers.
+   • python_code is the independent reference solution, written from
+     the same task, not copied from PseudoPy output.
+
+   Each reference prints a deterministic value and uses no stdin.
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  var CASES = [
+    {
+      id: 'holdout_1',
+      title: 'Accumulate Integers Up To Twenty',
+      concept: 'Iteration',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE total AS INTEGER',
+        '  total = 0',
+        '  DECLARE k AS INTEGER',
+        '  k = 1',
+        '  WHILE k <= 20 DO',
+        '    total = total + k',
+        '    k = k + 1',
+        '  END WHILE',
+        '  PRINT total',
+        'END'
+      ].join('\n'),
+      python_code: 'total = 0\nk = 1\nwhile k <= 20:\n    total = total + k\n    k = k + 1\nprint(total)'
+    },
+    {
+      id: 'holdout_2',
+      title: 'Count Down From Five',
+      concept: 'Reverse iteration',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  FOR i FROM 5 TO 1 STEP -1 DO',
+        '    DISPLAY i',
+        '  END FOR',
+        'END'
+      ].join('\n'),
+      python_code: 'for i in range(5, 1 - 1, -1):\n    print(i)'
+    },
+    {
+      id: 'holdout_3',
+      title: 'Report Even Values In A Range',
+      concept: 'Modulo branching',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE n AS INTEGER',
+        '  n = 0',
+        '  WHILE n <= 10 DO',
+        '    IF n MOD 2 == 0 THEN',
+        '      DISPLAY n',
+        '    END IF',
+        '    n = n + 1',
+        '  END WHILE',
+        'END'
+      ].join('\n'),
+      python_code: 'n = 0\nwhile n <= 10:\n    if n % 2 == 0:\n        print(n)\n    n = n + 1'
+    },
+    {
+      id: 'holdout_4',
+      title: 'Largest Value In A Collection',
+      concept: 'Reduction',
+      difficulty: 'medium',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE values AS ARRAY',
+        '  values = [3, 41, 7, 19, 12]',
+        '  DECLARE top AS INTEGER',
+        '  top = 0',
+        '  FOR EACH v IN values DO',
+        '    IF v > top THEN',
+        '      top = v',
+        '    END IF',
+        '  END FOR',
+        '  OUTPUT top',
+        'END'
+      ].join('\n'),
+      python_code: 'values = [3, 41, 7, 19, 12]\ntop = 0\nfor v in values:\n    if v > top:\n        top = v\nprint(top)'
+    },
+    {
+      id: 'holdout_5',
+      title: 'Factorial By Multiplication Loop',
+      concept: 'Accumulator',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE p AS INTEGER',
+        '  DECLARE i AS INTEGER',
+        '  SET p TO 1',
+        '  FOR i FROM 1 TO 5 DO',
+        '    p = p * i',
+        '  END FOR',
+        '  PRINT p',
+        'END'
+      ].join('\n'),
+      python_code: 'p = 1\nfor i in range(1, 5 + 1):\n    p = p * i\nprint(p)'
+    },
+    {
+      id: 'holdout_6',
+      title: 'Mean Of A List Using Integer Division',
+      concept: 'Aggregation',
+      difficulty: 'medium',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE nums AS ARRAY',
+        '  DECLARE total AS INTEGER',
+        '  DECLARE n AS INTEGER',
+        '  nums = [10, 20, 30, 40]',
+        '  total = 0',
+        '  n = 0',
+        '  FOR EACH x IN nums DO',
+        '    total = total + x',
+        '    n = n + 1',
+        '  END FOR',
+        '  PRINT total DIV n',
+        'END'
+      ].join('\n'),
+      python_code: 'nums = [10, 20, 30, 40]\ntotal = 0\nn = 0\nfor x in nums:\n    total = total + x\n    n = n + 1\nprint(total // n)'
+    },
+    {
+      id: 'holdout_7',
+      title: 'First Ten Fibonacci Terms',
+      concept: 'Sequence',
+      difficulty: 'medium',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE a AS INTEGER',
+        '  DECLARE b AS INTEGER',
+        '  DECLARE nxt AS INTEGER',
+        '  DECLARE i AS INTEGER',
+        '  a = 0',
+        '  b = 1',
+        '  FOR i FROM 1 TO 10 DO',
+        '    DISPLAY a',
+        '    nxt = a + b',
+        '    a = b',
+        '    b = nxt',
+        '  ENDFOR',
+        'END'
+      ].join('\n'),
+      python_code: 'a = 0\nb = 1\nfor i in range(1, 10 + 1):\n    print(a)\n    nxt = a + b\n    a = b\n    b = nxt'
+    },
+    {
+      id: 'holdout_8',
+      title: 'Greatest Common Divisor',
+      concept: 'Euclidean algorithm',
+      difficulty: 'medium',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE a AS INTEGER',
+        '  DECLARE b AS INTEGER',
+        '  DECLARE r AS INTEGER',
+        '  a = 48',
+        '  b = 18',
+        '  WHILE b != 0 DO',
+        '    r = a MOD b',
+        '    a = b',
+        '    b = r',
+        '  END WHILE',
+        '  DISPLAY a',
+        'END'
+      ].join('\n'),
+      python_code: 'a = 48\nb = 18\nwhile b != 0:\n    r = a % b\n    a = b\n    b = r\nprint(a)'
+    },
+    {
+      id: 'holdout_9',
+      title: 'Count Vowels In A Word',
+      concept: 'String iteration and membership',
+      difficulty: 'medium',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE word AS STRING',
+        '  DECLARE count AS INTEGER',
+        '  DECLARE ch AS CHARACTER',
+        '  word = "pseudocode"',
+        '  count = 0',
+        '  FOR EACH ch IN word DO',
+        '    IF ch IN "aeiou" THEN',
+        '      count = count + 1',
+        '    END IF',
+        '  END FOR',
+        '  PRINT count',
+        'END'
+      ].join('\n'),
+      python_code: 'word = "pseudocode"\ncount = 0\nfor ch in word:\n    if ch in "aeiou":\n        count = count + 1\nprint(count)'
+    },
+    {
+      id: 'holdout_10',
+      title: 'Reverse A List In Place',
+      concept: 'Two-pointer swap',
+      difficulty: 'medium',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE arr AS ARRAY',
+        '  DECLARE left AS INTEGER',
+        '  DECLARE right AS INTEGER',
+        '  DECLARE temp AS INTEGER',
+        '  arr = [1, 2, 3, 4, 5]',
+        '  left = 0',
+        '  right = 4',
+        '  WHILE left < right DO',
+        '    temp = arr[left]',
+        '    arr[left] = arr[right]',
+        '    arr[right] = temp',
+        '    left = left + 1',
+        '    right = right - 1',
+        '  END WHILE',
+        '  PRINT arr',
+        'END'
+      ].join('\n'),
+      python_code: 'arr = [1, 2, 3, 4, 5]\nleft = 0\nright = 4\nwhile left < right:\n    temp = arr[left]\n    arr[left] = arr[right]\n    arr[right] = temp\n    left = left + 1\n    right = right - 1\nprint(arr)'
+    },
+    {
+      id: 'holdout_11',
+      title: 'Sum Of Squares One To Five',
+      concept: 'Accumulation',
+      difficulty: 'easy',
+      pseudocode: [
+        '1 BEGIN',
+        '2   DECLARE s AS INTEGER',
+        '3   DECLARE i AS INTEGER',
+        '4   s = 0',
+        '5   FOR i FROM 1 TO 5 DO',
+        '6     s = s + i * i',
+        '7   END FOR',
+        '8   DISPLAY s',
+        '9 END'
+      ].join('\n'),
+      python_code: 's = 0\nfor i in range(1, 5 + 1):\n    s = s + i * i\nprint(s)'
+    },
+    {
+      id: 'holdout_12',
+      title: 'Multiples Of Three',
+      concept: 'Stepped iteration',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE i AS INTEGER',
+        '  FOR i FROM 3 TO 12 STEP 3 DO',
+        '    DISPLAY i',
+        '  END FOR   # inclusive bounds',
+        'END'
+      ].join('\n'),
+      python_code: 'for i in range(3, 12 + 1, 3):\n    print(i)'
+    },
+    {
+      id: 'holdout_13',
+      title: 'Sum Of Even Numbers To Twenty',
+      concept: 'Stepped accumulation',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE s AS INTEGER',
+        '  DECLARE k AS INTEGER',
+        '  s = 0',
+        '  FOR k FROM 2 TO 20 STEP 2 DO',
+        '    s = s + k',
+        '  END FOR',
+        '  OUTPUT s',
+        'END'
+      ].join('\n'),
+      python_code: 's = 0\nfor k in range(2, 20 + 1, 2):\n    s = s + k\nprint(s)'
+    },
+    {
+      id: 'holdout_14',
+      title: 'Smallest Value In A Collection',
+      concept: 'Reduction',
+      difficulty: 'medium',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE vals AS ARRAY',
+        '  DECLARE low AS INTEGER',
+        '  DECLARE v AS INTEGER',
+        '  vals = [8, -4, 15, 0, 7]',
+        '  low = vals[0]',
+        '  FOR EACH v IN vals DO',
+        '    IF v < low THEN',
+        '      low = v',
+        '    END IF',
+        '  END FOR',
+        '  PRINT low',
+        'END'
+      ].join('\n'),
+      python_code: 'vals = [8, -4, 15, 0, 7]\nlow = vals[0]\nfor v in vals:\n    if v < low:\n        low = v\nprint(low)'
+    },
+    {
+      id: 'holdout_15',
+      title: 'Factorial By Recursion',
+      concept: 'Recursion',
+      difficulty: 'hard',
+      pseudocode: [
+        'BEGIN',
+        '  FUNCTION factorial(n)',
+        '    IF n <= 1 THEN',
+        '      RETURN 1',
+        '    END IF',
+        '    RETURN n * factorial(n - 1)',
+        '  END FUNCTION',
+        '  DISPLAY factorial(5)',
+        'END'
+      ].join('\n'),
+      python_code: 'def factorial(n):\n    if n <= 1:\n        return 1\n    return n * factorial(n - 1)\nprint(factorial(5))'
+    },
+    {
+      id: 'holdout_16',
+      title: 'Greeting Procedure',
+      concept: 'Procedure and call',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  PROCEDURE greet(name)',
+        '    DISPLAY "Hello", name',
+        '  END PROCEDURE',
+        '  CALL greet("World")',
+        'END'
+      ].join('\n'),
+      python_code: 'def greet(name):\n    print("Hello", name)\ngreet("World")'
+    },
+    {
+      id: 'holdout_17',
+      title: 'Nested Loop Accumulation',
+      concept: 'Nested iteration',
+      difficulty: 'medium',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE total AS INTEGER',
+        '  DECLARE i AS INTEGER',
+        '  DECLARE j AS INTEGER',
+        '  total = 0',
+        '  FOR i FROM 1 TO 3 DO',
+        '    FOR j FROM 1 TO 3 DO',
+        '      total = total + i * j',
+        '    END FOR',
+        '  END FOR',
+        '  PRINT total',
+        'END'
+      ].join('\n'),
+      python_code: 'total = 0\nfor i in range(1, 3 + 1):\n    for j in range(1, 3 + 1):\n        total = total + i * j\nprint(total)'
+    },
+    {
+      id: 'holdout_18',
+      title: 'Linear Search For A Value',
+      concept: 'Search',
+      difficulty: 'medium',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE items AS ARRAY',
+        '  DECLARE target AS INTEGER',
+        '  DECLARE found AS INTEGER',
+        '  DECLARE i AS INTEGER',
+        '  items = [4, 9, 15, 22, 31]',
+        '  target = 22',
+        '  found = -1',
+        '  FOR i FROM 0 TO 4 DO',
+        '    IF items[i] == target THEN',
+        '      found = i',
+        '    END IF',
+        '  END FOR',
+        '  DISPLAY found',
+        'END'
+      ].join('\n'),
+      python_code: 'items = [4, 9, 15, 22, 31]\ntarget = 22\nfound = -1\nfor i in range(0, 4 + 1):\n    if items[i] == target:\n        found = i\nprint(found)'
+    },
+    {
+      id: 'holdout_19',
+      title: 'Sort A Small List',
+      concept: 'Sorting',
+      difficulty: 'hard',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE data AS ARRAY',
+        '  DECLARE i AS INTEGER',
+        '  DECLARE j AS INTEGER',
+        '  DECLARE tmp AS INTEGER',
+        '  data = [5, 2, 8, 3]',
+        '  FOR i FROM 0 TO 3 DO',
+        '    FOR j FROM 0 TO 2 DO',
+        '      IF data[j] > data[j + 1] THEN',
+        '        tmp = data[j]',
+        '        data[j] = data[j + 1]',
+        '        data[j + 1] = tmp',
+        '      END IF',
+        '    END FOR',
+        '  END FOR',
+        '  PRINT data',
+        'END'
+      ].join('\n'),
+      python_code: 'data = [5, 2, 8, 3]\nfor i in range(0, 3 + 1):\n    for j in range(0, 2 + 1):\n        if data[j] > data[j + 1]:\n            tmp = data[j]\n            data[j] = data[j + 1]\n            data[j + 1] = tmp\nprint(data)'
+    },
+    {
+      id: 'holdout_20',
+      title: 'Length Of A Word',
+      concept: 'Built-in expression',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE word AS STRING',
+        '  word = "pseudopy"',
+        '  DISPLAY len(word)',
+        'END'
+      ].join('\n'),
+      python_code: 'word = "pseudopy"\nprint(len(word))'
+    },
+    {
+      id: 'holdout_21',
+      title: 'Digit Sum Of A Number',
+      concept: 'Modulo and division',
+      difficulty: 'hard',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE n AS INTEGER',
+        '  DECLARE total AS INTEGER',
+        '  n = 1234',
+        '  total = 0',
+        '  WHILE n > 0 DO',
+        '    total = total + (n MOD 10)',
+        '    n = n DIV 10',
+        '  END WHILE',
+        '  DISPLAY total',
+        'END'
+      ].join('\n'),
+      python_code: 'n = 1234\ntotal = 0\nwhile n > 0:\n    total = total + (n % 10)\n    n = n // 10\nprint(total)'
+    },
+    {
+      id: 'holdout_22',
+      title: 'Powers Of Two',
+      concept: 'Exponentiation',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE e AS INTEGER',
+        '  FOR e FROM 1 TO 5 DO',
+        '    DISPLAY 2 ** e',
+        '  END FOR',
+        'END'
+      ].join('\n'),
+      python_code: 'for e in range(1, 5 + 1):\n    print(2 ** e)'
+    },
+    {
+      id: 'holdout_23',
+      title: 'Leap Year Test',
+      concept: 'Boolean logic',
+      difficulty: 'hard',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE year AS INTEGER',
+        '  year = 2024',
+        '  IF (year MOD 4 == 0 AND year MOD 100 != 0) OR year MOD 400 == 0 THEN',
+        '    DISPLAY "Leap"',
+        '  ELSE',
+        '    DISPLAY "Not leap"',
+        '  END IF',
+        'END'
+      ].join('\n'),
+      python_code: 'year = 2024\nif (year % 4 == 0 and year % 100 != 0) or year % 400 == 0:\n    print("Leap")\nelse:\n    print("Not leap")'
+    },
+    {
+      id: 'holdout_24',
+      title: 'Repeat A String',
+      concept: 'String repetition',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  DISPLAY "ab" * 3',
+        'END'
+      ].join('\n'),
+      python_code: 'print("ab" * 3)'
+    },
+    {
+      id: 'holdout_25',
+      title: 'Occurrences Of A Character',
+      concept: 'Counting',
+      difficulty: 'medium',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE text AS STRING',
+        '  DECLARE ch AS CHARACTER',
+        '  DECLARE hits AS INTEGER',
+        '  DECLARE c AS CHARACTER',
+        '  text = "banana"',
+        '  ch = "a"',
+        '  hits = 0',
+        '  FOR EACH c IN text DO',
+        '    IF c == ch THEN',
+        '      hits = hits + 1',
+        '    END IF',
+        '  END FOR',
+        '  DISPLAY hits',
+        'END'
+      ].join('\n'),
+      python_code: 'text = "banana"\nch = "a"\nhits = 0\nfor c in text:\n    if c == ch:\n        hits = hits + 1\nprint(hits)'
+    },
+    {
+      id: 'holdout_26',
+      title: 'Sum Of Odd Numbers To Nineteen',
+      concept: 'Stepped accumulation',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE s AS INTEGER',
+        '  DECLARE k AS INTEGER',
+        '  s = 0',
+        '  FOR k FROM 1 TO 19 STEP 2 DO',
+        '    s = s + k',
+        '  END FOR',
+        '  DISPLAY s',
+        'END'
+      ].join('\n'),
+      python_code: 's = 0\nfor k in range(1, 19 + 1, 2):\n    s = s + k\nprint(s)'
+    },
+    {
+      id: 'holdout_27',
+      title: 'Swap Two Values',
+      concept: 'Assignment',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE a AS INTEGER',
+        '  DECLARE b AS INTEGER',
+        '  DECLARE t AS INTEGER',
+        '  a = 3',
+        '  b = 9',
+        '  t <- a',
+        '  a <- b',
+        '  b <- t',
+        '  DISPLAY a',
+        '  DISPLAY b',
+        'END'
+      ].join('\n'),
+      python_code: 'a = 3\nb = 9\nt = a\na = b\nb = t\nprint(a)\nprint(b)'
+    },
+    {
+      id: 'holdout_28',
+      title: 'Factorial By Countdown Loop',
+      concept: 'Accumulator',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE n AS INTEGER',
+        '  DECLARE f AS INTEGER',
+        '  n = 6',
+        '  f = 1',
+        '  WHILE n > 1 DO',
+        '    f = f * n',
+        '    n = n - 1',
+        '  END WHILE',
+        '  PRINT f',
+        'END'
+      ].join('\n'),
+      python_code: 'n = 6\nf = 1\nwhile n > 1:\n    f = f * n\n    n = n - 1\nprint(f)'
+    },
+    {
+      id: 'holdout_29',
+      title: 'Palindrome Check',
+      concept: 'String comparison',
+      difficulty: 'medium',
+      pseudocode: [
+        'BEGIN',
+        '  DECLARE word AS STRING',
+        '  word = "level"',
+        '  IF word == word[::-1] THEN',
+        '    DISPLAY "yes"',
+        '  ELSE',
+        '    DISPLAY "no"',
+        '  END IF',
+        'END'
+      ].join('\n'),
+      python_code: 'word = "level"\nif word == word[::-1]:\n    print("yes")\nelse:\n    print("no")'
+    },
+    {
+      id: 'holdout_30',
+      title: 'Integer Quotient',
+      concept: 'Floor division',
+      difficulty: 'easy',
+      pseudocode: [
+        'BEGIN',
+        '  DISPLAY 30 DIV 4',
+        'END'
+      ].join('\n'),
+      python_code: 'print(30 // 4)'
+    }
+  ];
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = CASES;
+  if (root) root.SOP2_HOLDOUT_CASES = CASES;
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+/* ============================================================
+   SOP 2 — dataset assembly (pure)
+
+   Produces a single tagged row list from three clearly labelled
+   groups so the report never blends them into one number:
+
+     seed     — the 30 built-in exercises the compiler was designed
+                against (src/database/seed-data.js)
+     holdout  — independently written cases, different phrasing and
+                style, used only for evaluation
+     injected — programmatically broken variants of seed/holdout rows,
+                used to measure error DETECTION
+
+   Usable from Node (`module.exports`) and the browser (`window.Sop2Dataset`).
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  function injectionModule() {
+    if (root && root.Sop2Injection) return root.Sop2Injection;
+    if (typeof require === 'function') {
+      try { return require('./error-injection'); } catch (e) { /* browser */ }
+    }
+    return null;
+  }
+
+  function pick(obj, keys) {
+    for (var i = 0; i < keys.length; i++) {
+      if (obj && obj[keys[i]] != null && obj[keys[i]] !== '') return obj[keys[i]];
+    }
+    return '';
+  }
+
+  /** Normalise a seed exercise (database.js shape). */
+  function normalizeSeed(row, index) {
+    return {
+      id: String(pick(row, ['id', '_docId']) || ('seed_' + (index + 1))),
+      title: pick(row, ['title']) || null,
+      concept: pick(row, ['concept']) || null,
+      difficulty: pick(row, ['difficulty']) || null,
+      source: String(pick(row, ['pseudocode', 'code'])),
+      referencePython: String(pick(row, ['python_code', 'solution', 'pythonCode'])),
+      group: 'seed',
+      baseId: null,
+      injectionType: null,
+      injectionDetail: null
+    };
+  }
+
+  /** Normalise a holdout case (holdout-cases.js shape). */
+  function normalizeHoldout(row, index) {
+    return {
+      id: String(pick(row, ['id']) || ('holdout_' + (index + 1))),
+      title: pick(row, ['title']) || null,
+      concept: pick(row, ['concept']) || null,
+      difficulty: pick(row, ['difficulty']) || null,
+      source: String(pick(row, ['pseudocode', 'code'])),
+      referencePython: String(pick(row, ['python_code', 'solution'])),
+      group: 'holdout',
+      baseId: null,
+      injectionType: null,
+      injectionDetail: null
+    };
+  }
+
+  function isUsable(row) {
+    return !!(row.source && row.source.trim() && row.referencePython && row.referencePython.trim());
+  }
+
+  /**
+   * Build the tagged dataset.
+   * @param {Array} seedRows raw database.js seed objects
+   * @param {Array} holdoutRows raw holdout objects
+   * @param {{includeInjected?:boolean, injectionTypes?:string[],
+   *          includeHoldout?:boolean, includeSeed?:boolean}} [opts]
+   * @returns {{rows:Array, injections:{applicable:number, skipped:Array}}}
+   */
+  function buildDataset(seedRows, holdoutRows, opts) {
+    opts = opts || {};
+    var includeSeed = opts.includeSeed !== false;
+    var includeHoldout = opts.includeHoldout !== false;
+    var includeInjected = opts.includeInjected !== false;
+    var injection = injectionModule();
+
+    var base = [];
+    if (includeSeed) {
+      (seedRows || []).forEach(function (r, i) { var n = normalizeSeed(r, i); if (isUsable(n)) base.push(n); });
+    }
+    if (includeHoldout) {
+      (holdoutRows || []).forEach(function (r, i) { var n = normalizeHoldout(r, i); if (isUsable(n)) base.push(n); });
+    }
+
+    var rows = base.slice();
+    var skipped = [];
+
+    if (includeInjected && injection) {
+      base.forEach(function (row) {
+        var result = injection.injectAll(row.source, opts.injectionTypes);
+        result.skipped.forEach(function (type) { skipped.push(row.id + ':' + type); });
+        result.applicable.forEach(function (inj) {
+          rows.push({
+            id: row.id + '__inj_' + inj.type,
+            title: (row.title || row.id) + ' [' + inj.type + ']',
+            concept: row.concept,
+            difficulty: row.difficulty,
+            source: inj.source,
+            referencePython: row.referencePython,
+            group: 'injected',
+            baseId: row.id,
+            injectionType: inj.type,
+            injectionDetail: inj.detail
+          });
+        });
+      });
+    }
+
+    return {
+      rows: rows,
+      injections: { applicable: rows.filter(function (r) { return r.group === 'injected'; }).length, skipped: skipped }
+    };
+  }
+
+  function groupRows(rows, group) {
+    return rows.filter(function (r) { return r.group === group; });
+  }
+
+  var Sop2Dataset = {
+    normalizeSeed: normalizeSeed,
+    normalizeHoldout: normalizeHoldout,
+    buildDataset: buildDataset,
+    groupRows: groupRows
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = Sop2Dataset;
+  if (root) root.Sop2Dataset = Sop2Dataset;
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+/* ============================================================
+   SOP 2 — timing harness (pure)
+
+   Generation time is measured around TRANSLATION ONLY: raw text ->
+   Python. Bundle loading, VM creation, validation and execution are
+   never inside the timer. Browser clocks are coarse, so a single
+   measurement is meaningless; each case is warmed up and then run in
+   a batch, and the batch divided by the iteration count. Across cases
+   the report uses the median and IQR, never the mean of single shots.
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  function defaultNow() {
+    if (root && root.performance && typeof root.performance.now === 'function') return root.performance.now();
+    return Date.now();
+  }
+
+  /**
+   * @param {Function} fn the translation callable (already bound to its input)
+   * @param {{warmup?:number, iters?:number, now?:Function}} [opts]
+   * @returns {{warmup:number, iterations:number, totalMs:number, perIterationMs:number}}
+   */
+  function measure(fn, opts) {
+    opts = opts || {};
+    var warmup = opts.warmup == null ? 5 : opts.warmup;
+    var iters = opts.iters == null ? 200 : opts.iters;
+    var clock = opts.now || defaultNow;
+    var i;
+    for (i = 0; i < warmup; i++) fn();
+    var t0 = clock();
+    for (i = 0; i < iters; i++) fn();
+    var t1 = clock();
+    var totalMs = t1 - t0;
+    return {
+      warmup: warmup,
+      iterations: iters,
+      totalMs: totalMs,
+      perIterationMs: iters ? totalMs / iters : 0
+    };
+  }
+
+  /**
+   * Time a one-off setup cost (bundle load + VM + engine construction).
+   * @returns {{setupMs:number, value:*}}
+   */
+  function measureSetup(fn, opts) {
+    var clock = (opts && opts.now) || defaultNow;
+    var t0 = clock();
+    var value = fn();
+    var t1 = clock();
+    return { setupMs: t1 - t0, value: value };
+  }
+
+  var Sop2Timing = { measure: measure, measureSetup: measureSetup, now: defaultNow };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = Sop2Timing;
+  if (root) root.Sop2Timing = Sop2Timing;
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+/* ============================================================
+   SOP 2 — report rendering (CSV + Markdown), shared
+
+   One implementation used by both the Node harness
+   (src/research/sop2-comparison.js) and the DevTools panel
+   (src/devtools/research-ui.js), so an exported file and the
+   on-screen report can never drift apart.
+
+   Usable from Node (`module.exports = Sop2Report`) and the browser
+   (`window.Sop2Report`).
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  // Resolve dependencies from the browser globals or Node's require.
+  function tryRequire(m) { try { return require(m); } catch (e) { return null; } }
+  function resolve(globalName, modulePath) {
+    if (root && root[globalName]) return root[globalName];
+    if (typeof require === 'function') return tryRequire(modulePath);
+    return null;
+  }
+  var Stats = resolve('Sop2Stats', './stats');
+  var Taxonomy = resolve('Sop2Taxonomy', './error-taxonomy');
+
+  var SIDE_KEYS = ['pseudopy', 'baseline', 'baselineB2'];
+  var SIDE_LABELS = {
+    pseudopy: 'PseudoPy',
+    baseline: 'Baseline B1 (naive)',
+    baselineB2: 'Baseline B2 (rule-based)'
+  };
+
+  var CSV_COLUMNS = [
+    'caseId', 'title',
+    'pp_compile', 'pp_syntax', 'pp_runtime', 'pp_p', 'pp_r', 'pp_f1', 'pp_time_ms',
+    'bl_compile', 'bl_syntax', 'bl_runtime', 'bl_p', 'bl_r', 'bl_f1', 'bl_time_ms',
+    'group', 'injection_type',
+    'pp_class', 'pp_rejected', 'pp_outmatch', 'pp_correct', 'pp_silent', 'pp_f1_norm',
+    'bl2_compile', 'bl2_class', 'bl2_rejected', 'bl2_outmatch', 'bl2_silent', 'bl2_time_ms'
+  ];
+
+  function flag(v) { return v === true ? '1' : v === false ? '0' : ''; }
+
+  function csvCell(v) {
+    let s = v == null ? '' : String(v);
+    if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    return s;
+  }
+
+  function isSilent(side) {
+    if (!side) return false;
+    if (Taxonomy && Taxonomy.isSilentFailure) return Taxonomy.isSilentFailure(side.class, side.hasWarning);
+    return false;
+  }
+
+  function toCSV(doc) {
+    const results = Array.isArray(doc) ? doc : (doc && doc.results) || [];
+    const lines = [CSV_COLUMNS.join(',')];
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      const pp = r.pseudopy || {};
+      const bl = r.baseline || {};
+      const b2 = r.baselineB2 || {};
+      const ppM = (r.metrics && r.metrics.pseudopy) || {};
+      const blM = (r.metrics && r.metrics.baseline) || {};
+      const ppN = ppM.normalized || {};
+      lines.push([
+        r.caseId, r.title,
+        flag(pp.compileSuccess), flag(pp.syntaxSuccess), flag(pp.runtimeSuccess),
+        ppM.precision, ppM.recall, ppM.f1, pp.generationTimeMs,
+        flag(bl.compileSuccess), flag(bl.syntaxSuccess), flag(bl.runtimeSuccess),
+        blM.precision, blM.recall, blM.f1, bl.generationTimeMs,
+        r.group, r.injectionType,
+        pp.class, flag(pp.rejected), flag(pp.outputMatches), flag(pp.correct),
+        flag(isSilent(pp)), ppN.f1,
+        flag(b2.compileSuccess), b2.class, flag(b2.rejected),
+        flag(b2.outputMatches), flag(isSilent(b2)),
+        b2.generationTimeMs
+      ].map(csvCell).join(','));
+    }
+    return lines.join('\n') + '\n';
+  }
+
+  function toJSON(doc) {
+    return JSON.stringify(doc, null, 2) + '\n';
+  }
+
+  function round3(n) { return Math.round(n * 1000) / 1000; }
+  function pct(x) { return x == null ? 'n/a' : (x * 100).toFixed(1) + '%'; }
+  function f3(x) { return typeof x === 'number' ? x.toFixed(3) : 'n/a'; }
+
+  function medianOf(rows, key) {
+    return Stats ? Stats.median(rows.map(function (r) { return r[key].generationTimeMs; })) : 0;
+  }
+  function iqrOf(rows, key) {
+    return Stats ? Stats.iqr(rows.map(function (r) { return r[key].generationTimeMs; })) : 0;
+  }
+
+  function verdictText(doc) {
+    const rows = doc.results.filter(function (r) { return r.group === 'seed' || r.group === 'holdout'; });
+    const n = rows.length;
+    const pp = rows.filter(function (r) { return r.pseudopy.correct; }).length;
+    const b1 = rows.filter(function (r) { return r.baseline.correct; }).length;
+    const b2 = rows.filter(function (r) { return r.baselineB2.correct; }).length;
+    const ppTime = medianOf(rows, 'pseudopy');
+    const b1Time = medianOf(rows, 'baseline');
+    const overhead = ppTime - b1Time;
+    const inj = doc.groups && doc.groups.injected;
+    const injDetected = inj ? inj.pseudopy.rejected : 0;
+    const injN = inj ? inj.cases : 0;
+
+    const out = [];
+    out.push('On well-formed input (' + n + ' cases) PseudoPy produced the reference output in ' + pp +
+      ' cases, B1 in ' + b1 + ', and B2 in ' + b2 + '.');
+    if (inj) {
+      out.push('On ' + injN + ' deliberately broken cases PseudoPy warned (rejected) in ' + injDetected +
+        '; B2 warned in 0 because it has no validation.');
+    }
+    if (n && ppTime > b1Time) {
+      out.push('PseudoPy is slower than the naive baseline: it adds about ' + round3(overhead) +
+        ' ms of analysis+validation overhead per translation (median ' + round3(ppTime) + ' ms vs ' +
+        round3(b1Time) + ' ms). SOP 2c as originally worded is not supported by this data; the honest ' +
+        'statement is a small absolute cost per translation.');
+    } else if (n) {
+      out.push('PseudoPy was not slower than the naive baseline on this machine (median ' +
+        round3(ppTime) + ' ms vs ' + round3(b1Time) + ' ms).');
+    }
+    if (n && b2 >= pp) {
+      out.push('A careful rule-based baseline (B2) matches or exceeds PseudoPy on well-formed input, so ' +
+        'the correctness advantage on well-formed input is not established by this dataset; the ' +
+        'difference that does survive is error detection on malformed input.');
+    }
+    return out.join(' ');
+  }
+
+  function toMarkdown(doc) {
+    const L = [];
+    L.push('# SOP 2 — Traditional Baseline vs PseudoPy');
+    L.push('');
+    L.push('Generated ' + doc.metadata.timestamp + ' · ' + doc.metadata.cases + ' cases · ' +
+      'correctness = stdout equality against the reference program (shared ' + doc.metadata.runtime + ' runtime).');
+    L.push('');
+    L.push('Baselines: **B1** naive keyword substitution · **B2** reasonable rule-based (no CFG/AST/semantic validation).');
+    L.push('');
+    if (doc.metadata.setup) {
+      L.push('One-time setup (bundle load + VM + compiler construction): ' +
+        round3(doc.metadata.setup.setupMs) + ' ms — excluded from per-case timing.');
+      L.push('');
+    }
+    L.push('## SOP 2a — Functional correctness');
+    L.push('');
+    L.push('| Group | Cases | PseudoPy | Baseline B1 | Baseline B2 | Δ pp (PP−B1) | Relative (PP vs B1) |');
+    L.push('| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
+    ['seed', 'holdout', 'injected'].forEach(function (g) {
+      const s = doc.groups && doc.groups[g];
+      if (!s) return;
+      const pp = s.pseudopy.correctnessRate, b1 = s.baseline.correctnessRate;
+      const rel = b1 > 0 ? ((pp - b1) / b1) * 100 : null;
+      L.push('| ' + g + ' | ' + s.cases + ' | ' + pct(pp) + ' | ' + pct(b1) + ' | ' +
+        pct(s.baselineB2.correctnessRate) + ' | ' + ((pp - b1) * 100).toFixed(1) + ' | ' +
+        (rel == null ? 'n/a' : rel.toFixed(1) + '%') + ' |');
+    });
+    L.push('');
+    L.push('## SOP 2b — Error taxonomy');
+    L.push('');
+    ['seed', 'holdout', 'injected'].forEach(function (g) {
+      const s = doc.groups && doc.groups[g];
+      if (!s) return;
+      L.push('### ' + g + ' (' + s.cases + ' cases)');
+      L.push('');
+      L.push('| Translator | Correct | Rejected (warned) | Syntax err | Runtime err | Wrong output | Silent failures |');
+      L.push('| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
+      SIDE_KEYS.forEach(function (k) {
+        const x = s[k];
+        L.push('| ' + SIDE_LABELS[k] + ' | ' + x.correct + ' | ' + x.rejected + ' | ' +
+          x.counts.syntax_error + ' | ' + x.counts.runtime_error + ' | ' + x.counts.wrong_output + ' | ' +
+          x.silentFailures + ' (' + pct(x.silentFailureRate) + ') |');
+      });
+      L.push('');
+    });
+    L.push('## SOP 2c — Generation time (translation only)');
+    L.push('');
+    L.push('| Group | PseudoPy median (IQR) | B1 median (IQR) | B2 median (IQR) | Overhead vs B1 |');
+    L.push('| --- | ---: | ---: | ---: | ---: |');
+    ['seed', 'holdout', 'injected'].forEach(function (g) {
+      const rows = doc.results.filter(function (r) { return r.group === g; });
+      if (!rows.length) return;
+      function cell(key) { return round3(medianOf(rows, key)) + ' (' + round3(iqrOf(rows, key)) + ')'; }
+      L.push('| ' + g + ' | ' + cell('pseudopy') + ' | ' + cell('baseline') + ' | ' + cell('baselineB2') + ' | ' +
+        round3(medianOf(rows, 'pseudopy') - medianOf(rows, 'baseline')) + ' ms |');
+    });
+    L.push('');
+    L.push('## Statistics');
+    L.push('');
+    ['seed', 'holdout', 'injected'].forEach(function (g) {
+      const st = doc.stats && doc.stats[g];
+      if (!st) return;
+      L.push('### ' + g);
+      L.push('');
+      SIDE_KEYS.forEach(function (k) {
+        const w = st[k].wilson;
+        L.push('- ' + SIDE_LABELS[k] + ' correctness: ' + pct(w.p) + ' (95% CI ' + pct(w.low) + '–' +
+          pct(w.high) + ', n=' + w.n + ')');
+      });
+      L.push('- McNemar (correct) PseudoPy vs B1: b=' + st.mcnemar.vsB1.b + ', c=' + st.mcnemar.vsB1.c +
+        ', p=' + f3(st.mcnemar.vsB1.p));
+      L.push('- McNemar (correct) PseudoPy vs B2: b=' + st.mcnemar.vsB2.b + ', c=' + st.mcnemar.vsB2.c +
+        ', p=' + f3(st.mcnemar.vsB2.p));
+      L.push('- Wilcoxon (time) PseudoPy − B1: n=' + st.wilcoxonTime.vsB1.n + ', p=' +
+        f3(st.wilcoxonTime.vsB1.p) + ' (' + st.wilcoxonTime.vsB1.method + ')');
+      L.push('- Wilcoxon (time) PseudoPy − B2: n=' + st.wilcoxonTime.vsB2.n + ', p=' +
+        f3(st.wilcoxonTime.vsB2.p) + ' (' + st.wilcoxonTime.vsB2.method + ')');
+      L.push('');
+    });
+    L.push('## Verdict');
+    L.push('');
+    L.push(verdictText(doc));
+    L.push('');
+    if (doc.dataset && doc.dataset.skippedInjections && doc.dataset.skippedInjections.length) {
+      L.push('Injection variants skipped (target construct absent): ' + doc.dataset.skippedInjections.length + '.');
+      L.push('');
+    }
+    return L.join('\n');
+  }
+
+  function round6(n) { return Math.round(n * 1e6) / 1e6; }
+
+  function average(values) {
+    if (!values.length) return 0;
+    let total = 0;
+    for (let i = 0; i < values.length; i++) total += values[i];
+    return total / values.length;
+  }
+
+  function sideSummary(results, key) {
+    const rows = results.map(function (r) { return r[key]; });
+    const mets = results.map(function (r) { return r.metrics[key]; });
+    const classes = rows.map(function (r) { return { class: r.class, hasWarning: r.hasWarning }; });
+    const tax = (Taxonomy && Taxonomy.summarize)
+      ? Taxonomy.summarize(classes)
+      : { correct: 0, rejected: 0, silentFailures: 0, correctnessRate: 0, silentFailureRate: 0, syntaxErrorRate: 0, runtimeErrorRate: 0, wrongOutputRate: 0, counts: {} };
+    return {
+      cases: rows.length,
+      compileSuccess: rows.filter(function (r) { return r.compileSuccess; }).length,
+      syntaxSuccess: rows.filter(function (r) { return r.syntaxSuccess === true; }).length,
+      runtimeSuccess: rows.filter(function (r) { return r.runtimeSuccess === true; }).length,
+      correct: tax.correct,
+      rejected: tax.rejected,
+      silentFailures: tax.silentFailures,
+      correctnessRate: round6(tax.correctnessRate),
+      silentFailureRate: round6(tax.silentFailureRate),
+      syntaxErrorRate: round6(tax.syntaxErrorRate),
+      runtimeErrorRate: round6(tax.runtimeErrorRate),
+      wrongOutputRate: round6(tax.wrongOutputRate),
+      counts: tax.counts,
+      avgPrecision: round6(average(mets.map(function (m) { return m.precision; }))),
+      avgRecall: round6(average(mets.map(function (m) { return m.recall; }))),
+      avgF1: round6(average(mets.map(function (m) { return m.f1; }))),
+      avgF1Normalized: round6(average(mets.map(function (m) { return m.normalized ? m.normalized.f1 : m.f1; }))),
+      avgGenerationTimeMs: Math.round(average(rows.map(function (r) { return r.generationTimeMs; })) * 1000) / 1000
+    };
+  }
+
+  function summarize(results) {
+    const out = { cases: results.length };
+    SIDE_KEYS.forEach(function (key) { out[key] = sideSummary(results, key); });
+    return out;
+  }
+
+  function summarizeGroups(results) {
+    const groups = {};
+    ['seed', 'holdout', 'injected'].forEach(function (g) {
+      const rows = results.filter(function (r) { return r.group === g; });
+      groups[g] = rows.length ? summarize(rows) : null;
+    });
+    return groups;
+  }
+
+  function computeStats(results) {
+    const out = {};
+    if (!Stats) return out;
+    ['seed', 'holdout', 'injected'].forEach(function (g) {
+      const rows = results.filter(function (r) { return r.group === g; });
+      if (!rows.length) return;
+      const stats = {};
+      SIDE_KEYS.forEach(function (key) {
+        const successes = rows.filter(function (r) { return r[key].correct; }).length;
+        stats[key] = { wilson: Stats.wilson(successes, rows.length) };
+      });
+      function mcnemar(baseKey) {
+        let b = 0, c = 0;
+        rows.forEach(function (r) {
+          const pp = r.pseudopy.correct, bl = r[baseKey].correct;
+          if (pp && !bl) b++;
+          else if (!pp && bl) c++;
+        });
+        return Stats.mcnemarExact(b, c);
+      }
+      stats.mcnemar = { vsB1: mcnemar('baseline'), vsB2: mcnemar('baselineB2') };
+      stats.wilcoxonTime = {
+        vsB1: Stats.wilcoxon(rows.map(function (r) { return r.pseudopy.generationTimeMs - r.baseline.generationTimeMs; })),
+        vsB2: Stats.wilcoxon(rows.map(function (r) { return r.pseudopy.generationTimeMs - r.baselineB2.generationTimeMs; }))
+      };
+      out[g] = stats;
+    });
+    return out;
+  }
+
+  var Sop2Report = {
+    SIDE_KEYS: SIDE_KEYS,
+    SIDE_LABELS: SIDE_LABELS,
+    CSV_COLUMNS: CSV_COLUMNS,
+    flag: flag,
+    csvCell: csvCell,
+    toCSV: toCSV,
+    toJSON: toJSON,
+    toMarkdown: toMarkdown,
+    verdictText: verdictText,
+    pct: pct,
+    medianOf: medianOf,
+    iqrOf: iqrOf,
+    sideSummary: sideSummary,
+    summarize: summarize,
+    summarizeGroups: summarizeGroups,
+    computeStats: computeStats
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = Sop2Report;
+  if (root) root.Sop2Report = Sop2Report;
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
 ﻿/**
  * Resolve the syntax checker used to validate generated Python.
  *
@@ -3567,10 +5448,206 @@ function baselineTranslate(source, options) {
   });
 }
 
-if (typeof module !== 'undefined' && module.exports) { module.exports = { baselineTranslate, baselineTranslateRaw }; }
+/* ============================================================
+   B2 — "reasonable rule-based" baseline tier
+   ------------------------------------------------------------
+   Same contract as B1 (pure text -> Python, no I/O, no validation)
+   but written the way a competent engineer would from the PUBLIC
+   language spec in docs/compiler-language.md:
+
+     • word operators rewritten (MOD, DIV, AND, OR, NOT, IN, IS,
+       TRUE/FALSE/NULL) outside string literals
+     • inclusive FOR ranges (FOR i FROM a TO b -> range(a, b + 1)),
+       negative steps counted down
+     • INCREMENT / DECREMENT / APPEND
+     • assignment spellings <- and := normalised
+     • tidy indentation driven by block sentinels
+
+   It still has NO CFG, NO AST and NO semantic validation: it emits
+   Python for whatever text it is given, so broken input is translated
+   into broken Python silently. That is exactly the property SOP 2b
+   needs to contrast against PseudoPy's validation mechanism.
+   ============================================================ */
+
+function _b2Indent(level) { return '    '.repeat(Math.max(0, level)); }
+
+/** Apply a transform only to the parts of `text` outside string literals. */
+function _b2OutsideStrings(text, fn) {
+  let out = '';
+  let seg = '';
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '"' || ch === "'") {
+      out += fn(seg);
+      seg = '';
+      const quote = ch;
+      let str = ch;
+      i++;
+      while (i < text.length) {
+        str += text[i];
+        if (text[i] === '\\') { i++; if (i < text.length) { str += text[i]; i++; } continue; }
+        if (text[i] === quote) { i++; break; }
+        i++;
+      }
+      out += str;
+      continue;
+    }
+    seg += ch;
+    i++;
+  }
+  out += fn(seg);
+  return out;
+}
+
+const _B2_OPS = [
+  [/\bMOD\b/g, '%'],
+  [/\bDIV\b/g, '//'],
+  [/\bAND\b/g, 'and'],
+  [/\bOR\b/g, 'or'],
+  [/\bNOT\b/g, 'not'],
+  [/\bIN\b/g, 'in'],
+  [/\bIS\b/g, 'is'],
+  [/\bTRUE\b/g, 'True'],
+  [/\bFALSE\b/g, 'False'],
+  [/\bNULL\b/g, 'None'],
+  [/\bNONE\b/g, 'None'],
+  [/<>/g, '!='],
+  [/\u2190/g, '='],
+  [/<-/g, '='],
+  [/:=/g, '=']
+];
+
+function _b2Expr(text) {
+  return _b2OutsideStrings(String(text), function (plain) {
+    let s = plain;
+    for (let k = 0; k < _B2_OPS.length; k++) s = s.replace(_B2_OPS[k][0], _B2_OPS[k][1]);
+    return s;
+  });
+}
+
+/** Turn a single `=` comparison into `==` inside a condition. */
+function _b2Condition(text) {
+  return _b2Expr(text).replace(/([^=!<>])=([^=])/g, '$1==$2');
+}
+
+function baselineTranslateRawB2(source) {
+  if (source == null) source = '';
+  const lines = String(source).replace(/\r\n/g, '\n').split('\n');
+  const out = [];
+  let indent = 0;
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    line = line.replace(/^\s*(\d+(?:\.\d*)?(?:[):])?)\s+(?=[A-Za-z_#])/, '');
+    line = line.replace(/^\s*(\d+)\s*$/, '');
+    const t = line.trim();
+    if (!t) continue;
+    if (t.startsWith('#')) { out.push(_b2Indent(indent) + t); continue; }
+    if (t.startsWith('//')) { out.push(_b2Indent(indent) + '# ' + t.slice(2).trim()); continue; }
+    const up = t.toUpperCase();
+
+    if (up === 'BEGIN' || up === 'START') continue;
+    if (up === 'END' || up === 'END.') { if (indent > 0) indent--; continue; }
+    if (/^END\s*IF$/.test(up) || up === 'ENDIF') { if (indent > 0) indent--; continue; }
+    if (/^END\s*WHILE$/.test(up) || up === 'ENDWHILE') { if (indent > 0) indent--; continue; }
+    if (/^END\s*FOR$/.test(up) || up === 'ENDFOR') { if (indent > 0) indent--; continue; }
+    if (/^END\s*FUNCTION$/.test(up) || up === 'ENDFUNCTION') { if (indent > 0) indent--; continue; }
+    if (/^END\s*PROCEDURE$/.test(up) || up === 'ENDPROCEDURE') { if (indent > 0) indent--; continue; }
+
+    // DECLARE carries no Python meaning; dropping it keeps the output clean.
+    if (up.startsWith('DECLARE ')) continue;
+
+    let m = t.match(/^IF\b(.*)$/i);
+    if (m && /\bTHEN\b/i.test(t)) {
+      const cond = m[1].replace(/\bTHEN\b/i, '').trim();
+      out.push(_b2Indent(indent) + 'if ' + _b2Condition(cond) + ':');
+      indent++;
+      continue;
+    }
+    m = t.match(/^ELSE\s*IF\b(.*)$/i);
+    if (m) {
+      const cond = m[1].replace(/\bTHEN\b/i, '').trim();
+      out.push(_b2Indent(indent - 1) + 'elif ' + _b2Condition(cond) + ':');
+      continue;
+    }
+    if (up === 'ELSE') { out.push(_b2Indent(indent - 1) + 'else:'); continue; }
+
+    m = t.match(/^WHILE\b(.*)$/i);
+    if (m) {
+      const cond = m[1].replace(/\bDO\b/i, '').trim();
+      out.push(_b2Indent(indent) + 'while ' + _b2Condition(cond) + ':');
+      indent++;
+      continue;
+    }
+
+    m = t.match(/^FOR\s+EACH\s+([A-Za-z_]\w*)\s+IN\s+(.+?)\s+DO\s*$/i);
+    if (m) {
+      out.push(_b2Indent(indent) + 'for ' + m[1] + ' in ' + _b2Expr(m[2]) + ':');
+      indent++;
+      continue;
+    }
+    m = t.match(/^FOR\s+([A-Za-z_]\w*)\s+FROM\s+(.+?)\s+TO\s+(.+?)(?:\s+STEP\s+(.+?))?\s+DO\s*$/i);
+    if (m) {
+      const start = _b2Expr(m[2]), stop = _b2Expr(m[3]);
+      const step = m[4] ? _b2Expr(m[4]) : '';
+      const stopAdj = /^\s*-\s*\d/.test(step) ? '(' + stop + ' - 1)' : '(' + stop + ' + 1)';
+      const args = step && step !== '1' ? start + ', ' + stopAdj + ', ' + step : start + ', ' + stopAdj;
+      out.push(_b2Indent(indent) + 'for ' + m[1] + ' in range(' + args + '):');
+      indent++;
+      continue;
+    }
+
+    m = t.match(/^(FUNCTION|PROCEDURE)\s+([A-Za-z_]\w*)\s*(?:\(([^)]*)\))?/i);
+    if (m) {
+      const params = (m[3] || '').replace(/\s+/g, ' ').trim();
+      out.push(_b2Indent(indent) + 'def ' + m[2] + '(' + params + '):');
+      indent++;
+      continue;
+    }
+
+    m = t.match(/^(INCREMENT|DECREMENT)\s+([A-Za-z_]\w*)\s*$/i);
+    if (m) {
+      out.push(_b2Indent(indent) + m[2] + (m[1].toUpperCase() === 'INCREMENT' ? ' += 1' : ' -= 1'));
+      continue;
+    }
+
+    m = t.match(/^APPEND\s+(.+?)\s+TO\s+(.+?)\s*$/i);
+    if (m) {
+      out.push(_b2Indent(indent) + _b2Expr(m[2]) + '.append(' + _b2Expr(m[1]) + ')');
+      continue;
+    }
+
+    m = t.match(/^RETURN\b(.*)$/i);
+    if (m) {
+      out.push(_b2Indent(indent) + 'return' + (m[1].trim() ? ' ' + _b2Expr(m[1]) : ''));
+      continue;
+    }
+
+    m = t.match(/^CALL\s+(.+)$/i);
+    if (m) { out.push(_b2Indent(indent) + _b2Expr(m[1])); continue; }
+
+    m = t.match(/^(DISPLAY|PRINT|OUTPUT)\s*(.*)$/i);
+    if (m) { out.push(_b2Indent(indent) + 'print(' + _b2Expr(m[2]) + ')'); continue; }
+
+    m = t.match(/^(INPUT|READ)\b(?:\s+WITH\s+PROMPT\s+(.+?))?\s+([A-Za-z_]\w*)\s*$/i);
+    if (m) { out.push(_b2Indent(indent) + m[3] + ' = input(' + (m[2] ? _b2Expr(m[2]) : '') + ')'); continue; }
+
+    m = t.match(/^SET\s+(.+?)\s+TO\s+(.+)$/i);
+    if (m) { out.push(_b2Indent(indent) + _b2Expr(m[1]) + ' = ' + _b2Expr(m[2])); continue; }
+
+    out.push(_b2Indent(indent) + _b2Expr(t));
+  }
+  const generatedPython = out.join('\n');
+  return { generatedPython, translatorId: 'baseline-b2', translatorVersion: '0.1.0' };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { baselineTranslate, baselineTranslateRaw, baselineTranslateRawB2 };
+}
 if (typeof window !== 'undefined') {
   window.baselineTranslate = baselineTranslate;
   window.baselineTranslateRaw = baselineTranslateRaw;
+  window.baselineTranslateRawB2 = baselineTranslateRawB2;
 }
 ﻿/* ============================================================
    SOP 2 — comparison panel (DevTools)

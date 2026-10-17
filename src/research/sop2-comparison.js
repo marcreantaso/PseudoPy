@@ -1,73 +1,213 @@
 ﻿/* ============================================================
-   SOP 2 — PseudoPy vs. baseline comparison (Node harness)
+   SOP 2 — Traditional Baseline vs PseudoPy (Node harness)
    ------------------------------------------------------------
-   Produces `sop2-comparison-results.json` and `.csv` and can be
-   run directly:
+   Produces `sop2-comparison-results.json`, `.csv` and a short
+   `.md` report, and can be run directly:
 
-       npm run sop2          (or: node src/research/sop2-comparison.js)
+       npm run sop2                  (full run)
+       npm run sop2 -- --quick       (tiny iteration count for dev)
 
-   Fairness rules enforced here:
-   • Generation time is measured around translation ONLY. The
-     compiler bundle is loaded and instantiated once, up front,
-     so file reads and VM creation never land in a case's timing.
-   • Both translators are judged by the SAME CPython interpreter:
-     syntax via `ast.parse`, then real execution of the generated
-     program (see python-runtime.js).
+   What this harness guarantees (the methodology, in code):
+
+   1) FUNCTIONAL CORRECTNESS (SOP 2a) is stdout equality against the
+      reference program, executed in the same interpreter — never a
+      text-similarity score.
+   2) ERROR TAXONOMY (SOP 2b) classifies every (case, translator) pair
+      as rejected / syntax_error / runtime_error / wrong_output /
+      correct / unverified, and reports a separate silent-failure rate.
+   3) TRANSLATION-ONLY TIMING (SOP 2c): the report times raw text ->
+      Python, with warm-ups and a batched loop. Bundle load, VM
+      creation, validation and execution are measured separately as a
+      one-time setup cost, never inside a case's timer.
+   4) Two documented baselines: B1 (naive keyword substitution) and B2
+      (reasonable rule-based). Both are built only from the public
+      language spec in docs/; neither has validation of any kind.
+   5) Results are reported per dataset group — seed / holdout /
+      injected — and never blended into one number.
    ============================================================ */
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const { performance } = require('perf_hooks');
+
 const MetricsCore = require('./line-metrics');
-const { baselineTranslateRaw } = require('./baseline-translator');
+const Functional = require('./functional-metrics');
+const Taxonomy = require('./error-taxonomy');
+const Stats = require('./stats');
+const Timing = require('./timing');
+const Dataset = require('./dataset');
+const Injection = require('./error-injection');
+const { baselineTranslateRaw, baselineTranslateRawB2 } = require('./baseline-translator');
 const pythonRuntime = require('./python-runtime');
+const HOLDOUT_CASES = require('./holdout-cases');
 
 const RESULTS_BASENAME = 'sop2-comparison-results';
-const METRICS_VERSION = '1.1.0';
+const METRICS_VERSION = '2.0.0';
+const SCHEMA_VERSION = 2;
+
+const SIDE_KEYS = ['pseudopy', 'baseline', 'baselineB2'];
+const SIDE_LABELS = {
+  pseudopy: 'PseudoPy',
+  baseline: 'Baseline B1 (naive)',
+  baselineB2: 'Baseline B2 (rule-based)'
+};
 
 let cachedEngine = null;
+let engineSetup = null;
 
 /**
  * Load mapper.js + compiler.js into one VM context and keep the resulting
- * compiler instance. Doing this lazily-but-once keeps bundle I/O and context
- * creation out of every per-case generation-time measurement.
+ * compiler instance. Returns the one-time setup cost the first time it runs
+ * so the report can state it separately from per-case translation time.
  */
 function getCompilerEngine() {
   if (cachedEngine) return cachedEngine;
-  const vm = require('vm');
-  const ctx = {
-    module: { exports: {} },
-    exports: {},
-    console,
-    setTimeout,
-    clearTimeout,
-    performance: { now: () => performance.now() }
-  };
-  const base = path.join(__dirname, '../../');
-  vm.runInNewContext(fs.readFileSync(path.join(base, 'mapper.js'), 'utf8'), ctx);
-  vm.runInNewContext(fs.readFileSync(path.join(base, 'compiler.js'), 'utf8'), ctx);
-  cachedEngine = new ctx.module.exports.PseudocodeCompiler();
+  const measured = Timing.measureSetup(function () {
+    const ctx = {
+      module: { exports: {} },
+      exports: {},
+      console,
+      setTimeout,
+      clearTimeout,
+      performance: { now: () => performance.now() }
+    };
+    const base = path.join(__dirname, '../../');
+    vm.runInNewContext(fs.readFileSync(path.join(base, 'mapper.js'), 'utf8'), ctx);
+    vm.runInNewContext(fs.readFileSync(path.join(base, 'compiler.js'), 'utf8'), ctx);
+    return new ctx.module.exports.PseudocodeCompiler();
+  });
+  cachedEngine = measured.value;
+  engineSetup = { setupMs: measured.setupMs };
   return cachedEngine;
+}
+
+function round3(n) { return Math.round(n * 1000) / 1000; }
+function round6(n) { return Math.round(n * 1e6) / 1e6; }
+
+function average(values) {
+  if (!values.length) return 0;
+  return values.reduce(function (a, b) { return a + b; }, 0) / values.length;
 }
 
 function lineMetrics(gen, exp) {
   return MetricsCore.lineMetrics(gen, exp);
 }
 
+/* ---------- reference execution (cached per reference program) ---------- */
+
+const referenceCache = new Map();
+
+function runReference(referencePython, opts) {
+  const key = String(referencePython == null ? '' : referencePython);
+  if (referenceCache.has(key)) return referenceCache.get(key);
+  const run = pythonRuntime.pythonRun(key, { timeoutMs: opts && opts.timeoutMs, stdin: opts && opts.stdin });
+  const outcome = { ok: run.ok, stdout: run.stdout, error: run.error, unavailable: !!run.unavailable };
+  referenceCache.set(key, outcome);
+  return outcome;
+}
+
+/* ---------- one translator side ---------- */
+
 /**
- * Compare one source/expected pair. Never throws for an expected failure.
+ * Translate (timed), validate and execute one side of one case.
+ * @param {string} key 'pseudopy' | 'baseline' | 'baselineB2'
+ * @param {object} ctx {source, reference, executeRuntime, timeoutMs, stdin, timing, engine}
+ */
+function measureSide(key, ctx) {
+  const source = ctx.source;
+  let generatedPython = '';
+  let rejected = false;
+  let emitted = false;
+  let hasWarning = false;
+  let compileErrors = [];
+
+  const timingOpts = ctx.timing || {};
+  const iters = ctx.timingIters == null ? 200 : ctx.timingIters;
+  const warmup = ctx.timingWarmup == null ? 5 : ctx.timingWarmup;
+
+  const translated = Timing.measure(function () {
+    let res;
+    if (key === 'pseudopy') {
+      if (!ctx.engine) { res = { valid: false, python: '', errors: ['compiler unavailable'] }; }
+      else {
+        try {
+          res = ctx.engine.compile(source);
+        } catch (e) {
+          res = { valid: false, python: '', errors: [e.message || String(e)] };
+        }
+      }
+      generatedPython = res.python || '';
+      rejected = res.valid === false || !generatedPython;
+      compileErrors = (res.errors || []).map(function (e) {
+        return typeof e === 'string' ? e : (e.message || String(e));
+      });
+    } else if (key === 'baseline') {
+      generatedPython = baselineTranslateRaw(source).generatedPython || '';
+    } else {
+      generatedPython = baselineTranslateRawB2(source).generatedPython || '';
+    }
+    return generatedPython;
+  }, { warmup: warmup, iters: iters });
+
+  emitted = !!generatedPython && generatedPython.trim() !== '';
+  // PseudoPy warns when it declines an input. The baselines never warn.
+  hasWarning = key === 'pseudopy' && rejected;
+
+  const syntax = emitted
+    ? pythonRuntime.pythonSyntaxCheck(generatedPython, { timeoutMs: ctx.timeoutMs })
+    : { ok: null, error: null, omitted: true };
+
+  let run = { ok: null, error: null, stdout: '', stderr: '', timedOut: false };
+  if (ctx.executeRuntime !== false && emitted && syntax.ok === true) {
+    run = pythonRuntime.pythonRun(generatedPython, { timeoutMs: ctx.timeoutMs, stdin: ctx.stdin });
+  }
+
+  const outputMatches = syntax.ok === true && run.ok === true && Functional.outputsMatch(run.stdout, ctx.reference.stdout);
+  const cls = Taxonomy.classify({
+    rejected: rejected,
+    hasWarning: hasWarning,
+    syntaxOk: emitted ? syntax.ok : (rejected ? null : false),
+    runtimeOk: ctx.executeRuntime === false || !emitted ? null : run.ok,
+    outputMatches: outputMatches
+  });
+
+  return {
+    side: key,
+    generatedPython: generatedPython,
+    rejected: rejected,
+    emitted: emitted,
+    hasWarning: hasWarning,
+    compileSuccess: syntax.ok === true,
+    syntaxSuccess: syntax.ok,
+    syntaxError: syntax.error,
+    runtimeSuccess: run.ok,
+    runtimeError: run.error,
+    stdout: run.stdout,
+    outputMatches: outputMatches,
+    correct: cls === 'correct',
+    class: cls,
+    generationTimeMs: round3(translated.perIterationMs),
+    timing: {
+      iterations: translated.iterations,
+      warmup: translated.warmup,
+      totalMs: round3(translated.totalMs)
+    },
+    errors: compileErrors
+  };
+}
+
+/* ---------- one case ---------- */
+
+/**
+ * Compare one source/reference pair through every translator tier.
  * @param {string} source pseudocode
  * @param {string} refPython reference Python
- * @param {{caseId?: string, title?: string, executeRuntime?: boolean, timeoutMs?: number}} [opts]
+ * @param {object} [opts]
  */
 function compare(source, refPython, opts) {
   opts = opts || {};
-  const expected = refPython || '';
-  const executeRuntime = opts.executeRuntime !== false;
+  const referencePython = refPython == null ? '' : String(refPython);
 
-  // ── PseudoPy: timed translation only ────────────────────────
-  // Resolve the engine BEFORE starting the clock: loading the bundles and
-  // creating the VM context happens once and must never be attributed to a
-  // case's generation time.
   let engine = null;
   let engineError = null;
   try {
@@ -75,111 +215,65 @@ function compare(source, refPython, opts) {
   } catch (e) {
     engineError = e.message || String(e);
   }
-  let pseudopyRes;
-  let pseudopyErrors = [];
-  const p0 = performance.now();
-  if (engine) {
-    try {
-      pseudopyRes = engine.compile(source);
-    } catch (e) {
-      pseudopyRes = { valid: false, python: '' };
-      pseudopyErrors = [e.message || String(e)];
-    }
-  } else {
-    pseudopyRes = { valid: false, python: '' };
-    pseudopyErrors = [engineError || 'compiler unavailable'];
-  }
-  const p1 = performance.now();
 
-  // ── Baseline: timed raw translation only ────────────────────
-  let baselineGen = '';
-  let baselineError = null;
-  const b0 = performance.now();
-  try {
-    baselineGen = baselineTranslateRaw(source).generatedPython || '';
-  } catch (e) {
-    baselineError = e.message || String(e);
-  }
-  const b1 = performance.now();
+  const reference = runReference(referencePython, opts);
 
-  const ppPython = pseudopyRes.python || '';
+  const ctx = {
+    source: source,
+    reference: reference,
+    engine: engine,
+    executeRuntime: opts.executeRuntime,
+    timeoutMs: opts.timeoutMs,
+    stdin: opts.stdin,
+    timing: opts.timing,
+    timingIters: opts.timingIters,
+    timingWarmup: opts.timingWarmup
+  };
+  if (!engine && engineError) { /* handled per-side as compiler unavailable */ }
 
-  // ── Same-runtime validation (outside the timed region) ──────
-  const ppSyntax = pythonRuntime.pythonSyntaxCheck(ppPython, { timeoutMs: opts.timeoutMs });
-  const blSyntax = baselineError
-    ? { ok: null, error: baselineError }
-    : pythonRuntime.pythonSyntaxCheck(baselineGen, { timeoutMs: opts.timeoutMs });
+  const sides = {};
+  sides.pseudopy = measureSide('pseudopy', ctx);
+  sides.baseline = measureSide('baseline', ctx);
+  sides.baselineB2 = measureSide('baselineB2', ctx);
 
-  let ppRun = { ok: null, error: null, stdout: '', stderr: '', timedOut: false };
-  let blRun = { ok: null, error: null, stdout: '', stderr: '', timedOut: false };
-  if (executeRuntime) {
-    if (ppSyntax.ok === true) ppRun = pythonRuntime.pythonRun(ppPython, { timeoutMs: opts.timeoutMs });
-    if (blSyntax.ok === true) blRun = pythonRuntime.pythonRun(baselineGen, { timeoutMs: opts.timeoutMs });
-  }
+  const metrics = {};
+  const similarity = {};
+  SIDE_KEYS.forEach(function (key) {
+    const sim = Functional.textSimilarity(sides[key].generatedPython, referencePython);
+    similarity[key] = sim;
+    metrics[key] = Object.assign({}, sim.raw, { raw: sim.raw, normalized: sim.normalized });
+  });
 
   return {
     caseId: opts.caseId || null,
     title: opts.title || null,
+    group: opts.group || 'seed',
+    injectionType: opts.injectionType || null,
+    baseId: opts.baseId || null,
+    injectionDetail: opts.injectionDetail || null,
     input: source,
-    expectedPython: expected,
-    pseudopy: {
-      generatedPython: ppPython,
-      compileSuccess: !!pseudopyRes.valid,
-      syntaxSuccess: ppSyntax.ok,
-      syntaxError: ppSyntax.error,
-      runtimeSuccess: ppRun.ok,
-      runtimeError: ppRun.error,
-      stdout: ppRun.stdout,
-      generationTimeMs: round3(p1 - p0),
-      errors: pseudopyErrors.length ? pseudopyErrors : (pseudopyRes.errors || [])
+    expectedPython: referencePython,
+    reference: {
+      ok: reference.ok,
+      stdout: reference.stdout,
+      error: reference.error,
+      unavailable: reference.unavailable || false
     },
-    baseline: {
-      generatedPython: baselineGen,
-      compileSuccess: blSyntax.ok === true,
-      syntaxSuccess: blSyntax.ok,
-      syntaxError: blSyntax.error,
-      runtimeSuccess: blRun.ok,
-      runtimeError: blRun.error,
-      stdout: blRun.stdout,
-      generationTimeMs: round3(b1 - b0)
-    },
-    metrics: {
-      pseudopy: lineMetrics(ppPython, expected),
-      baseline: lineMetrics(baselineGen, expected)
-    }
+    pseudopy: sides.pseudopy,
+    baseline: sides.baseline,
+    baselineB2: sides.baselineB2,
+    metrics: metrics,
+    similarity: similarity,
+    setupError: engineError || null
   };
 }
 
-function round3(n) {
-  return Math.round(n * 1000) / 1000;
-}
+/* ---------- aggregation & statistics ---------- */
 
-function average(values) {
-  if (!values.length) return 0;
-  return values.reduce(function (a, b) { return a + b; }, 0) / values.length;
-}
+// Summaries and inferential statistics are shared with the browser UI via
+// src/research/report.js; the destructuring below binds them into this module.
 
-function summarize(results) {
-  function side(key) {
-    const rows = results.map(function (r) { return r[key]; });
-    const metrics = results.map(function (r) { return r.metrics[key]; });
-    return {
-      cases: rows.length,
-      compileSuccess: rows.filter(function (r) { return r.compileSuccess; }).length,
-      syntaxSuccess: rows.filter(function (r) { return r.syntaxSuccess === true; }).length,
-      runtimeSuccess: rows.filter(function (r) { return r.runtimeSuccess === true; }).length,
-      avgPrecision: round6(average(metrics.map(function (m) { return m.precision; }))),
-      avgRecall: round6(average(metrics.map(function (m) { return m.recall; }))),
-      avgF1: round6(average(metrics.map(function (m) { return m.f1; }))),
-      avgGenerationTimeMs: round3(average(rows.map(function (r) { return r.generationTimeMs; })))
-    };
-  }
-  return { cases: results.length, pseudopy: side('pseudopy'), baseline: side('baseline') };
-}
-
-function round6(n) {
-  return Math.round(n * 1e6) / 1e6;
-}
+/* ---------- dataset reading ---------- */
 
 function readSeeds(limit) {
   const db = fs.readFileSync(path.join(__dirname, '../../database.js'), 'utf8');
@@ -199,87 +293,137 @@ function readSeeds(limit) {
 }
 
 /**
- * Run the built-in seed exercises through both translators.
- * @param {{limit?: number, executeRuntime?: boolean, timeoutMs?: number, write?: boolean, outDir?: string}} [opts]
- * @returns {object} the full results document (also written when `write`).
+ * Build the tagged dataset used by the full comparison.
  */
-function runSeedComparison(opts) {
+function buildComparisonDataset(opts) {
   opts = opts || {};
-  const seeds = readSeeds(opts.limit || 30);
+  const seeds = readSeeds(opts.limit);
+  return Dataset.buildDataset(seeds, HOLDOUT_CASES, {
+    includeSeed: opts.includeSeed,
+    includeHoldout: opts.includeHoldout,
+    includeInjected: opts.includeInjected,
+    injectionTypes: opts.injectionTypes
+  });
+}
+
+/* ---------- full run ---------- */
+
+function runComparison(opts) {
+  opts = opts || {};
+  const dataset = buildComparisonDataset(opts);
+  const timing = opts.timing || {};
+  const defaultIters = opts.iters == null ? 200 : opts.iters;
+  const defaultWarmup = opts.warmup == null ? 5 : opts.warmup;
+
   const results = [];
-  for (let i = 0; i < seeds.length; i++) {
-    const ex = seeds[i];
-    const src = ex.pseudocode || ex.code || '';
-    const ref = ex.python_code || ex.solution || ex.pythonCode || '';
-    if (!src) continue;
-    results.push(compare(src, ref, {
-      caseId: ex.id,
-      title: ex.title,
+  for (let i = 0; i < dataset.rows.length; i++) {
+    const row = dataset.rows[i];
+    const injected = row.group === 'injected';
+    results.push(compare(row.source, row.referencePython, {
+      caseId: row.id,
+      title: row.title,
+      group: row.group,
+      injectionType: row.injectionType,
+      baseId: row.baseId,
+      injectionDetail: row.injectionDetail,
       executeRuntime: opts.executeRuntime,
-      timeoutMs: opts.timeoutMs
+      timeoutMs: opts.timeoutMs,
+      // Headline timing runs on seed+holdout only; injected rows get a
+      // single-shot figure that is never used for the 2c claim.
+      timingIters: injected ? 1 : (timing.iters == null ? defaultIters : timing.iters),
+      timingWarmup: injected ? 0 : (timing.warmup == null ? defaultWarmup : timing.warmup)
     }));
   }
+
+  const groups = summarizeGroups(results);
   const doc = {
     metadata: {
       timestamp: new Date().toISOString(),
+      schemaVersion: SCHEMA_VERSION,
       cases: results.length,
       compiler: 'PseudoPy',
-      baseline: 'direct-line-based',
+      baselines: { B1: 'naive keyword substitution', B2: 'reasonable rule-based (no validation)' },
       runtime: pythonRuntime.pythonCommand(),
-      metricsVersion: METRICS_VERSION
+      metricsVersion: METRICS_VERSION,
+      correctnessDefinition: 'generated program runs and stdout equals the reference program stdout',
+      timingMethod: 'translation only; ' + (timing.warmup == null ? defaultWarmup : timing.warmup) +
+        ' warm-ups then ' + (timing.iters == null ? defaultIters : timing.iters) + ' iterations, median/IQR across cases',
+      setup: engineSetup
+    },
+    dataset: {
+      composition: {
+        seed: dataset.rows.filter(function (r) { return r.group === 'seed'; }).length,
+        holdout: dataset.rows.filter(function (r) { return r.group === 'holdout'; }).length,
+        injected: dataset.rows.filter(function (r) { return r.group === 'injected'; }).length
+      },
+      skippedInjections: dataset.injections.skipped
     },
     summary: summarize(results),
+    groups: groups,
+    stats: computeStats(results),
+    results: results
+  };
+
+  if (opts.write) writeResults(doc, opts.outDir);
+  return doc;
+}
+
+/** Backwards-compatible seed-only run used by the existing tests. */
+function runSeedComparison(opts) {
+  opts = opts || {};
+  const seeds = readSeeds(opts.limit || 30);
+  const rows = Dataset.buildDataset(seeds, [], { includeHoldout: false, includeInjected: false }).rows;
+  const results = rows.map(function (row) {
+    return compare(row.source, row.referencePython, {
+      caseId: row.id,
+      title: row.title,
+      group: 'seed',
+      executeRuntime: opts.executeRuntime,
+      timeoutMs: opts.timeoutMs,
+      timingIters: opts.timingIters == null ? 200 : opts.timingIters,
+      timingWarmup: opts.timingWarmup == null ? 5 : opts.timingWarmup
+    });
+  });
+  const doc = {
+    metadata: {
+      timestamp: new Date().toISOString(),
+      schemaVersion: SCHEMA_VERSION,
+      cases: results.length,
+      compiler: 'PseudoPy',
+      baselines: { B1: 'naive keyword substitution', B2: 'reasonable rule-based (no validation)' },
+      runtime: pythonRuntime.pythonCommand(),
+      metricsVersion: METRICS_VERSION,
+      setup: engineSetup
+    },
+    summary: summarize(results),
+    groups: { seed: summarize(results), holdout: null, injected: null },
+    stats: computeStats(results),
+    dataset: { composition: { seed: results.length, holdout: 0, injected: 0 }, skippedInjections: [] },
     results: results
   };
   if (opts.write) writeResults(doc, opts.outDir);
   return doc;
 }
 
-function flag(v) {
-  return v === true ? '1' : v === false ? '0' : '';
-}
+/* ---------- report rendering ---------- */
 
-function csvCell(v) {
-  let s = v == null ? '' : String(v);
-  if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
-  if (/^[=+\-@]/.test(s)) s = "'" + s;
-  return s;
-}
+// CSV/Markdown/JSON rendering lives in src/research/report.js so the browser
+// UI and this harness produce byte-identical exports from one implementation.
+const Report = require('./report');
+const { toCSV, toJSON, toMarkdown, verdictText, summarize, summarizeGroups, computeStats } = Report;
+const CSV_COLUMNS = Report.CSV_COLUMNS;
 
-const CSV_COLUMNS = [
-  'caseId', 'title',
-  'pp_compile', 'pp_syntax', 'pp_runtime', 'pp_p', 'pp_r', 'pp_f1', 'pp_time_ms',
-  'bl_compile', 'bl_syntax', 'bl_runtime', 'bl_p', 'bl_r', 'bl_f1', 'bl_time_ms'
-];
-
-function toCSV(doc) {
-  const results = Array.isArray(doc) ? doc : doc.results;
-  const lines = [CSV_COLUMNS.join(',')];
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
-    lines.push([
-      r.caseId, r.title,
-      flag(r.pseudopy.compileSuccess), flag(r.pseudopy.syntaxSuccess), flag(r.pseudopy.runtimeSuccess),
-      r.metrics.pseudopy.precision, r.metrics.pseudopy.recall, r.metrics.pseudopy.f1, r.pseudopy.generationTimeMs,
-      flag(r.baseline.compileSuccess), flag(r.baseline.syntaxSuccess), flag(r.baseline.runtimeSuccess),
-      r.metrics.baseline.precision, r.metrics.baseline.recall, r.metrics.baseline.f1, r.baseline.generationTimeMs
-    ].map(csvCell).join(','));
-  }
-  return lines.join('\n') + '\n';
-}
-
-function toJSON(doc) {
-  return JSON.stringify(doc, null, 2) + '\n';
-}
+// pct/f3/toMarkdown/verdictText removed: rendering is shared via report.js.
 
 function writeResults(doc, outDir) {
   const dir = outDir || path.join(__dirname, '../../');
-  fs.writeFileSync(path.join(dir, RESULTS_BASENAME + '.json'), toJSON(doc), 'utf8');
-  fs.writeFileSync(path.join(dir, RESULTS_BASENAME + '.csv'), toCSV(doc), 'utf8');
-  return {
-    json: path.join(dir, RESULTS_BASENAME + '.json'),
-    csv: path.join(dir, RESULTS_BASENAME + '.csv')
-  };
+  const jsonPath = path.join(dir, RESULTS_BASENAME + '.json');
+  const csvPath = path.join(dir, RESULTS_BASENAME + '.csv');
+  const mdPath = path.join(dir, RESULTS_BASENAME + '.md');
+  fs.writeFileSync(jsonPath, toJSON(doc), 'utf8');
+  fs.writeFileSync(csvPath, toCSV(doc), 'utf8');
+  fs.writeFileSync(mdPath, toMarkdown(doc), 'utf8');
+  return { json: jsonPath, csv: csvPath, md: mdPath };
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -287,16 +431,40 @@ if (typeof module !== 'undefined' && module.exports) {
     compare,
     lineMetrics,
     runSeedComparison,
+    runComparison,
+    buildComparisonDataset,
     summarize,
+    summarizeGroups,
+    computeStats,
     toCSV,
     toJSON,
-    writeResults
+    toMarkdown,
+    writeResults,
+    readSeeds,
+    SIDE_KEYS
   };
 }
 
 if (require.main === module) {
-  const doc = runSeedComparison({ write: true });
+  const quick = process.argv.indexOf('--quick') >= 0;
+  const doc = runComparison({
+    write: true,
+    iters: quick ? 5 : 200,
+    warmup: quick ? 1 : 5
+  });
   const written = path.join(__dirname, '../../', RESULTS_BASENAME);
-  console.log('SOP 2 comparison: ' + doc.results.length + ' cases -> ' + written + '.json / .csv');
-  console.log(JSON.stringify(doc.summary, null, 2));
+  console.log('SOP 2 comparison: ' + doc.results.length + ' cases -> ' + written + '.json / .csv / .md');
+  console.log('groups: seed=' + doc.dataset.composition.seed +
+    ' holdout=' + doc.dataset.composition.holdout +
+    ' injected=' + doc.dataset.composition.injected);
+  console.log(JSON.stringify(doc.groups.seed.pseudopy && {
+    pp_correct: doc.groups.seed.pseudopy.correct,
+    b1_correct: doc.groups.seed.baseline.correct,
+    b2_correct: doc.groups.seed.baselineB2.correct
+  }));
+  console.log(JSON.stringify(doc.groups.holdout && {
+    pp_correct: doc.groups.holdout.pseudopy.correct,
+    b1_correct: doc.groups.holdout.baseline.correct,
+    b2_correct: doc.groups.holdout.baselineB2.correct
+  }));
 }
