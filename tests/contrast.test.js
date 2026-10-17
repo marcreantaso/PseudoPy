@@ -115,6 +115,12 @@ const MATRIX = [
     ['dark', '#4ade80', '#111119', 4.5, 'text-success on card'],
     ['dark', '#fbbf24', '#111119', 4.5, 'text-warning on card'],
     ['dark', '#22d3ee', '#111119', 4.5, 'text-cyan on card'],
+    // Dark audit badge text (semi-transparent status bg composited over card #111119)
+    ['dark', '#4ade80', '#112a29', 4.5, 'audit-badge--success'],
+    ['dark', '#93c5fd', '#17223a', 4.5, 'audit-badge--info'],
+    ['dark', '#fbbf24', '#332617', 4.5, 'audit-badge--warning'],
+    ['dark', '#f87171', '#32191f', 4.5, 'audit-badge--danger'],
+    ['dark', '#94a3b8', '#1d202a', 4.5, 'audit-badge--neutral'],
     // Dark UI graphics
     ['dark', '#3b82f6', '#111119', 3.0, 'accent graphics on card'],
     ['dark', '#34d399', '#111119', 3.0, 'icon-success on card'],
@@ -185,6 +191,19 @@ test('surface borders and input focus reference the new tokens', () => {
     assert.ok(css.includes('border: 1px solid var(--border-strong);'), 'cards must use --border-strong');
     assert.ok(css.includes('border-bottom: 1px solid var(--border-divider);'), 'table rows/panels must use --border-divider');
     assert.ok(css.includes('color: var(--icon-muted);'), 'stat icons must use --icon-muted');
+});
+
+test('audit badge classes are themed through status tokens, not hardcoded colors', () => {
+    for (const variant of ['success', 'info', 'warning', 'danger', 'neutral']) {
+        const block = css.match(new RegExp('\\.audit-badge--' + variant + '\\s*\\{[^}]*\\}'));
+        assert.ok(block, `.audit-badge--${variant} rule must exist`);
+        for (const part of ['fg', 'bg', 'border']) {
+            assert.ok(
+                block[0].includes(`var(--status-${variant}-${part})`),
+                `.audit-badge--${variant} ${part} must use --status-${variant}-${part}`
+            );
+        }
+    }
 });
 
 test('stat labels are weight-600 for legibility', () => {
