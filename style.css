@@ -2371,6 +2371,47 @@ svg.lucide {
   border-color: var(--status-danger-border);
 }
 
+/* ── Security Audit Log ─────────────────────────────────────── */
+/* Badges keep the shared .badge geometry but read as friendly
+   sentence-case labels. Each variant pairs an icon + text with a
+   distinct colour, and reuses the AA-validated status tokens. */
+.audit-badge {
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.audit-badge--success {
+  background: var(--status-success-bg);
+  color: var(--status-success-fg);
+  border-color: var(--status-success-border);
+}
+
+.audit-badge--info {
+  background: var(--status-info-bg);
+  color: var(--status-info-fg);
+  border-color: var(--status-info-border);
+}
+
+.audit-badge--warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-fg);
+  border-color: var(--status-warning-border);
+}
+
+.audit-badge--danger {
+  background: var(--status-danger-bg);
+  color: var(--status-danger-fg);
+  border-color: var(--status-danger-border);
+}
+
+.audit-badge--neutral {
+  background: var(--status-neutral-bg);
+  color: var(--status-neutral-fg);
+  border-color: var(--status-neutral-border);
+}
+
 /* ── Chart Placeholder ── */
 .chart-container {
   background: var(--bg-card);
