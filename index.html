@@ -2312,20 +2312,93 @@ CALL f(1,2); f(1,2)</pre>
             </div>
           </div>
           <div class="devtools-tab-panel" id="devtools-panel-sop2">
-            <div class="devtools-panel-toolbar"><span class="devtools-count">SOP2 comparison</span></div>
-            <div class="devtools-panel-body" style="padding:1rem">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-                <div><h4>Pseudocode</h4><textarea id="sop2-src" class="code-editor devtools-editor" spellcheck="false"></textarea></div>
-                <div><h4>Reference Python</h4><textarea id="sop2-ref" class="code-editor devtools-editor" spellcheck="false"></textarea></div>
+            <div class="devtools-panel-toolbar">
+              <span class="devtools-count">SOP 2 &middot; Traditional baseline vs PseudoPy</span>
+              <button type="button" class="sop2-info-btn" id="sop2-info-btn" aria-haspopup="dialog"
+                aria-expanded="false" aria-controls="sop2-info">What is measured?</button>
+            </div>
+            <div class="devtools-panel-body sop2" id="sop2-panel">
+              <div class="sop2-popover hidden" id="sop2-info" role="dialog" aria-modal="false"
+                aria-labelledby="sop2-info-title" tabindex="-1">
+                <h3 id="sop2-info-title">What this experiment measures</h3>
+                <dl class="sop2-info-list">
+                  <div><dt>2a &middot; Functional correctness</dt>
+                    <dd>The generated Python is <strong>run</strong>, and its printed output must equal the
+                      reference program's output. Text similarity is shown but is never the correctness score.</dd></div>
+                  <div><dt>2b &middot; Error detection</dt>
+                    <dd>Every case is classified as correct, rejected, syntax error, runtime error or wrong
+                      output, and a separate <strong>silent-failure</strong> rate is reported.</dd></div>
+                  <div><dt>2c &middot; Translation time</dt>
+                    <dd>Only raw text &rarr; Python is timed (warm-ups plus a batched loop). Bundle load,
+                      validation and execution are excluded and reported separately.</dd></div>
+                  <div><dt>Baselines</dt>
+                    <dd><strong>B1</strong> naive keyword substitution &middot; <strong>B2</strong> reasonable
+                      rule-based. Neither performs any validation.</dd></div>
+                  <div><dt>Groups</dt>
+                    <dd>Seed (built-in), holdout (independently written) and injected (deliberately broken).
+                      Results are never blended across groups.</dd></div>
+                </dl>
+                <button type="button" class="btn btn-ghost" id="sop2-info-close">Close</button>
               </div>
-              <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+
+              <div class="sop2-setup">
+                <div class="sop2-editors">
+                  <div class="sop2-editor-card">
+                    <div class="sop2-editor-head">
+                      <label for="sop2-src">Pseudocode</label>
+                      <span class="sop2-hint">identical input for every translator</span>
+                    </div>
+                    <textarea id="sop2-src" class="code-editor devtools-editor sop2-textarea"
+                      spellcheck="false" aria-label="Pseudocode input"></textarea>
+                  </div>
+                  <div class="sop2-editor-card">
+                    <div class="sop2-editor-head">
+                      <label for="sop2-ref">Reference Python</label>
+                      <span class="sop2-hint">judges output only &mdash; never shown to a translator</span>
+                    </div>
+                    <textarea id="sop2-ref" class="code-editor devtools-editor sop2-textarea"
+                      spellcheck="false" aria-label="Reference Python"></textarea>
+                  </div>
+                </div>
+
+                <div class="sop2-loadbar">
+                  <label class="sop2-field" for="sop2-load-example">
+                    <span>Load example</span>
+                    <select id="sop2-load-example"><option value="">Choose a case&hellip;</option></select>
+                  </label>
+                  <label class="sop2-field" for="sop2-tier">
+                    <span>Baseline to compare</span>
+                    <select id="sop2-tier">
+                      <option value="baselineB2">B2 &middot; reasonable rule-based</option>
+                      <option value="baseline">B1 &middot; naive</option>
+                    </select>
+                  </label>
+                  <label class="sop2-field sop2-field-check" for="sop2-scope-injected">
+                    <input type="checkbox" id="sop2-scope-injected">
+                    <span>Include error-injected cases in benchmark</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="sop2-actions" id="sop2-actions" role="toolbar" aria-label="Comparison actions">
                 <button class="btn btn-primary" id="sop2-compare">Compare</button>
                 <button class="btn btn-secondary" id="sop2-run">Run both</button>
-                <button class="btn btn-ghost" id="sop2-bench">Benchmark</button>
-                <button class="btn btn-ghost" id="sop2-export-json">Export JSON</button>
-                <button class="btn btn-ghost" id="sop2-export-csv">Export CSV</button>
+                <button class="btn btn-secondary" id="sop2-bench">Benchmark</button>
+                <button class="btn btn-ghost" id="sop2-bench-cancel" hidden>Cancel</button>
+                <span class="sop2-actions-spacer" aria-hidden="true"></span>
+                <button class="btn btn-ghost" id="sop2-export-json" disabled>Export JSON</button>
+                <button class="btn btn-ghost" id="sop2-export-csv" disabled>Export CSV</button>
+                <button class="btn btn-ghost" id="sop2-export-md" disabled>Export report</button>
               </div>
-              <div id="sop2-result" style="margin-top:1rem;overflow:auto"></div>
+
+              <div class="sop2-progress hidden" id="sop2-progress" role="progressbar"
+                aria-label="Benchmark progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div class="sop2-progress-track"><span class="sop2-progress-fill" id="sop2-progress-fill"></span></div>
+                <span class="sop2-progress-text" id="sop2-progress-text"></span>
+              </div>
+
+              <div id="sop2-result" class="sop2-result" role="region" aria-label="Comparison results"
+                aria-live="polite" aria-busy="false"></div>
               <div id="sop2-status" class="devtools-hint" role="status" aria-live="polite"></div>
             </div>
           </div>
