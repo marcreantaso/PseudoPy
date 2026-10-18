@@ -148,9 +148,15 @@ test('the old seam and page-level padding bands are gone', () => {
 test('desktop is 55/45 and 768-1023px narrows the hero', () => {
     const rule = css.match(/\.login-page\s*\{[^{}]*\}/)[0];
     assert.match(rule, /grid-template-columns:\s*55fr\s+45fr/);
-    const tablet = css.slice(css.indexOf('@media (max-width: 1023px)'), css.indexOf('@media (max-width: 768px) {'));
+    const tablet = css.slice(css.indexOf('@media (max-width: 1023px)'), css.indexOf('@media (max-width: 767.98px) {'));
     assert.match(tablet, /grid-template-columns:\s*45fr\s+55fr/,
         'the hero should be narrower than the form between 768 and 1023px');
+    // The phone query must start strictly below 768px or a 768px tablet is
+    // swallowed by the single-column layout and loses the two-column view.
+    assert.ok(loginSection.includes('@media (max-width: 767.98px) {'),
+        'the phone layout must begin below 768px');
+    assert.doesNotMatch(loginSection, /@media \(max-width: 768px\)/,
+        'a max-width:768px query swallows the 768px tablet breakpoint');
 });
 
 test('the form is an elevated card bounded to 400-440px', () => {
@@ -179,6 +185,9 @@ test('no auth text drops below 12px', () => {
     assert.match(css.match(/#login-version\s*\{[^{}]*\}/)[0], /font-size:\s*max\(12px/);
     assert.match(css.match(/\.login-page \.form-group label\s*\{[^{}]*\}/)[0], /font-size:\s*max\(13px/);
     assert.match(css.match(/\.login-error\s*\{[^{}]*\}/)[0], /font-size:\s*max\(1[23]px/);
+    // The decorative hero code card is still text, so it must clear 12px too.
+    assert.match(css.match(/\.code-card-title\s*\{[^{}]*\}/)[0], /font-size:\s*max\(12px/);
+    assert.match(css.match(/\.code-card-body\s*\{[^{}]*\}/)[0], /font-size:\s*max\(12px/);
 });
 
 // ── Decorative art stays out of the way ───────────────────────
@@ -193,7 +202,7 @@ test('hero art is low-opacity and masked clear of the copy', () => {
 
 // ── Phone layout ──────────────────────────────────────────────
 test('phones get one column, a compact hero and a full-width card', () => {
-    const mobile = css.slice(css.indexOf('@media (max-width: 768px) {'));
+    const mobile = css.slice(css.indexOf('@media (max-width: 767.98px) {'));
     assert.match(mobile, /\.login-page\s*\{[^{}]*flex-direction:\s*column/);
     assert.match(mobile, /\.hero-code-card\s*\{[^{}]*display:\s*none/, 'the code card should be dropped on phones');
     assert.match(mobile, /\.auth-card\s*\{[^{}]*inline-size:\s*100%/);
