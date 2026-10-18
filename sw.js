@@ -14,7 +14,7 @@ const LOCAL_ASSETS = [
     './pwa-updates.js?v=20260921-1',
     './style.css',
     './student-workspace.css',
-    './style.css?v=ux-20261018-8',
+    './style.css?v=ux-20261019-9',
     './student-workspace.css?v=ux-20261006-5',
     './mapper.js',
     './app.js',

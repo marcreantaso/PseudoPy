@@ -96,7 +96,7 @@
   <!-- Android Chrome -->
   <meta name="application-name" content="PseudoPy">
 
-  <link rel="stylesheet" href="style.css?v=ux-20261018-8">
+  <link rel="stylesheet" href="style.css?v=ux-20261019-9">
   <link rel="stylesheet" href="student-workspace.css?v=ux-20261006-5">
   <link rel="stylesheet" href="ui-icons.css?v=1">
 
@@ -2077,9 +2077,9 @@
             <div class="devtools-console-title">{{ui:Terminal}} Runtime Console</div>
             <span class="devtools-console-state" id="devtools-console-state" data-state="idle">Idle</span>
             <div class="devtools-console-actions">
-              <button class="btn btn-ghost btn-sm" id="devtools-console-stop" onclick="runtimeConsoleStop()" title="Stop the running program" aria-label="Stop the running program" disabled>{{ui:CircleX}} Stop</button>
-              <button class="btn btn-ghost btn-sm" id="devtools-console-copy" onclick="runtimeConsoleCopy()" title="Copy console output" aria-label="Copy console output" disabled>{{ui:ClipboardList}} Copy</button>
-              <button class="btn btn-ghost btn-sm" id="devtools-console-clear" onclick="runtimeConsoleClear()" title="Clear console output" aria-label="Clear console output">{{ui:Trash2}} Clear</button>
+              <button type="button" class="pp-btn pp-btn-ghost pp-btn-md" id="devtools-console-stop" onclick="runtimeConsoleStop()" title="Stop the running program" aria-label="Stop the running program" disabled>{{ui:CircleX}} Stop</button>
+              <button type="button" class="pp-btn pp-btn-ghost pp-btn-md" id="devtools-console-copy" onclick="runtimeConsoleCopy()" title="Copy console output" aria-label="Copy console output" disabled>{{ui:ClipboardList}} Copy</button>
+              <button type="button" class="pp-btn pp-btn-ghost pp-btn-md" id="devtools-console-clear" onclick="runtimeConsoleClear()" title="Clear console output" aria-label="Clear console output">{{ui:Trash2}} Clear</button>
             </div>
           </div>
           <div class="devtools-console-output" id="devtools-console-output" role="log" aria-live="polite" aria-label="Runtime console output"></div>

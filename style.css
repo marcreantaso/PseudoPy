@@ -268,6 +268,471 @@
 }
 
 /* ============================================================
+   SHADCN-STYLE COMPONENT PRIMITIVES (.pp-*)
+   ------------------------------------------------------------
+   Vanilla-CSS ports of the shadcn/ui look and ARIA behaviour:
+   flat surfaces, 1px borders, token-driven colour, visible
+   2px focus rings. Every colour is a var() alias of the app
+   palette — no hex in component rules — so both themes follow
+   automatically. The legacy .btn/.form-input families remain
+   for the rest of the app; the devtools surfaces adopt .pp-*.
+   ============================================================ */
+
+/* ── Card ── */
+.pp-card {
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.pp-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1rem 1.25rem 0;
+}
+
+.pp-card-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.pp-card-description {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted-foreground);
+}
+
+.pp-card-content { padding: 1rem 1.25rem; }
+
+.pp-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1.25rem 1rem;
+}
+
+/* ── Button ── */
+.pp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-shadcn-btn);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+  transition: background-color var(--duration) var(--ease),
+              color var(--duration) var(--ease),
+              border-color var(--duration) var(--ease),
+              opacity var(--duration) var(--ease);
+}
+
+.pp-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.pp-btn:active:not(:disabled) { opacity: 0.85; }
+
+.pp-btn:disabled,
+.pp-btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Busy state: a spinner beside the label; reduced motion gets a static dot. */
+.pp-btn[aria-busy='true'] { cursor: progress; }
+.pp-btn[aria-busy='true']::after {
+  content: '';
+  width: 0.9em;
+  height: 0.9em;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: pp-spin 0.7s linear infinite;
+}
+
+@keyframes pp-spin { to { transform: rotate(360deg); } }
+
+.pp-btn-sm { min-height: 2rem; padding: 0 0.65rem; font-size: 0.75rem; }
+.pp-btn-md { min-height: 2.25rem; padding: 0 0.95rem; }
+.pp-btn-lg { min-height: 2.75rem; padding: 0 1.3rem; font-size: 0.875rem; }
+.pp-btn-icon { min-height: 2.25rem; min-width: 2.25rem; padding: 0; }
+
+.pp-btn-default { background: var(--primary-tok); color: var(--primary-foreground); }
+/* Mix toward the foreground so light darkens and dark lightens — no hex. */
+.pp-btn-default:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary-tok) 85%, var(--foreground));
+}
+
+.pp-btn-secondary { background: var(--secondary); color: var(--secondary-foreground); border-color: var(--border); }
+.pp-btn-secondary:hover:not(:disabled) { background: var(--accent-tok); }
+
+.pp-btn-outline { background: transparent; border-color: var(--border-input); color: var(--foreground); }
+.pp-btn-outline:hover:not(:disabled) { background: var(--accent-tok); }
+
+.pp-btn-ghost { background: transparent; color: var(--muted-foreground); }
+.pp-btn-ghost:hover:not(:disabled) { background: var(--accent-tok); color: var(--accent-foreground); }
+
+.pp-btn-destructive { background: var(--destructive-tok); color: var(--primary-foreground); }
+.pp-btn-destructive:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--destructive-tok) 85%, var(--foreground));
+}
+
+.pp-btn-destructive-outline { background: transparent; border-color: var(--destructive-tok); color: var(--destructive-tok); }
+.pp-btn-destructive-outline:hover:not(:disabled) { background: var(--destructive-tok); color: var(--primary-foreground); }
+
+/* ── Label / helper text ── */
+.pp-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pp-helper {
+  font-size: 0.74rem;
+  color: var(--muted-foreground);
+}
+
+/* ── Input / Textarea ── */
+.pp-input,
+.pp-textarea {
+  width: 100%;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-shadcn-btn);
+  padding: 0.5rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
+}
+
+.pp-input::placeholder,
+.pp-textarea::placeholder { color: var(--text-muted); }
+
+.pp-input:focus-visible,
+.pp-textarea:focus-visible {
+  border-color: var(--ring);
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.pp-textarea { resize: vertical; }
+
+/* ── Select ──
+   The native <select> is kept for accessibility and its themed popup
+   (color-scheme); the chevron is a masked token-coloured glyph so it
+   follows the theme without a hard-coded stroke colour. */
+.pp-select-wrap { position: relative; display: block; }
+
+.pp-select-wrap::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0.65rem;
+  width: 1rem;
+  height: 1rem;
+  transform: translateY(-50%);
+  background: var(--icon-muted);
+  pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.pp-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: 2.25rem;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-shadcn-btn);
+  padding: 0.45rem 2rem 0.45rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
+}
+
+.pp-select:focus-visible {
+  border-color: var(--ring);
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+/* ── Checkbox ── */
+.pp-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  display: inline-grid;
+  place-content: center;
+  border: 1px solid var(--border-input);
+  border-radius: 0.25rem;
+  background: var(--bg-input);
+  cursor: pointer;
+  transition: background-color var(--duration) var(--ease), border-color var(--duration) var(--ease);
+}
+
+.pp-checkbox::before {
+  content: '';
+  width: 0.65rem;
+  height: 0.65rem;
+  transform: scale(0);
+  transition: transform var(--duration) var(--ease);
+  background: var(--primary-foreground);
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+.pp-checkbox:checked {
+  background: var(--primary-tok);
+  border-color: var(--primary-tok);
+}
+
+.pp-checkbox:checked::before { transform: scale(1); }
+
+.pp-checkbox:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ── Progress ── */
+.pp-progress { display: flex; flex-direction: column; gap: 0.35rem; }
+
+.pp-progress-track {
+  height: 0.5rem;
+  border-radius: var(--radius-shadcn-pill);
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.pp-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--primary-tok);
+  transition: width 0.15s linear;
+}
+
+.pp-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+/* ── Badge ── */
+.pp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-shadcn-pill);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pp-badge-success { background: var(--status-success-bg); color: var(--status-success-fg); border-color: var(--status-success-border); }
+.pp-badge-warning { background: var(--status-warning-bg); color: var(--status-warning-fg); border-color: var(--status-warning-border); }
+.pp-badge-danger { background: var(--status-danger-bg); color: var(--status-danger-fg); border-color: var(--status-danger-border); }
+.pp-badge-neutral { background: var(--status-neutral-bg); color: var(--status-neutral-fg); border-color: var(--status-neutral-border); }
+.pp-badge-info { background: var(--status-info-bg); color: var(--status-info-fg); border-color: var(--status-info-border); }
+
+/* ── Table ── */
+.pp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.pp-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pp-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-divider);
+}
+
+.pp-table tbody tr:hover { background: var(--bg-card-hover); }
+
+/* ── Alert ── */
+.pp-alert {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  font-size: 0.8rem;
+}
+
+.pp-alert-title { font-weight: 600; }
+
+/* ── Separator ── */
+.pp-separator {
+  height: 1px;
+  border: 0;
+  margin: 0.75rem 0;
+  background: var(--border);
+}
+
+/* ── Skeleton (the app-wide .skeleton already implements the shimmer;
+      this alias keeps the .pp-* vocabulary complete). ── */
+.pp-skeleton { background: var(--muted); }
+
+/* ── Menu (shared with the theme switcher above) ── */
+.pp-menu {
+  position: absolute;
+  z-index: 60;
+  min-width: 10.5rem;
+  padding: 0.25rem;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-shadcn-btn);
+  box-shadow: var(--shadow-md);
+}
+
+.pp-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 0;
+  border-radius: var(--radius-shadcn-btn);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pp-menu-item:hover,
+.pp-menu-item:focus-visible {
+  background: var(--accent-tok);
+  color: var(--accent-foreground);
+  outline: none;
+}
+
+.pp-menu-item:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+
+.pp-menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Tooltip (CSS-only, attribute-driven) ── */
+.pp-tooltip-host { position: relative; }
+
+.pp-tooltip-host::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-shadcn-btn);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration) var(--ease);
+}
+
+.pp-tooltip-host:hover::after,
+.pp-tooltip-host:focus-visible::after { opacity: 1; }
+
+/* ── Empty state ── */
+.pp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--muted-foreground);
+}
+
+.pp-empty-icon { color: var(--icon-muted); }
+
+.pp-empty-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pp-empty-desc {
+  margin: 0;
+  max-width: 42ch;
+  font-size: 0.8rem;
+}
+
+/* ── Reduced motion: no component animates ── */
+@media (prefers-reduced-motion: reduce) {
+  .pp-btn,
+  .pp-checkbox,
+  .pp-checkbox::before,
+  .pp-input,
+  .pp-textarea,
+  .pp-select,
+  .pp-progress-fill,
+  .pp-tooltip-host::after {
+    transition: none !important;
+  }
+
+  .pp-btn[aria-busy='true']::after {
+    animation: none;
+    border-style: dotted;
+    border-top-color: currentColor;
+  }
+}
+
+/* ── Touch devices: every action target reaches 44px ── */
+@media (hover: none) and (pointer: coarse) {
+  .pp-btn-md,
+  .pp-btn-icon { min-height: 44px; min-width: 44px; }
+  .pp-btn-sm { min-height: 40px; }
+  .pp-select { min-height: 44px; }
+  .pp-checkbox { width: 1.375rem; height: 1.375rem; }
+  .pp-menu-item { padding: 0.7rem 0.75rem; }
+  .devtools-tab { min-height: 44px; }
+}
+
+/* ============================================================
    SEMANTIC THEME EXTENSIONS
    Widely-referenced shorthand tokens + component surface tokens.
    ============================================================ */
@@ -7264,28 +7729,34 @@ tr.skeleton-tr td {
   margin-bottom: 1rem;
 }
 
+/* Tabs (shadcn TabsList): muted pill track, active trigger on the card
+   surface. Overflow scrolls on a themed thin scrollbar — the UA strip is
+   gone (color-scheme + explicit scrollbar-color). */
 .devtools-tab-bar {
   display: flex;
   flex-wrap: nowrap;
-  gap: 0;
-  border-bottom: 1px solid var(--border);
-  padding: 0;
+  gap: 2px;
+  padding: 4px;
+  background: var(--muted);
+  border-radius: var(--radius-shadcn-btn);
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 .devtools-tab {
-  padding: 0.6rem 0.95rem;
+  min-height: 2.25rem;
+  padding: 0.55rem 0.9rem;
   font-size: 0.78rem;
   font-weight: 600;
   font-family: inherit;
   color: var(--dt-text-subtle);
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-shadcn-btn);
   cursor: pointer;
-  transition: color 0.2s, background 0.2s, border-color 0.2s;
+  transition: color 0.2s, background 0.2s, box-shadow 0.2s;
   white-space: nowrap;
 }
 
@@ -7300,9 +7771,9 @@ tr.skeleton-tr td {
 }
 
 .devtools-tab.active {
-  color: var(--dt-accent);
-  border-bottom-color: var(--dt-accent);
-  background: var(--dt-active-glare);
+  color: var(--card-foreground);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
 }
 
 .devtools-tab-panel {
@@ -8206,6 +8677,7 @@ tr.skeleton-tr td {
   align-items: center;
   gap: 0.75rem;
   padding: 0.6rem 0.9rem;
+  background: var(--card);
   border-bottom: 1px solid var(--border-divider);
   flex-wrap: wrap;
 }
@@ -8923,6 +9395,7 @@ tr.skeleton-tr td {
   }
 
   .devtools-tab {
+    min-height: 2.25rem;
     padding: 0.4rem 0.6rem;
     font-size: 0.72rem;
   }
