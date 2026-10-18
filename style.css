@@ -349,6 +349,10 @@
   cursor: not-allowed;
 }
 
+/* Author display beats the UA [hidden] rule, so opt hidden back in — the
+   Cancel button and the progress bar rely on it. */
+.pp-btn[hidden] { display: none; }
+
 /* Busy state: a spinner beside the label; reduced motion gets a static dot. */
 .pp-btn[aria-busy='true'] { cursor: progress; }
 .pp-btn[aria-busy='true']::after {
@@ -730,6 +734,7 @@
   .pp-checkbox { width: 1.375rem; height: 1.375rem; }
   .pp-menu-item { padding: 0.7rem 0.75rem; }
   .devtools-tab { min-height: 44px; }
+  .sop2-info-btn { min-height: 44px; }
 }
 
 /* ============================================================
@@ -8458,42 +8463,60 @@ tr.skeleton-tr td {
   border: 1px solid var(--border);
   border-radius: var(--radius-shadcn-pill);
   color: var(--dt-text-subtle);
+  font-family: inherit;
   font-size: 0.72rem;
-  padding: 0.25rem 0.6rem;
+  padding: 0.35rem 0.7rem;
   cursor: pointer;
-  min-height: 32px;
+  min-height: 34px;
 }
 .sop2-info-btn:hover { color: var(--card-foreground); border-color: var(--border-hover); }
-.sop2-info-btn:focus-visible { outline: 2px solid var(--chart-1); outline-offset: 2px; }
+.sop2-info-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 .sop2-popover {
   position: relative;
-  margin: 0.75rem 1rem 0;
   padding: 0.9rem 1rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-shadcn);
   background: var(--card);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
+  box-shadow: var(--shadow-md);
 }
-.sop2-popover:focus-visible { outline: 2px solid var(--chart-1); outline-offset: 2px; }
+.sop2-popover:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .sop2-popover h3 { margin: 0 0 0.6rem; font-size: 0.9rem; }
 .sop2-info-list { margin: 0 0 0.75rem; display: grid; gap: 0.5rem; }
 .sop2-info-list dt { font-weight: 600; font-size: 0.78rem; color: var(--card-foreground); }
 .sop2-info-list dd { margin: 0.1rem 0 0; font-size: 0.76rem; color: var(--dt-text-subtle); line-height: 1.5; }
 
-.sop2-setup { display: grid; gap: 0.75rem; padding: 1rem 1rem 0; }
+/* One stacked flow: popover, cards, actions, progress, results. */
+.devtools-panel-body.sop2 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+.sop2-section { min-width: 0; }
+
 .sop2-editors { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .sop2-editor-card { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
-.sop2-editor-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
-.sop2-editor-head label { font-weight: 600; font-size: 0.82rem; }
-.sop2-hint { font-size: 0.7rem; color: var(--dt-text-subtle); }
 .sop2-textarea { min-height: 150px; resize: vertical; width: 100%; box-sizing: border-box; }
 
-.sop2-loadbar { display: flex; flex-wrap: wrap; align-items: end; gap: 0.75rem 1.25rem; }
-.sop2-field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.72rem; color: var(--dt-text-subtle); }
-.sop2-field select { min-height: 36px; min-width: 12rem; max-width: 100%; }
-.sop2-field-check { flex-direction: row; align-items: center; gap: 0.5rem; font-size: 0.75rem; }
-.sop2-field-check input { width: 18px; height: 18px; }
+.sop2-loadbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.85rem 1.25rem;
+  align-items: start;
+}
+.sop2-field { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.sop2-field .pp-select { width: 100%; }
+.sop2-field-check {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.55rem;
+  align-items: center;
+}
+.sop2-field-check label { cursor: pointer; font-weight: 500; font-size: 0.78rem; color: var(--text-primary); }
+.sop2-field-check .pp-helper { grid-column: 1 / -1; }
 
 .sop2-actions {
   position: sticky;
@@ -8503,19 +8526,52 @@ tr.skeleton-tr td {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.6rem 1rem;
+  padding: 0.6rem 0.75rem;
   background: var(--dt-surface, var(--card));
-  border-block: 1px solid var(--border-divider);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-shadcn);
 }
-.sop2-actions .btn { min-height: 44px; }
+.sop2-actions .pp-btn { min-height: 44px; }
 .sop2-actions-spacer { flex: 1 1 auto; }
 
-.sop2-progress { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 1rem 0; }
-.sop2-progress-track { flex: 1; height: 6px; border-radius: 999px; background: var(--muted, rgba(0, 0, 0, 0.1)); overflow: hidden; }
-.sop2-progress-fill { display: block; height: 100%; width: 0; background: var(--chart-1); transition: width 0.15s linear; }
-.sop2-progress-text { font-size: 0.72rem; color: var(--dt-text-subtle); white-space: nowrap; }
+.sop2-export-wrap { position: relative; }
+.sop2-export-menu {
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 12rem;
+}
 
-.sop2-result { display: grid; gap: 1rem; padding: 1rem; }
+.sop2-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-shadcn);
+  background: var(--dt-surface, var(--card));
+}
+.sop2-progress-track { flex: 1; min-width: 0; height: 6px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.sop2-progress-fill { display: block; height: 100%; width: 0; background: var(--chart-1); transition: width 0.15s linear; }
+.sop2-progress-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--dt-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sop2-result { display: grid; gap: 1rem; min-height: 12rem; }
+
+/* Empty state reserves the height of a populated results block so the panel
+   does not jump when the first comparison lands. */
+.sop2-empty-state { min-height: 15rem; }
+
+.sop2-skeleton { display: grid; gap: 0.6rem; padding: 0.5rem 0; }
+.sop2-sk { display: block; height: 0.95rem; border-radius: 999px; }
+.sop2-sk-title { height: 1.4rem; width: 42%; }
+.sop2-sk-short { width: 60%; }
 
 .sop2-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .sop2-card {
@@ -8654,10 +8710,13 @@ tr.skeleton-tr td {
 @media (max-width: 900px) {
   .sop2-editors, .sop2-cards, .sop2-statcards { grid-template-columns: 1fr; }
 }
+@media (max-width: 767.98px) {
+  .sop2-loadbar { grid-template-columns: 1fr; }
+}
 @media (max-width: 480px) {
   .sop2-kv-row { grid-template-columns: 1fr; }
   .sop2-actions { padding: 0.5rem 0.6rem; }
-  .sop2-field select { min-width: 0; width: 100%; }
+  .sop2-field .pp-select { min-width: 0; width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sop2-progress-fill { transition: none; }

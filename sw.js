@@ -3,10 +3,10 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-shell-20261018-v34';
+const CACHE_NAME = 'pseudopy-shell-20261018-v35';
 // Vendor cache name is versioned so the old-worker cleanup below can prune
 // superseded PDF worker generations instead of accumulating them.
-const VENDOR_CACHE_NAME = 'pseudopy-vendor-20261018-v34';
+const VENDOR_CACHE_NAME = 'pseudopy-vendor-20261018-v35';
 
 const LOCAL_ASSETS = [
     './',
@@ -14,7 +14,7 @@ const LOCAL_ASSETS = [
     './pwa-updates.js?v=20260921-1',
     './style.css',
     './student-workspace.css',
-    './style.css?v=ux-20261019-9',
+    './style.css?v=ux-20261019-10',
     './student-workspace.css?v=ux-20261006-5',
     './mapper.js',
     './app.js',

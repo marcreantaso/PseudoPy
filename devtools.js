@@ -6259,9 +6259,32 @@ if (typeof window !== 'undefined') {
   }
 
   function renderEmpty() {
-    return '<div class="devtools-idle-message"><p>Load an example or paste pseudocode, then press ' +
-      '<strong>Compare</strong>. Benchmark runs the whole labelled dataset (seed + holdout) and reports ' +
-      'correctness, error detection and translation time per group.</p></div>';
+    return '<div class="pp-empty sop2-empty-state">' +
+      '<i data-lucide="flask-conical" class="pp-empty-icon" aria-hidden="true"></i>' +
+      '<p class="pp-empty-title">No comparison yet</p>' +
+      '<p class="pp-empty-desc">Load an example or paste pseudocode, then press <strong>Compare</strong>. ' +
+      'Benchmark runs the whole labelled dataset (seed + holdout, optionally injected) and reports ' +
+      'correctness, error detection and translation time per group.</p>' +
+      '<button type="button" class="pp-btn pp-btn-outline pp-btn-md" id="sop2-empty-load">Load example</button>' +
+      '</div>';
+  }
+
+  // Skeleton rows shown while a run computes: honest feedback that work is
+  // happening without freezing the previous results on screen.
+  function renderSkeletons() {
+    var host = $('sop2-result');
+    if (!host) return;
+    host.setAttribute('aria-busy', 'true');
+    host.innerHTML = '<div class="sop2-skeleton" aria-hidden="true">' +
+      '<span class="skeleton sop2-sk sop2-sk-title"></span>' +
+      '<span class="skeleton sop2-sk"></span>' +
+      '<span class="skeleton sop2-sk"></span>' +
+      '<span class="skeleton sop2-sk sop2-sk-short"></span>' +
+      '</div>';
+  }
+
+  function refreshResultIcons() {
+    if (typeof refreshIcons === 'function') refreshIcons($('sop2-result'));
   }
 
   function renderDoc(doc) {
@@ -6272,6 +6295,7 @@ if (typeof window !== 'undefined') {
       if (host.setAttribute) host.setAttribute('aria-busy', 'false');
       host.innerHTML = doc.results.length === 1 ? renderCase(doc.results[0]) : renderBenchmark(doc);
       wireResultControls(doc);
+      refreshResultIcons();
     }
     updateExportState();
   }
@@ -6289,14 +6313,18 @@ if (typeof window !== 'undefined') {
 
   function updateExportState() {
     var enabled = !!lastDoc && !isStale;
-    ['sop2-export-json', 'sop2-export-csv', 'sop2-export-md'].forEach(function (id) {
+    ['sop2-export-json', 'sop2-export-csv', 'sop2-export-report'].forEach(function (id) {
       var el = $(id);
       if (el) el.disabled = !enabled;
     });
+    var btn = $('sop2-export-btn');
+    if (btn) btn.disabled = !enabled;
+    if (!enabled) closeExportMenu();
   }
 
   function setBusy(busy) {
-    ['sop2-compare', 'sop2-run', 'sop2-bench', 'sop2-export-json', 'sop2-export-csv', 'sop2-export-md'].forEach(function (id) {
+    ['sop2-compare', 'sop2-run', 'sop2-bench',
+      'sop2-export-json', 'sop2-export-csv', 'sop2-export-report', 'sop2-export-btn'].forEach(function (id) {
       var el = $(id);
       if (el) el.disabled = busy;
     });
@@ -6309,16 +6337,44 @@ if (typeof window !== 'undefined') {
   }
 
   // ── progress ────────────────────────────────────────────────
-  function showProgress(done, total, label) {
+  // The benchmark loop reports every case; writing the DOM on each report
+  // would force a layout pass per case. Updates are coalesced into one
+  // requestAnimationFrame tick instead (synchronous fallback where rAF is
+  // unavailable, e.g. the test harness).
+  var progressPending = null;
+  var progressFrame = 0;
+
+  function flushProgress() {
+    progressFrame = 0;
+    var p = progressPending;
+    progressPending = null;
+    if (!p) return;
     var wrap = $('sop2-progress'), fill = $('sop2-progress-fill'), text = $('sop2-progress-text');
     if (!wrap) return;
-    wrap.classList.remove('hidden');
-    var pct = total ? Math.round((done / total) * 100) : 0;
+    var pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
     wrap.setAttribute('aria-valuenow', String(pct));
+    wrap.setAttribute('aria-valuetext', p.label || (p.done + ' / ' + p.total));
     if (fill) fill.style.width = pct + '%';
-    if (text) text.textContent = label || (done + ' / ' + total);
+    if (text) {
+      text.textContent = p.label || (p.done + ' / ' + p.total);
+      // The label truncates in place; the tooltip reveals the full case title.
+      text.setAttribute('title', p.title || '');
+    }
+  }
+
+  function showProgress(done, total, label, title) {
+    var wrap = $('sop2-progress');
+    if (!wrap) return;
+    wrap.classList.remove('hidden');
+    progressPending = { done: done, total: total, label: label || '', title: title || '' };
+    if (progressFrame) return;
+    if (typeof requestAnimationFrame === 'function') progressFrame = requestAnimationFrame(flushProgress);
+    else flushProgress();
   }
   function hideProgress() {
+    if (progressFrame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(progressFrame);
+    progressFrame = 0;
+    progressPending = null;
     var wrap = $('sop2-progress');
     if (wrap) wrap.classList.add('hidden');
   }
@@ -6330,6 +6386,7 @@ if (typeof window !== 'undefined') {
     if (!src.trim()) { setStatus('Enter pseudocode'); return Promise.resolve(null); }
     if (!ref.trim()) { setStatus('Enter reference Python'); return Promise.resolve(null); }
     setBusy(true);
+    renderSkeletons();
     setStatus(withRuntime ? 'Translating and running in Skulpt…' : 'Translating…');
     return ensureSk().then(function () {
       return buildRow(src, ref, { withRuntime: withRuntime, caseId: 'ui', title: null, group: 'single', timingIters: 8, timingWarmup: 2 });
@@ -6359,7 +6416,8 @@ if (typeof window !== 'undefined') {
     var rows = built.rows;
     benchCancelled = false;
     setBusy(true);
-    var cancel = $('sop2-bench-cancel');
+    renderSkeletons();
+    var cancel = $('sop2-cancel');
     if (cancel) { cancel.hidden = false; cancel.disabled = false; }
     setStatus('Benchmarking ' + rows.length + ' cases…');
     showProgress(0, rows.length, '0 / ' + rows.length);
@@ -6374,7 +6432,10 @@ if (typeof window !== 'undefined') {
       function step(i) {
         if (benchCancelled || i >= rows.length) return Promise.resolve(results);
         var row = rows[i];
-        showProgress(i, rows.length, (i + 1) + ' / ' + rows.length + ' · ' + (row.title || row.id));
+        var caseTitle = row.title || row.id || ('case ' + (i + 1));
+        showProgress(i, rows.length,
+          (i + 1) + ' / ' + rows.length + ' \u00b7 ' + row.group + ' \u00b7 ' + caseTitle,
+          caseTitle);
         return new Promise(function (resolve) { setTimeout(resolve, 0); }).then(function () {
           return buildRow(row.source, row.referencePython, {
             withRuntime: true, caseId: row.id, title: row.title, group: row.group,
@@ -6450,6 +6511,42 @@ if (typeof window !== 'undefined') {
     }
     add('Seed (built-in)', seeds, 'seed');
     add('Holdout (independent)', holdout, 'holdout');
+    addInjected(seeds, holdout, sel);
+  }
+
+  // The injected group lists the broken variants of every seed/holdout row,
+  // built with the same Sop2Injection module the benchmark uses so the
+  // selector and the dataset cannot drift apart. Loading one puts the broken
+  // pseudocode in the editor with the parent's untouched reference program —
+  // exactly the row the benchmark measures.
+  function addInjected(seeds, holdout, sel) {
+    var inj = injectionModule();
+    if (!inj || typeof document === 'undefined') return;
+    var og = document.createElement('optgroup');
+    og.label = 'Injected (deliberately broken)';
+    var added = 0;
+    [['seed', seeds], ['holdout', holdout]].forEach(function (pair) {
+      var group = pair[0], rows = pair[1];
+      rows.forEach(function (r, i) {
+        var source = r.pseudocode || r.code || '';
+        if (!source) return;
+        var res;
+        try { res = inj.injectAll(source); } catch (e) { return; }
+        (res.applicable || []).forEach(function (a) {
+          var opt = document.createElement('option');
+          opt.value = 'injected:' + group + ':' + i + ':' + a.type;
+          opt.textContent = (r.title || r.id || (group + ' ' + (i + 1))) + ' [' + a.type + ']';
+          og.appendChild(opt);
+          added++;
+        });
+      });
+    });
+    if (added) sel.appendChild(og);
+  }
+
+  function injectionModule() {
+    if (typeof window === 'undefined' || !window.Sop2Injection) return null;
+    return window.Sop2Injection.injectAll ? window.Sop2Injection : null;
   }
 
   function onExampleChange() {
@@ -6457,16 +6554,37 @@ if (typeof window !== 'undefined') {
     if (!sel || !sel.value) return;
     var parts = sel.value.split(':');
     var group = parts[0], idx = parseInt(parts[1], 10);
-    var rows = group === 'seed'
-      ? ((typeof SEED_EXERCISES_LIST !== 'undefined') ? SEED_EXERCISES_LIST : [])
-      : ((typeof SOP2_HOLDOUT_CASES !== 'undefined') ? SOP2_HOLDOUT_CASES : []);
-    var row = rows[idx];
-    if (!row) return;
-    var src = $('sop2-src'), ref = $('sop2-ref');
-    if (src) src.value = norm(row.pseudocode || row.code || '');
-    if (ref) ref.value = row.python_code || row.solution || '';
+    var src = '', ref = '', label = '';
+    if (group === 'injected') {
+      var parentGroup = parts[1], parentIdx = parseInt(parts[2], 10), type = parts[3];
+      var parents = parentGroup === 'seed'
+        ? ((typeof SEED_EXERCISES_LIST !== 'undefined') ? SEED_EXERCISES_LIST : [])
+        : ((typeof SOP2_HOLDOUT_CASES !== 'undefined') ? SOP2_HOLDOUT_CASES : []);
+      var parent = parents[parentIdx];
+      var inj = injectionModule();
+      if (!parent || !inj) return;
+      var res;
+      try { res = inj.injectAll(parent.pseudocode || parent.code || ''); } catch (e) { return; }
+      var hit = (res.applicable || []).filter(function (a) { return a.type === type; })[0];
+      if (!hit) return;
+      src = hit.source;
+      ref = parent.python_code || parent.solution || '';
+      label = (parent.title || parent.id || parentGroup) + ' [' + type + ']';
+    } else {
+      var rows = group === 'seed'
+        ? ((typeof SEED_EXERCISES_LIST !== 'undefined') ? SEED_EXERCISES_LIST : [])
+        : ((typeof SOP2_HOLDOUT_CASES !== 'undefined') ? SOP2_HOLDOUT_CASES : []);
+      var row = rows[idx];
+      if (!row) return;
+      src = row.pseudocode || row.code || '';
+      ref = row.python_code || row.solution || '';
+      label = row.title || row.id || '';
+    }
+    var srcEl = $('sop2-src'), refEl = $('sop2-ref');
+    if (srcEl) srcEl.value = norm(src);
+    if (refEl) refEl.value = ref;
     markStale();
-    setStatus('Loaded ' + (row.title || row.id || '') + ' (' + group + ')');
+    setStatus('Loaded ' + label + ' (' + group + ')');
   }
 
   function wireInfo() {
@@ -6484,14 +6602,69 @@ if (typeof window !== 'undefined') {
     });
   }
 
+  function closeExportMenu() {
+    var btn = $('sop2-export-btn'), menu = $('sop2-export-menu');
+    if (!menu) return;
+    menu.classList.add('hidden');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function wireExportMenu() {
+    var btn = $('sop2-export-btn'), menu = $('sop2-export-menu');
+    if (!btn || !menu) return;
+    var order = ['sop2-export-json', 'sop2-export-csv', 'sop2-export-report'];
+
+    function setOpen(open) {
+      if (open && btn.disabled) return;
+      menu.classList.toggle('hidden', !open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) {
+        for (var i = 0; i < order.length; i++) {
+          var item = $(order[i]);
+          if (item && !item.disabled) { item.focus(); break; }
+        }
+      }
+    }
+
+    btn.addEventListener('click', function () { setOpen(menu.classList.contains('hidden')); });
+    menu.addEventListener('click', function (e) {
+      var item = e.target && e.target.closest ? e.target.closest('.pp-menu-item') : null;
+      if (item && !item.disabled) setOpen(false);
+    });
+    // Roving focus (ARIA menu keyboard contract).
+    menu.addEventListener('keydown', function (e) {
+      var items = [];
+      for (var i = 0; i < order.length; i++) { var it = $(order[i]); if (it) items.push(it); }
+      var index = -1;
+      for (var j = 0; j < items.length; j++) { if (items[j] === document.activeElement) index = j; }
+      var next = -1;
+      if (e.key === 'ArrowDown') next = (index + 1) % items.length;
+      else if (e.key === 'ArrowUp') next = (index - 1 + items.length) % items.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = items.length - 1;
+      if (next >= 0 && items[next]) { e.preventDefault(); items[next].focus(); }
+    });
+    // Outside click and Escape close the menu; Escape returns focus.
+    document.addEventListener('click', function (e) {
+      if (menu.classList.contains('hidden')) return;
+      if (menu.contains(e.target) || btn.contains(e.target)) return;
+      closeExportMenu();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || menu.classList.contains('hidden')) return;
+      closeExportMenu();
+      btn.focus();
+    });
+  }
+
   function wire() {
     bind('sop2-compare', function () { runCompare(false); });
     bind('sop2-run', function () { runCompare(true); });
     bind('sop2-bench', benchmark);
-    bind('sop2-bench-cancel', function () { benchCancelled = true; setStatus('Cancelling…'); });
+    bind('sop2-cancel', function () { benchCancelled = true; setStatus('Cancelling…'); });
     bind('sop2-export-json', exportJSON);
     bind('sop2-export-csv', exportCSV);
-    bind('sop2-export-md', exportMD);
+    bind('sop2-export-report', exportMD);
     var s = $('sop2-src'), r = $('sop2-ref');
     if (s) s.addEventListener('input', markStale);
     if (r) r.addEventListener('input', markStale);
@@ -6501,8 +6674,17 @@ if (typeof window !== 'undefined') {
     if (sel) sel.addEventListener('change', onExampleChange);
     populateExamples();
     wireInfo();
+    wireExportMenu();
     var host = $('sop2-result');
-    if (host) host.innerHTML = renderEmpty();
+    if (host) {
+      host.innerHTML = renderEmpty();
+      var loadBtn = $('sop2-empty-load');
+      if (loadBtn) loadBtn.addEventListener('click', function () {
+        var example = $('sop2-load-example');
+        if (example && example.focus) example.focus();
+      });
+      refreshResultIcons();
+    }
     setBusy(false);
     updateExportState();
   }
