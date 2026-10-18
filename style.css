@@ -532,10 +532,13 @@ body:has(#login-page:not(.hidden)) {
   inset: 0;
   overflow: hidden;
   pointer-events: none;
-  opacity: 0.5;
-  color: var(--auth-hero-foreground);
-  -webkit-mask-image: radial-gradient(ellipse 70% 65% at 50% 45%, #000 35%, transparent 100%);
-  mask-image: radial-gradient(ellipse 70% 65% at 50% 45%, #000 35%, transparent 100%);
+  opacity: 0.32;
+  color: var(--auth-art);
+  /* Transparent through the middle (where the headline, tagline and code card
+     sit) and only visible at the outer edges, so the bars can never muddle the
+     copy. */
+  -webkit-mask-image: radial-gradient(ellipse 62% 64% at 50% 50%, transparent 0 58%, #000 100%);
+  mask-image: radial-gradient(ellipse 62% 64% at 50% 50%, transparent 0 58%, #000 100%);
 }
 
 .hero-art-svg {
@@ -561,7 +564,7 @@ body:has(#login-page:not(.hidden)) {
 
 .hero-art-flow {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--auth-art-flow);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-dasharray: 4 7;
@@ -590,7 +593,7 @@ body:has(#login-page:not(.hidden)) {
 .hero-shape-1 {
   width: 400px;
   height: 400px;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.35), transparent 70%);
+  background: radial-gradient(circle, var(--auth-shape-1), transparent 70%);
   top: -10%;
   left: -10%;
   animation: shapeFloat1 14s ease-in-out infinite alternate;
@@ -599,7 +602,7 @@ body:has(#login-page:not(.hidden)) {
 .hero-shape-2 {
   width: 300px;
   height: 300px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.3), transparent 70%);
+  background: radial-gradient(circle, var(--auth-shape-2), transparent 70%);
   bottom: 10%;
   right: -5%;
   animation: shapeFloat2 12s ease-in-out infinite alternate;
@@ -608,7 +611,7 @@ body:has(#login-page:not(.hidden)) {
 .hero-shape-3 {
   width: 200px;
   height: 200px;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.2), transparent 70%);
+  background: radial-gradient(circle, var(--auth-shape-3), transparent 70%);
   top: 50%;
   left: 40%;
   animation: shapeFloat3 16s ease-in-out infinite alternate;
@@ -660,13 +663,13 @@ body:has(#login-page:not(.hidden)) {
 .hero-logo .logo-icon {
   width: 52px;
   height: 52px;
-  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  background: linear-gradient(135deg, var(--auth-accent), var(--auth-accent-2));
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  box-shadow: 0 0 30px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 30px var(--auth-shape-1);
 }
 
 .pseudopy-logo {
@@ -690,7 +693,7 @@ body:has(#login-page:not(.hidden)) {
 }
 
 .hero-tagline {
-  font-size: 3.5rem;
+  font-size: clamp(2.5rem, 1.6rem + 2.6vw, 3.5rem);
   font-weight: 900;
   line-height: 1.1;
   letter-spacing: -0.04em;
@@ -699,7 +702,7 @@ body:has(#login-page:not(.hidden)) {
 }
 
 .hero-highlight {
-  background: linear-gradient(135deg, #60a5fa, #a78bfa, #34d399);
+  background: linear-gradient(135deg, var(--auth-accent-2), var(--auth-accent-3));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -722,8 +725,7 @@ body:has(#login-page:not(.hidden)) {
   border-radius: var(--radius-lg);
   overflow: hidden;
   backdrop-filter: blur(16px);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4),
-    0 0 40px rgba(59, 130, 246, 0.06);
+  box-shadow: var(--auth-code-shadow);
   max-width: 340px;
   animation: cardFloat 6s ease-in-out infinite;
 }
@@ -756,15 +758,15 @@ body:has(#login-page:not(.hidden)) {
 }
 
 .code-dot.red {
-  background: #ff5f57;
+  background: var(--auth-dot-red);
 }
 
 .code-dot.yellow {
-  background: #febc2e;
+  background: var(--auth-dot-yellow);
 }
 
 .code-dot.green {
-  background: #28c840;
+  background: var(--auth-dot-green);
 }
 
 .code-card-title {
@@ -876,10 +878,11 @@ body:has(#login-page:not(.hidden)) {
   font-weight: 800;
   margin-bottom: 0.5rem;
   letter-spacing: -0.03em;
+  color: var(--auth-text);
 }
 
 .login-card-header p {
-  color: var(--text-secondary);
+  color: var(--auth-muted);
   font-size: 0.9rem;
 }
 
@@ -921,6 +924,109 @@ body:has(#login-page:not(.hidden)) {
 .form-input::placeholder {
   color: var(--text-muted);
   opacity: 1;
+}
+
+/* ── Login-scoped field + control polish ──
+   Scoped under .login-page so the app-wide .form-group/.form-input used by
+   every other screen keeps its own sizing. Colours come from the auth tokens
+   so the controls always match the card and the canvas. */
+.login-page .form-group {
+  margin-bottom: 1rem;
+}
+
+.login-page .form-group label {
+  font-size: max(13px, 0.9rem);
+  font-weight: 600;
+  color: var(--auth-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-bottom: 0.5rem;
+}
+
+.login-page .form-input {
+  background: var(--auth-input-bg);
+  border-color: var(--auth-input-border);
+  color: var(--auth-text);
+  border-radius: 12px;
+  min-height: 46px;
+  font-size: max(14px, 0.95rem);
+}
+
+.login-page .form-input:focus {
+  border-color: var(--auth-accent);
+  box-shadow: 0 0 0 3px var(--auth-focus-ring);
+}
+
+.login-page .form-input:focus-visible {
+  outline: 2px solid var(--auth-accent);
+  outline-offset: 2px;
+}
+
+.login-page .form-input::placeholder {
+  color: var(--auth-muted);
+  opacity: 0.7;
+}
+
+/* Password field: the input with a real toggle button layered on the right. */
+.login-password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login-password-field .form-input {
+  padding-right: 2.75rem;
+}
+
+.login-password-field .btn-icon {
+  position: absolute;
+  right: 0.35rem;
+  background: transparent;
+  border: none;
+  color: var(--auth-muted);
+}
+
+.login-password-field .btn-icon:hover {
+  color: var(--auth-text);
+  background: var(--auth-surface-2);
+}
+
+/* Primary action + busy state within the card. */
+.auth-card .btn-primary {
+  min-height: 46px;
+  font-size: 0.95rem;
+  border-radius: 12px;
+  margin-top: 0.5rem;
+}
+
+/* Forgot-password link row. */
+.login-forgot-row {
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+.login-forgot-row .btn {
+  color: var(--auth-accent);
+  font-size: max(13px, 0.9rem);
+  font-weight: 600;
+  min-height: 44px;
+}
+
+/* Inline error slot, reserved under the submit button. Toasts stay the live
+   channel, so this never shifts the button when a message appears. */
+.login-error {
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  background: var(--auth-surface-2);
+  border: 1px solid var(--auth-border);
+  color: var(--auth-text);
+  font-size: max(13px, 0.9rem);
+  line-height: 1.45;
+}
+
+.login-error[hidden] {
+  display: none;
 }
 
 .role-selector {
@@ -983,8 +1089,8 @@ body:has(#login-page:not(.hidden)) {
 .login-footer-text {
   text-align: center;
   margin-top: 1.75rem;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+  font-size: max(12px, 0.8rem);
+  color: var(--auth-muted);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -999,19 +1105,25 @@ body:has(#login-page:not(.hidden)) {
   gap: 0.4rem;
 }
 
+.login-footer-text .legal-links button {
+  color: var(--auth-accent);
+  font-size: max(12px, 0.8rem);
+}
+
 #login-version {
-  font-size: 0.7rem;
-  color: var(--text-secondary);
+  font-size: max(12px, 0.8rem);
+  color: var(--auth-muted);
 }
 
 /* ── Login Responsive ── */
-@media (max-width: 1024px) {
-  .hero-tagline {
-    font-size: 2.75rem;
+/* 768–1023px: the form card stays centred, the hero simply gets narrower. */
+@media (max-width: 1023px) {
+  .login-page {
+    grid-template-columns: 45fr 55fr;
   }
 
   .login-hero {
-    padding: 2rem;
+    padding: max(2.5rem, env(safe-area-inset-top)) 2rem max(2.5rem, env(safe-area-inset-bottom));
   }
 }
 

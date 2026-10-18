@@ -83,7 +83,7 @@
   <!-- Android Chrome -->
   <meta name="application-name" content="PseudoPy">
 
-  <link rel="stylesheet" href="style.css?v=ux-20261006-5">
+  <link rel="stylesheet" href="style.css?v=ux-20261017-6">
   <link rel="stylesheet" href="student-workspace.css?v=ux-20261006-5">
   <link rel="stylesheet" href="ui-icons.css?v=1">
 
@@ -204,14 +204,12 @@
             </div>
             <div class="form-group">
               <label for="login-password">Password</label>
-              <div style="position: relative; display: flex; align-items: center;">
+              <div class="login-password-field">
                 <input type="password" id="login-password" class="form-input" placeholder="Enter your password"
-                  autocomplete="current-password" enterkeyhint="go"
-                  style="padding-right: 2.5rem; width: 100%;">
+                  autocomplete="current-password" enterkeyhint="go">
                 <button type="button" class="btn btn-ghost btn-icon"
                   onclick="togglePasswordVisibility('login-password', this)"
-                  aria-label="Show password"
-                  style="position: absolute; right: 0.25rem; background: transparent; border: none; font-size: 1.1rem; opacity: 0.7; cursor: pointer;">
+                  aria-label="Show password" aria-pressed="false">
                   <i data-lucide="eye" aria-hidden="true"></i>
                 </button>
               </div>
@@ -220,10 +218,11 @@
             <button type="submit" class="btn btn-primary" id="login-submit">
               Sign In <i data-lucide="arrow-right" aria-hidden="true"></i>
             </button>
+            <div id="login-error" class="login-error" role="alert" aria-live="polite" hidden></div>
           </form>
 
-          <div style="text-align:center; margin-top: 1rem;">
-            <button type="button" class="btn btn-ghost btn-sm" onclick="showForgotPassword()" style="font-size:0.85rem; color:var(--text-secondary);">
+          <div class="login-forgot-row">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="showForgotPassword()">
               <i data-lucide="lock-keyhole" aria-hidden="true"></i> Forgot your password?
             </button>
           </div>
@@ -3408,7 +3407,7 @@ CALL f(1,2); f(1,2)</pre>
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=ux-20261006-5"></script>
+  <script src="app.js?v=ux-20261017-6"></script>
   <script>
     // Lazy-init lucide: every createIcons call site is guarded, so the icon
     // library is fetched on load (not at parse) and icons render once it lands.
