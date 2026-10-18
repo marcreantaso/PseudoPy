@@ -204,7 +204,7 @@
   --primary: #2563eb;
 
   /* Auth Hero — permanently-dark navy surface (theme-independent). */
-  --auth-hero-bg: linear-gradient(145deg, #080818 0%, #0d1530 40%, #0a1628 100%);
+  --auth-hero-bg: linear-gradient(145deg, var(--auth-bg-start) 0%, var(--auth-bg-end) 40%, var(--auth-bg-mid) 100%);
   --auth-hero-foreground: #ffffff;
   --auth-hero-heading: #f8fafc;
   --auth-hero-muted: #cbd5e1;
@@ -217,6 +217,41 @@
   --auth-hero-code-kw: #c084fc;
   --auth-hero-code-fn: #60a5fa;
   --auth-hero-code-str: #34d399;
+
+  /* ── Auth canvas + surface family ──
+     The auth screen is ONE continuous deep-navy canvas in both themes
+     (--auth-bg-*), while the elevated card that holds the form is themed
+     (--auth-surface + --auth-text/muted/accent). Defining both here and in
+     [data-theme='dark'] is what keeps hero, form, links, inputs and footer
+     on the same palette with no hard seam. */
+  --auth-bg-start: #070713;
+  --auth-bg-mid: #0a1628;
+  --auth-bg-end: #0d1530;
+
+  --auth-surface: #ffffff;
+  --auth-surface-2: #eef2f7;
+  --auth-border: rgba(15, 23, 42, 0.10);
+  --auth-text: #0f172a;
+  --auth-muted: #475569;
+  --auth-accent: #2563eb;
+  --auth-accent-contrast: #ffffff;
+  --auth-accent-2: #60a5fa;
+  --auth-accent-3: #34d399;
+
+  --auth-input-bg: #f8fafc;
+  --auth-input-border: #cbd5e1;
+  --auth-focus-ring: rgba(37, 99, 235, 0.35);
+  --auth-shadow: 0 24px 60px rgba(2, 6, 23, 0.35);
+
+  --auth-art: #ffffff;
+  --auth-art-flow: #60a5fa;
+  --auth-shape-1: rgba(59, 130, 246, 0.32);
+  --auth-shape-2: rgba(139, 92, 246, 0.26);
+  --auth-shape-3: rgba(16, 185, 129, 0.16);
+  --auth-code-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 40px rgba(59, 130, 246, 0.06);
+  --auth-dot-red: #ff5f57;
+  --auth-dot-yellow: #febc2e;
+  --auth-dot-green: #28c840;
 
   /* Developer tools — light surface hierarchy. */
   --dt-surface: #ffffff;
@@ -331,6 +366,33 @@
   --error-cat-codegen: #c084fc;
   --error-cat-runtime: #ec4899;
   --error-cat-validation: #14b8a6;
+
+  /* Auth canvas stays the deep-navy brand; the card becomes a dark glass
+     surface with light text so the login screen is cohesive in dark mode. */
+  --auth-bg-start: #070713;
+  --auth-bg-mid: #0a1628;
+  --auth-bg-end: #0d1530;
+
+  --auth-surface: rgba(17, 17, 25, 0.72);
+  --auth-surface-2: rgba(255, 255, 255, 0.06);
+  --auth-border: rgba(255, 255, 255, 0.12);
+  --auth-text: #f0f0f5;
+  --auth-muted: #cbd5e1;
+  --auth-accent: #60a5fa;
+  --auth-accent-contrast: #0b1220;
+  --auth-accent-2: #60a5fa;
+  --auth-accent-3: #34d399;
+
+  --auth-input-bg: rgba(255, 255, 255, 0.05);
+  --auth-input-border: rgba(255, 255, 255, 0.18);
+  --auth-focus-ring: rgba(96, 165, 250, 0.45);
+  --auth-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+
+  --auth-art: #ffffff;
+  --auth-art-flow: #60a5fa;
+  --auth-shape-1: rgba(59, 130, 246, 0.32);
+  --auth-shape-2: rgba(139, 92, 246, 0.26);
+  --auth-shape-3: rgba(16, 185, 129, 0.16);
 }
 
 /* ── Reset ── */
@@ -423,10 +485,19 @@ h4 {
 
 .login-page {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 55fr 45fr;
   min-height: 100vh;
   min-height: 100dvh;
-  overflow: hidden;
+  background: linear-gradient(135deg, var(--auth-bg-start) 0%, var(--auth-bg-end) 68%, var(--auth-bg-mid) 100%);
+}
+
+/* The whole auth screen is one canvas: while it is visible the page
+   background is the deep-navy brand (not --bg-primary), so the halves meet
+   with no seam and overscroll never flashes a second colour. */
+html:has(#login-page:not(.hidden)),
+body:has(#login-page:not(.hidden)) {
+  min-height: 100dvh;
+  background-color: var(--auth-bg-start);
 }
 
 /* ── Left Hero Panel ── */
@@ -435,10 +506,9 @@ h4 {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--auth-hero-bg);
   color: var(--auth-hero-foreground);
   overflow: hidden;
-  padding: 3rem;
+  padding: max(3rem, env(safe-area-inset-top)) 3rem max(3rem, env(safe-area-inset-bottom));
 }
 
 .hero-bg-shapes {
@@ -462,10 +532,13 @@ h4 {
   inset: 0;
   overflow: hidden;
   pointer-events: none;
-  opacity: 0.5;
-  color: var(--auth-hero-foreground);
-  -webkit-mask-image: radial-gradient(ellipse 70% 65% at 50% 45%, #000 35%, transparent 100%);
-  mask-image: radial-gradient(ellipse 70% 65% at 50% 45%, #000 35%, transparent 100%);
+  opacity: 0.32;
+  color: var(--auth-art);
+  /* Transparent through the middle (where the headline, tagline and code card
+     sit) and only visible at the outer edges, so the bars can never muddle the
+     copy. */
+  -webkit-mask-image: radial-gradient(ellipse 62% 64% at 50% 50%, transparent 0 58%, #000 100%);
+  mask-image: radial-gradient(ellipse 62% 64% at 50% 50%, transparent 0 58%, #000 100%);
 }
 
 .hero-art-svg {
@@ -491,7 +564,7 @@ h4 {
 
 .hero-art-flow {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--auth-art-flow);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-dasharray: 4 7;
@@ -520,7 +593,7 @@ h4 {
 .hero-shape-1 {
   width: 400px;
   height: 400px;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.35), transparent 70%);
+  background: radial-gradient(circle, var(--auth-shape-1), transparent 70%);
   top: -10%;
   left: -10%;
   animation: shapeFloat1 14s ease-in-out infinite alternate;
@@ -529,7 +602,7 @@ h4 {
 .hero-shape-2 {
   width: 300px;
   height: 300px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.3), transparent 70%);
+  background: radial-gradient(circle, var(--auth-shape-2), transparent 70%);
   bottom: 10%;
   right: -5%;
   animation: shapeFloat2 12s ease-in-out infinite alternate;
@@ -538,7 +611,7 @@ h4 {
 .hero-shape-3 {
   width: 200px;
   height: 200px;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.2), transparent 70%);
+  background: radial-gradient(circle, var(--auth-shape-3), transparent 70%);
   top: 50%;
   left: 40%;
   animation: shapeFloat3 16s ease-in-out infinite alternate;
@@ -590,13 +663,13 @@ h4 {
 .hero-logo .logo-icon {
   width: 52px;
   height: 52px;
-  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  background: linear-gradient(135deg, var(--auth-accent), var(--auth-accent-2));
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  box-shadow: 0 0 30px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 30px var(--auth-shape-1);
 }
 
 .pseudopy-logo {
@@ -620,7 +693,7 @@ h4 {
 }
 
 .hero-tagline {
-  font-size: 3.5rem;
+  font-size: clamp(2.5rem, 1.6rem + 2.6vw, 3.5rem);
   font-weight: 900;
   line-height: 1.1;
   letter-spacing: -0.04em;
@@ -629,7 +702,7 @@ h4 {
 }
 
 .hero-highlight {
-  background: linear-gradient(135deg, #60a5fa, #a78bfa, #34d399);
+  background: linear-gradient(135deg, var(--auth-accent-2), var(--auth-accent-3));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -652,8 +725,7 @@ h4 {
   border-radius: var(--radius-lg);
   overflow: hidden;
   backdrop-filter: blur(16px);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4),
-    0 0 40px rgba(59, 130, 246, 0.06);
+  box-shadow: var(--auth-code-shadow);
   max-width: 340px;
   animation: cardFloat 6s ease-in-out infinite;
 }
@@ -686,20 +758,20 @@ h4 {
 }
 
 .code-dot.red {
-  background: #ff5f57;
+  background: var(--auth-dot-red);
 }
 
 .code-dot.yellow {
-  background: #febc2e;
+  background: var(--auth-dot-yellow);
 }
 
 .code-dot.green {
-  background: #28c840;
+  background: var(--auth-dot-green);
 }
 
 .code-card-title {
   margin-left: auto;
-  font-size: 0.7rem;
+  font-size: max(12px, 0.7rem);
   color: var(--auth-hero-code-muted);
   font-family: 'JetBrains Mono', monospace;
 }
@@ -707,7 +779,7 @@ h4 {
 .code-card-body {
   padding: 1rem 1.1rem;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.8rem;
+  font-size: max(12px, 0.8rem);
   line-height: 1.75;
   color: var(--auth-hero-code-fg);
   margin: 0;
@@ -731,8 +803,7 @@ h4 {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 3rem 2rem;
-  background: var(--bg-primary);
+  padding: max(3rem, env(safe-area-inset-top)) 2rem max(3rem, env(safe-area-inset-bottom));
   position: relative;
 }
 
@@ -782,19 +853,20 @@ h4 {
   justify-content: center;
 }
 
-.login-form-section::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1px;
-  height: 100%;
-  background: linear-gradient(to bottom, transparent, var(--border), transparent);
-}
-
-.login-card {
-  width: 100%;
-  max-width: 420px;
+/* No hard divider: the hero and form share one canvas, so the old 1px
+   seam between the two halves is gone. */
+.auth-card {
+  position: relative;
+  inline-size: min(100%, 420px);
+  max-inline-size: 100%;
+  background: var(--auth-surface);
+  border: 1px solid var(--auth-border);
+  border-radius: 18px;
+  padding: 2.25rem 2rem;
+  color: var(--auth-text);
+  box-shadow: var(--auth-shadow);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
 }
 
 .login-card-header {
@@ -806,10 +878,11 @@ h4 {
   font-weight: 800;
   margin-bottom: 0.5rem;
   letter-spacing: -0.03em;
+  color: var(--auth-text);
 }
 
 .login-card-header p {
-  color: var(--text-secondary);
+  color: var(--auth-muted);
   font-size: 0.9rem;
 }
 
@@ -851,6 +924,109 @@ h4 {
 .form-input::placeholder {
   color: var(--text-muted);
   opacity: 1;
+}
+
+/* ── Login-scoped field + control polish ──
+   Scoped under .login-page so the app-wide .form-group/.form-input used by
+   every other screen keeps its own sizing. Colours come from the auth tokens
+   so the controls always match the card and the canvas. */
+.login-page .form-group {
+  margin-bottom: 1rem;
+}
+
+.login-page .form-group label {
+  font-size: max(13px, 0.9rem);
+  font-weight: 600;
+  color: var(--auth-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-bottom: 0.5rem;
+}
+
+.login-page .form-input {
+  background: var(--auth-input-bg);
+  border-color: var(--auth-input-border);
+  color: var(--auth-text);
+  border-radius: 12px;
+  min-height: 46px;
+  font-size: max(14px, 0.95rem);
+}
+
+.login-page .form-input:focus {
+  border-color: var(--auth-accent);
+  box-shadow: 0 0 0 3px var(--auth-focus-ring);
+}
+
+.login-page .form-input:focus-visible {
+  outline: 2px solid var(--auth-accent);
+  outline-offset: 2px;
+}
+
+.login-page .form-input::placeholder {
+  color: var(--auth-muted);
+  opacity: 0.7;
+}
+
+/* Password field: the input with a real toggle button layered on the right. */
+.login-password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login-password-field .form-input {
+  padding-right: 2.75rem;
+}
+
+.login-password-field .btn-icon {
+  position: absolute;
+  right: 0.35rem;
+  background: transparent;
+  border: none;
+  color: var(--auth-muted);
+}
+
+.login-password-field .btn-icon:hover {
+  color: var(--auth-text);
+  background: var(--auth-surface-2);
+}
+
+/* Primary action + busy state within the card. */
+.auth-card .btn-primary {
+  min-height: 46px;
+  font-size: 0.95rem;
+  border-radius: 12px;
+  margin-top: 0.5rem;
+}
+
+/* Forgot-password link row. */
+.login-forgot-row {
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+.login-forgot-row .btn {
+  color: var(--auth-accent);
+  font-size: max(13px, 0.9rem);
+  font-weight: 600;
+  min-height: 44px;
+}
+
+/* Inline error slot, reserved under the submit button. Toasts stay the live
+   channel, so this never shifts the button when a message appears. */
+.login-error {
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  background: var(--auth-surface-2);
+  border: 1px solid var(--auth-border);
+  color: var(--auth-text);
+  font-size: max(13px, 0.9rem);
+  line-height: 1.45;
+}
+
+.login-error[hidden] {
+  display: none;
 }
 
 .role-selector {
@@ -913,8 +1089,8 @@ h4 {
 .login-footer-text {
   text-align: center;
   margin-top: 1.75rem;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+  font-size: max(12px, 0.8rem);
+  color: var(--auth-muted);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -929,23 +1105,29 @@ h4 {
   gap: 0.4rem;
 }
 
+.login-footer-text .legal-links button {
+  color: var(--auth-accent);
+  font-size: max(12px, 0.8rem);
+}
+
 #login-version {
-  font-size: 0.7rem;
-  color: var(--text-secondary);
+  font-size: max(12px, 0.8rem);
+  color: var(--auth-muted);
 }
 
 /* ── Login Responsive ── */
-@media (max-width: 1024px) {
-  .hero-tagline {
-    font-size: 2.75rem;
+/* 768–1023px: the form card stays centred, the hero simply gets narrower. */
+@media (max-width: 1023px) {
+  .login-page {
+    grid-template-columns: 45fr 55fr;
   }
 
   .login-hero {
-    padding: 2rem;
+    padding: max(2.5rem, env(safe-area-inset-top)) 2rem max(2.5rem, env(safe-area-inset-bottom));
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .login-page {
     display: flex;
     flex-direction: column;
@@ -955,31 +1137,44 @@ h4 {
     overflow: visible;
   }
 
+  /* Compact hero header: logo + short headline, top-aligned, no code card. */
   .login-hero {
-    padding: 3rem 1.5rem;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: max(2.5rem, env(safe-area-inset-top)) 1.5rem 1.5rem;
+  }
+
+  .hero-content {
+    max-width: 100%;
   }
 
   .hero-tagline {
-    font-size: 2.5rem;
+    font-size: 2.25rem;
   }
 
   .hero-logo {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.25rem;
   }
 
   .hero-subtitle {
-    margin-bottom: 2rem;
+    font-size: 0.95rem;
+    margin-bottom: 0;
+  }
+
+  .hero-code-card {
+    display: none;
   }
 
   .login-form-section {
     min-height: 0;
     flex: 0 0 auto;
-    align-items: flex-start;
-    padding: 2rem 1.5rem max(4rem, calc(2rem + env(safe-area-inset-bottom, 0px)));
+    align-items: stretch;
+    padding: 1.5rem 1.25rem max(2.5rem, calc(1.25rem + env(safe-area-inset-bottom, 0px)));
   }
 
-  .login-form-section::before {
-    display: none;
+  .auth-card {
+    inline-size: 100%;
+    padding: 1.75rem 1.5rem;
   }
 
   .login-card-header h2 {
@@ -988,7 +1183,7 @@ h4 {
 }
 
 /* ── Login mobile: single scroll owner, safe-area bottom, touch sizing ── */
-@media (max-width: 768px) and (max-height: 600px) {
+@media (max-width: 767.98px) and (max-height: 600px) {
   .login-hero {
     padding: 2rem 1.5rem 1.5rem;
   }
@@ -3500,27 +3695,23 @@ svg.lucide {
     font-size: 13px;
   }
 
-  .login-page {
-    padding: 1.25rem;
+  .auth-card {
+    padding: 1.5rem 1.25rem;
+    border-radius: 16px;
   }
 
-  .login-logo .logo-icon {
-    width: 64px;
-    height: 64px;
-    font-size: 1.75rem;
+  .hero-tagline {
+    font-size: 2rem;
   }
 
-  .login-logo h1 {
+  .hero-logo .logo-icon {
+    width: 56px;
+    height: 56px;
+    font-size: 1.6rem;
+  }
+
+  .hero-logo h1 {
     font-size: 1.35rem;
-  }
-
-  .login-logo p {
-    font-size: 0.8rem;
-  }
-
-  .login-card {
-    padding: 1.5rem;
-    border-radius: var(--radius-lg);
   }
 
   .role-selector {
@@ -3717,10 +3908,8 @@ svg.lucide {
     padding-bottom: max(2rem, env(safe-area-inset-bottom));
   }
 
-  .login-page {
-    padding-top: max(2rem, env(safe-area-inset-top));
-    padding-bottom: max(2rem, env(safe-area-inset-bottom));
-  }
+  /* The login screen's safe-area padding now lives on .login-hero and
+     .login-form-section, so the page itself stays full-bleed with no seam. */
 
   .toast-container {
     top: max(1.5rem, env(safe-area-inset-top));

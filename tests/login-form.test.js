@@ -117,7 +117,7 @@ test('app boot wires the login form', () => {
 
 test('mobile login page keeps a single scroll owner with touch-safe sizing', () => {
     const css = read('style.css');
-    const mobile = css.slice(css.indexOf('@media (max-width: 768px) {'));
+    const mobile = css.slice(css.indexOf('@media (max-width: 767.98px) {'));
     const loginPageRule = mobile.match(/\.login-page\s*\{[^{}]*\}/)[0];
     assert.match(loginPageRule, /overflow:\s*visible;/, 'login-page is still an internal scroll container');
     assert.doesNotMatch(loginPageRule, /overflow-y/, 'login-page still owns vertical scroll on mobile');

@@ -14938,6 +14938,7 @@ function togglePasswordVisibility(inputId, btn) {
     const show = input.type === 'password';
     input.type = show ? 'text' : 'password';
     btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    btn.setAttribute('aria-pressed', show ? 'true' : 'false');
 
     const icon = btn.querySelector('[data-lucide]');
     if (icon) {
