@@ -51,7 +51,7 @@
      mirror these at the theme's brightness. */
   --border-strong: #cbd5e1;
   --border-divider: #cbd5e1;
-  --border-input: #94a3b8;
+  --border-input: #64748b;
   --bg-input-soft: #f8fafc;
   --focus-ring: rgba(59, 130, 246, 0.35);
   --icon-muted: #475569;
@@ -112,7 +112,7 @@
 
   --border-strong: #33334a;
   --border-divider: #232334;
-  --border-input: #3f3f56;
+  --border-input: #7c7c90;
   --bg-input-soft: #0e0e16;
   --focus-ring: rgba(59, 130, 246, 0.45);
   --icon-muted: #8b8ba0;
@@ -197,7 +197,9 @@
   --popover: #1a1a25;
   --popover-foreground: #f0f0f5;
   --primary-tok: #3b82f6;
-  --primary-foreground: #ffffff;
+  /* Near-black label on the bright dark-theme fills: white only reaches
+     3.7:1 on #3b82f6/#ef4444, the page ink reaches 6.3:1 (WCAG AA). */
+  --primary-foreground: var(--bg-primary);
   --secondary: #1a1a25;
   --secondary-foreground: #f0f0f5;
   --destructive-tok: #ef4444;
@@ -7747,7 +7749,7 @@ tr.skeleton-tr td {
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-color: var(--border-input) transparent;
 }
 
 .devtools-tab {
@@ -10679,7 +10681,7 @@ select,
   top: 0;
   z-index: 20000;
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-foreground);
   padding: 0.6rem 1rem;
   border-radius: 0 0 0.5rem 0;
   font-weight: 600;
