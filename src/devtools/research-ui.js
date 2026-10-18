@@ -856,6 +856,14 @@
     updateExportState();
   }
 
+  // The SOP2 charts and diff cards embed var(--chart-N) colours; re-render
+  // the current results on 'themechange' so nothing keeps stale paints.
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('themechange', function () {
+      if (lastDoc) renderDoc(lastDoc);
+    });
+  }
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
   else wire();
 

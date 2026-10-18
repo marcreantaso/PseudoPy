@@ -668,9 +668,9 @@ async function init() {
 
         console.log(`[App] Loaded users, max ${EX_PAGE_LIMIT} exercises, and activity records from IndexedDB.`);
 
-        // Initialize Theme from Storage
-        const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) || 'dark';
-        document.documentElement.setAttribute('data-theme', savedTheme);
+        // Initialize Theme from Storage: mode, meta colour, menu state and
+        // live System-mode tracking (the head bootstrap painted the theme).
+        if (typeof initTheme === 'function') initTheme();
 
         // Show the app version (login footer / settings About).
         renderAppVersion();
@@ -7282,6 +7282,19 @@ function anChartGrid(width, ticks, y, suffix) {
 
 function anChartSvg(width, label, content) {
     return `<svg class="an-svg" width="${width}" height="250" viewBox="0 0 ${width} 250" role="group" aria-label="${anAttr(label)}">${content}</svg>`;
+}
+
+/* Charts embed var(--chart-N) colours, so the CSS cascade recolours most
+   marks for free. Re-running every mounted chart job on 'themechange' also
+   refreshes whatever a render closure captured (gradient stops, legend
+   chips, cached series colours), so nothing can stay painted in the
+   previous theme's colours. */
+if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('themechange', () => {
+        anChartJobs.forEach(job => {
+            try { job.run(); } catch (e) { /* one failing chart must not block the rest */ }
+        });
+    });
 }
 /* Instructor analytics. Shared chart layout and interactions: chart-system.js. */
 var analyticsPieActiveName = null;
@@ -14864,21 +14877,174 @@ async function exportData(type) {
    ============================================================ */
 
 /**
- * Toggles between Light and Dark mode
+ * Three-mode appearance control: Light, Dark and System.
+ *
+ * The head bootstrap in index.html applies the stored mode before first
+ * paint; everything below keeps it in sync afterwards — the toggle menu,
+ * the meta theme-color, and System mode's live OS preference tracking.
+ * Every applied switch fires exactly one 'themechange' so charts and any
+ * colour-caching UI can refresh in place.
  */
-function toggleTheme() {
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+const THEME_MODES = ['light', 'dark', 'system'];
 
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem(STORAGE_KEYS.THEME, newTheme);
+/** The stored preference: an explicit mode, or 'system'. */
+function getThemeMode() {
+    let stored = null;
+    try { stored = localStorage.getItem(STORAGE_KEYS.THEME); } catch (e) { /* private browsing */ }
+    return THEME_MODES.indexOf(stored) !== -1 ? stored : 'dark';
+}
 
-    const themeButton = $id('theme-toggle-btn');
-    if (themeButton) {
-        themeButton.innerHTML = `<i data-lucide="${newTheme === 'dark' ? 'sun-moon' : 'sun'}" aria-hidden="true"></i>`;
-        refreshIcons(themeButton);
+/** Does the given mode resolve to dark right now? */
+function themeModeIsDark(mode) {
+    return mode === 'system'
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
+        : mode === 'dark';
+}
+
+/** The browser/OS chrome colour for the resolved theme. */
+function themeColorFor(dark) {
+    return dark ? '#0f172a' : '#f8fafc';
+}
+
+/** Updates the toggle button icon/labels and the menu checkmarks. */
+function updateThemeToggleUI(mode, theme) {
+    const button = $id('theme-toggle-btn');
+    if (button) {
+        const icon = mode === 'system' ? 'sun-moon' : (theme === 'dark' ? 'moon' : 'sun');
+        button.innerHTML = `<i data-lucide="${icon}" aria-hidden="true"></i>`;
+        refreshIcons(button);
+        const label = `Theme: ${mode === 'system' ? 'System' : (theme === 'dark' ? 'Dark' : 'Light')} — choose appearance`;
+        button.setAttribute('aria-label', label);
+        button.setAttribute('title', label);
     }
-    showToast(`Switched to ${newTheme} mode`, 'info');
+    const menu = $id('theme-menu');
+    if (menu && menu.querySelectorAll) {
+        menu.querySelectorAll('.theme-menu-item').forEach(item => {
+            item.setAttribute('aria-checked', String(item.getAttribute('data-theme-mode') === mode));
+        });
+    }
+}
+
+/**
+ * Applies a theme mode to the document.
+ *
+ * @param {string} mode 'light' | 'dark' | 'system'
+ * @param {object} options persist — write the mode to storage (user action);
+ *                         announce — fire 'themechange' (skip on boot, when
+ *                         no listener can exist yet and the cascade alone
+ *                         paints the first frame).
+ */
+function applyThemeMode(mode, options) {
+    const opts = options || {};
+    const dark = themeModeIsDark(mode);
+    const theme = dark ? 'dark' : 'light';
+    const root = document.documentElement;
+
+    if (opts.persist) {
+        try { localStorage.setItem(STORAGE_KEYS.THEME, mode); } catch (e) { /* private browsing */ }
+    }
+
+    // Short-lived class: components opt out of transitions so the whole
+    // page swaps theme without animating every surface on the way.
+    root.classList.add('theme-switching');
+    root.setAttribute('data-theme', theme);
+
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', themeColorFor(dark));
+
+    updateThemeToggleUI(mode, theme);
+
+    if (opts.announce !== false) {
+        window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: theme, mode: mode } }));
+    }
+
+    requestAnimationFrame(() => root.classList.remove('theme-switching'));
+    return theme;
+}
+
+/** Applies and persists a user-chosen mode, then closes the menu. */
+function setThemeMode(mode) {
+    if (THEME_MODES.indexOf(mode) === -1) return;
+    applyThemeMode(mode, { persist: true });
+    const spoken = mode === 'system' ? 'System' : (themeModeIsDark(mode) ? 'Dark' : 'Light');
+    showToast(`Theme set to ${spoken} mode`, 'info');
+    closeThemeMenu();
+}
+
+function openThemeMenu() {
+    const button = $id('theme-toggle-btn');
+    const menu = $id('theme-menu');
+    if (!button || !menu) return;
+    menu.classList.remove('hidden');
+    button.setAttribute('aria-expanded', 'true');
+    const checked = menu.querySelector('.theme-menu-item[aria-checked="true"]') || menu.querySelector('.theme-menu-item');
+    if (checked) checked.focus();
+}
+
+function closeThemeMenu() {
+    const button = $id('theme-toggle-btn');
+    const menu = $id('theme-menu');
+    if (!menu) return;
+    menu.classList.add('hidden');
+    if (button) button.setAttribute('aria-expanded', 'false');
+}
+
+/** Wires the appearance menu and System-mode tracking. Called from init(). */
+function initTheme() {
+    // Re-apply the stored mode so icon, meta colour and menu state agree
+    // with what the head bootstrap painted.
+    applyThemeMode(getThemeMode(), { announce: false });
+
+    // System mode follows the OS setting live.
+    if (typeof window.matchMedia === 'function') {
+        const media = window.matchMedia('(prefers-color-scheme: dark)');
+        const onSystemChange = () => {
+            if (getThemeMode() === 'system') applyThemeMode('system');
+        };
+        if (media.addEventListener) media.addEventListener('change', onSystemChange);
+        else if (media.addListener) media.addListener(onSystemChange); // legacy Safari
+    }
+
+    const button = $id('theme-toggle-btn');
+    const menu = $id('theme-menu');
+    if (!button || !menu) return;
+
+    button.addEventListener('click', () => {
+        if (menu.classList.contains('hidden')) openThemeMenu();
+        else closeThemeMenu();
+    });
+
+    menu.addEventListener('click', event => {
+        const item = event.target && event.target.closest ? event.target.closest('.theme-menu-item') : null;
+        if (item) setThemeMode(item.getAttribute('data-theme-mode'));
+    });
+
+    // Roving focus inside the menu (ARIA menu keyboard contract).
+    menu.addEventListener('keydown', event => {
+        const items = Array.from(menu.querySelectorAll('.theme-menu-item'));
+        const index = items.indexOf(document.activeElement);
+        let next = -1;
+        if (event.key === 'ArrowDown') next = (index + 1) % items.length;
+        else if (event.key === 'ArrowUp') next = (index - 1 + items.length) % items.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = items.length - 1;
+        if (next >= 0 && items[next]) {
+            event.preventDefault();
+            items[next].focus();
+        }
+    });
+
+    // Outside click and Escape close the menu; Escape returns focus.
+    document.addEventListener('click', event => {
+        if (menu.classList.contains('hidden')) return;
+        if (menu.contains(event.target) || button.contains(event.target)) return;
+        closeThemeMenu();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape' || menu.classList.contains('hidden')) return;
+        closeThemeMenu();
+        button.focus();
+    });
 }
 
 /**

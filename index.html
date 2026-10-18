@@ -61,17 +61,30 @@
 }
 </script>
 
-  <!-- Immediate Dark Mode Initializer -->
-  <script>
-    (function() {
-      const savedTheme = localStorage.getItem('pseudopy_theme') || 'dark';
-      document.documentElement.setAttribute('data-theme', savedTheme);
-    })();
-  </script>
-
   <!-- PWA Meta Tags -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0f172a">
+  <meta name="color-scheme" content="light dark">
+
+  <!-- THEME BOOTSTRAP.
+       Resolves the stored preference (light | dark | system) before the
+       stylesheet paints, so the first frame is already the right theme and
+       there is no light/dark flash. 'system' follows prefers-color-scheme,
+       now and at every later change (see src/app/appearance.js). -->
+  <script>
+    (function () {
+      var MODES = ['light', 'dark', 'system'];
+      var stored = null;
+      try { stored = localStorage.getItem('pseudopy_theme'); } catch (e) { /* private browsing */ }
+      var mode = MODES.indexOf(stored) !== -1 ? stored : 'dark';
+      var dark = mode === 'system'
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
+        : mode === 'dark';
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', dark ? '#0f172a' : '#f8fafc');
+    })();
+  </script>
   <meta name="mobile-web-app-capable" content="yes">
 
   <!-- iOS PWA Meta Tags -->
@@ -83,7 +96,7 @@
   <!-- Android Chrome -->
   <meta name="application-name" content="PseudoPy">
 
-  <link rel="stylesheet" href="style.css?v=ux-20261017-7">
+  <link rel="stylesheet" href="style.css?v=ux-20261018-8">
   <link rel="stylesheet" href="student-workspace.css?v=ux-20261006-5">
   <link rel="stylesheet" href="ui-icons.css?v=1">
 
@@ -485,10 +498,27 @@
           </div>
         </div>
 
-        <button class="btn btn-ghost btn-icon" id="theme-toggle-btn" onclick="toggleTheme()"
-          aria-label="Toggle Dark/Light Mode" title="Toggle Dark/Light Mode">
-          <i data-lucide="sun-moon" aria-hidden="true"></i>
-        </button>
+        <div class="theme-menu-wrap">
+          <button type="button" class="btn btn-ghost btn-icon" id="theme-toggle-btn"
+            aria-haspopup="menu" aria-expanded="false" aria-controls="theme-menu"
+            aria-label="Theme: choose appearance" title="Theme">
+            <i data-lucide="sun-moon" aria-hidden="true"></i>
+          </button>
+          <div class="theme-menu hidden" id="theme-menu" role="menu" aria-label="Theme">
+            <button type="button" role="menuitemradio" aria-checked="true" class="theme-menu-item" data-theme-mode="light">
+              <i data-lucide="sun" aria-hidden="true"></i><span class="theme-menu-label">Light</span>
+              <i data-lucide="check" class="theme-menu-check" aria-hidden="true"></i>
+            </button>
+            <button type="button" role="menuitemradio" aria-checked="false" class="theme-menu-item" data-theme-mode="dark">
+              <i data-lucide="moon" aria-hidden="true"></i><span class="theme-menu-label">Dark</span>
+              <i data-lucide="check" class="theme-menu-check" aria-hidden="true"></i>
+            </button>
+            <button type="button" role="menuitemradio" aria-checked="false" class="theme-menu-item" data-theme-mode="system">
+              <i data-lucide="sun-moon" aria-hidden="true"></i><span class="theme-menu-label">System</span>
+              <i data-lucide="check" class="theme-menu-check" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
         <span style="font-size:0.8rem;color:var(--text-muted);margin-left:0.5rem" id="topbar-time"></span>
       </div>
     </div>
@@ -3407,7 +3437,7 @@ CALL f(1,2); f(1,2)</pre>
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=ux-20261017-6"></script>
+  <script src="app.js?v=ux-20261018-7"></script>
   <script>
     // Lazy-init lucide: every createIcons call site is guarded, so the icon
     // library is fetched on load (not at parse) and icons render once it lands.

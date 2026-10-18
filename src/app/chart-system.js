@@ -154,3 +154,16 @@ function anChartGrid(width, ticks, y, suffix) {
 function anChartSvg(width, label, content) {
     return `<svg class="an-svg" width="${width}" height="250" viewBox="0 0 ${width} 250" role="group" aria-label="${anAttr(label)}">${content}</svg>`;
 }
+
+/* Charts embed var(--chart-N) colours, so the CSS cascade recolours most
+   marks for free. Re-running every mounted chart job on 'themechange' also
+   refreshes whatever a render closure captured (gradient stops, legend
+   chips, cached series colours), so nothing can stay painted in the
+   previous theme's colours. */
+if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('themechange', () => {
+        anChartJobs.forEach(job => {
+            try { job.run(); } catch (e) { /* one failing chart must not block the rest */ }
+        });
+    });
+}
