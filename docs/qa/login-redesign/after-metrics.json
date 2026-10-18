@@ -1,0 +1,826 @@
+[
+  {
+    "size": "375",
+    "theme": "light",
+    "png": "after-375-light.png",
+    "pngBytes": 136299,
+    "m": {
+      "viewport": {
+        "w": 375,
+        "h": 812
+      },
+      "theme": "light",
+      "scrollWidth": 375,
+      "overflowX": false,
+      "colors": {
+        "htmlBg": "rgb(7, 7, 19)",
+        "bodyBg": "rgb(7, 7, 19)",
+        "pageBg": "rgba(0, 0, 0, 0)",
+        "heroBg": "rgba(0, 0, 0, 0)",
+        "formBg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "cardShadow": "rgba(2, 6, 23, 0.35) 0px 24px 60px 0px",
+        "cardRadius": "16px",
+        "submitBg": "rgba(0, 0, 0, 0)",
+        "submitColor": "rgb(255, 255, 255)",
+        "footerColor": "rgb(71, 85, 105)",
+        "pageCanvasGradient": "linear-gradient(135deg, rgb(7, 7, 19) 0%, rgb(13, 21, 48) 68%, rgb(10, 22, 40) 100%)"
+      },
+      "rects": {
+        "page": {
+          "x": 0,
+          "y": 0,
+          "w": 375,
+          "h": 842
+        },
+        "hero": {
+          "x": 0,
+          "y": 0,
+          "w": 375,
+          "h": 283
+        },
+        "form": {
+          "x": 0,
+          "y": 283,
+          "w": 375,
+          "h": 559
+        },
+        "card": {
+          "x": 18,
+          "y": 304,
+          "w": 340,
+          "h": 503
+        },
+        "username": {
+          "x": 36,
+          "y": 434,
+          "w": 303,
+          "h": 46
+        },
+        "password": {
+          "x": 36,
+          "y": 522,
+          "w": 303,
+          "h": 46
+        },
+        "submit": {
+          "x": 36,
+          "y": 589,
+          "w": 303,
+          "h": 46
+        },
+        "forgot": {
+          "x": 97,
+          "y": 642,
+          "w": 182,
+          "h": 44
+        },
+        "error": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "version": {
+          "x": 188,
+          "y": 785,
+          "w": 0,
+          "h": 0
+        }
+      },
+      "splitHeroPct": 50,
+      "cardWidthPx": 340,
+      "inputHeightPx": 46,
+      "submitHeightPx": 46,
+      "labelFontPx": 13,
+      "minTextFont": {
+        "px": 12,
+        "el": "span."
+      },
+      "heroArtOpacity": "0.32",
+      "heroCodeCardVisible": false,
+      "errorSlotReserved": false
+    }
+  },
+  {
+    "size": "375",
+    "theme": "dark",
+    "png": "after-375-dark.png",
+    "pngBytes": 141267,
+    "m": {
+      "viewport": {
+        "w": 375,
+        "h": 812
+      },
+      "theme": "dark",
+      "scrollWidth": 375,
+      "overflowX": false,
+      "colors": {
+        "htmlBg": "rgb(7, 7, 19)",
+        "bodyBg": "rgb(7, 7, 19)",
+        "pageBg": "rgba(0, 0, 0, 0)",
+        "heroBg": "rgba(0, 0, 0, 0)",
+        "formBg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgba(17, 17, 25, 0.72)",
+        "cardShadow": "rgba(0, 0, 0, 0.55) 0px 24px 60px 0px",
+        "cardRadius": "16px",
+        "submitBg": "rgba(0, 0, 0, 0)",
+        "submitColor": "rgb(255, 255, 255)",
+        "footerColor": "rgb(203, 213, 225)",
+        "pageCanvasGradient": "linear-gradient(135deg, rgb(7, 7, 19) 0%, rgb(13, 21, 48) 68%, rgb(10, 22, 40) 100%)"
+      },
+      "rects": {
+        "page": {
+          "x": 0,
+          "y": 0,
+          "w": 375,
+          "h": 842
+        },
+        "hero": {
+          "x": 0,
+          "y": 0,
+          "w": 375,
+          "h": 283
+        },
+        "form": {
+          "x": 0,
+          "y": 283,
+          "w": 375,
+          "h": 559
+        },
+        "card": {
+          "x": 18,
+          "y": 304,
+          "w": 340,
+          "h": 503
+        },
+        "username": {
+          "x": 36,
+          "y": 434,
+          "w": 303,
+          "h": 46
+        },
+        "password": {
+          "x": 36,
+          "y": 522,
+          "w": 303,
+          "h": 46
+        },
+        "submit": {
+          "x": 36,
+          "y": 589,
+          "w": 303,
+          "h": 46
+        },
+        "forgot": {
+          "x": 97,
+          "y": 642,
+          "w": 182,
+          "h": 44
+        },
+        "error": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "version": {
+          "x": 188,
+          "y": 785,
+          "w": 0,
+          "h": 0
+        }
+      },
+      "splitHeroPct": 50,
+      "cardWidthPx": 340,
+      "inputHeightPx": 46,
+      "submitHeightPx": 46,
+      "labelFontPx": 13,
+      "minTextFont": {
+        "px": 12,
+        "el": "span."
+      },
+      "heroArtOpacity": "0.32",
+      "heroCodeCardVisible": false,
+      "errorSlotReserved": false
+    }
+  },
+  {
+    "size": "768",
+    "theme": "light",
+    "png": "after-768-light.png",
+    "pngBytes": 186768,
+    "m": {
+      "viewport": {
+        "w": 768,
+        "h": 1024
+      },
+      "theme": "light",
+      "scrollWidth": 768,
+      "overflowX": false,
+      "colors": {
+        "htmlBg": "rgb(7, 7, 19)",
+        "bodyBg": "rgb(7, 7, 19)",
+        "pageBg": "rgba(0, 0, 0, 0)",
+        "heroBg": "rgba(0, 0, 0, 0)",
+        "formBg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "cardShadow": "rgba(2, 6, 23, 0.35) 0px 24px 60px 0px",
+        "cardRadius": "18px",
+        "submitBg": "rgba(0, 0, 0, 0)",
+        "submitColor": "rgb(255, 255, 255)",
+        "footerColor": "rgb(71, 85, 105)",
+        "pageCanvasGradient": "linear-gradient(135deg, rgb(7, 7, 19) 0%, rgb(13, 21, 48) 68%, rgb(10, 22, 40) 100%)"
+      },
+      "rects": {
+        "page": {
+          "x": 0,
+          "y": 0,
+          "w": 768,
+          "h": 1024
+        },
+        "hero": {
+          "x": 0,
+          "y": 0,
+          "w": 346,
+          "h": 1024
+        },
+        "form": {
+          "x": 346,
+          "y": 0,
+          "w": 422,
+          "h": 1024
+        },
+        "card": {
+          "x": 374,
+          "y": 248,
+          "w": 366,
+          "h": 528
+        },
+        "username": {
+          "x": 403,
+          "y": 393,
+          "w": 308,
+          "h": 46
+        },
+        "password": {
+          "x": 403,
+          "y": 481,
+          "w": 308,
+          "h": 46
+        },
+        "submit": {
+          "x": 403,
+          "y": 548,
+          "w": 308,
+          "h": 46
+        },
+        "forgot": {
+          "x": 466,
+          "y": 601,
+          "w": 182,
+          "h": 44
+        },
+        "error": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "version": {
+          "x": 557,
+          "y": 744,
+          "w": 0,
+          "h": 0
+        }
+      },
+      "splitHeroPct": 45,
+      "cardWidthPx": 366,
+      "inputHeightPx": 46,
+      "submitHeightPx": 46,
+      "labelFontPx": 13,
+      "minTextFont": {
+        "px": 12,
+        "el": "span.code-card-title"
+      },
+      "heroArtOpacity": "0.32",
+      "heroCodeCardVisible": true,
+      "errorSlotReserved": false
+    }
+  },
+  {
+    "size": "768",
+    "theme": "dark",
+    "png": "after-768-dark.png",
+    "pngBytes": 192344,
+    "m": {
+      "viewport": {
+        "w": 768,
+        "h": 1024
+      },
+      "theme": "dark",
+      "scrollWidth": 768,
+      "overflowX": false,
+      "colors": {
+        "htmlBg": "rgb(7, 7, 19)",
+        "bodyBg": "rgb(7, 7, 19)",
+        "pageBg": "rgba(0, 0, 0, 0)",
+        "heroBg": "rgba(0, 0, 0, 0)",
+        "formBg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgba(17, 17, 25, 0.72)",
+        "cardShadow": "rgba(0, 0, 0, 0.55) 0px 24px 60px 0px",
+        "cardRadius": "18px",
+        "submitBg": "rgba(0, 0, 0, 0)",
+        "submitColor": "rgb(255, 255, 255)",
+        "footerColor": "rgb(203, 213, 225)",
+        "pageCanvasGradient": "linear-gradient(135deg, rgb(7, 7, 19) 0%, rgb(13, 21, 48) 68%, rgb(10, 22, 40) 100%)"
+      },
+      "rects": {
+        "page": {
+          "x": 0,
+          "y": 0,
+          "w": 768,
+          "h": 1024
+        },
+        "hero": {
+          "x": 0,
+          "y": 0,
+          "w": 346,
+          "h": 1024
+        },
+        "form": {
+          "x": 346,
+          "y": 0,
+          "w": 422,
+          "h": 1024
+        },
+        "card": {
+          "x": 374,
+          "y": 238,
+          "w": 366,
+          "h": 547
+        },
+        "username": {
+          "x": 403,
+          "y": 383,
+          "w": 308,
+          "h": 46
+        },
+        "password": {
+          "x": 403,
+          "y": 471,
+          "w": 308,
+          "h": 46
+        },
+        "submit": {
+          "x": 403,
+          "y": 538,
+          "w": 308,
+          "h": 46
+        },
+        "forgot": {
+          "x": 466,
+          "y": 591,
+          "w": 182,
+          "h": 44
+        },
+        "error": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "version": {
+          "x": 521,
+          "y": 734,
+          "w": 72,
+          "h": 19
+        }
+      },
+      "splitHeroPct": 45,
+      "cardWidthPx": 366,
+      "inputHeightPx": 46,
+      "submitHeightPx": 46,
+      "labelFontPx": 13,
+      "minTextFont": {
+        "px": 12,
+        "el": "span.code-card-title"
+      },
+      "heroArtOpacity": "0.32",
+      "heroCodeCardVisible": true,
+      "errorSlotReserved": false
+    }
+  },
+  {
+    "size": "1366",
+    "theme": "light",
+    "png": "after-1366-light.png",
+    "pngBytes": 258220,
+    "m": {
+      "viewport": {
+        "w": 1366,
+        "h": 768
+      },
+      "theme": "light",
+      "scrollWidth": 1366,
+      "overflowX": false,
+      "colors": {
+        "htmlBg": "rgb(7, 7, 19)",
+        "bodyBg": "rgb(7, 7, 19)",
+        "pageBg": "rgba(0, 0, 0, 0)",
+        "heroBg": "rgba(0, 0, 0, 0)",
+        "formBg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "cardShadow": "rgba(2, 6, 23, 0.35) 0px 24px 60px 0px",
+        "cardRadius": "18px",
+        "submitBg": "rgba(0, 0, 0, 0)",
+        "submitColor": "rgb(255, 255, 255)",
+        "footerColor": "rgb(71, 85, 105)",
+        "pageCanvasGradient": "linear-gradient(135deg, rgb(7, 7, 19) 0%, rgb(13, 21, 48) 68%, rgb(10, 22, 40) 100%)"
+      },
+      "rects": {
+        "page": {
+          "x": 0,
+          "y": 0,
+          "w": 1366,
+          "h": 768
+        },
+        "hero": {
+          "x": 0,
+          "y": 0,
+          "w": 751,
+          "h": 768
+        },
+        "form": {
+          "x": 751,
+          "y": 0,
+          "w": 615,
+          "h": 768
+        },
+        "card": {
+          "x": 849,
+          "y": 110,
+          "w": 420,
+          "h": 547
+        },
+        "username": {
+          "x": 878,
+          "y": 255,
+          "w": 362,
+          "h": 46
+        },
+        "password": {
+          "x": 878,
+          "y": 343,
+          "w": 362,
+          "h": 46
+        },
+        "submit": {
+          "x": 878,
+          "y": 410,
+          "w": 362,
+          "h": 46
+        },
+        "forgot": {
+          "x": 968,
+          "y": 463,
+          "w": 182,
+          "h": 44
+        },
+        "error": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "version": {
+          "x": 1023,
+          "y": 606,
+          "w": 72,
+          "h": 19
+        }
+      },
+      "splitHeroPct": 55,
+      "cardWidthPx": 420,
+      "inputHeightPx": 46,
+      "submitHeightPx": 46,
+      "labelFontPx": 13,
+      "minTextFont": {
+        "px": 12,
+        "el": "span.code-card-title"
+      },
+      "heroArtOpacity": "0.32",
+      "heroCodeCardVisible": true,
+      "errorSlotReserved": false
+    }
+  },
+  {
+    "size": "1366",
+    "theme": "dark",
+    "png": "after-1366-dark.png",
+    "pngBytes": 396749,
+    "m": {
+      "viewport": {
+        "w": 1366,
+        "h": 768
+      },
+      "theme": "dark",
+      "scrollWidth": 1366,
+      "overflowX": false,
+      "colors": {
+        "htmlBg": "rgb(7, 7, 19)",
+        "bodyBg": "rgb(7, 7, 19)",
+        "pageBg": "rgba(0, 0, 0, 0)",
+        "heroBg": "rgba(0, 0, 0, 0)",
+        "formBg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgba(17, 17, 25, 0.72)",
+        "cardShadow": "rgba(0, 0, 0, 0.55) 0px 24px 60px 0px",
+        "cardRadius": "18px",
+        "submitBg": "rgba(0, 0, 0, 0)",
+        "submitColor": "rgb(255, 255, 255)",
+        "footerColor": "rgb(203, 213, 225)",
+        "pageCanvasGradient": "linear-gradient(135deg, rgb(7, 7, 19) 0%, rgb(13, 21, 48) 68%, rgb(10, 22, 40) 100%)"
+      },
+      "rects": {
+        "page": {
+          "x": 0,
+          "y": 0,
+          "w": 1366,
+          "h": 768
+        },
+        "hero": {
+          "x": 0,
+          "y": 0,
+          "w": 751,
+          "h": 768
+        },
+        "form": {
+          "x": 751,
+          "y": 0,
+          "w": 615,
+          "h": 768
+        },
+        "card": {
+          "x": 849,
+          "y": 110,
+          "w": 420,
+          "h": 547
+        },
+        "username": {
+          "x": 878,
+          "y": 255,
+          "w": 362,
+          "h": 46
+        },
+        "password": {
+          "x": 878,
+          "y": 343,
+          "w": 362,
+          "h": 46
+        },
+        "submit": {
+          "x": 878,
+          "y": 410,
+          "w": 362,
+          "h": 46
+        },
+        "forgot": {
+          "x": 968,
+          "y": 463,
+          "w": 182,
+          "h": 44
+        },
+        "error": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "version": {
+          "x": 1023,
+          "y": 606,
+          "w": 72,
+          "h": 19
+        }
+      },
+      "splitHeroPct": 55,
+      "cardWidthPx": 420,
+      "inputHeightPx": 46,
+      "submitHeightPx": 46,
+      "labelFontPx": 13,
+      "minTextFont": {
+        "px": 12,
+        "el": "span.code-card-title"
+      },
+      "heroArtOpacity": "0.32",
+      "heroCodeCardVisible": true,
+      "errorSlotReserved": false
+    }
+  },
+  {
+    "size": "1920",
+    "theme": "light",
+    "png": "after-1920-light.png",
+    "pngBytes": 649990,
+    "m": {
+      "viewport": {
+        "w": 1920,
+        "h": 1080
+      },
+      "theme": "light",
+      "scrollWidth": 1920,
+      "overflowX": false,
+      "colors": {
+        "htmlBg": "rgb(7, 7, 19)",
+        "bodyBg": "rgb(7, 7, 19)",
+        "pageBg": "rgba(0, 0, 0, 0)",
+        "heroBg": "rgba(0, 0, 0, 0)",
+        "formBg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgb(255, 255, 255)",
+        "cardShadow": "rgba(2, 6, 23, 0.35) 0px 24px 60px 0px",
+        "cardRadius": "18px",
+        "submitBg": "rgba(0, 0, 0, 0)",
+        "submitColor": "rgb(255, 255, 255)",
+        "footerColor": "rgb(71, 85, 105)",
+        "pageCanvasGradient": "linear-gradient(135deg, rgb(7, 7, 19) 0%, rgb(13, 21, 48) 68%, rgb(10, 22, 40) 100%)"
+      },
+      "rects": {
+        "page": {
+          "x": 0,
+          "y": 0,
+          "w": 1920,
+          "h": 1080
+        },
+        "hero": {
+          "x": 0,
+          "y": 0,
+          "w": 1056,
+          "h": 1080
+        },
+        "form": {
+          "x": 1056,
+          "y": 0,
+          "w": 864,
+          "h": 1080
+        },
+        "card": {
+          "x": 1278,
+          "y": 276,
+          "w": 420,
+          "h": 528
+        },
+        "username": {
+          "x": 1307,
+          "y": 421,
+          "w": 362,
+          "h": 46
+        },
+        "password": {
+          "x": 1307,
+          "y": 509,
+          "w": 362,
+          "h": 46
+        },
+        "submit": {
+          "x": 1307,
+          "y": 576,
+          "w": 362,
+          "h": 46
+        },
+        "forgot": {
+          "x": 1397,
+          "y": 629,
+          "w": 182,
+          "h": 44
+        },
+        "error": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "version": {
+          "x": 1488,
+          "y": 772,
+          "w": 0,
+          "h": 0
+        }
+      },
+      "splitHeroPct": 55,
+      "cardWidthPx": 420,
+      "inputHeightPx": 46,
+      "submitHeightPx": 46,
+      "labelFontPx": 13,
+      "minTextFont": {
+        "px": 12,
+        "el": "span.code-card-title"
+      },
+      "heroArtOpacity": "0.32",
+      "heroCodeCardVisible": true,
+      "errorSlotReserved": false
+    }
+  },
+  {
+    "size": "1920",
+    "theme": "dark",
+    "png": "after-1920-dark.png",
+    "pngBytes": 316757,
+    "m": {
+      "viewport": {
+        "w": 1920,
+        "h": 1080
+      },
+      "theme": "dark",
+      "scrollWidth": 1920,
+      "overflowX": false,
+      "colors": {
+        "htmlBg": "rgb(7, 7, 19)",
+        "bodyBg": "rgb(7, 7, 19)",
+        "pageBg": "rgba(0, 0, 0, 0)",
+        "heroBg": "rgba(0, 0, 0, 0)",
+        "formBg": "rgba(0, 0, 0, 0)",
+        "cardBg": "rgba(17, 17, 25, 0.72)",
+        "cardShadow": "rgba(0, 0, 0, 0.55) 0px 24px 60px 0px",
+        "cardRadius": "18px",
+        "submitBg": "rgba(0, 0, 0, 0)",
+        "submitColor": "rgb(255, 255, 255)",
+        "footerColor": "rgb(203, 213, 225)",
+        "pageCanvasGradient": "linear-gradient(135deg, rgb(7, 7, 19) 0%, rgb(13, 21, 48) 68%, rgb(10, 22, 40) 100%)"
+      },
+      "rects": {
+        "page": {
+          "x": 0,
+          "y": 0,
+          "w": 1920,
+          "h": 1080
+        },
+        "hero": {
+          "x": 0,
+          "y": 0,
+          "w": 1056,
+          "h": 1080
+        },
+        "form": {
+          "x": 1056,
+          "y": 0,
+          "w": 864,
+          "h": 1080
+        },
+        "card": {
+          "x": 1278,
+          "y": 266,
+          "w": 420,
+          "h": 547
+        },
+        "username": {
+          "x": 1307,
+          "y": 411,
+          "w": 362,
+          "h": 46
+        },
+        "password": {
+          "x": 1307,
+          "y": 499,
+          "w": 362,
+          "h": 46
+        },
+        "submit": {
+          "x": 1307,
+          "y": 566,
+          "w": 362,
+          "h": 46
+        },
+        "forgot": {
+          "x": 1397,
+          "y": 619,
+          "w": 182,
+          "h": 44
+        },
+        "error": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "version": {
+          "x": 1452,
+          "y": 762,
+          "w": 72,
+          "h": 19
+        }
+      },
+      "splitHeroPct": 55,
+      "cardWidthPx": 420,
+      "inputHeightPx": 46,
+      "submitHeightPx": 46,
+      "labelFontPx": 13,
+      "minTextFont": {
+        "px": 12,
+        "el": "span.code-card-title"
+      },
+      "heroArtOpacity": "0.32",
+      "heroCodeCardVisible": true,
+      "errorSlotReserved": false
+    }
+  }
+]
