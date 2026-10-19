@@ -29,7 +29,9 @@ function themeModeIsDark(mode) {
 
 /** The browser/OS chrome colour for the resolved theme. */
 function themeColorFor(dark) {
-    return dark ? '#0f172a' : '#f8fafc';
+    // Matches --bg-secondary (the topbar/header colour) in each theme, so the
+    // browser/OS chrome never contradicts the app header (audit finding #9).
+    return dark ? '#0d0d14' : '#f1f5f9';
 }
 
 /** Updates the toggle button icon/labels and the menu checkmarks. */
@@ -75,8 +77,13 @@ function applyThemeMode(mode, options) {
     root.classList.add('theme-switching');
     root.setAttribute('data-theme', theme);
 
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', themeColorFor(dark));
+    // Keep the browser/OS chrome colour in step with the resolved theme. The
+    // head carries paired prefers-color-scheme metas for the pre-JS frame;
+    // once a theme is applied, every meta takes the resolved colour so the
+    // effective colour is right whichever media query matches.
+    const themeColor = themeColorFor(dark);
+    document.querySelectorAll('meta[name="theme-color"]').forEach(meta =>
+        meta.setAttribute('content', themeColor));
 
     updateThemeToggleUI(mode, theme);
 
@@ -134,6 +141,11 @@ function initTheme() {
     const button = $id('theme-toggle-btn');
     const menu = $id('theme-menu');
     if (!button || !menu) return;
+
+    // Android back / iOS swipe-back closes the theme menu via the
+    // overlay-history stack with its real close action, so aria-expanded
+    // and the check marks unwind together with visibility.
+    if (typeof overlayHistoryOnClose === 'function') overlayHistoryOnClose(menu, closeThemeMenu);
 
     button.addEventListener('click', () => {
         if (menu.classList.contains('hidden')) openThemeMenu();

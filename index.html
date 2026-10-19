@@ -3,7 +3,8 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <title>PseudoPy</title>
   <meta name="description"
     content="Translating Pseudocode to Python: An Algorithmic Approach to Automated Code Generation">
@@ -63,7 +64,12 @@
 
   <!-- PWA Meta Tags -->
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#0f172a">
+  <!-- Paired theme-color metas follow the OS before JS runs; the theme
+       bootstrap below and src/app/appearance.js overwrite BOTH contents with
+       the resolved theme colour, so an explicit light/dark override wins
+       regardless of which media query matches. -->
+  <meta name="theme-color" content="#0d0d14" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f1f5f9" media="(prefers-color-scheme: light)">
   <meta name="color-scheme" content="light dark">
 
   <!-- THEME BOOTSTRAP.
@@ -81,8 +87,9 @@
         ? window.matchMedia('(prefers-color-scheme: dark)').matches
         : mode === 'dark';
       document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-      var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute('content', dark ? '#0f172a' : '#f8fafc');
+      var themeColor = dark ? '#0d0d14' : '#f1f5f9';
+      var metas = document.querySelectorAll('meta[name="theme-color"]');
+      for (var i = 0; i < metas.length; i++) metas[i].setAttribute('content', themeColor);
     })();
   </script>
   <meta name="mobile-web-app-capable" content="yes">
@@ -96,7 +103,7 @@
   <!-- Android Chrome -->
   <meta name="application-name" content="PseudoPy">
 
-  <link rel="stylesheet" href="style.css?v=ux-20261019-11">
+  <link rel="stylesheet" href="style.css?v=ux-20261019-12">
   <link rel="stylesheet" href="student-workspace.css?v=ux-20261006-5">
   <link rel="stylesheet" href="ui-icons.css?v=1">
 
@@ -3465,7 +3472,7 @@ CALL f(1,2); f(1,2)</pre>
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=ux-20261018-7"></script>
+  <script src="app.js?v=ux-20261019-8"></script>
   <script>
     // Lazy-init lucide: every createIcons call site is guarded, so the icon
     // library is fetched on load (not at parse) and icons render once it lands.

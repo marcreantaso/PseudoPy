@@ -86,6 +86,22 @@ function maybeSaveEditorDraft() {
     }
 }
 
+/**
+ * Debounced draft autosave (mobile comfort Phase 1). Typing schedules a
+ * single save per quiet window so the localStorage draft stays current
+ * during a long editing session; the beforeunload / visibilitychange
+ * flushes keep the final value. A crash or forced PWA update can now lose
+ * at most the last debounce window instead of the whole session's work.
+ */
+let editorDraftSaveTimer = null;
+function scheduleEditorDraftSave(delay) {
+    if (editorDraftSaveTimer) clearTimeout(editorDraftSaveTimer);
+    editorDraftSaveTimer = setTimeout(() => {
+        editorDraftSaveTimer = null;
+        maybeSaveEditorDraft();
+    }, delay || 800);
+}
+
 function clearEditorDraft() {
     try { localStorage.removeItem(EDITOR_DRAFT_KEY); } catch (e) { }
 }

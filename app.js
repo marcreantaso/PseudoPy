@@ -642,12 +642,106 @@ async function refreshAuthoritativeCaches() {
     }
 }
 
+/**
+ * Wire the pseudocode + Python editor input/scroll pipeline, the unsaved
+ * draft safety net, and realtime validation. Called at the very top of
+ * init(), BEFORE its first await: the editor must answer keystrokes from the
+ * first moment it is on screen, not after session restore and the IndexedDB
+ * warm-up finish (mobile audit finding #10: a 1.5–11.8 s dead window,
+ * median 5.1 s).
+ */
+function bindEditorInputPipeline() {
+    // Update line count on editor input and sync gutter
+    const editor = $id('pseudocode-editor');
+    if (editor) {
+        const syncEditorState = () => {
+            if (currentErrorLineNumbers.length) {
+                currentErrorLineNumbers = [];
+                clearEditorErrors('pseudocode-editor');
+                setText('console-output', 'Source changed — translate again to refresh diagnostics.');
+            }
+            setText('line-count', editor.value.split('\n').length + ' lines');
+            updateGutter();
+
+            exerciseState.isTranslated = false;
+            exerciseState.isExecuted = false;
+            exerciseState.outputMatched = false;
+            updateExerciseStatus();
+
+            // Debounced draft autosave: a crash or forced PWA update right
+            // after typing loses at most one debounce window, not the
+            // session's work.
+            if (typeof scheduleEditorDraftSave === 'function') scheduleEditorDraftSave();
+        };
+
+        editor.addEventListener('input', syncEditorState);
+        editor.addEventListener('scroll', () => {
+            const gutter = $id('editor-gutter');
+            const highlights = $id('editor-highlights');
+            if (gutter) gutter.scrollTop = editor.scrollTop;
+            if (highlights) {
+                highlights.scrollTop = editor.scrollTop;
+                highlights.scrollLeft = editor.scrollLeft;
+            }
+        });
+
+        // Safety net: any page unload (refresh, tab close, PWA update) persists
+        // unsaved pseudocode to the draft slot so student work survives.
+        window.addEventListener('beforeunload', function () {
+            try { if (typeof maybeSaveEditorDraft === 'function') maybeSaveEditorDraft(); } catch (e) { }
+        });
+        // iOS Safari does not reliably fire beforeunload when the app is
+        // backgrounded; the visibility transition is the dependable flush.
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState !== 'hidden') return;
+            try { if (typeof maybeSaveEditorDraft === 'function') maybeSaveEditorDraft(); } catch (e) { }
+        });
+    }
+
+    // Sync scrolling and update gutter for Python Editor
+    const pyEditor = $id('python-output');
+    if (pyEditor) {
+        const syncPythonState = () => {
+            updatePythonGutter();
+
+            exerciseState.isExecuted = false;
+            exerciseState.outputMatched = false;
+            updateExerciseStatus();
+        };
+
+        pyEditor.addEventListener('input', syncPythonState);
+        pyEditor.addEventListener('scroll', () => {
+            const gutter = $id('python-gutter');
+            const highlights = $id('python-highlights');
+            if (gutter) gutter.scrollTop = pyEditor.scrollTop;
+            if (highlights) {
+                highlights.scrollTop = pyEditor.scrollTop;
+                highlights.scrollLeft = pyEditor.scrollLeft;
+            }
+        });
+
+        updatePythonGutter();
+    }
+
+    // Setup real-time validation
+    setupRealtimeValidation();
+}
+
 async function init() {
     console.log('[App] init() called');
     try {
 
         // Bind the real login form once (Enter / GO / RETURN submit path).
         if (typeof setupLoginForm === 'function') setupLoginForm();
+
+        // Wire the editor input pipeline BEFORE the first await. Session
+        // restore and the IndexedDB warm-up take seconds on a cold
+        // Firestore-connected boot; typing during that window hit a dead
+        // editor with no gutter or line-count response (mobile audit finding
+        // #10). Everything the handlers touch is hoisted function
+        // declarations plus already-initialised module state, so binding
+        // here is safe and costs nothing.
+        bindEditorInputPipeline();
 
         // Restore the persisted session FIRST so a refresh never flashes
         // login and never behaves like a logout.
@@ -682,70 +776,6 @@ async function init() {
 
     updateClock();
     setInterval(updateClock, 60000);
-
-    // Update line count on editor input and sync gutter
-    const editor = $id('pseudocode-editor');
-    if (editor) {
-        const syncEditorState = () => {
-            if (currentErrorLineNumbers.length) {
-                currentErrorLineNumbers = [];
-                clearEditorErrors('pseudocode-editor');
-                setText('console-output', 'Source changed — translate again to refresh diagnostics.');
-            }
-            setText('line-count', editor.value.split('\n').length + ' lines');
-            updateGutter();
-
-            exerciseState.isTranslated = false;
-            exerciseState.isExecuted = false;
-            exerciseState.outputMatched = false;
-            updateExerciseStatus();
-        };
-
-        editor.addEventListener('input', syncEditorState);
-        editor.addEventListener('scroll', () => {
-            const gutter = $id('editor-gutter');
-            const highlights = $id('editor-highlights');
-            if (gutter) gutter.scrollTop = editor.scrollTop;
-            if (highlights) {
-                highlights.scrollTop = editor.scrollTop;
-                highlights.scrollLeft = editor.scrollLeft;
-            }
-        });
-
-        // Safety net: any page unload (refresh, tab close, PWA update) persists
-        // unsaved pseudocode to the draft slot so student work survives.
-        window.addEventListener('beforeunload', function () {
-            try { if (typeof maybeSaveEditorDraft === 'function') maybeSaveEditorDraft(); } catch (e) { }
-        });
-    }
-
-    // Sync scrolling and update gutter for Python Editor
-    const pyEditor = $id('python-output');
-    if (pyEditor) {
-        const syncPythonState = () => {
-            updatePythonGutter();
-
-            exerciseState.isExecuted = false;
-            exerciseState.outputMatched = false;
-            updateExerciseStatus();
-        };
-
-        pyEditor.addEventListener('input', syncPythonState);
-        pyEditor.addEventListener('scroll', () => {
-            const gutter = $id('python-gutter');
-            const highlights = $id('python-highlights');
-            if (gutter) gutter.scrollTop = pyEditor.scrollTop;
-            if (highlights) {
-                highlights.scrollTop = pyEditor.scrollTop;
-                highlights.scrollLeft = pyEditor.scrollLeft;
-            }
-        });
-
-        updatePythonGutter();
-    }
-
-    // Setup real-time validation
-    setupRealtimeValidation();
 
     // Close notification dropdown on outside click
     document.addEventListener('click', (e) => {
@@ -2114,6 +2144,152 @@ currentPage = pageId;
 }
 
 /* ============================================================
+   OVERLAY HISTORY — Android back / iOS swipe-back closes overlays
+   The app had no popstate handling anywhere, so the system back
+   gesture left the app instead of closing the open drawer, modal
+   or popup. This module owns a small stack of open overlays; each
+   open pushes one history entry, and each back gesture closes the
+   overlay that owned the entry being left. Manual closes unwind
+   their own history entry with history.back(), which the
+   popstate handler recognizes (the leaving owner is null) and
+   ignores, so a manual close never double-closes the next
+   overlay underneath.
+   ============================================================ */
+
+const OVERLAY_HISTORY_STATE_KEY = 'ppOverlay';
+
+/** Stable per-element key so id-less overlays still stack correctly. */
+const overlayHistoryKeys = new WeakMap();
+let overlayHistoryKeySeq = 0;
+
+/** Real close actions for overlays whose close does more than toggle the
+    `hidden` class (e.g. the mobile nav drawer also unwinds body/inert/aria). */
+const overlayHistoryCloseFns = new WeakMap();
+
+/** Register the real close action for an overlay. Unregistered overlays close
+    by adding the `hidden` class — the universal close signal the
+    MutationObserver below watches. */
+function overlayHistoryOnClose(el, close) {
+    if (!el || typeof close !== 'function') return;
+    overlayHistoryCloseFns.set(el, close);
+}
+
+/** Entries own one history entry each: { id, close } — top of stack = current. */
+let overlayHistoryStack = [];
+/** Overlay id owning the CURRENT history entry (null = our own entry or none). */
+let overlayHistoryCurrent = null;
+/** True while a popstate-initiated close is running, so the close callback
+    does not try to unwind history again. */
+let overlayHistoryClosingFromPop = false;
+
+function overlayHistoryKeyFor(el) {
+    if (el.id) return el.id;
+    if (!overlayHistoryKeys.has(el)) overlayHistoryKeys.set(el, 'overlay-' + (++overlayHistoryKeySeq));
+    return overlayHistoryKeys.get(el);
+}
+
+function overlayHistoryVisible(el) {
+    return el && !el.classList.contains('hidden') && el.getClientRects().length > 0;
+}
+
+/**
+ * Records an open overlay and claims one history entry for it.
+ * Safe to call repeatedly for the same overlay (idempotent) and
+ * safe in contexts where pushState throws (sandboxed frames).
+ */
+function overlayHistoryOpen(el, close) {
+    const id = overlayHistoryKeyFor(el);
+    if (overlayHistoryStack.some(e => e.id === id)) return;
+    overlayHistoryStack.push({ id, close, el });
+    try {
+        const state = {};
+        state[OVERLAY_HISTORY_STATE_KEY] = id;
+        history.pushState(state, '');
+        overlayHistoryCurrent = id;
+    } catch (e) {
+        // No history integration available; the stack still works for closeAll.
+    }
+}
+
+/**
+ * Records a manual close. If the closed overlay owned the current history
+ * entry, the entry is unwound with history.back(); the resulting popstate
+ * sees a null leaving-owner and does nothing.
+ */
+function overlayHistoryClosed(el) {
+    const id = overlayHistoryKeyFor(el);
+    const idx = overlayHistoryStack.map(e => e.id).lastIndexOf(id);
+    if (idx === -1) return;
+    overlayHistoryStack.splice(idx, 1);
+    if (overlayHistoryCurrent !== id) return;
+    overlayHistoryCurrent = null;
+    if (overlayHistoryClosingFromPop) return;
+    try { history.back(); } catch (e) { /* best effort */ }
+}
+
+function overlayHistoryInit() {
+    window.addEventListener('popstate', () => {
+        const state = history.state;
+        const arriving = state && state[OVERLAY_HISTORY_STATE_KEY] || null;
+        const leaving = overlayHistoryCurrent;
+        overlayHistoryCurrent = arriving;
+        if (!leaving || overlayHistoryClosingFromPop) return;
+        const idx = overlayHistoryStack.map(e => e.id).lastIndexOf(leaving);
+        if (idx === -1) return;
+        const entry = overlayHistoryStack.splice(idx, 1)[0];
+        // Only the leaving owner's own close runs here; nested overlays below
+        // keep their stack entries and close on later back gestures.
+        if (overlayHistoryStack.some(e => e.id === leaving)) return;
+        overlayHistoryClosingFromPop = true;
+        try { entry.close(); } catch (e) { /* close must never break history */ }
+        finally { overlayHistoryClosingFromPop = false; }
+    });
+
+    // Wire every modal/drawer overlay the same way the a11y layer watches
+    // them: static markup at boot plus any overlay added later.
+    const wired = new WeakSet();
+    const wire = (el) => {
+        if (wired.has(el)) return;
+        wired.add(el);
+        const fallbackClose = () => el.classList.add('hidden');
+        let wasVisible = overlayHistoryVisible(el);
+        const sync = () => {
+            const nowVisible = overlayHistoryVisible(el);
+            if (nowVisible === wasVisible) return;
+            wasVisible = nowVisible;
+            if (nowVisible) overlayHistoryOpen(el, overlayHistoryCloseFns.get(el) || fallbackClose);
+            else overlayHistoryClosed(el);
+        };
+        new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ['class'] });
+    };
+    // The selector also covers the mobile nav-drawer backdrop and the theme
+    // menu, whose registered close callbacks (see overlayHistoryOnClose)
+    // unwind body, inert and aria state together with visibility.
+    // #notif-dropdown is deliberately NOT wired: its outside-click close
+    // shares the same tap as whatever opens next (e.g. the theme menu), and
+    // a history unwind in that window would immediately close the overlay
+    // the user had just opened.
+    const OVERLAY_SELECTOR = '.modal-overlay, .drawer-overlay, #sidebar-overlay, #theme-menu';
+    document.querySelectorAll(OVERLAY_SELECTOR).forEach(wire);
+    new MutationObserver((muts) => {
+        muts.forEach((m) => {
+            m.addedNodes && m.addedNodes.forEach((node) => {
+                if (node.nodeType !== 1) return;
+                if (node.matches && node.matches(OVERLAY_SELECTOR)) wire(node);
+                else if (node.querySelectorAll) node.querySelectorAll(OVERLAY_SELECTOR).forEach(wire);
+            });
+        });
+    }).observe(document.body, { childList: true, subtree: true });
+}
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', overlayHistoryInit);
+    } else {
+        overlayHistoryInit();
+    }
+}
+/* ============================================================
    MOBILE NAVIGATION HANDLERS
    ============================================================ */
 
@@ -2141,6 +2317,13 @@ function setMobileSidebar(open) {
 }
 function toggleMobileSidebar() { setMobileSidebar(!$qs('.sidebar')?.classList.contains('open')); }
 function closeMobileSidebar() { setMobileSidebar(false); }
+
+// Android back / iOS swipe-back closes the nav drawer through the
+// overlay-history stack, using the real close action so body/inert/aria
+// state all unwind with it (overlay-history.js loads before this module).
+if (typeof overlayHistoryOnClose === 'function') {
+    overlayHistoryOnClose($id('sidebar-overlay'), closeMobileSidebar);
+}
 
 document.addEventListener('keydown', event => {
     const sidebar = $qs('.sidebar.open');
@@ -9731,6 +9914,22 @@ function maybeSaveEditorDraft() {
     }
 }
 
+/**
+ * Debounced draft autosave (mobile comfort Phase 1). Typing schedules a
+ * single save per quiet window so the localStorage draft stays current
+ * during a long editing session; the beforeunload / visibilitychange
+ * flushes keep the final value. A crash or forced PWA update can now lose
+ * at most the last debounce window instead of the whole session's work.
+ */
+let editorDraftSaveTimer = null;
+function scheduleEditorDraftSave(delay) {
+    if (editorDraftSaveTimer) clearTimeout(editorDraftSaveTimer);
+    editorDraftSaveTimer = setTimeout(() => {
+        editorDraftSaveTimer = null;
+        maybeSaveEditorDraft();
+    }, delay || 800);
+}
+
 function clearEditorDraft() {
     try { localStorage.removeItem(EDITOR_DRAFT_KEY); } catch (e) { }
 }
@@ -14903,7 +15102,9 @@ function themeModeIsDark(mode) {
 
 /** The browser/OS chrome colour for the resolved theme. */
 function themeColorFor(dark) {
-    return dark ? '#0f172a' : '#f8fafc';
+    // Matches --bg-secondary (the topbar/header colour) in each theme, so the
+    // browser/OS chrome never contradicts the app header (audit finding #9).
+    return dark ? '#0d0d14' : '#f1f5f9';
 }
 
 /** Updates the toggle button icon/labels and the menu checkmarks. */
@@ -14949,8 +15150,13 @@ function applyThemeMode(mode, options) {
     root.classList.add('theme-switching');
     root.setAttribute('data-theme', theme);
 
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', themeColorFor(dark));
+    // Keep the browser/OS chrome colour in step with the resolved theme. The
+    // head carries paired prefers-color-scheme metas for the pre-JS frame;
+    // once a theme is applied, every meta takes the resolved colour so the
+    // effective colour is right whichever media query matches.
+    const themeColor = themeColorFor(dark);
+    document.querySelectorAll('meta[name="theme-color"]').forEach(meta =>
+        meta.setAttribute('content', themeColor));
 
     updateThemeToggleUI(mode, theme);
 
@@ -15008,6 +15214,11 @@ function initTheme() {
     const button = $id('theme-toggle-btn');
     const menu = $id('theme-menu');
     if (!button || !menu) return;
+
+    // Android back / iOS swipe-back closes the theme menu via the
+    // overlay-history stack with its real close action, so aria-expanded
+    // and the check marks unwind together with visibility.
+    if (typeof overlayHistoryOnClose === 'function') overlayHistoryOnClose(menu, closeThemeMenu);
 
     button.addEventListener('click', () => {
         if (menu.classList.contains('hidden')) openThemeMenu();
