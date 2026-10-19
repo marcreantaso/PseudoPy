@@ -171,15 +171,21 @@ async function connect(wsUrl) {
 
 /** Fresh isolated tab with console/error capture and the domains QA needs. */
 async function newPage(browserWs, url) {
-    // Chrome requires PUT for /json/new; older builds only accept GET.
-    const endpoint = 'http://127.0.0.1:' + new URL(browserWs).port + '/json/new?' + encodeURIComponent(url);
-    const target = await (async () => {
-        let response = await fetch(endpoint, { method: 'PUT' });
-        if (!response.ok) response = await fetch(endpoint);
-        if (!response.ok) throw new Error('Could not open a tab: ' + response.status);
-        return response.json();
-    })();
-    const session = await connect(target.webSocketDebuggerUrl || 'ws://127.0.0.1:' + new URL(browserWs).port + '/devtools/page/' + targetId);
+    // Create the tab over the browser WebSocket (Target.createTarget) rather
+    // than the legacy HTTP /json/new endpoint. The HTTP handler on some
+    // builds (Chrome 155 observed) accepts /json/new but never answers it,
+    // and a single wedged request blocks every later connection to the
+    // DevTools server — including the WebSocket fallback. Target.createTarget
+    // is the same route Puppeteer/Playwright use and answers deterministically.
+    const port = new URL(browserWs).port;
+    const browser = await connect(browserWs);
+    let targetId;
+    try {
+        ({ targetId } = await browser.send('Target.createTarget', { url }));
+    } finally {
+        try { browser.socket.close(); } catch (e) { /* already closed */ }
+    }
+    const session = await connect('ws://127.0.0.1:' + port + '/devtools/page/' + targetId);
     const consoleErrors = [];
     await session.send('Page.enable');
     await session.send('Runtime.enable');
