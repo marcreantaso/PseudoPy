@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test": "node --test tests/*.test.js && node test_operator_translation.js",
+    "audit:mobile": "node scripts/mobile-audit.js",
     "build": "node scripts/build.js",
     "build:check": "node scripts/build.js --check",
     "sop2": "node src/research/sop2-comparison.js",
@@ -17,5 +18,8 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
   }
 }
