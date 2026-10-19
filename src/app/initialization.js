@@ -124,9 +124,9 @@ async function init() {
 
         console.log(`[App] Loaded users, max ${EX_PAGE_LIMIT} exercises, and activity records from IndexedDB.`);
 
-        // Initialize Theme from Storage
-        const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) || 'dark';
-        document.documentElement.setAttribute('data-theme', savedTheme);
+        // Initialize Theme from Storage: mode, meta colour, menu state and
+        // live System-mode tracking (the head bootstrap painted the theme).
+        if (typeof initTheme === 'function') initTheme();
 
         // Show the app version (login footer / settings About).
         renderAppVersion();

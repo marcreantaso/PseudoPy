@@ -61,17 +61,30 @@
 }
 </script>
 
-  <!-- Immediate Dark Mode Initializer -->
-  <script>
-    (function() {
-      const savedTheme = localStorage.getItem('pseudopy_theme') || 'dark';
-      document.documentElement.setAttribute('data-theme', savedTheme);
-    })();
-  </script>
-
   <!-- PWA Meta Tags -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0f172a">
+  <meta name="color-scheme" content="light dark">
+
+  <!-- THEME BOOTSTRAP.
+       Resolves the stored preference (light | dark | system) before the
+       stylesheet paints, so the first frame is already the right theme and
+       there is no light/dark flash. 'system' follows prefers-color-scheme,
+       now and at every later change (see src/app/appearance.js). -->
+  <script>
+    (function () {
+      var MODES = ['light', 'dark', 'system'];
+      var stored = null;
+      try { stored = localStorage.getItem('pseudopy_theme'); } catch (e) { /* private browsing */ }
+      var mode = MODES.indexOf(stored) !== -1 ? stored : 'dark';
+      var dark = mode === 'system'
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
+        : mode === 'dark';
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', dark ? '#0f172a' : '#f8fafc');
+    })();
+  </script>
   <meta name="mobile-web-app-capable" content="yes">
 
   <!-- iOS PWA Meta Tags -->
@@ -83,7 +96,7 @@
   <!-- Android Chrome -->
   <meta name="application-name" content="PseudoPy">
 
-  <link rel="stylesheet" href="style.css?v=ux-20261017-7">
+  <link rel="stylesheet" href="style.css?v=ux-20261019-11">
   <link rel="stylesheet" href="student-workspace.css?v=ux-20261006-5">
   <link rel="stylesheet" href="ui-icons.css?v=1">
 
@@ -485,10 +498,27 @@
           </div>
         </div>
 
-        <button class="btn btn-ghost btn-icon" id="theme-toggle-btn" onclick="toggleTheme()"
-          aria-label="Toggle Dark/Light Mode" title="Toggle Dark/Light Mode">
-          <i data-lucide="sun-moon" aria-hidden="true"></i>
-        </button>
+        <div class="theme-menu-wrap">
+          <button type="button" class="btn btn-ghost btn-icon" id="theme-toggle-btn"
+            aria-haspopup="menu" aria-expanded="false" aria-controls="theme-menu"
+            aria-label="Theme: choose appearance" title="Theme">
+            <i data-lucide="sun-moon" aria-hidden="true"></i>
+          </button>
+          <div class="theme-menu hidden" id="theme-menu" role="menu" aria-label="Theme">
+            <button type="button" role="menuitemradio" aria-checked="true" class="theme-menu-item" data-theme-mode="light">
+              <i data-lucide="sun" aria-hidden="true"></i><span class="theme-menu-label">Light</span>
+              <i data-lucide="check" class="theme-menu-check" aria-hidden="true"></i>
+            </button>
+            <button type="button" role="menuitemradio" aria-checked="false" class="theme-menu-item" data-theme-mode="dark">
+              <i data-lucide="moon" aria-hidden="true"></i><span class="theme-menu-label">Dark</span>
+              <i data-lucide="check" class="theme-menu-check" aria-hidden="true"></i>
+            </button>
+            <button type="button" role="menuitemradio" aria-checked="false" class="theme-menu-item" data-theme-mode="system">
+              <i data-lucide="sun-moon" aria-hidden="true"></i><span class="theme-menu-label">System</span>
+              <i data-lucide="check" class="theme-menu-check" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
         <span style="font-size:0.8rem;color:var(--text-muted);margin-left:0.5rem" id="topbar-time"></span>
       </div>
     </div>
@@ -2047,9 +2077,9 @@
             <div class="devtools-console-title">{{ui:Terminal}} Runtime Console</div>
             <span class="devtools-console-state" id="devtools-console-state" data-state="idle">Idle</span>
             <div class="devtools-console-actions">
-              <button class="btn btn-ghost btn-sm" id="devtools-console-stop" onclick="runtimeConsoleStop()" title="Stop the running program" aria-label="Stop the running program" disabled>{{ui:CircleX}} Stop</button>
-              <button class="btn btn-ghost btn-sm" id="devtools-console-copy" onclick="runtimeConsoleCopy()" title="Copy console output" aria-label="Copy console output" disabled>{{ui:ClipboardList}} Copy</button>
-              <button class="btn btn-ghost btn-sm" id="devtools-console-clear" onclick="runtimeConsoleClear()" title="Clear console output" aria-label="Clear console output">{{ui:Trash2}} Clear</button>
+              <button type="button" class="pp-btn pp-btn-ghost pp-btn-md" id="devtools-console-stop" onclick="runtimeConsoleStop()" title="Stop the running program" aria-label="Stop the running program" disabled>{{ui:CircleX}} Stop</button>
+              <button type="button" class="pp-btn pp-btn-ghost pp-btn-md" id="devtools-console-copy" onclick="runtimeConsoleCopy()" title="Copy console output" aria-label="Copy console output" disabled>{{ui:ClipboardList}} Copy</button>
+              <button type="button" class="pp-btn pp-btn-ghost pp-btn-md" id="devtools-console-clear" onclick="runtimeConsoleClear()" title="Clear console output" aria-label="Clear console output">{{ui:Trash2}} Clear</button>
             </div>
           </div>
           <div class="devtools-console-output" id="devtools-console-output" role="log" aria-live="polite" aria-label="Runtime console output"></div>
@@ -2337,57 +2367,85 @@ CALL f(1,2); f(1,2)</pre>
                     <dd>Seed (built-in), holdout (independently written) and injected (deliberately broken).
                       Results are never blended across groups.</dd></div>
                 </dl>
-                <button type="button" class="btn btn-ghost" id="sop2-info-close">Close</button>
+                <button type="button" class="pp-btn pp-btn-ghost pp-btn-md" id="sop2-info-close">Close</button>
               </div>
 
-              <div class="sop2-setup">
-                <div class="sop2-editors">
+              <section class="pp-card sop2-section" aria-labelledby="sop2-inputs-title">
+                <div class="pp-card-header">
+                  <h3 class="pp-card-title" id="sop2-inputs-title">Inputs</h3>
+                  <p class="pp-card-description">Identical pseudocode goes to every translator. The reference
+                    program only judges printed output &mdash; it is never shown to a translator.</p>
+                </div>
+                <div class="pp-card-content sop2-editors">
                   <div class="sop2-editor-card">
-                    <div class="sop2-editor-head">
-                      <label for="sop2-src">Pseudocode</label>
-                      <span class="sop2-hint">identical input for every translator</span>
-                    </div>
+                    <label class="pp-label" for="sop2-src">Pseudocode</label>
                     <textarea id="sop2-src" class="code-editor devtools-editor sop2-textarea"
                       spellcheck="false" aria-label="Pseudocode input"></textarea>
                   </div>
                   <div class="sop2-editor-card">
-                    <div class="sop2-editor-head">
-                      <label for="sop2-ref">Reference Python</label>
-                      <span class="sop2-hint">judges output only &mdash; never shown to a translator</span>
-                    </div>
+                    <label class="pp-label" for="sop2-ref">Reference Python</label>
                     <textarea id="sop2-ref" class="code-editor devtools-editor sop2-textarea"
                       spellcheck="false" aria-label="Reference Python"></textarea>
                   </div>
                 </div>
+              </section>
 
-                <div class="sop2-loadbar">
-                  <label class="sop2-field" for="sop2-load-example">
-                    <span>Load example</span>
-                    <select id="sop2-load-example"><option value="">Choose a case&hellip;</option></select>
-                  </label>
-                  <label class="sop2-field" for="sop2-tier">
-                    <span>Baseline to compare</span>
-                    <select id="sop2-tier">
-                      <option value="baselineB2">B2 &middot; reasonable rule-based</option>
-                      <option value="baseline">B1 &middot; naive</option>
-                    </select>
-                  </label>
-                  <label class="sop2-field sop2-field-check" for="sop2-scope-injected">
-                    <input type="checkbox" id="sop2-scope-injected">
-                    <span>Include error-injected cases in benchmark</span>
-                  </label>
+              <section class="pp-card sop2-section" aria-labelledby="sop2-settings-title">
+                <div class="pp-card-header">
+                  <h3 class="pp-card-title" id="sop2-settings-title">Run settings</h3>
                 </div>
-              </div>
+                <div class="pp-card-content sop2-loadbar">
+                  <div class="sop2-field">
+                    <label class="pp-label" for="sop2-load-example">Load example</label>
+                    <span class="pp-select-wrap">
+                      <select id="sop2-load-example" class="pp-select">
+                        <option value="">Choose a case&hellip;</option>
+                      </select>
+                    </span>
+                    <span class="pp-helper">Seed, holdout and injected (deliberately broken) cases</span>
+                  </div>
+                  <div class="sop2-field">
+                    <label class="pp-label" for="sop2-tier">Baseline to compare</label>
+                    <span class="pp-select-wrap">
+                      <select id="sop2-tier" class="pp-select">
+                        <option value="baselineB2">B2 &middot; reasonable rule-based</option>
+                        <option value="baseline">B1 &middot; naive</option>
+                      </select>
+                    </span>
+                    <span class="pp-helper">B1 substitutes keywords; B2 follows simple rules. Neither validates.</span>
+                  </div>
+                  <div class="sop2-field sop2-field-check">
+                    <input type="checkbox" id="sop2-scope-injected" class="pp-checkbox">
+                    <label for="sop2-scope-injected">Include error-injected cases in benchmark</label>
+                    <span class="pp-helper">Adds broken variants of the seed and holdout rows.</span>
+                  </div>
+                </div>
+              </section>
 
               <div class="sop2-actions" id="sop2-actions" role="toolbar" aria-label="Comparison actions">
-                <button class="btn btn-primary" id="sop2-compare">Compare</button>
-                <button class="btn btn-secondary" id="sop2-run">Run both</button>
-                <button class="btn btn-secondary" id="sop2-bench">Benchmark</button>
-                <button class="btn btn-ghost" id="sop2-bench-cancel" hidden>Cancel</button>
+                <button type="button" class="pp-btn pp-btn-default pp-btn-md" id="sop2-compare">Compare</button>
+                <button type="button" class="pp-btn pp-btn-secondary pp-btn-md" id="sop2-run">Run both</button>
+                <button type="button" class="pp-btn pp-btn-outline pp-btn-md" id="sop2-bench">Benchmark</button>
+                <button type="button" class="pp-btn pp-btn-destructive-outline pp-btn-md" id="sop2-cancel" hidden>Cancel</button>
                 <span class="sop2-actions-spacer" aria-hidden="true"></span>
-                <button class="btn btn-ghost" id="sop2-export-json" disabled>Export JSON</button>
-                <button class="btn btn-ghost" id="sop2-export-csv" disabled>Export CSV</button>
-                <button class="btn btn-ghost" id="sop2-export-md" disabled>Export report</button>
+                <div class="sop2-export-wrap">
+                  <button type="button" class="pp-btn pp-btn-outline pp-btn-md" id="sop2-export-btn"
+                    aria-haspopup="menu" aria-expanded="false" aria-controls="sop2-export-menu" disabled>
+                    <i data-lucide="download" aria-hidden="true"></i>Export
+                    <i data-lucide="chevron-down" aria-hidden="true"></i>
+                  </button>
+                  <div class="pp-menu sop2-export-menu hidden" id="sop2-export-menu" role="menu" aria-label="Export results">
+                    <button type="button" class="pp-menu-item" role="menuitem" id="sop2-export-json" disabled>
+                      <i data-lucide="braces" aria-hidden="true"></i>JSON
+                    </button>
+                    <button type="button" class="pp-menu-item" role="menuitem" id="sop2-export-csv" disabled>
+                      <i data-lucide="table" aria-hidden="true"></i>CSV
+                    </button>
+                    <button type="button" class="pp-menu-item" role="menuitem" id="sop2-export-report" disabled>
+                      <i data-lucide="file-text" aria-hidden="true"></i>Report (Markdown)
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div class="sop2-progress hidden" id="sop2-progress" role="progressbar"
@@ -3407,7 +3465,7 @@ CALL f(1,2); f(1,2)</pre>
   <script src="mapper.js"></script>
   <script src="compiler.js?v=20260903"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=ux-20261017-6"></script>
+  <script src="app.js?v=ux-20261018-7"></script>
   <script>
     // Lazy-init lucide: every createIcons call site is guarded, so the icon
     // library is fetched on load (not at parse) and icons render once it lands.

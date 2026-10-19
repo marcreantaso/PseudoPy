@@ -76,7 +76,8 @@ function loadUi() {
 
 test('research-ui wires every SOP2 button and avoids a duplicate metrics implementation', () => {
   const src = read('src/devtools/research-ui.js');
-  for (const id of ['sop2-compare', 'sop2-run', 'sop2-bench', 'sop2-export-json', 'sop2-export-csv', 'sop2-export-md']) {
+  for (const id of ['sop2-compare', 'sop2-run', 'sop2-bench', 'sop2-cancel',
+    'sop2-export-json', 'sop2-export-csv', 'sop2-export-report']) {
     assert.ok(src.includes("bind('" + id + "'"), id + ' has no click handler');
   }
   assert.doesNotMatch(src, /require\(/, 'browser UI must not call require');

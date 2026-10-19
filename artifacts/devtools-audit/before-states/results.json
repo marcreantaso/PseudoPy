@@ -1,0 +1,187 @@
+{
+  "phase": "before",
+  "shots": [
+    {
+      "width": 1440,
+      "theme": "light",
+      "state": "idle",
+      "file": "sop2-idle-1440-light.png",
+      "note": null,
+      "verify": {
+        "tabBarVisible": true,
+        "actionsVisible": true,
+        "targetInView": true,
+        "resultCards": 0,
+        "resultText": "Load an example or paste pseudocode, then press Compare. Benchmark run",
+        "progressShown": false
+      }
+    },
+    {
+      "width": 1440,
+      "theme": "light",
+      "state": "results",
+      "file": "sop2-results-1440-light.png",
+      "note": null,
+      "verify": {
+        "tabBarVisible": true,
+        "actionsVisible": true,
+        "targetInView": true,
+        "resultCards": 2,
+        "resultText": "Baseline B2 (rule-based) Unverified Outcome Could not be verified in t",
+        "progressShown": false
+      }
+    },
+    {
+      "width": 1440,
+      "theme": "light",
+      "state": "running",
+      "file": "sop2-running-1440-light.png",
+      "note": null,
+      "verify": {
+        "tabBarVisible": true,
+        "actionsVisible": true,
+        "targetInView": true,
+        "resultCards": 2,
+        "resultText": "Baseline B2 (rule-based) Unverified Outcome Could not be verified in t",
+        "progressShown": true
+      }
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "state": "idle",
+      "file": "sop2-idle-1440-dark.png",
+      "note": null,
+      "verify": {
+        "tabBarVisible": true,
+        "actionsVisible": true,
+        "targetInView": true,
+        "resultCards": 0,
+        "resultText": "Load an example or paste pseudocode, then press Compare. Benchmark run",
+        "progressShown": false
+      }
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "state": "results",
+      "file": "sop2-results-1440-dark.png",
+      "note": null,
+      "verify": {
+        "tabBarVisible": true,
+        "actionsVisible": true,
+        "targetInView": true,
+        "resultCards": 2,
+        "resultText": "Baseline B2 (rule-based) Unverified Outcome Could not be verified in t",
+        "progressShown": false
+      }
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "state": "running",
+      "file": "sop2-running-1440-dark.png",
+      "note": null,
+      "verify": {
+        "tabBarVisible": true,
+        "actionsVisible": true,
+        "targetInView": true,
+        "resultCards": 2,
+        "resultText": "Baseline B2 (rule-based) Unverified Outcome Could not be verified in t",
+        "progressShown": true
+      }
+    },
+    {
+      "width": 375,
+      "theme": "light",
+      "state": "idle",
+      "file": "sop2-idle-375-light.png",
+      "note": null,
+      "verify": {
+        "tabBarVisible": true,
+        "actionsVisible": true,
+        "targetInView": true,
+        "resultCards": 0,
+        "resultText": "Load an example or paste pseudocode, then press Compare. Benchmark run",
+        "progressShown": false
+      }
+    },
+    {
+      "width": 375,
+      "theme": "light",
+      "state": "results",
+      "file": "sop2-results-375-light.png",
+      "note": null,
+      "verify": {
+        "tabBarVisible": true,
+        "actionsVisible": true,
+        "targetInView": true,
+        "resultCards": 2,
+        "resultText": "Baseline B2 (rule-based) Unverified Outcome Could not be verified in t",
+        "progressShown": false
+      }
+    },
+    {
+      "width": 375,
+      "theme": "light",
+      "state": "running",
+      "file": "sop2-running-375-light.png",
+      "note": null,
+      "verify": {
+        "tabBarVisible": true,
+        "actionsVisible": true,
+        "targetInView": true,
+        "resultCards": 2,
+        "resultText": "Baseline B2 (rule-based) Unverified Outcome Could not be verified in t",
+        "progressShown": true
+      }
+    },
+    {
+      "width": 375,
+      "theme": "dark",
+      "state": "idle",
+      "file": "sop2-idle-375-dark.png",
+      "note": null,
+      "verify": {
+        "tabBarVisible": true,
+        "actionsVisible": true,
+        "targetInView": true,
+        "resultCards": 0,
+        "resultText": "Load an example or paste pseudocode, then press Compare. Benchmark run",
+        "progressShown": false
+      }
+    },
+    {
+      "width": 375,
+      "theme": "dark",
+      "state": "results",
+      "file": "sop2-results-375-dark.png",
+      "note": null,
+      "verify": {
+        "tabBarVisible": true,
+        "actionsVisible": true,
+        "targetInView": true,
+        "resultCards": 2,
+        "resultText": "Baseline B2 (rule-based) Unverified Outcome Could not be verified in t",
+        "progressShown": false
+      }
+    },
+    {
+      "width": 375,
+      "theme": "dark",
+      "state": "running",
+      "file": "sop2-running-375-dark.png",
+      "note": null,
+      "verify": {
+        "tabBarVisible": true,
+        "actionsVisible": true,
+        "targetInView": true,
+        "resultCards": 2,
+        "resultText": "Baseline B2 (rule-based) Unverified Outcome Could not be verified in t",
+        "progressShown": true
+      }
+    }
+  ],
+  "notes": [],
+  "consoleErrors": []
+}

@@ -1,0 +1,77 @@
+{
+  "measurements": [
+    {
+      "width": 1440,
+      "theme": "light",
+      "tabOverflowX": 580,
+      "tabScrollbarHeight": 1,
+      "colorScheme": "normal",
+      "activePanel": "devtools-panel-impl",
+      "sop2InlineStyles": 0
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "tabOverflowX": 580,
+      "tabScrollbarHeight": 1,
+      "colorScheme": "normal",
+      "activePanel": "devtools-panel-impl",
+      "sop2InlineStyles": 0
+    },
+    {
+      "width": 1024,
+      "theme": "light",
+      "tabOverflowX": 925,
+      "tabScrollbarHeight": 1,
+      "colorScheme": "normal",
+      "activePanel": "devtools-panel-impl",
+      "sop2InlineStyles": 0
+    },
+    {
+      "width": 1024,
+      "theme": "dark",
+      "tabOverflowX": 925,
+      "tabScrollbarHeight": 1,
+      "colorScheme": "normal",
+      "activePanel": "devtools-panel-impl",
+      "sop2InlineStyles": 0
+    },
+    {
+      "width": 768,
+      "theme": "light",
+      "tabOverflowX": 692,
+      "tabScrollbarHeight": 1,
+      "colorScheme": "normal",
+      "activePanel": "devtools-panel-impl",
+      "sop2InlineStyles": 0
+    },
+    {
+      "width": 768,
+      "theme": "dark",
+      "tabOverflowX": 692,
+      "tabScrollbarHeight": 1,
+      "colorScheme": "normal",
+      "activePanel": "devtools-panel-impl",
+      "sop2InlineStyles": 0
+    },
+    {
+      "width": 375,
+      "theme": "light",
+      "tabOverflowX": 0,
+      "tabScrollbarHeight": 1,
+      "colorScheme": "normal",
+      "activePanel": "devtools-panel-impl",
+      "sop2InlineStyles": 0
+    },
+    {
+      "width": 375,
+      "theme": "dark",
+      "tabOverflowX": 0,
+      "tabScrollbarHeight": 1,
+      "colorScheme": "normal",
+      "activePanel": "devtools-panel-impl",
+      "sop2InlineStyles": 0
+    }
+  ],
+  "consoleErrors": []
+}

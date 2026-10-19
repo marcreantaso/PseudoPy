@@ -211,3 +211,66 @@ test('stat labels are weight-600 for legibility', () => {
     assert.ok(block, '.stat-card .stat-label rule must exist');
     assert.ok(block[0].includes('font-weight: 600;'), '.stat-card .stat-label must be weight-600');
 });
+
+// ── SOP2 UI refresh pairs (shadcn aliases + devtools chrome) ───
+// Alias tokens resolve through var() chains; the dark theme resolves
+// against the real cascade (light defaults overridden by dark blocks).
+function resolveVar(map, key, depth) {
+    depth = depth || 0;
+    if (depth > 8) return null;
+    const raw = map[key];
+    if (!raw) return null;
+    const m = raw.match(/^var\(\s*(--[a-zA-Z0-9-]+)\s*(?:,\s*([^)]+))?\)\s*$/);
+    if (m) return resolveVar(map, m[1], depth + 1) || (m[2] ? m[2].trim() : null);
+    return raw;
+}
+
+const DARK_CASCADE = Object.assign({}, L, D);
+
+const REFRESH_PAIRS = [
+    // [theme, foreground token, background token, minimum, label]
+    ['light', '--dt-text-subtle', '--dt-surface', 4.5, 'SOP2 helper text on the devtools surface'],
+    ['dark', '--dt-text-subtle', '--dt-surface', 4.5, 'SOP2 helper text on the devtools surface'],
+    ['light', '--popover-foreground', '--popover', 4.5, 'menu label on the popover'],
+    ['dark', '--popover-foreground', '--popover', 4.5, 'menu label on the popover'],
+    ['light', '--muted-foreground', '--card', 4.5, 'card description / ghost label on card'],
+    ['dark', '--muted-foreground', '--card', 4.5, 'card description / ghost label on card'],
+    ['light', '--text-primary', '--bg-input', 4.5, 'editor / input text'],
+    ['dark', '--text-primary', '--bg-input', 4.5, 'editor / input text'],
+    ['light', '--primary-foreground', '--primary-tok', 4.5, 'default (Compare) button label'],
+    ['dark', '--primary-foreground', '--primary-tok', 4.5, 'default (Compare) button label'],
+    ['light', '--primary-foreground', '--destructive-tok', 4.5, 'destructive button label'],
+    ['dark', '--primary-foreground', '--destructive-tok', 4.5, 'destructive button label'],
+    ['light', '--primary-foreground', '--primary', 4.5, 'label on the primary fill'],
+    ['dark', '--primary-foreground', '--primary', 4.5, 'label on the primary fill'],
+    ['light', '--border-input', '--bg-input', 3.0, 'control border against the input fill'],
+    ['dark', '--border-input', '--bg-input', 3.0, 'control border against the input fill'],
+    ['light', '--icon-muted', '--bg-input', 3.0, 'select chevron against the input fill'],
+    ['dark', '--icon-muted', '--bg-input', 3.0, 'select chevron against the input fill'],
+];
+
+test('SOP2 refresh colour pairs meet WCAG 2.2 AA in both themes', () => {
+    for (const [theme, fgKey, bgKey, min, label] of REFRESH_PAIRS) {
+        const vars = theme === 'dark' ? DARK_CASCADE : L;
+        const fgRaw = resolveVar(vars, fgKey);
+        const bgRaw = resolveVar(vars, bgKey);
+        assert.ok(fgRaw && hexToRgb(fgRaw),
+            fgKey + ' (' + theme + ') does not resolve to a colour: ' + fgRaw);
+        assert.ok(bgRaw && hexToRgb(bgRaw),
+            bgKey + ' (' + theme + ') does not resolve to a colour: ' + bgRaw);
+        const r = ratio(fgRaw, bgRaw);
+        assert.ok(r >= min - 0.005,
+            label + ': ' + fgKey + ' on ' + bgKey + ' is ' + r.toFixed(2) +
+            ':1 (needs ' + min + ':1 in ' + theme + ')');
+    }
+});
+
+test('shadcn alias tokens resolve in both themes', () => {
+    for (const key of ['--background', '--foreground', '--ring', '--radius',
+        '--accent-tok', '--primary-tok', '--destructive-tok', '--ring-tok',
+        '--status-warning', '--status-danger', '--status-danger-soft',
+        '--dt-syntax-keyword-bg']) {
+        assert.ok(resolveVar(L, key), key + ' is missing from the light cascade');
+        assert.ok(resolveVar(DARK_CASCADE, key), key + ' is missing from the dark cascade');
+    }
+});

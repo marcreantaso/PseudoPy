@@ -8,6 +8,8 @@
 /* ── CSS Variables ── */
 :root {
   /* Light Theme (Default) */
+  /* Native controls, scrollbars and form widgets follow the active theme. */
+  color-scheme: light;
   --bg-primary: #f8fafc;
   --bg-secondary: #f1f5f9;
   --bg-card: #ffffff;
@@ -49,7 +51,7 @@
      mirror these at the theme's brightness. */
   --border-strong: #cbd5e1;
   --border-divider: #cbd5e1;
-  --border-input: #94a3b8;
+  --border-input: #64748b;
   --bg-input-soft: #f8fafc;
   --focus-ring: rgba(59, 130, 246, 0.35);
   --icon-muted: #475569;
@@ -71,6 +73,7 @@
 }
 
 [data-theme='dark'] {
+  color-scheme: dark;
   --bg-primary: #06060b;
   --bg-secondary: #0d0d14;
   --bg-card: #111119;
@@ -109,7 +112,7 @@
 
   --border-strong: #33334a;
   --border-divider: #232334;
-  --border-input: #3f3f56;
+  --border-input: #7c7c90;
   --bg-input-soft: #0e0e16;
   --focus-ring: rgba(59, 130, 246, 0.45);
   --icon-muted: #8b8ba0;
@@ -129,6 +132,18 @@
   --radius-shadcn: 0.625rem;
   --radius-shadcn-pill: 9999px;
   --radius-shadcn-btn: 0.375rem;
+
+  /* Canonical shadcn names aliased onto the existing palette — no new hex.
+     Where shadcn's name collides with an established app token the app name
+     wins and the shadcn role keeps its existing suffixed token:
+       accent     -> --accent-tok   (--accent is the brand blue)
+       primary    -> --primary      (same role)
+       destructive-> --destructive-tok
+       border/input/chart-1..5 are already canonical here. */
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  --radius: var(--radius-shadcn);
+  --ring: var(--focus-ring);
 
   --card: #ffffff;
   --card-foreground: #0f172a;
@@ -166,6 +181,12 @@
 }
 
 [data-theme='dark'] {
+  /* Canonical shadcn aliases (dark). */
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  --radius: var(--radius-shadcn);
+  --ring: var(--focus-ring);
+
   --card: #111119;
   --card-foreground: #f0f0f5;
   --input: #26263a;
@@ -176,7 +197,9 @@
   --popover: #1a1a25;
   --popover-foreground: #f0f0f5;
   --primary-tok: #3b82f6;
-  --primary-foreground: #ffffff;
+  /* Near-black label on the bright dark-theme fills: white only reaches
+     3.7:1 on #3b82f6/#ef4444, the page ink reaches 6.3:1 (WCAG AA). */
+  --primary-foreground: var(--bg-primary);
   --secondary: #1a1a25;
   --secondary-foreground: #f0f0f5;
   --destructive-tok: #ef4444;
@@ -190,6 +213,530 @@
   --chart-3: #fbbf24;
   --chart-4: #f87171;
   --chart-5: #a78bfa;
+}
+
+/* ============================================================
+   THEME SWITCHER MENU (top bar)
+   Three-mode appearance control: Light / Dark / System.
+   ============================================================ */
+.theme-menu-wrap { position: relative; }
+
+.theme-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 10.5rem;
+  padding: 0.25rem;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-shadcn-btn);
+  box-shadow: var(--shadow-md);
+}
+
+.theme-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 0;
+  border-radius: var(--radius-shadcn-btn);
+  background: transparent;
+  color: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.theme-menu-item:hover,
+.theme-menu-item:focus-visible {
+  background: var(--accent-tok);
+  color: var(--accent-foreground);
+}
+
+.theme-menu-label { flex: 1 1 auto; }
+
+.theme-menu-check { visibility: hidden; }
+.theme-menu-item[aria-checked='true'] .theme-menu-check { visibility: visible; }
+
+/* While the theme flips, nothing animates the whole page. */
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* ============================================================
+   SHADCN-STYLE COMPONENT PRIMITIVES (.pp-*)
+   ------------------------------------------------------------
+   Vanilla-CSS ports of the shadcn/ui look and ARIA behaviour:
+   flat surfaces, 1px borders, token-driven colour, visible
+   2px focus rings. Every colour is a var() alias of the app
+   palette — no hex in component rules — so both themes follow
+   automatically. The legacy .btn/.form-input families remain
+   for the rest of the app; the devtools surfaces adopt .pp-*.
+   ============================================================ */
+
+/* ── Card ── */
+.pp-card {
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.pp-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1rem 1.25rem 0;
+}
+
+.pp-card-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.pp-card-description {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted-foreground);
+}
+
+.pp-card-content { padding: 1rem 1.25rem; }
+
+.pp-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1.25rem 1rem;
+}
+
+/* ── Button ── */
+.pp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-shadcn-btn);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+  transition: background-color var(--duration) var(--ease),
+              color var(--duration) var(--ease),
+              border-color var(--duration) var(--ease),
+              opacity var(--duration) var(--ease);
+}
+
+.pp-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.pp-btn:active:not(:disabled) { opacity: 0.85; }
+
+.pp-btn:disabled,
+.pp-btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Author display beats the UA [hidden] rule, so opt hidden back in — the
+   Cancel button and the progress bar rely on it. */
+.pp-btn[hidden] { display: none; }
+
+/* Busy state: a spinner beside the label; reduced motion gets a static dot. */
+.pp-btn[aria-busy='true'] { cursor: progress; }
+.pp-btn[aria-busy='true']::after {
+  content: '';
+  width: 0.9em;
+  height: 0.9em;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: pp-spin 0.7s linear infinite;
+}
+
+@keyframes pp-spin { to { transform: rotate(360deg); } }
+
+.pp-btn-sm { min-height: 2rem; padding: 0 0.65rem; font-size: 0.75rem; }
+.pp-btn-md { min-height: 2.25rem; padding: 0 0.95rem; }
+.pp-btn-lg { min-height: 2.75rem; padding: 0 1.3rem; font-size: 0.875rem; }
+.pp-btn-icon { min-height: 2.25rem; min-width: 2.25rem; padding: 0; }
+
+.pp-btn-default { background: var(--primary-tok); color: var(--primary-foreground); }
+/* Mix toward the foreground so light darkens and dark lightens — no hex. */
+.pp-btn-default:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary-tok) 85%, var(--foreground));
+}
+
+.pp-btn-secondary { background: var(--secondary); color: var(--secondary-foreground); border-color: var(--border); }
+.pp-btn-secondary:hover:not(:disabled) { background: var(--accent-tok); }
+
+.pp-btn-outline { background: transparent; border-color: var(--border-input); color: var(--foreground); }
+.pp-btn-outline:hover:not(:disabled) { background: var(--accent-tok); }
+
+.pp-btn-ghost { background: transparent; color: var(--muted-foreground); }
+.pp-btn-ghost:hover:not(:disabled) { background: var(--accent-tok); color: var(--accent-foreground); }
+
+.pp-btn-destructive { background: var(--destructive-tok); color: var(--primary-foreground); }
+.pp-btn-destructive:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--destructive-tok) 85%, var(--foreground));
+}
+
+.pp-btn-destructive-outline { background: transparent; border-color: var(--destructive-tok); color: var(--destructive-tok); }
+.pp-btn-destructive-outline:hover:not(:disabled) { background: var(--destructive-tok); color: var(--primary-foreground); }
+
+/* ── Label / helper text ── */
+.pp-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pp-helper {
+  font-size: 0.74rem;
+  color: var(--muted-foreground);
+}
+
+/* ── Input / Textarea ── */
+.pp-input,
+.pp-textarea {
+  width: 100%;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-shadcn-btn);
+  padding: 0.5rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
+}
+
+.pp-input::placeholder,
+.pp-textarea::placeholder { color: var(--text-muted); }
+
+.pp-input:focus-visible,
+.pp-textarea:focus-visible {
+  border-color: var(--ring);
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.pp-textarea { resize: vertical; }
+
+/* ── Select ──
+   The native <select> is kept for accessibility and its themed popup
+   (color-scheme); the chevron is a masked token-coloured glyph so it
+   follows the theme without a hard-coded stroke colour. */
+.pp-select-wrap { position: relative; display: block; }
+
+.pp-select-wrap::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0.65rem;
+  width: 1rem;
+  height: 1rem;
+  transform: translateY(-50%);
+  background: var(--icon-muted);
+  pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.pp-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: 2.25rem;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-shadcn-btn);
+  padding: 0.45rem 2rem 0.45rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
+}
+
+.pp-select:focus-visible {
+  border-color: var(--ring);
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+/* ── Checkbox ── */
+.pp-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  display: inline-grid;
+  place-content: center;
+  border: 1px solid var(--border-input);
+  border-radius: 0.25rem;
+  background: var(--bg-input);
+  cursor: pointer;
+  transition: background-color var(--duration) var(--ease), border-color var(--duration) var(--ease);
+}
+
+.pp-checkbox::before {
+  content: '';
+  width: 0.65rem;
+  height: 0.65rem;
+  transform: scale(0);
+  transition: transform var(--duration) var(--ease);
+  background: var(--primary-foreground);
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+.pp-checkbox:checked {
+  background: var(--primary-tok);
+  border-color: var(--primary-tok);
+}
+
+.pp-checkbox:checked::before { transform: scale(1); }
+
+.pp-checkbox:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ── Progress ── */
+.pp-progress { display: flex; flex-direction: column; gap: 0.35rem; }
+
+.pp-progress-track {
+  height: 0.5rem;
+  border-radius: var(--radius-shadcn-pill);
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.pp-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--primary-tok);
+  transition: width 0.15s linear;
+}
+
+.pp-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+/* ── Badge ── */
+.pp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-shadcn-pill);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pp-badge-success { background: var(--status-success-bg); color: var(--status-success-fg); border-color: var(--status-success-border); }
+.pp-badge-warning { background: var(--status-warning-bg); color: var(--status-warning-fg); border-color: var(--status-warning-border); }
+.pp-badge-danger { background: var(--status-danger-bg); color: var(--status-danger-fg); border-color: var(--status-danger-border); }
+.pp-badge-neutral { background: var(--status-neutral-bg); color: var(--status-neutral-fg); border-color: var(--status-neutral-border); }
+.pp-badge-info { background: var(--status-info-bg); color: var(--status-info-fg); border-color: var(--status-info-border); }
+
+/* ── Table ── */
+.pp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.pp-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pp-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-divider);
+}
+
+.pp-table tbody tr:hover { background: var(--bg-card-hover); }
+
+/* ── Alert ── */
+.pp-alert {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  font-size: 0.8rem;
+}
+
+.pp-alert-title { font-weight: 600; }
+
+/* ── Separator ── */
+.pp-separator {
+  height: 1px;
+  border: 0;
+  margin: 0.75rem 0;
+  background: var(--border);
+}
+
+/* ── Skeleton (the app-wide .skeleton already implements the shimmer;
+      this alias keeps the .pp-* vocabulary complete). ── */
+.pp-skeleton { background: var(--muted); }
+
+/* ── Menu (shared with the theme switcher above) ── */
+.pp-menu {
+  position: absolute;
+  z-index: 60;
+  min-width: 10.5rem;
+  padding: 0.25rem;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-shadcn-btn);
+  box-shadow: var(--shadow-md);
+}
+
+.pp-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 0;
+  border-radius: var(--radius-shadcn-btn);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pp-menu-item:hover,
+.pp-menu-item:focus-visible {
+  background: var(--accent-tok);
+  color: var(--accent-foreground);
+  outline: none;
+}
+
+.pp-menu-item:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+
+.pp-menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Tooltip (CSS-only, attribute-driven) ── */
+.pp-tooltip-host { position: relative; }
+
+.pp-tooltip-host::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-shadcn-btn);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration) var(--ease);
+}
+
+.pp-tooltip-host:hover::after,
+.pp-tooltip-host:focus-visible::after { opacity: 1; }
+
+/* ── Empty state ── */
+.pp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--muted-foreground);
+}
+
+.pp-empty-icon { color: var(--icon-muted); }
+
+.pp-empty-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pp-empty-desc {
+  margin: 0;
+  max-width: 42ch;
+  font-size: 0.8rem;
+}
+
+/* ── Reduced motion: no component animates ── */
+@media (prefers-reduced-motion: reduce) {
+  .pp-btn,
+  .pp-checkbox,
+  .pp-checkbox::before,
+  .pp-input,
+  .pp-textarea,
+  .pp-select,
+  .pp-progress-fill,
+  .pp-tooltip-host::after {
+    transition: none !important;
+  }
+
+  .pp-btn[aria-busy='true']::after {
+    animation: none;
+    border-style: dotted;
+    border-top-color: currentColor;
+  }
+}
+
+/* ── Touch devices: every action target reaches 44px ── */
+@media (hover: none) and (pointer: coarse) {
+  .pp-btn-md,
+  .pp-btn-icon { min-height: 44px; min-width: 44px; }
+  .pp-btn-sm { min-height: 40px; }
+  .pp-select { min-height: 44px; }
+  .pp-checkbox { width: 1.375rem; height: 1.375rem; }
+  .pp-menu-item { padding: 0.7rem 0.75rem; }
+  .devtools-tab { min-height: 44px; }
+  .sop2-info-btn { min-height: 44px; }
 }
 
 /* ============================================================
@@ -282,6 +829,11 @@
   --status-violet-bg: #f5f3ff;
   --status-violet-border: #c4b5fd;
 
+  /* Bare status names (alias the signal colours; used by the health rows). */
+  --status-warning: var(--warning-tok);
+  --status-danger: var(--danger);
+  --status-danger-soft: var(--error-glow);
+
   /* Monochrome avatar surfaces (light): white circle, dark icon. */
   --avatar-bg: #ffffff;
   --avatar-fg: #111111;
@@ -289,6 +841,7 @@
 
   /* DevTools syntax colors (light). */
   --dt-syntax-keyword: #7c3aed;
+  --dt-syntax-keyword-bg: color-mix(in srgb, var(--dt-syntax-keyword) 12%, transparent);
   --dt-syntax-identifier: #0e7490;
   --dt-syntax-number: #b45309;
   --dt-syntax-string: #047857;
@@ -7183,28 +7736,34 @@ tr.skeleton-tr td {
   margin-bottom: 1rem;
 }
 
+/* Tabs (shadcn TabsList): muted pill track, active trigger on the card
+   surface. Overflow scrolls on a themed thin scrollbar — the UA strip is
+   gone (color-scheme + explicit scrollbar-color). */
 .devtools-tab-bar {
   display: flex;
   flex-wrap: nowrap;
-  gap: 0;
-  border-bottom: 1px solid var(--border);
-  padding: 0;
+  gap: 2px;
+  padding: 4px;
+  background: var(--muted);
+  border-radius: var(--radius-shadcn-btn);
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
+  scrollbar-color: var(--border-input) transparent;
 }
 
 .devtools-tab {
-  padding: 0.6rem 0.95rem;
+  min-height: 2.25rem;
+  padding: 0.55rem 0.9rem;
   font-size: 0.78rem;
   font-weight: 600;
   font-family: inherit;
   color: var(--dt-text-subtle);
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-shadcn-btn);
   cursor: pointer;
-  transition: color 0.2s, background 0.2s, border-color 0.2s;
+  transition: color 0.2s, background 0.2s, box-shadow 0.2s;
   white-space: nowrap;
 }
 
@@ -7219,9 +7778,9 @@ tr.skeleton-tr td {
 }
 
 .devtools-tab.active {
-  color: var(--dt-accent);
-  border-bottom-color: var(--dt-accent);
-  background: var(--dt-active-glare);
+  color: var(--card-foreground);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
 }
 
 .devtools-tab-panel {
@@ -7906,42 +8465,60 @@ tr.skeleton-tr td {
   border: 1px solid var(--border);
   border-radius: var(--radius-shadcn-pill);
   color: var(--dt-text-subtle);
+  font-family: inherit;
   font-size: 0.72rem;
-  padding: 0.25rem 0.6rem;
+  padding: 0.35rem 0.7rem;
   cursor: pointer;
-  min-height: 32px;
+  min-height: 34px;
 }
 .sop2-info-btn:hover { color: var(--card-foreground); border-color: var(--border-hover); }
-.sop2-info-btn:focus-visible { outline: 2px solid var(--chart-1); outline-offset: 2px; }
+.sop2-info-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 .sop2-popover {
   position: relative;
-  margin: 0.75rem 1rem 0;
   padding: 0.9rem 1rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-shadcn);
   background: var(--card);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
+  box-shadow: var(--shadow-md);
 }
-.sop2-popover:focus-visible { outline: 2px solid var(--chart-1); outline-offset: 2px; }
+.sop2-popover:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .sop2-popover h3 { margin: 0 0 0.6rem; font-size: 0.9rem; }
 .sop2-info-list { margin: 0 0 0.75rem; display: grid; gap: 0.5rem; }
 .sop2-info-list dt { font-weight: 600; font-size: 0.78rem; color: var(--card-foreground); }
 .sop2-info-list dd { margin: 0.1rem 0 0; font-size: 0.76rem; color: var(--dt-text-subtle); line-height: 1.5; }
 
-.sop2-setup { display: grid; gap: 0.75rem; padding: 1rem 1rem 0; }
+/* One stacked flow: popover, cards, actions, progress, results. */
+.devtools-panel-body.sop2 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+.sop2-section { min-width: 0; }
+
 .sop2-editors { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .sop2-editor-card { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
-.sop2-editor-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
-.sop2-editor-head label { font-weight: 600; font-size: 0.82rem; }
-.sop2-hint { font-size: 0.7rem; color: var(--dt-text-subtle); }
 .sop2-textarea { min-height: 150px; resize: vertical; width: 100%; box-sizing: border-box; }
 
-.sop2-loadbar { display: flex; flex-wrap: wrap; align-items: end; gap: 0.75rem 1.25rem; }
-.sop2-field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.72rem; color: var(--dt-text-subtle); }
-.sop2-field select { min-height: 36px; min-width: 12rem; max-width: 100%; }
-.sop2-field-check { flex-direction: row; align-items: center; gap: 0.5rem; font-size: 0.75rem; }
-.sop2-field-check input { width: 18px; height: 18px; }
+.sop2-loadbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.85rem 1.25rem;
+  align-items: start;
+}
+.sop2-field { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.sop2-field .pp-select { width: 100%; }
+.sop2-field-check {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.55rem;
+  align-items: center;
+}
+.sop2-field-check label { cursor: pointer; font-weight: 500; font-size: 0.78rem; color: var(--text-primary); }
+.sop2-field-check .pp-helper { grid-column: 1 / -1; }
 
 .sop2-actions {
   position: sticky;
@@ -7951,19 +8528,52 @@ tr.skeleton-tr td {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.6rem 1rem;
+  padding: 0.6rem 0.75rem;
   background: var(--dt-surface, var(--card));
-  border-block: 1px solid var(--border-divider);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-shadcn);
 }
-.sop2-actions .btn { min-height: 44px; }
+.sop2-actions .pp-btn { min-height: 44px; }
 .sop2-actions-spacer { flex: 1 1 auto; }
 
-.sop2-progress { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 1rem 0; }
-.sop2-progress-track { flex: 1; height: 6px; border-radius: 999px; background: var(--muted, rgba(0, 0, 0, 0.1)); overflow: hidden; }
-.sop2-progress-fill { display: block; height: 100%; width: 0; background: var(--chart-1); transition: width 0.15s linear; }
-.sop2-progress-text { font-size: 0.72rem; color: var(--dt-text-subtle); white-space: nowrap; }
+.sop2-export-wrap { position: relative; }
+.sop2-export-menu {
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 12rem;
+}
 
-.sop2-result { display: grid; gap: 1rem; padding: 1rem; }
+.sop2-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-shadcn);
+  background: var(--dt-surface, var(--card));
+}
+.sop2-progress-track { flex: 1; min-width: 0; height: 6px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.sop2-progress-fill { display: block; height: 100%; width: 0; background: var(--chart-1); transition: width 0.15s linear; }
+.sop2-progress-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--dt-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sop2-result { display: grid; gap: 1rem; min-height: 12rem; }
+
+/* Empty state reserves the height of a populated results block so the panel
+   does not jump when the first comparison lands. */
+.sop2-empty-state { min-height: 15rem; }
+
+.sop2-skeleton { display: grid; gap: 0.6rem; padding: 0.5rem 0; }
+.sop2-sk { display: block; height: 0.95rem; border-radius: 999px; }
+.sop2-sk-title { height: 1.4rem; width: 42%; }
+.sop2-sk-short { width: 60%; }
 
 .sop2-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .sop2-card {
@@ -8102,10 +8712,13 @@ tr.skeleton-tr td {
 @media (max-width: 900px) {
   .sop2-editors, .sop2-cards, .sop2-statcards { grid-template-columns: 1fr; }
 }
+@media (max-width: 767.98px) {
+  .sop2-loadbar { grid-template-columns: 1fr; }
+}
 @media (max-width: 480px) {
   .sop2-kv-row { grid-template-columns: 1fr; }
   .sop2-actions { padding: 0.5rem 0.6rem; }
-  .sop2-field select { min-width: 0; width: 100%; }
+  .sop2-field .pp-select { min-width: 0; width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sop2-progress-fill { transition: none; }
@@ -8125,6 +8738,7 @@ tr.skeleton-tr td {
   align-items: center;
   gap: 0.75rem;
   padding: 0.6rem 0.9rem;
+  background: var(--card);
   border-bottom: 1px solid var(--border-divider);
   flex-wrap: wrap;
 }
@@ -8842,6 +9456,7 @@ tr.skeleton-tr td {
   }
 
   .devtools-tab {
+    min-height: 2.25rem;
     padding: 0.4rem 0.6rem;
     font-size: 0.72rem;
   }
@@ -10066,7 +10681,7 @@ select,
   top: 0;
   z-index: 20000;
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-foreground);
   padding: 0.6rem 1rem;
   border-radius: 0 0 0.5rem 0;
   font-weight: 600;
