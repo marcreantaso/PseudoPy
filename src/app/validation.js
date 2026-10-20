@@ -31,7 +31,7 @@ function renderHtmlErrors(errors, editorId) {
     const header = hasSemantic
         ? '# {{ui:CircleX}} Compilation Errors Found:'
         : '# {{ui:CircleX}} Syntax Errors Found:';
-    let output = '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text">' + header + '</span></div>';
+    let output = '<div style="margin-bottom: 0.5rem; font-family: var(--font-mono); font-variant-ligatures: none; font-feature-settings: \'liga\' 0, \'calt\' 0;"><span class="error-text">' + header + '</span></div>';
 
     for (const err of list) {
         const lineLabel = (err && err.line) != null ? 'Line ' + err.line + ': ' : '';
@@ -53,18 +53,18 @@ function renderHtmlErrors(errors, editorId) {
                     bits.map(b => '<div style="color: var(--text-muted);"># &nbsp; ' + b + '</div>').join('') + '</details>';
             }
         }
-        output += '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;">' +
+        output += '<div style="margin-bottom: 0.5rem; font-family: var(--font-mono); font-variant-ligatures: none; font-feature-settings: \'liga\' 0, \'calt\' 0;">' +
             '<div><span class="error-text"># ' + icon + ' ' + _consoleEscape(lineLabel + (err ? err.message : '')) + '</span></div>' +
             suggestionHtml + detailsHtml +
             '<div><span style="color: var(--text-muted);">#</span></div></div>';
     }
-    output += '<div style="margin-top: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># Fix the errors in your pseudocode before translation.</span></div>';
+    output += '<div style="margin-top: 0.5rem; font-family: var(--font-mono); font-variant-ligatures: none; font-feature-settings: \'liga\' 0, \'calt\' 0;"><span class="error-text"># Fix the errors in your pseudocode before translation.</span></div>';
     // A direct route into the Fix Pseudocode review, so a student does not have
     // to find the wand. The dialog decides what is safely fixable.
     if (editorId && list.length) {
         const safeId = String(editorId).replace(/[^A-Za-z0-9_-]/g, '');
         if (safeId) {
-            output += '<div style="margin-top: 0.75rem; font-family: \'JetBrains Mono\', monospace;">' +
+            output += '<div style="margin-top: 0.75rem; font-family: var(--font-mono); font-variant-ligatures: none; font-feature-settings: \'liga\' 0, \'calt\' 0;">' +
                 '<button type="button" class="btn btn-primary btn-sm console-fix-btn" onclick="pseudopyOpenAssistanceFor(\'' + safeId + '\')">{{ui:Wrench}} Fix pseudocode</button></div>';
         }
     }

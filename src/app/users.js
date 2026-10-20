@@ -162,7 +162,7 @@ function renderInstructorTable() {
               <div class="avatar-sm">{{ui:UserRound}}</div>
               <div>
                 <div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div>
-                <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace">@${u.username}</div>
+                <div style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0">@${u.username}</div>
               </div>
             </div>
           </td>
@@ -301,7 +301,7 @@ async function renderDeviceModalTable() {
               <span style="font-size:1.1rem; flex-shrink:0;">${icon}</span>
               <div>
                 <strong style="color:var(--text-primary); font-size:0.85rem;">${d.deviceName || 'Device'}</strong>
-                <div style="font-size:0.72rem; color:var(--text-muted); font-family:monospace;">${d.deviceId ? d.deviceId.substring(0, 16) + '...' : '-'}</div>
+                <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;">${d.deviceId ? d.deviceId.substring(0, 16) + '...' : '-'}</div>
               </div>
             </div>
           </td>

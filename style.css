@@ -5,11 +5,37 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
+/* ── Bundled monospace: JetBrains Mono NL (no-ligature variant) ──
+   SIL Open Font License 1.1 — see vendor/fonts/LICENSE-OFL.txt.
+   Subset (basic Latin, Latin-1, Latin Extended-A, Greek, general
+   punctuation, arrows, math operators, supplemental math operators and
+   box drawing) so every device renders identical monospace glyphs with
+   no ligature variants, online or offline. The NL face cannot ligate
+   ">=" into a single slanted glyph by design. */
+@font-face {
+  font-family: 'JetBrains Mono NL';
+  src: url('vendor/fonts/jetbrains-mono-nl-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono NL';
+  src: url('vendor/fonts/jetbrains-mono-nl-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ── CSS Variables ── */
 :root {
   /* Light Theme (Default) */
   /* Native controls, scrollbars and form widgets follow the active theme. */
   color-scheme: light;
+  /* One monospace stack for every code surface. The bundled NL (no-ligature)
+     face comes first, and every consumer also disables ligature features, so
+     operators like >= always render as separate characters. */
+  --font-mono: 'JetBrains Mono NL', 'JetBrains Mono', ui-monospace, SFMono-Regular, 'Cascadia Mono', Consolas, 'Liberation Mono', monospace;
   --bg-primary: #f8fafc;
   --bg-secondary: #f1f5f9;
   --bg-card: #ffffff;
@@ -1029,7 +1055,9 @@ h4 {
 }
 
 .mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
 }
 
 /* ============================================================
@@ -1326,12 +1354,16 @@ body:has(#login-page:not(.hidden)) {
   margin-left: auto;
   font-size: max(12px, 0.7rem);
   color: var(--auth-hero-code-muted);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
 }
 
 .code-card-body {
   padding: 1rem 1.1rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: max(12px, 0.8rem);
   line-height: 1.75;
   color: var(--auth-hero-code-fg);
@@ -2241,7 +2273,9 @@ svg.lucide {
   border: none;
   outline: none;
   padding: 0.85rem;
-  font-family: monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.8rem;
   line-height: 1.65;
   color: var(--text-primary);
@@ -2291,7 +2325,9 @@ svg.lucide {
 
 .output-content {
   padding: 1.25rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.825rem;
   line-height: 1.7;
   min-height: 120px;
@@ -2304,6 +2340,34 @@ svg.lucide {
 
 .output-content.error {
   color: var(--danger);
+}
+
+/* Console polish: the grey "Please enter…" prompts, the green program
+   output and the input echoes all share one line box so the transcript reads
+   as a single column. Long lines wrap instead of being clipped, and an input
+   echo is visually distinct from program output. */
+.output-content .skulpt-input-label,
+.output-content .skulpt-input-echo,
+.output-content .console-line,
+.output-content > span {
+  line-height: 1.7;
+  font-size: 0.825rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.output-content .skulpt-input-echo {
+  padding: 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.5rem;
+  margin: 0.1rem 0;
+}
+
+.output-content .skulpt-input-label {
+  color: var(--text-muted);
+  font-weight: 500;
+  margin: 0;
 }
 
 
@@ -2331,7 +2395,9 @@ svg.lucide {
 }
 
 .error-line-num {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-weight: 700;
   color: var(--danger);
   background: rgba(239, 68, 68, 0.12);
@@ -2428,7 +2494,9 @@ svg.lucide {
   font-weight: 600;
   color: var(--text-accent);
   margin-bottom: 0.5rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
 }
 
 .skulpt-input-row {
@@ -2440,7 +2508,9 @@ svg.lucide {
 .skulpt-input-field {
   flex: 1;
   padding: 0.5rem 0.75rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.85rem;
   color: var(--text-primary);
   background: var(--bg-input);
@@ -2481,7 +2551,9 @@ svg.lucide {
 
 .skulpt-input-echo {
   padding: 0.25rem 0;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.825rem;
   line-height: 1.6;
 }
@@ -3376,7 +3448,9 @@ svg.lucide {
 }
 
 .audit-mono {
-  font-family: monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.82rem;
   color: var(--text-accent);
   background: var(--bg-input-soft);
@@ -4960,7 +5034,9 @@ select.form-input {
   bottom: 0;
   padding: 0.85rem;
   /* Matches textarea padding exactly */
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.8rem;
   line-height: 1.65;
   white-space: pre-wrap;
@@ -5002,7 +5078,9 @@ select.form-input {
   padding: 0.8rem 0;
   /* Usually matches standard form-input padding */
   color: var(--text-muted);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.9rem;
   text-align: right;
   overflow: hidden;
@@ -6220,7 +6298,9 @@ tr.skeleton-tr td {
 .an-avatar-sm .ui-symbol { width: 0.95rem; height: 0.95rem; }
 .an-user-name { font-weight: 500; color: var(--card-foreground); font-size: 0.85rem; }
 .an-cell-muted { color: var(--muted-foreground); font-size: 0.82rem; }
-.an-cell-mono { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; }
+.an-cell-mono { font-family: var(--font-mono);
+font-variant-ligatures: none;
+font-feature-settings: "liga" 0, "calt" 0; font-size: 0.78rem; }
 .an-cell-secondary { color: var(--secondary-foreground); font-size: 0.85rem; }
 .an-cell-score { font-weight: 600; font-size: 0.85rem; }
 
@@ -7474,7 +7554,9 @@ tr.skeleton-tr td {
 .pipe-func {
   font-size: 0.68rem;
   color: var(--dt-text-subtle);
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   word-break: break-word;
 }
 
@@ -7679,7 +7761,9 @@ tr.skeleton-tr td {
 .devtools-python-pre {
   margin: 0;
   padding: 0.75rem;
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.82rem;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -8051,7 +8135,9 @@ tr.skeleton-tr td {
 .devtools-event-log {
   max-height: 350px;
   overflow-y: auto;
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.78rem;
 }
 
@@ -8138,7 +8224,9 @@ tr.skeleton-tr td {
   font-size: 1.15rem;
   font-weight: 700;
   color: var(--dt-text);
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
 }
 
 /* Attempt History */
@@ -8215,7 +8303,9 @@ tr.skeleton-tr td {
   border: 1px solid var(--border);
   border-radius: 0.375rem;
   padding: 0.75rem;
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.8rem;
   min-height: 80px;
   white-space: pre-wrap;
@@ -8262,7 +8352,9 @@ tr.skeleton-tr td {
   color: var(--dt-text-subtle);
   font-size: 0.75rem;
   margin-top: 0.15rem;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
 }
 
 /* Translation view */
@@ -8295,7 +8387,9 @@ tr.skeleton-tr td {
 .devtools-trans-python {
   padding: 0.5rem 0.75rem;
   margin: 0;
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.8rem;
   color: var(--code-success);
   background: var(--code-surface);
@@ -8365,7 +8459,9 @@ tr.skeleton-tr td {
 
 .devtools-health-row dd {
   margin: 0;
-  font-family: 'JetBrains Mono', 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.74rem;
   word-break: break-word;
 }
@@ -8402,7 +8498,9 @@ tr.skeleton-tr td {
 .devtools-raw-pre {
   margin: 0;
   padding: 0.75rem;
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.75rem;
   white-space: pre-wrap;
   word-break: break-all;
@@ -8616,7 +8714,9 @@ tr.skeleton-tr td {
 .sop2-badge-na { background: var(--muted, rgba(0, 0, 0, 0.06)); color: var(--dt-text-subtle); }
 
 .sop2-code {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.72rem;
   line-height: 1.5;
   max-height: 260px;
@@ -8682,7 +8782,9 @@ tr.skeleton-tr td {
 .sop2-results { min-width: 600px; }
 .sop2-col-case { min-width: 160px; }
 .sop2-col-note { min-width: 200px; color: var(--dt-text-subtle); }
-.sop2-caseid { font-family: 'JetBrains Mono', monospace; font-size: 0.73rem; }
+.sop2-caseid { font-family: var(--font-mono);
+font-variant-ligatures: none;
+font-feature-settings: "liga" 0, "calt" 0; font-size: 0.73rem; }
 .sop2-groupchip, .sop2-injchip {
   display: inline-block;
   margin-left: 0.35rem;
@@ -8792,7 +8894,9 @@ tr.skeleton-tr td {
 .devtools-console-output {
   background: var(--code-surface);
   color: var(--code-fg);
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.8rem;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -8872,7 +8976,9 @@ tr.skeleton-tr td {
 }
 
 .devtools-console-prompt {
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.8rem;
   color: var(--text-cyan);
   white-space: nowrap;
@@ -8886,7 +8992,9 @@ tr.skeleton-tr td {
   flex: 1;
   min-width: 0;
   padding: 0.4rem 0.6rem;
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.8rem;
   color: var(--dt-text);
   background: var(--bg-input-soft);
@@ -8966,7 +9074,9 @@ tr.skeleton-tr td {
 .sim-bar-value {
   min-width: 5.5rem;
   text-align: right;
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.78rem;
   color: var(--dt-text);
 }
@@ -9023,7 +9133,9 @@ tr.skeleton-tr td {
   color: var(--dt-text);
   border-radius: 0.5rem;
   padding: 0.35rem 0.6rem;
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.75rem;
   text-align: center;
 }
@@ -9111,7 +9223,9 @@ tr.skeleton-tr td {
   color: var(--code-fg);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.75rem;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -9131,7 +9245,9 @@ tr.skeleton-tr td {
 }
 
 .sim-nlp-word-diff {
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.78rem;
   line-height: 1.5;
   padding: 0.5rem;
@@ -9164,7 +9280,9 @@ tr.skeleton-tr td {
 }
 
 .sim-nlp-lineno {
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   color: var(--dt-text-subtle);
   margin-right: 0.35rem;
 }
@@ -9208,7 +9326,9 @@ tr.skeleton-tr td {
   flex: 1;
   min-width: 14rem;
   padding: 0.4rem 0.6rem;
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.78rem;
   color: var(--dt-text);
   background: var(--bg-input-soft);
@@ -9347,13 +9467,17 @@ tr.skeleton-tr td {
 }
 
 .sim-walk-prod {
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.72rem;
   white-space: normal;
 }
 
 .sim-walk-lineno {
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   color: var(--dt-text-subtle);
   min-width: 2rem;
 }
@@ -9367,7 +9491,9 @@ tr.skeleton-tr td {
 
 .sim-walk-python {
   margin: 0;
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.72rem;
   white-space: pre-wrap;
   word-break: break-word;
@@ -9408,7 +9534,9 @@ tr.skeleton-tr td {
 
 .sim-walk-source-no {
   color: var(--dt-text-subtle);
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   min-width: 1.6rem;
   text-align: right;
 }
@@ -9939,7 +10067,9 @@ select,
   padding: 0.75rem;
   max-height: 200px;
   overflow: auto;
-  font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.78rem;
   line-height: 1.55;
 }
@@ -10789,13 +10919,28 @@ select,
 @media (max-width: 1023px) {
   #page-write-pseudocode { padding-bottom: calc(var(--exercise-actions-height, 220px) + 16px); }
   #page-write-pseudocode .editor-panel { min-height: 0; }
-  #page-write-pseudocode .code-editor {
-    flex: none;
+  #page-write-pseudocode .editor-with-gutter {
+    /* Definite host height so the heights inside resolve against it. The
+       layout chain above is height:auto, so the host previously fell back
+       to content height and the 32-line gutter (707px) stretched the panel
+       while the fixed-height textarea left an empty striped strip below
+       (audit finding #2). Extra line numbers stay clipped inside the
+       gutter and follow the textarea's synced scroll. */
     height: 40vh;
     height: 40dvh;
     min-height: 200px;
     max-height: 50vh;
     max-height: 50dvh;
+  }
+  #page-write-pseudocode .code-editor {
+    /* flex: none + the base width: 100% sized the textarea to the whole
+       host; together with the 40px gutter that overflowed the host's
+       overflow: hidden and clipped the right ~27px — the wand button area
+       included (audit finding #1). */
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    height: 100%;
     overflow: auto;
     font-size: 16px;
   }
@@ -10928,7 +11073,9 @@ select,
 .source-assistance-gutter { position: absolute; left: 0; top: 0; bottom: 0; width: 48px; margin: 0; padding: 12px 8px; overflow: hidden; text-align: right; pointer-events: none; color: var(--text-secondary, #9ca3af); border-right: 1px solid var(--border-color, #687083); }
 .source-assistance-gutter div { line-height: 20px; }
 .source-assistance-gutter .assistance-error-line { color: var(--error, #f87171); font-weight: 600; }
-.devtools-source-wrap .source-assistance-numbered, .source-assistance-gutter { font-family: monospace; font-size: 13px; line-height: 20px; box-sizing: border-box; tab-size: 4; }
+.devtools-source-wrap .source-assistance-numbered, .source-assistance-gutter { font-family: var(--font-mono);
+font-variant-ligatures: none;
+font-feature-settings: "liga" 0, "calt" 0; font-size: 13px; line-height: 20px; box-sizing: border-box; tab-size: 4; }
 .devtools-source-wrap .source-assistance-numbered { padding: 12px 64px 12px 56px; white-space: pre; overflow: auto; }
 
 /* ── Review / Quick-Fix dialog ──
@@ -10959,11 +11106,15 @@ select,
 .assistance-badge-error { background: color-mix(in srgb, var(--error, #f87171) 12%, transparent); color: var(--error, #f87171); }
 .assistance-badge-warning { background: color-mix(in srgb, var(--warning, #fbbf24) 12%, transparent); color: var(--warning, #fbbf24); }
 .assistance-badge-fix { background: color-mix(in srgb, var(--accent, #4f8cff) 12%, transparent); color: var(--accent, #4f8cff); }
-.assistance-loc { margin-left: auto; font-family: monospace; font-size: 12px; color: var(--text-secondary, #9ca3af); }
+.assistance-loc { margin-left: auto; font-family: var(--font-mono);
+font-variant-ligatures: none;
+font-feature-settings: "liga" 0, "calt" 0; font-size: 12px; color: var(--text-secondary, #9ca3af); }
 .assistance-message { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-primary, #fff); overflow-wrap: anywhere; }
 .assistance-suggestion { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-secondary, #9ca3af); overflow-wrap: anywhere; }
 .assistance-guidance { margin-top: 8px; font-size: 12px; color: var(--warning, #fbbf24); }
-.assistance-preview { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--bg-secondary); font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-primary, #fff); }
+.assistance-preview { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--bg-secondary); font-family: var(--font-mono);
+font-variant-ligatures: none;
+font-feature-settings: "liga" 0, "calt" 0; font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-primary, #fff); }
 .assistance-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .assistance-empty { margin: 8px 0; font-size: 13px; color: var(--text-secondary, #9ca3af); }
 .source-assistance-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border-color, #687083); flex: none; }

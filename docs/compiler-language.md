@@ -31,7 +31,8 @@ The precedence parser constructs literal, identifier, binary, unary, comparison-
 | Boolean | `AND`, `OR`, `NOT` (case insensitive); preserves Python short-circuit and operand-return behavior |
 | Membership / identity | `IN`, `NOT IN`, `IS`, `IS NOT` |
 | Constants | `TRUE`, `FALSE`, `NULL` / `NONE` |
-| Unicode aliases | `≥`, `≤`, `≠`, `≡`, `×`, `✕`, `⋅`, `÷`, and common Unicode minus signs |
+| Unicode aliases | `≥` `⩾`, `≤` `⩽`, `≠`, `≡`, `×` `✕` `⋅`, `÷` `∕`, `∧`, `∨`, `¬` (→ `AND`/`OR`/`NOT`), `←` / `≔` (assignment), `→`, and common Unicode minus signs. The table is `SYMBOL_MAP` in `src/compiler/language-spec.js` — the single source consumed by the lexer, the research normalizer and the formatter. |
+| Symbols with no Python equivalent | `√`, `π`, `±`, `≈` are rejected with a specific hint (the suggestion names the replacement, e.g. `x ^ 0.5`) rather than a generic unsupported-character error. |
 | Comments | `#` anywhere outside strings; `//` only as the first token on a line. In an expression, `//` is floor division. |
 
 Precedence follows the [Python expression reference](https://docs.python.org/3/reference/expressions.html#operator-precedence). Exponentiation is right-associative: `2 ** 3 ** 2` is 512. `-2 ** 2` is -4. Negative division and remainder follow Python (`-7 // 3` is -3; `-7 % 3` is 2). Comparisons retain chaining rather than becoming Boolean-valued binary operations. Approximate equality `≈` is rejected rather than silently treated as exact equality.

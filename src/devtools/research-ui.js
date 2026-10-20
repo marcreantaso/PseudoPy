@@ -1006,6 +1006,94 @@
     });
   }
 
+  // ── Normalize / Format panel ──────────────────────────────
+  // Wires the previously dead #norm-* controls to the shared formatter:
+  // preview -> diff -> apply to the editor, with Undo handled by the editor's
+  // pending-undo affordance.
+  function normSource() {
+    var input = $('norm-input');
+    if (input && input.value.trim()) return input.value;
+    var dev = $('devtools-pseudocode');
+    return (dev && dev.value) || '';
+  }
+
+  function renderNormDiff(before, after) {
+    var host = $('norm-diff');
+    if (!host) return;
+    var a = String(before).split('\n');
+    var b = String(after).split('\n');
+    var max = Math.max(a.length, b.length);
+    var rows = [];
+    for (var i = 0; i < max; i++) {
+      if (a[i] === b[i]) continue;
+      if (a[i] !== undefined) rows.push('- ' + (i + 1) + ': ' + a[i]);
+      if (b[i] !== undefined) rows.push('+ ' + (i + 1) + ': ' + b[i]);
+    }
+    host.textContent = rows.length ? rows.join('\n') : 'No changes.';
+  }
+
+  function runNormalize(apply) {
+    var formatter = window.PseudocodeFormatter;
+    if (!formatter) { setStatus('Formatter not loaded (rebuild the app bundle).'); return; }
+    var source = normSource();
+    if (!source.trim()) { setStatus('Enter pseudocode to normalize.'); return; }
+    var useSymbols = (typeof pythonOperatorsInOutputEnabled === 'function') ? pythonOperatorsInOutputEnabled() : true;
+    var result = formatter.formatPseudocode(source, { pythonOperatorsInOutput: useSymbols });
+    var output = $('norm-output');
+    if (output) output.value = result.text;
+    var input = $('norm-input');
+    if (input && !input.value.trim()) input.value = source;
+    renderNormDiff(source, result.text);
+    var changed = result.changes.filter(function (c) { return c.type === 'output-symbol'; }).length;
+    setStatus(result.text === source ? 'Already normalized.' :
+      ('Normalized. ' + result.changes.length + ' change(s)' + (changed ? ', ' + changed + ' showing Python operators in output' : '') + '.'));
+    if (apply) {
+      var target = $('devtools-pseudocode');
+      if (target && target.value !== undefined) {
+        target.value = result.text;
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      var student = $('pseudocode-editor');
+      if (student) {
+        var before = student.value;
+        student.value = result.text;
+        student.dispatchEvent(new Event('input', { bubbles: true }));
+        if (typeof updateGutter === 'function') updateGutter();
+        var states = window.__pseudopyAssistanceStates;
+        var st = states && states['pseudocode-editor'];
+        if (st && typeof pseudopySetPendingUndo === 'function') {
+          pseudopySetPendingUndo(st, before, result.text, { editorId: 'pseudocode-editor', consoleId: 'console-output' });
+        }
+      }
+      setStatus('Applied to the editor. Use Undo fix to revert.');
+    }
+  }
+
+  function wireNormalize() {
+    bind('norm-preview', function () { runNormalize(false); });
+    bind('norm-apply', function () { runNormalize(true); });
+    bind('norm-copy', function () {
+      var output = $('norm-output');
+      if (!output) return;
+      var text = output.value;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { setStatus('Copied.'); }, function () { setStatus('Copy failed.'); });
+      } else {
+        output.select(); document.execCommand('copy'); setStatus('Copied.');
+      }
+    });
+    var input = $('norm-input');
+    if (input) input.addEventListener('input', function () {
+      var formatter = window.PseudocodeFormatter;
+      if (!formatter) return;
+      var useSymbols = (typeof pythonOperatorsInOutputEnabled === 'function') ? pythonOperatorsInOutputEnabled() : true;
+      var result = formatter.formatPseudocode(input.value, { pythonOperatorsInOutput: useSymbols });
+      var output = $('norm-output');
+      if (output) output.value = result.text;
+      renderNormDiff(input.value, result.text);
+    });
+  }
+
   function wire() {
     bind('sop2-compare', function () { runCompare(false); });
     bind('sop2-run', function () { runCompare(true); });
@@ -1024,6 +1112,7 @@
     populateExamples();
     wireInfo();
     wireExportMenu();
+    wireNormalize();
     var host = $('sop2-result');
     if (host) {
       host.innerHTML = renderEmpty();

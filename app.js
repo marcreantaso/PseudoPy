@@ -79,6 +79,7 @@ const STORAGE_KEYS = {
     TUTORIAL_COMPLETED: 'pseudopy_tutorial_completed',
     UPDATE_DISMISSED: 'pseudopy_update_dismissed',
     GUIDE_MODE: 'pseudopy_guide_mode',
+    PYTHON_OUTPUT_SYMBOLS: 'pseudopy_python_output_symbols',
     LOCAL_PREFIX: 'pseudopy_local_'
 };
 ﻿/* ============================================================
@@ -4929,7 +4930,7 @@ function renderInstructorTable() {
               <div class="avatar-sm">{{ui:UserRound}}</div>
               <div>
                 <div style="font-weight:600;color:var(--text-primary)">${u.fullName}</div>
-                <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace">@${u.username}</div>
+                <div style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0">@${u.username}</div>
               </div>
             </div>
           </td>
@@ -5068,7 +5069,7 @@ async function renderDeviceModalTable() {
               <span style="font-size:1.1rem; flex-shrink:0;">${icon}</span>
               <div>
                 <strong style="color:var(--text-primary); font-size:0.85rem;">${d.deviceName || 'Device'}</strong>
-                <div style="font-size:0.72rem; color:var(--text-muted); font-family:monospace;">${d.deviceId ? d.deviceId.substring(0, 16) + '...' : '-'}</div>
+                <div style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;">${d.deviceId ? d.deviceId.substring(0, 16) + '...' : '-'}</div>
               </div>
             </div>
           </td>
@@ -6003,12 +6004,12 @@ async function openStudentNumberMigration() {
                   <div class="avatar-sm">{{ui:UserRound}}</div>
                   <div>
                     <div style="font-weight:600;color:var(--text-primary)">${row.user.fullName || ''}</div>
-                    <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace">@${row.user.username || ''}</div>
+                    <div style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0">@${row.user.username || ''}</div>
                   </div>
                 </div>
               </td>
-              <td style="font-family:monospace;font-size:0.85rem;color:var(--text-muted)">${row.current}</td>
-              <td style="font-family:monospace;font-size:0.85rem;color:var(--text-accent)">${row.proposed}</td>
+              <td style="font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;font-size:0.85rem;color:var(--text-muted)">${row.current}</td>
+              <td style="font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;font-size:0.85rem;color:var(--text-accent)">${row.proposed}</td>
               <td><span class="badge badge-active">READY</span></td>
             </tr>`).join('');
         $id('sn-migration-total').textContent = String(rows.length) + ' student(s)';
@@ -7785,6 +7786,12 @@ async function loadStudentSettings() {
         studentNumberEl.textContent = sn === '\u2014' ? 'Not yet assigned' : sn;
     }
     setText('settings-role', currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1));
+
+    // Editor formatting preference (default ON).
+    const outputSymbolsToggle = $id('settings-python-output-symbols');
+    if (outputSymbolsToggle && typeof pythonOperatorsInOutputEnabled === 'function') {
+        outputSymbolsToggle.checked = pythonOperatorsInOutputEnabled();
+    }
         const status = (currentUser.status || 'active').toLowerCase();
         const statusEl = $id('settings-status');
         if (statusEl) {
@@ -11073,7 +11080,7 @@ function renderHtmlErrors(errors, editorId) {
     const header = hasSemantic
         ? '# {{ui:CircleX}} Compilation Errors Found:'
         : '# {{ui:CircleX}} Syntax Errors Found:';
-    let output = '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text">' + header + '</span></div>';
+    let output = '<div style="margin-bottom: 0.5rem; font-family: var(--font-mono); font-variant-ligatures: none; font-feature-settings: \'liga\' 0, \'calt\' 0;"><span class="error-text">' + header + '</span></div>';
 
     for (const err of list) {
         const lineLabel = (err && err.line) != null ? 'Line ' + err.line + ': ' : '';
@@ -11095,18 +11102,18 @@ function renderHtmlErrors(errors, editorId) {
                     bits.map(b => '<div style="color: var(--text-muted);"># &nbsp; ' + b + '</div>').join('') + '</details>';
             }
         }
-        output += '<div style="margin-bottom: 0.5rem; font-family: \'JetBrains Mono\', monospace;">' +
+        output += '<div style="margin-bottom: 0.5rem; font-family: var(--font-mono); font-variant-ligatures: none; font-feature-settings: \'liga\' 0, \'calt\' 0;">' +
             '<div><span class="error-text"># ' + icon + ' ' + _consoleEscape(lineLabel + (err ? err.message : '')) + '</span></div>' +
             suggestionHtml + detailsHtml +
             '<div><span style="color: var(--text-muted);">#</span></div></div>';
     }
-    output += '<div style="margin-top: 0.5rem; font-family: \'JetBrains Mono\', monospace;"><span class="error-text"># Fix the errors in your pseudocode before translation.</span></div>';
+    output += '<div style="margin-top: 0.5rem; font-family: var(--font-mono); font-variant-ligatures: none; font-feature-settings: \'liga\' 0, \'calt\' 0;"><span class="error-text"># Fix the errors in your pseudocode before translation.</span></div>';
     // A direct route into the Fix Pseudocode review, so a student does not have
     // to find the wand. The dialog decides what is safely fixable.
     if (editorId && list.length) {
         const safeId = String(editorId).replace(/[^A-Za-z0-9_-]/g, '');
         if (safeId) {
-            output += '<div style="margin-top: 0.75rem; font-family: \'JetBrains Mono\', monospace;">' +
+            output += '<div style="margin-top: 0.75rem; font-family: var(--font-mono); font-variant-ligatures: none; font-feature-settings: \'liga\' 0, \'calt\' 0;">' +
                 '<button type="button" class="btn btn-primary btn-sm console-fix-btn" onclick="pseudopyOpenAssistanceFor(\'' + safeId + '\')">{{ui:Wrench}} Fix pseudocode</button></div>';
         }
     }
@@ -15259,42 +15266,77 @@ function initTheme() {
 }
 
 /**
- * Automatically formats pseudocode with consistent indentation
+ * Read the "Use Python operators in output text" preference (default ON).
+ */
+function pythonOperatorsInOutputEnabled() {
+    try {
+        return localStorage.getItem(STORAGE_KEYS.PYTHON_OUTPUT_SYMBOLS) !== 'off';
+    } catch (e) {
+        return true;
+    }
+}
+
+/**
+ * Set the preference and persist it. Kept in the app bundle so the formatter
+ * setting has one owner.
+ */
+function setPythonOperatorsInOutput(enabled) {
+    try {
+        localStorage.setItem(STORAGE_KEYS.PYTHON_OUTPUT_SYMBOLS, enabled ? 'on' : 'off');
+    } catch (e) { /* storage unavailable */ }
+}
+
+/**
+ * Settings checkbox handler for the output-symbol preference.
+ */
+function handlePythonOutputSymbolsToggle(enabled) {
+    setPythonOperatorsInOutput(!!enabled);
+    if (typeof showToast === 'function') {
+        showToast(enabled
+            ? 'Output text will show Python operators (for example >= instead of \u2265).'
+            : 'Output text will keep the symbols exactly as typed.', 'success');
+    }
+}
+
+/**
+ * Automatically formats pseudocode: the shared formatter normalizes
+ * indentation, casing, operator spacing, tabs/CRLF/NBSP and (when enabled)
+ * converts math symbols inside string literals to Python operators. The prior
+ * text is kept so the change can be undone, matching the editor-assistance
+ * "Undo fix" pattern.
  */
 function autoFormatPseudocode() {
     const editor = $id('pseudocode-editor');
     if (!editor) return;
+    const formatter = window.PseudocodeFormatter;
+    if (!formatter) return;
 
-    const lines = editor.value.split('\n');
-    let indentLevel = 0;
-    const indentSize = 2; // Spaces per level
-
-    const formattedLines = lines.map(line => {
-        let trimmed = line.trim();
-        if (!trimmed) return '';
-
-        // Keywords that decrease indentation BEFORE the line
-        if (trimmed.match(/^(END|ELSE|NEXT|UNTIL)/i)) {
-            indentLevel = Math.max(0, indentLevel - 1);
-        }
-
-        const spaces = ' '.repeat(indentLevel * indentSize);
-        const result = spaces + trimmed;
-
-        // Keywords that increase indentation AFTER the line
-        if (trimmed.match(/^(BEGIN|IF|WHILE|FOR|REPEAT|ELSE|FUNCTION|PROCEDURE|CASE)/i)) {
-            // But don't increase if it's an inline IF or a single-line block
-            if (!trimmed.match(/THEN.*END\s+IF/i) && !trimmed.match(/DO.*DONE/i)) {
-                indentLevel++;
-            }
-        }
-
-        return result;
+    const before = editor.value;
+    const result = formatter.formatPseudocode(before, {
+        pythonOperatorsInOutput: pythonOperatorsInOutputEnabled()
     });
+    if (result.text === before) {
+        showToast('Pseudocode is already formatted.', 'info');
+        return;
+    }
 
-    editor.value = formattedLines.join('\n');
+    editor.value = result.text;
     updateGutter(); // Refresh line numbers
-    showToast('Pseudocode formatted!', 'success');
+    // Reuse the shared per-editor Undo affordance when available so the
+    // formatting change (including output-symbol conversion) can be reverted.
+    try {
+        const states = typeof window !== 'undefined' ? window.__pseudopyAssistanceStates : null;
+        const editorState = states && states['pseudocode-editor'];
+        if (editorState && typeof pseudopySetPendingUndo === 'function') {
+            pseudopySetPendingUndo(editorState, before, result.text, { editorId: 'pseudocode-editor', consoleId: 'console-output' });
+        }
+    } catch (e) { /* undo affordance optional */ }
+    const outputChanges = result.changes.filter(c => c.type === 'output-symbol').length;
+    if (outputChanges) {
+        showToast('Formatted. ' + outputChanges + ' line' + (outputChanges === 1 ? '' : 's') + ' with symbols now show Python operators in output.', 'success');
+    } else {
+        showToast('Pseudocode formatted!', 'success');
+    }
 }
 /* ============================================================
    ACCESSIBILITY — shared a11y behaviors

@@ -103,8 +103,8 @@
   <!-- Android Chrome -->
   <meta name="application-name" content="PseudoPy">
 
-  <link rel="stylesheet" href="style.css?v=ux-20261019-12">
-  <link rel="stylesheet" href="student-workspace.css?v=ux-20261006-5">
+  <link rel="stylesheet" href="style.css?v=ux-20261021-1">
+  <link rel="stylesheet" href="student-workspace.css?v=ux-20261021-1">
   <link rel="stylesheet" href="ui-icons.css?v=1">
 
   <!-- BOOT GATE.
@@ -633,7 +633,7 @@
               <div class="editor-with-gutter">
                 <div id="editor-gutter" class="editor-gutter"></div>
                 <div id="editor-highlights" class="editor-highlights"></div>
-                <textarea id="pseudocode-editor" class="code-editor" spellcheck="false"
+                <textarea id="pseudocode-editor" class="code-editor" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" data-gramm="false"
                   placeholder="Write your pseudocode here...&#10;&#10;Example:&#10;BEGIN&#10;  SET x TO 10&#10;  IF x > 5 THEN&#10;    DISPLAY &quot;x is large&quot;&#10;  ELSE&#10;    DISPLAY &quot;x is small&quot;&#10;  END IF&#10;END"></textarea>
               </div>
             </div>
@@ -757,7 +757,7 @@
               </div>
             </div>
             <div class="panel-body">
-              <textarea id="translate-input" class="code-editor" spellcheck="false"
+              <textarea id="translate-input" class="code-editor" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" data-gramm="false"
                 placeholder="Paste or write your pseudocode here..."></textarea>
             </div>
             <div class="panel-footer">
@@ -1248,21 +1248,21 @@
               <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;margin-bottom:0.4rem"><i data-lucide="notebook-pen" aria-hidden="true"></i> SUBMITTED
                 PSEUDOCODE</div>
               <pre id="sdm-pseudo"
-                style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.82rem;line-height:1.6;white-space:pre-wrap;overflow-x:auto;color:var(--text-primary);margin:0"></pre>
+                style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;font-size:0.82rem;line-height:1.6;white-space:pre-wrap;overflow-x:auto;color:var(--text-primary);margin:0"></pre>
             </div>
             <!-- Python Output -->
             <div style="margin-bottom:1rem">
               <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;margin-bottom:0.4rem"><i data-lucide="code-2" aria-hidden="true"></i> GENERATED
                 PYTHON CODE</div>
               <pre id="sdm-python"
-                style="background:#0f1117;border:1px solid var(--border);border-radius:var(--radius);padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.82rem;line-height:1.6;white-space:pre-wrap;overflow-x:auto;color:#a5f3fc;margin:0"></pre>
+                style="background:#0f1117;border:1px solid var(--border);border-radius:var(--radius);padding:1rem;font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;font-size:0.82rem;line-height:1.6;white-space:pre-wrap;overflow-x:auto;color:#a5f3fc;margin:0"></pre>
             </div>
             <!-- Compiler Output -->
             <div>
               <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;margin-bottom:0.4rem"><i data-lucide="settings" aria-hidden="true"></i> COMPILER
                 OUTPUT</div>
               <pre id="sdm-output"
-                style="background:#070a0f;border:1px solid var(--border);border-radius:var(--radius);padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.82rem;line-height:1.6;white-space:pre-wrap;overflow-x:auto;color:#86efac;margin:0"></pre>
+                style="background:#070a0f;border:1px solid var(--border);border-radius:var(--radius);padding:1rem;font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;font-size:0.82rem;line-height:1.6;white-space:pre-wrap;overflow-x:auto;color:#86efac;margin:0"></pre>
             </div>
           </div>
           <div class="modal-footer">
@@ -1604,8 +1604,8 @@
             <h3>{{ui:GraduationCap}} Concept Mastery Analytics (Constructivism Model)</h3>
           </div>
           <div style="padding:0.4rem 1rem 0;font-size:0.78rem;color:var(--text-muted);">Groups benchmark test results by
-            programming concept. <strong>Mastery Level</strong> is determined by the exact-match accuracy: ≥80% =
-            Expert, ≥65% = Proficient, ≥40% = Developing, &lt;40% = Beginner.</div>
+            programming concept. <strong>Mastery Level</strong> is determined by the exact-match accuracy: &gt;=80% =
+            Expert, &gt;=65% = Proficient, &gt;=40% = Developing, &lt;40% = Beginner.</div>
           <table class="data-table">
             <thead>
               <tr>
@@ -2061,7 +2061,7 @@
         <div class="devtools-columns">
           <div class="devtools-col devtools-col-left">
             <div class="devtools-panel"><div class="devtools-panel-header"><h3>{{ui:NotebookPen}} Source Pseudocode</h3><div class="devtools-panel-actions"><input type="file" id="devtools-file-input" accept=".txt,.pseudo,.psc,text/plain" hidden><button class="btn btn-ghost btn-sm" id="devtools-upload-btn" onclick="devToolsPickFile()" title="Upload pseudocode file" aria-label="Upload pseudocode file">{{ui:FileText}} Upload</button><button class="btn btn-ghost btn-sm" id="devtools-clear-btn" onclick="devToolsClearSource()" title="Clear pseudocode" aria-label="Clear pseudocode">{{ui:X}} Clear</button></div></div>
-              <div class="devtools-panel-body devtools-source-wrap"><textarea id="devtools-pseudocode" class="code-editor devtools-editor" spellcheck="false" placeholder="Enter pseudocode here...&#10;&#10;Example:&#10;BEGIN&#10;  DECLARE x AS INTEGER&#10;  SET x TO 5&#10;  IF x > 0 THEN&#10;    DISPLAY &quot;Positive&quot;&#10;  END IF&#10;END"></textarea><div class="devtools-drop-hint" id="devtools-drop-hint" aria-hidden="true">{{ui:Download}} Drop pseudocode file here</div></div>
+              <div class="devtools-panel-body devtools-source-wrap"><textarea id="devtools-pseudocode" class="code-editor devtools-editor" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off" data-gramm="false" placeholder="Enter pseudocode here...&#10;&#10;Example:&#10;BEGIN&#10;  DECLARE x AS INTEGER&#10;  SET x TO 5&#10;  IF x > 0 THEN&#10;    DISPLAY &quot;Positive&quot;&#10;  END IF&#10;END"></textarea><div class="devtools-drop-hint" id="devtools-drop-hint" aria-hidden="true">{{ui:Download}} Drop pseudocode file here</div></div>
             </div>
           </div>
           <div class="devtools-col devtools-col-center">
@@ -2327,7 +2327,7 @@ FOR EACH item IN list DO ... END FOR EACH</pre>
 PROCEDURE p() ... END PROCEDURE
 CALL f(1,2); f(1,2)</pre>
               <p>Recursive calls supported; signature validation incomplete.</p>
-              <h3>Operators/Unicode</h3><p>+ - * / DIV MOD ^ ** // ; == != &lt;&gt; = &gt; &lt; &gt;= &lt;= IS NOT IN AND OR NOT; ≥≤≠≡×÷−→ normalized.</p>
+              <h3>Operators/Unicode</h3><p data-symbol-example data-symbol-example-reason="documents accepted input symbols">+ - * / DIV MOD ^ ** // ; == != &lt;&gt; = &gt; &lt; &gt;= &lt;= IS NOT IN AND OR NOT; ≥≤≠≡×÷−→ normalized.</p>
               <h3>Notes</h3><p>Input conversion limited; no preserved column mapping; Skulpt runtime.</p>
               <h3>Interface tips</h3><p>If you see a blinking text cursor moving through menus, buttons or labels, your browser's caret browsing is on. Press <kbd>F7</kbd> to switch it off, or turn off "Navigate pages with a text cursor" in the browser's accessibility settings.</p>
             </div>
@@ -2674,6 +2674,25 @@ CALL f(1,2); f(1,2)</pre>
           </div>
         </div>
 
+        <!-- Editor formatting preferences -->
+        <div class="settings-section">
+          <div class="section-header">
+            <h3><i data-lucide="wand-sparkles" aria-hidden="true"></i> Editor formatting</h3>
+            <p>How the Format button and output text handle symbols.</p>
+          </div>
+          <div class="profile-details">
+            <div class="profile-detail-row">
+              <span class="detail-label"><i data-lucide="type" aria-hidden="true"></i> Use Python operators in output text</span>
+              <span class="detail-value">
+                <label class="pp-checkbox" style="display:inline-flex;align-items:center;gap:0.5rem">
+                  <input type="checkbox" id="settings-python-output-symbols" onchange="handlePythonOutputSymbolsToggle(this.checked)">
+                  <span data-symbol-example data-symbol-example-reason="names the exact symbol a student may have typed">Convert math symbols typed inside string literals (for example <code>≥</code>) into Python operators (<code>&gt;=</code>) so every console output shows Python operators.</span>
+                </label>
+              </span>
+            </div>
+          </div>
+        </div>
+
         <!-- About / App Version -->
         <div class="settings-section">
           <div class="section-header">
@@ -2763,9 +2782,9 @@ CALL f(1,2); f(1,2)</pre>
           </div>
           <div style="padding:1.25rem 1.4rem">
             <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:1rem">
-              Assign canonical <code style="font-family:monospace;color:var(--text-accent)">230xxxx</code> student numbers to accounts
+              Assign canonical <code style="font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;color:var(--text-accent)">230xxxx</code> student numbers to accounts
               that still use legacy placeholders. The preview is read-only;
-              migration updates only the <code style="font-family:monospace">studentNumber</code> field and never rewrites existing IDs.
+              migration updates only the <code style="font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0">studentNumber</code> field and never rewrites existing IDs.
             </p>
             <button class="btn btn-secondary btn-sm" onclick="openStudentNumberMigration()" title="Preview and assign 230-series student numbers">
               <i data-lucide="id-card" aria-hidden="true"></i> Manage Student Numbers
@@ -2930,7 +2949,7 @@ CALL f(1,2); f(1,2)</pre>
         <div class="form-group">
           <label>Expected Pseudocode (Solution Key) <span style="color:var(--danger)">*</span></label>
           <textarea id="ex-solution" class="form-input mono" rows="5" placeholder="BEGIN&#10;  ...&#10;END"
-            style="font-family:'JetBrains Mono',monospace;font-size:0.825rem"></textarea>
+            style="font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;font-size:0.825rem"></textarea>
           <span id="ex-solution-error"
             style="display:none;color:var(--danger);font-size:0.78rem;margin-top:0.25rem">Expected Pseudocode (Solution
             Key) is required.</span>
@@ -2938,7 +2957,7 @@ CALL f(1,2); f(1,2)</pre>
         <div class="form-group">
           <label>Expected Output <span style="color:var(--danger)">*</span></label>
           <textarea id="ex-expected-output" class="form-input mono" rows="3" placeholder="Expected terminal output when executed..."
-            style="font-family:'JetBrains Mono',monospace;font-size:0.825rem"></textarea>
+            style="font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;font-size:0.825rem"></textarea>
           <span id="ex-expected-output-error"
             style="display:none;color:var(--danger);font-size:0.78rem;margin-top:0.25rem">Expected Output is required.</span>
         </div>
@@ -3074,7 +3093,7 @@ CALL f(1,2); f(1,2)</pre>
         <div style="text-align:center;padding:0.75rem 0 1.25rem;border-bottom:1px solid var(--border);margin-bottom:1rem">
           <div class="avatar-lg" id="idm-avatar" style="width:68px;height:68px;border-radius:50%;background:var(--avatar-bg);color:var(--avatar-fg);border:1px solid var(--avatar-border);display:flex;align-items:center;justify-content:center;margin:0 auto 0.6rem;">{{ui:UserRound}}</div>
           <h3 id="idm-name" style="margin-bottom:0.15rem;color:var(--text-primary);font-size:1.2rem">Marc Reantaso</h3>
-          <div id="idm-username" style="font-size:0.85rem;color:var(--text-muted);font-family:monospace">@mreantaso_instructor</div>
+          <div id="idm-username" style="font-size:0.85rem;color:var(--text-muted);font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0">@mreantaso_instructor</div>
         </div>
 
         <!-- Detail List Items matching screenshot -->
@@ -3249,7 +3268,7 @@ CALL f(1,2); f(1,2)</pre>
           <div>
             <div style="font-size:0.8rem; color:var(--text-muted);">Instructor Profile</div>
             <div style="font-weight:600; font-size:0.95rem; color:var(--text-primary);" id="device-modal-instructor-name">—</div>
-            <div style="font-size:0.75rem; color:var(--text-muted); font-family:monospace;" id="device-modal-instructor-handle">@—</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;" id="device-modal-instructor-handle">@—</div>
           </div>
           <div style="display:flex; gap:0.75rem;">
             <div style="text-align:center; padding:0.3rem 0.6rem; background:rgba(255,255,255,0.03); border-radius:6px;">
@@ -3326,7 +3345,7 @@ CALL f(1,2); f(1,2)</pre>
         </div>
         <div style="display: flex; justify-content: space-between;">
           <span style="color: var(--text-muted);">Device ID:</span>
-          <span id="pending-device-info-id" style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted);">-</span>
+          <span id="pending-device-info-id" style="font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0; font-size: 0.75rem; color: var(--text-muted);">-</span>
         </div>
       </div>
 
@@ -3470,9 +3489,9 @@ CALL f(1,2); f(1,2)</pre>
   <!-- App Logic. Skulpt, PDF.js and anime are loaded on demand from
        src/app/on-demand.js so they never block the initial render. -->
   <script src="mapper.js"></script>
-  <script src="compiler.js?v=20260903"></script>
+  <script src="compiler.js?v=20261021-1"></script>
   <script src="metrics.js?v=20260903"></script>
-  <script src="app.js?v=ux-20261019-8"></script>
+  <script src="app.js?v=ux-20261021-1"></script>
   <script>
     // Lazy-init lucide: every createIcons call site is guarded, so the icon
     // library is fetched on load (not at parse) and icons render once it lands.

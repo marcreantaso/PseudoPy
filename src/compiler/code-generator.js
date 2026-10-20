@@ -1,18 +1,7 @@
-const PYTHON_OPERATOR_MAP = {
-    '\u2265': '>=',
-    '\u2264': '<=',
-    '\u2260': '!=',
-    '==': '==',
-    '\u2261': '==',
-    '\u00D7': '*',
-    '\u2715': '*',
-    '\u22C5': '*',
-    '\u00F7': '/',
-    '\u2011': '-',
-    '\u2212': '-',
-    '\u2013': '-',
-    '\u2014': '-'
-};
+// Aliases the single shared SYMBOL_MAP (language-spec.js, bundled first).
+// Kept as an intermediate constant so a regression test can assert no second
+// table is ever reintroduced here.
+const PYTHON_OPERATOR_MAP = LANGUAGE_SPEC.unicodeNormalizations;
 
 class CodeGenerator {
     constructor(symbolTable) {
