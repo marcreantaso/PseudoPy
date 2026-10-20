@@ -2467,11 +2467,13 @@ CALL f(1,2); f(1,2)</pre>
             </div>
           </div>
           <div class="devtools-tab-panel" id="devtools-panel-impl">
-            <div class="devtools-panel-toolbar"><span class="devtools-count">Attribution</span></div>
-            <div class="devtools-panel-body" style="padding:1rem;overflow:auto;max-height:70vh">
-              <h3>Researcher</h3><ul><li>Compiler integration</li><li>Editor assistance</li><li>DevTools</li><li>Research tooling</li></ul>
-              <h3>Third-party</h3><ul><li>Skulpt</li><li>PDF.js</li><li>Express/CORS</li><li>Firebase</li></ul>
-              <p>See docs/IMPLEMENTATION_COMPONENTS.md, docs/COMPILER_PIPELINE.md</p>
+            <div class="devtools-panel-toolbar">
+              <span class="devtools-count">Attribution &amp; component inventory</span>
+              <span class="devtools-hint" id="impl-generated-at"></span>
+            </div>
+            <div class="devtools-panel-body" id="impl-panel-body" style="padding:1rem;overflow:auto;max-height:70vh">
+              <div class="impl-filter-chips" id="impl-filters" role="group" aria-label="Filter components"></div>
+              <div id="impl-content" aria-live="polite"></div>
             </div>
           </div>
         </div>

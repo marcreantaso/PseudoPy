@@ -99,6 +99,8 @@
     "src/database/facade.js"
   ],
   "devtools.js": [
+    "src/devtools/implementation-data.js",
+    "src/devtools/implementation-panel.js",
     "src/devtools/runtime-console.js",
     "src/devtools/pipeline-controls.js",
     "src/devtools/pipeline-view.js",
