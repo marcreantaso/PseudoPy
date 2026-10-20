@@ -23,7 +23,7 @@ Developer Options › Simulation panel displays live:
 | # | Stage | Implementation | What it maps |
 |---|-------|----------------|--------------|
 | 1 | Preprocessing & NLP/keyword mapping | `mapper.js` | English phrases to operators (e.g. `IS GREATER THAN OR EQUAL TO` → `>=`); string literals and comments are protected |
-| 2 | Unicode operator normalization | `src/compiler/lexer.js` | `≥ ≤ ≠ ≡ × ÷ − ←` and variants to strict Python ASCII operators |
+| 2 | Unicode operator normalization | `src/compiler/lexer.js` (shared `SYMBOL_MAP` in `src/compiler/language-spec.js`) | `≥ ⩾ ≤ ⩽ ≠ ≡ × ÷ ∕ − ← ∧ ∨ ¬` and variants to strict Python ASCII operators; symbols with no Python equivalent get a specific hint |
 | 3 | Lexical analysis | `src/compiler/lexer.js` | Characters → typed tokens with real 1-based line/column positions |
 | 4 | Syntax analysis (CFG parsing) | `src/compiler/parser.js` | Tokens → abstract syntax tree; block-stack validation; sentinel suggestions for unclosed blocks |
 | 5 | Semantic analysis | `src/compiler/semantic-analyzer.js` | Symbol table, strict typing for declared variables, invalid-operand checks |

@@ -819,6 +819,53 @@
       "status": "Qualified",
       "evidence": "src/database/ writes localStorage and IndexedDB first, then syncs to Firestore; offline writes are queued, not lost."
     }
+  ],
+  "compliance": [
+    {
+      "id": "C1",
+      "comment": "Show the pipeline with identical stage names and counts everywhere.",
+      "status": "Partial",
+      "evidence": "Canonical stage list now exists in scripts/docs-implementation.js and is rendered in the Implementation panel and generated doc.",
+      "test": "the pipeline stage vocabulary is defined once and the doc references it",
+      "gap": "The pipeline strip, simulation ledger, metrics chart and docs/COMPILER_PIPELINE.md still use their own stage sets.",
+      "ownerAction": "Repoint every surface at the canonical stage list and re-capture the DevTools audit screenshots."
+    },
+    {
+      "id": "C2",
+      "comment": "Mapping and validation execution: show input, validation checks, generated Python, actual output, and the invalid-syntax path.",
+      "status": "Complete",
+      "evidence": "Monitored live in Developer Options: NLP diff, event ledger, SDT walkthrough, console output and the failing-stage diagnostic.",
+      "test": "client compiler and vendored Skulpt translate and run with no network APIs",
+      "gap": null,
+      "ownerAction": null
+    },
+    {
+      "id": "C3",
+      "comment": "Functions: parameters, arity checking and a call stack in execution traces.",
+      "status": "Partial",
+      "evidence": "Function calls, returns and recursion are compiled and executed; the language reference states signature validation is incomplete.",
+      "test": "CALL passes distinct arguments",
+      "gap": "Function symbols carry no parameterCount/parameterNames, there is no arity check, and Exec Trace has no call stack.",
+      "ownerAction": "Add parameter metadata and an arity diagnostic, then render a call stack in Exec Trace."
+    },
+    {
+      "id": "C4",
+      "comment": "Monospace operators must read correctly (no fused glyphs, no stray Unicode).",
+      "status": "Complete",
+      "evidence": "Bundled no-ligature font; ligatures disabled on every mono surface; one shared symbol map; console verified in headless Chrome.",
+      "test": "every monospace surface disables ligatures so >= never fuses into one glyph",
+      "gap": null,
+      "ownerAction": null
+    },
+    {
+      "id": "C5",
+      "comment": "Identifiers: Unicode, NFC, homoglyph and zero-width handling; export encoding.",
+      "status": "Partial",
+      "evidence": "Editors opt out of OS autocorrect/autocapitalize; the formatter strips zero-width characters and normalizes NBSP.",
+      "test": "editors opt out of OS autocorrect so identifiers are not rewritten",
+      "gap": "The lexer accepts ASCII identifiers only; there is no NFC normalization and no homoglyph rejection.",
+      "ownerAction": "Decide the identifier policy (reject vs. fold for NFC/homoglyphs) and apply it in the lexer with a regression set."
+    }
   ]
 };
     if (typeof module !== "undefined" && module.exports) module.exports = global.PSEUDOPY_IMPLEMENTATION;
@@ -943,6 +990,31 @@
             '</tr></thead><tbody>' + rows + '</tbody></table></div></section>';
     }
 
+    function complianceCard(rows) {
+        var body = rows.map(function (c) {
+            var cls = c.status === 'Complete' ? 'pp-badge-success'
+                : (c.status === 'Partial' ? 'pp-badge-warning' : 'pp-badge-danger');
+            return '<tr>' +
+                '<td><strong>' + esc(c.id) + '</strong></td>' +
+                '<td>' + esc(c.comment) + '</td>' +
+                '<td><span class="pp-badge ' + cls + '">' + esc(c.status) + '</span></td>' +
+                '<td>' + esc(c.evidence) + (c.gap ? '<br><em>Gap:</em> ' + esc(c.gap) +
+                    '<br><em>Owner action:</em> ' + esc(c.ownerAction) : '') + '</td>' +
+                '</tr>';
+        }).join('');
+        var complete = rows.filter(function (c) { return c.status === 'Complete'; }).length;
+        return '' +
+            '<section class="pp-card impl-card">' +
+            '<div class="pp-card-header"><h3 class="pp-card-title">Panel comments' +
+            ' <span class="pp-badge pp-badge-info">' + complete + '/' + rows.length + ' complete</span></h3>' +
+            '<p class="pp-card-description">Each comment the panel made, with an honest status and the gap ' +
+            'that remains. Full matrix: <a href="docs/PANEL_COMPLIANCE.md" target="_blank" rel="noopener">' +
+            'docs/PANEL_COMPLIANCE.md</a>.</p></div>' +
+            '<div class="pp-card-content"><table class="pp-table"><thead><tr>' +
+            '<th scope="col">ID</th><th scope="col">Comment</th><th scope="col">Status</th><th scope="col">Evidence &amp; gap</th>' +
+            '</tr></thead><tbody>' + body + '</tbody></table></div></section>';
+    }
+
     function attributionCard() {
         // These are real links now, not plain text.
         return '' +
@@ -983,6 +1055,7 @@
             thirdPartyCard(data.thirdParty || []) +
             externalCard(data.external || []) +
             thesisCard(data.thesisClaims || []) +
+            complianceCard(data.compliance || []) +
             attributionCard();
         wireExpandableRows(host);
         var stamp = doc.getElementById('impl-generated-at');

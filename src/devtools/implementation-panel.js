@@ -118,6 +118,31 @@
             '</tr></thead><tbody>' + rows + '</tbody></table></div></section>';
     }
 
+    function complianceCard(rows) {
+        var body = rows.map(function (c) {
+            var cls = c.status === 'Complete' ? 'pp-badge-success'
+                : (c.status === 'Partial' ? 'pp-badge-warning' : 'pp-badge-danger');
+            return '<tr>' +
+                '<td><strong>' + esc(c.id) + '</strong></td>' +
+                '<td>' + esc(c.comment) + '</td>' +
+                '<td><span class="pp-badge ' + cls + '">' + esc(c.status) + '</span></td>' +
+                '<td>' + esc(c.evidence) + (c.gap ? '<br><em>Gap:</em> ' + esc(c.gap) +
+                    '<br><em>Owner action:</em> ' + esc(c.ownerAction) : '') + '</td>' +
+                '</tr>';
+        }).join('');
+        var complete = rows.filter(function (c) { return c.status === 'Complete'; }).length;
+        return '' +
+            '<section class="pp-card impl-card">' +
+            '<div class="pp-card-header"><h3 class="pp-card-title">Panel comments' +
+            ' <span class="pp-badge pp-badge-info">' + complete + '/' + rows.length + ' complete</span></h3>' +
+            '<p class="pp-card-description">Each comment the panel made, with an honest status and the gap ' +
+            'that remains. Full matrix: <a href="docs/PANEL_COMPLIANCE.md" target="_blank" rel="noopener">' +
+            'docs/PANEL_COMPLIANCE.md</a>.</p></div>' +
+            '<div class="pp-card-content"><table class="pp-table"><thead><tr>' +
+            '<th scope="col">ID</th><th scope="col">Comment</th><th scope="col">Status</th><th scope="col">Evidence &amp; gap</th>' +
+            '</tr></thead><tbody>' + body + '</tbody></table></div></section>';
+    }
+
     function attributionCard() {
         // These are real links now, not plain text.
         return '' +
@@ -158,6 +183,7 @@
             thirdPartyCard(data.thirdParty || []) +
             externalCard(data.external || []) +
             thesisCard(data.thesisClaims || []) +
+            complianceCard(data.compliance || []) +
             attributionCard();
         wireExpandableRows(host);
         var stamp = doc.getElementById('impl-generated-at');

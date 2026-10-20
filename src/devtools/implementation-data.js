@@ -819,6 +819,53 @@
       "status": "Qualified",
       "evidence": "src/database/ writes localStorage and IndexedDB first, then syncs to Firestore; offline writes are queued, not lost."
     }
+  ],
+  "compliance": [
+    {
+      "id": "C1",
+      "comment": "Show the pipeline with identical stage names and counts everywhere.",
+      "status": "Partial",
+      "evidence": "Canonical stage list now exists in scripts/docs-implementation.js and is rendered in the Implementation panel and generated doc.",
+      "test": "the pipeline stage vocabulary is defined once and the doc references it",
+      "gap": "The pipeline strip, simulation ledger, metrics chart and docs/COMPILER_PIPELINE.md still use their own stage sets.",
+      "ownerAction": "Repoint every surface at the canonical stage list and re-capture the DevTools audit screenshots."
+    },
+    {
+      "id": "C2",
+      "comment": "Mapping and validation execution: show input, validation checks, generated Python, actual output, and the invalid-syntax path.",
+      "status": "Complete",
+      "evidence": "Monitored live in Developer Options: NLP diff, event ledger, SDT walkthrough, console output and the failing-stage diagnostic.",
+      "test": "client compiler and vendored Skulpt translate and run with no network APIs",
+      "gap": null,
+      "ownerAction": null
+    },
+    {
+      "id": "C3",
+      "comment": "Functions: parameters, arity checking and a call stack in execution traces.",
+      "status": "Partial",
+      "evidence": "Function calls, returns and recursion are compiled and executed; the language reference states signature validation is incomplete.",
+      "test": "CALL passes distinct arguments",
+      "gap": "Function symbols carry no parameterCount/parameterNames, there is no arity check, and Exec Trace has no call stack.",
+      "ownerAction": "Add parameter metadata and an arity diagnostic, then render a call stack in Exec Trace."
+    },
+    {
+      "id": "C4",
+      "comment": "Monospace operators must read correctly (no fused glyphs, no stray Unicode).",
+      "status": "Complete",
+      "evidence": "Bundled no-ligature font; ligatures disabled on every mono surface; one shared symbol map; console verified in headless Chrome.",
+      "test": "every monospace surface disables ligatures so >= never fuses into one glyph",
+      "gap": null,
+      "ownerAction": null
+    },
+    {
+      "id": "C5",
+      "comment": "Identifiers: Unicode, NFC, homoglyph and zero-width handling; export encoding.",
+      "status": "Partial",
+      "evidence": "Editors opt out of OS autocorrect/autocapitalize; the formatter strips zero-width characters and normalizes NBSP.",
+      "test": "editors opt out of OS autocorrect so identifiers are not rewritten",
+      "gap": "The lexer accepts ASCII identifiers only; there is no NFC normalization and no homoglyph rejection.",
+      "ownerAction": "Decide the identifier policy (reject vs. fold for NFC/homoglyphs) and apply it in the lexer with a regression set."
+    }
   ]
 };
     if (typeof module !== "undefined" && module.exports) module.exports = global.PSEUDOPY_IMPLEMENTATION;
