@@ -27,6 +27,13 @@ function setMobileSidebar(open) {
 function toggleMobileSidebar() { setMobileSidebar(!$qs('.sidebar')?.classList.contains('open')); }
 function closeMobileSidebar() { setMobileSidebar(false); }
 
+// Android back / iOS swipe-back closes the nav drawer through the
+// overlay-history stack, using the real close action so body/inert/aria
+// state all unwind with it (overlay-history.js loads before this module).
+if (typeof overlayHistoryOnClose === 'function') {
+    overlayHistoryOnClose($id('sidebar-overlay'), closeMobileSidebar);
+}
+
 document.addEventListener('keydown', event => {
     const sidebar = $qs('.sidebar.open');
     if (!sidebar) return;

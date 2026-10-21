@@ -98,12 +98,106 @@ async function refreshAuthoritativeCaches() {
     }
 }
 
+/**
+ * Wire the pseudocode + Python editor input/scroll pipeline, the unsaved
+ * draft safety net, and realtime validation. Called at the very top of
+ * init(), BEFORE its first await: the editor must answer keystrokes from the
+ * first moment it is on screen, not after session restore and the IndexedDB
+ * warm-up finish (mobile audit finding #10: a 1.5–11.8 s dead window,
+ * median 5.1 s).
+ */
+function bindEditorInputPipeline() {
+    // Update line count on editor input and sync gutter
+    const editor = $id('pseudocode-editor');
+    if (editor) {
+        const syncEditorState = () => {
+            if (currentErrorLineNumbers.length) {
+                currentErrorLineNumbers = [];
+                clearEditorErrors('pseudocode-editor');
+                setText('console-output', 'Source changed — translate again to refresh diagnostics.');
+            }
+            setText('line-count', editor.value.split('\n').length + ' lines');
+            updateGutter();
+
+            exerciseState.isTranslated = false;
+            exerciseState.isExecuted = false;
+            exerciseState.outputMatched = false;
+            updateExerciseStatus();
+
+            // Debounced draft autosave: a crash or forced PWA update right
+            // after typing loses at most one debounce window, not the
+            // session's work.
+            if (typeof scheduleEditorDraftSave === 'function') scheduleEditorDraftSave();
+        };
+
+        editor.addEventListener('input', syncEditorState);
+        editor.addEventListener('scroll', () => {
+            const gutter = $id('editor-gutter');
+            const highlights = $id('editor-highlights');
+            if (gutter) gutter.scrollTop = editor.scrollTop;
+            if (highlights) {
+                highlights.scrollTop = editor.scrollTop;
+                highlights.scrollLeft = editor.scrollLeft;
+            }
+        });
+
+        // Safety net: any page unload (refresh, tab close, PWA update) persists
+        // unsaved pseudocode to the draft slot so student work survives.
+        window.addEventListener('beforeunload', function () {
+            try { if (typeof maybeSaveEditorDraft === 'function') maybeSaveEditorDraft(); } catch (e) { }
+        });
+        // iOS Safari does not reliably fire beforeunload when the app is
+        // backgrounded; the visibility transition is the dependable flush.
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState !== 'hidden') return;
+            try { if (typeof maybeSaveEditorDraft === 'function') maybeSaveEditorDraft(); } catch (e) { }
+        });
+    }
+
+    // Sync scrolling and update gutter for Python Editor
+    const pyEditor = $id('python-output');
+    if (pyEditor) {
+        const syncPythonState = () => {
+            updatePythonGutter();
+
+            exerciseState.isExecuted = false;
+            exerciseState.outputMatched = false;
+            updateExerciseStatus();
+        };
+
+        pyEditor.addEventListener('input', syncPythonState);
+        pyEditor.addEventListener('scroll', () => {
+            const gutter = $id('python-gutter');
+            const highlights = $id('python-highlights');
+            if (gutter) gutter.scrollTop = pyEditor.scrollTop;
+            if (highlights) {
+                highlights.scrollTop = pyEditor.scrollTop;
+                highlights.scrollLeft = pyEditor.scrollLeft;
+            }
+        });
+
+        updatePythonGutter();
+    }
+
+    // Setup real-time validation
+    setupRealtimeValidation();
+}
+
 async function init() {
     console.log('[App] init() called');
     try {
 
         // Bind the real login form once (Enter / GO / RETURN submit path).
         if (typeof setupLoginForm === 'function') setupLoginForm();
+
+        // Wire the editor input pipeline BEFORE the first await. Session
+        // restore and the IndexedDB warm-up take seconds on a cold
+        // Firestore-connected boot; typing during that window hit a dead
+        // editor with no gutter or line-count response (mobile audit finding
+        // #10). Everything the handlers touch is hoisted function
+        // declarations plus already-initialised module state, so binding
+        // here is safe and costs nothing.
+        bindEditorInputPipeline();
 
         // Restore the persisted session FIRST so a refresh never flashes
         // login and never behaves like a logout.
@@ -138,70 +232,6 @@ async function init() {
 
     updateClock();
     setInterval(updateClock, 60000);
-
-    // Update line count on editor input and sync gutter
-    const editor = $id('pseudocode-editor');
-    if (editor) {
-        const syncEditorState = () => {
-            if (currentErrorLineNumbers.length) {
-                currentErrorLineNumbers = [];
-                clearEditorErrors('pseudocode-editor');
-                setText('console-output', 'Source changed — translate again to refresh diagnostics.');
-            }
-            setText('line-count', editor.value.split('\n').length + ' lines');
-            updateGutter();
-
-            exerciseState.isTranslated = false;
-            exerciseState.isExecuted = false;
-            exerciseState.outputMatched = false;
-            updateExerciseStatus();
-        };
-
-        editor.addEventListener('input', syncEditorState);
-        editor.addEventListener('scroll', () => {
-            const gutter = $id('editor-gutter');
-            const highlights = $id('editor-highlights');
-            if (gutter) gutter.scrollTop = editor.scrollTop;
-            if (highlights) {
-                highlights.scrollTop = editor.scrollTop;
-                highlights.scrollLeft = editor.scrollLeft;
-            }
-        });
-
-        // Safety net: any page unload (refresh, tab close, PWA update) persists
-        // unsaved pseudocode to the draft slot so student work survives.
-        window.addEventListener('beforeunload', function () {
-            try { if (typeof maybeSaveEditorDraft === 'function') maybeSaveEditorDraft(); } catch (e) { }
-        });
-    }
-
-    // Sync scrolling and update gutter for Python Editor
-    const pyEditor = $id('python-output');
-    if (pyEditor) {
-        const syncPythonState = () => {
-            updatePythonGutter();
-
-            exerciseState.isExecuted = false;
-            exerciseState.outputMatched = false;
-            updateExerciseStatus();
-        };
-
-        pyEditor.addEventListener('input', syncPythonState);
-        pyEditor.addEventListener('scroll', () => {
-            const gutter = $id('python-gutter');
-            const highlights = $id('python-highlights');
-            if (gutter) gutter.scrollTop = pyEditor.scrollTop;
-            if (highlights) {
-                highlights.scrollTop = pyEditor.scrollTop;
-                highlights.scrollLeft = pyEditor.scrollLeft;
-            }
-        });
-
-        updatePythonGutter();
-    }
-
-    // Setup real-time validation
-    setupRealtimeValidation();
 
     // Close notification dropdown on outside click
     document.addEventListener('click', (e) => {

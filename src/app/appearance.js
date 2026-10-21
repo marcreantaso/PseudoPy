@@ -29,7 +29,9 @@ function themeModeIsDark(mode) {
 
 /** The browser/OS chrome colour for the resolved theme. */
 function themeColorFor(dark) {
-    return dark ? '#0f172a' : '#f8fafc';
+    // Matches --bg-secondary (the topbar/header colour) in each theme, so the
+    // browser/OS chrome never contradicts the app header (audit finding #9).
+    return dark ? '#0d0d14' : '#f1f5f9';
 }
 
 /** Updates the toggle button icon/labels and the menu checkmarks. */
@@ -75,8 +77,13 @@ function applyThemeMode(mode, options) {
     root.classList.add('theme-switching');
     root.setAttribute('data-theme', theme);
 
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', themeColorFor(dark));
+    // Keep the browser/OS chrome colour in step with the resolved theme. The
+    // head carries paired prefers-color-scheme metas for the pre-JS frame;
+    // once a theme is applied, every meta takes the resolved colour so the
+    // effective colour is right whichever media query matches.
+    const themeColor = themeColorFor(dark);
+    document.querySelectorAll('meta[name="theme-color"]').forEach(meta =>
+        meta.setAttribute('content', themeColor));
 
     updateThemeToggleUI(mode, theme);
 
@@ -135,6 +142,11 @@ function initTheme() {
     const menu = $id('theme-menu');
     if (!button || !menu) return;
 
+    // Android back / iOS swipe-back closes the theme menu via the
+    // overlay-history stack with its real close action, so aria-expanded
+    // and the check marks unwind together with visibility.
+    if (typeof overlayHistoryOnClose === 'function') overlayHistoryOnClose(menu, closeThemeMenu);
+
     button.addEventListener('click', () => {
         if (menu.classList.contains('hidden')) openThemeMenu();
         else closeThemeMenu();
@@ -174,40 +186,75 @@ function initTheme() {
 }
 
 /**
- * Automatically formats pseudocode with consistent indentation
+ * Read the "Use Python operators in output text" preference (default ON).
+ */
+function pythonOperatorsInOutputEnabled() {
+    try {
+        return localStorage.getItem(STORAGE_KEYS.PYTHON_OUTPUT_SYMBOLS) !== 'off';
+    } catch (e) {
+        return true;
+    }
+}
+
+/**
+ * Set the preference and persist it. Kept in the app bundle so the formatter
+ * setting has one owner.
+ */
+function setPythonOperatorsInOutput(enabled) {
+    try {
+        localStorage.setItem(STORAGE_KEYS.PYTHON_OUTPUT_SYMBOLS, enabled ? 'on' : 'off');
+    } catch (e) { /* storage unavailable */ }
+}
+
+/**
+ * Settings checkbox handler for the output-symbol preference.
+ */
+function handlePythonOutputSymbolsToggle(enabled) {
+    setPythonOperatorsInOutput(!!enabled);
+    if (typeof showToast === 'function') {
+        showToast(enabled
+            ? 'Output text will show Python operators (for example >= instead of \u2265).'
+            : 'Output text will keep the symbols exactly as typed.', 'success');
+    }
+}
+
+/**
+ * Automatically formats pseudocode: the shared formatter normalizes
+ * indentation, casing, operator spacing, tabs/CRLF/NBSP and (when enabled)
+ * converts math symbols inside string literals to Python operators. The prior
+ * text is kept so the change can be undone, matching the editor-assistance
+ * "Undo fix" pattern.
  */
 function autoFormatPseudocode() {
     const editor = $id('pseudocode-editor');
     if (!editor) return;
+    const formatter = window.PseudocodeFormatter;
+    if (!formatter) return;
 
-    const lines = editor.value.split('\n');
-    let indentLevel = 0;
-    const indentSize = 2; // Spaces per level
-
-    const formattedLines = lines.map(line => {
-        let trimmed = line.trim();
-        if (!trimmed) return '';
-
-        // Keywords that decrease indentation BEFORE the line
-        if (trimmed.match(/^(END|ELSE|NEXT|UNTIL)/i)) {
-            indentLevel = Math.max(0, indentLevel - 1);
-        }
-
-        const spaces = ' '.repeat(indentLevel * indentSize);
-        const result = spaces + trimmed;
-
-        // Keywords that increase indentation AFTER the line
-        if (trimmed.match(/^(BEGIN|IF|WHILE|FOR|REPEAT|ELSE|FUNCTION|PROCEDURE|CASE)/i)) {
-            // But don't increase if it's an inline IF or a single-line block
-            if (!trimmed.match(/THEN.*END\s+IF/i) && !trimmed.match(/DO.*DONE/i)) {
-                indentLevel++;
-            }
-        }
-
-        return result;
+    const before = editor.value;
+    const result = formatter.formatPseudocode(before, {
+        pythonOperatorsInOutput: pythonOperatorsInOutputEnabled()
     });
+    if (result.text === before) {
+        showToast('Pseudocode is already formatted.', 'info');
+        return;
+    }
 
-    editor.value = formattedLines.join('\n');
+    editor.value = result.text;
     updateGutter(); // Refresh line numbers
-    showToast('Pseudocode formatted!', 'success');
+    // Reuse the shared per-editor Undo affordance when available so the
+    // formatting change (including output-symbol conversion) can be reverted.
+    try {
+        const states = typeof window !== 'undefined' ? window.__pseudopyAssistanceStates : null;
+        const editorState = states && states['pseudocode-editor'];
+        if (editorState && typeof pseudopySetPendingUndo === 'function') {
+            pseudopySetPendingUndo(editorState, before, result.text, { editorId: 'pseudocode-editor', consoleId: 'console-output' });
+        }
+    } catch (e) { /* undo affordance optional */ }
+    const outputChanges = result.changes.filter(c => c.type === 'output-symbol').length;
+    if (outputChanges) {
+        showToast('Formatted. ' + outputChanges + ' line' + (outputChanges === 1 ? '' : 's') + ' with symbols now show Python operators in output.', 'success');
+    } else {
+        showToast('Pseudocode formatted!', 'success');
+    }
 }

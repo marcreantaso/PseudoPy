@@ -3,10 +3,10 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-shell-20261018-v36';
+const CACHE_NAME = 'pseudopy-shell-20261021-v38';
 // Vendor cache name is versioned so the old-worker cleanup below can prune
 // superseded PDF worker generations instead of accumulating them.
-const VENDOR_CACHE_NAME = 'pseudopy-vendor-20261018-v36';
+const VENDOR_CACHE_NAME = 'pseudopy-vendor-20261021-v38';
 
 const LOCAL_ASSETS = [
     './',
@@ -14,15 +14,15 @@ const LOCAL_ASSETS = [
     './pwa-updates.js?v=20260921-1',
     './style.css',
     './student-workspace.css',
-    './style.css?v=ux-20261019-11',
-    './student-workspace.css?v=ux-20261006-5',
+    './style.css?v=ux-20261021-1',
+    './student-workspace.css?v=ux-20261021-1',
     './mapper.js',
     './app.js',
-    './app.js?v=ux-20261018-7',
+    './app.js?v=ux-20261021-1',
     './ui-icons.js?v=2',
     './ui-icons.css?v=1',
     './compiler.js',
-    './compiler.js?v=20260903',
+    './compiler.js?v=20261021-1',
     './metrics.js',
     './metrics.js?v=20260903',
     './manifest.json',
@@ -38,7 +38,12 @@ const LOCAL_ASSETS = [
     // stdlib are vendored under vendor/ and pre-cached at install time so an
     // installed PWA can translate AND execute Python with no network at all.
     './vendor/skulpt/skulpt.min.js',
-    './vendor/skulpt/skulpt-stdlib.js'
+    './vendor/skulpt/skulpt-stdlib.js',
+    // Bundled no-ligature monospace (JetBrains Mono NL, OFL 1.1 — see
+    // vendor/fonts/LICENSE-OFL.txt) so every device renders identical
+    // monospace glyphs offline.
+    './vendor/fonts/jetbrains-mono-nl-400.woff2',
+    './vendor/fonts/jetbrains-mono-nl-700.woff2'
 ];
 
 // External assets are pre-cached best-effort (non-blocking): installation never

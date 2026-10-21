@@ -356,6 +356,356 @@ function suggestSentinel(givenWord, candidates) {
 // Scans raw pseudocode input character-by-character in O(N).
 // Produces a flat array of typed tokens for the Parser.
 // ══════════════════════════════════════════════════════════════
+// ── Unicode → Python operator SYMBOL_MAP (single source of truth) ──
+// One table for the whole system: the lexer applies it to code outside string
+// literals, the research normalizer applies it to whole sources, and the
+// formatter consults it for output-text conversion. A regression test fails
+// if a second copy of this mapping ever appears in another file.
+// Word-valued targets (AND/OR/NOT) are emitted as keyword tokens by the lexer.
+const SYMBOL_MAP = Object.freeze({
+  "\u2265": ">=",  // ≥  GREATER-THAN OR EQUAL TO
+  "\u2A7E": ">=",  // ⩾  SLANTED GREATER-THAN OR EQUAL TO
+  "\u2264": "<=",  // ≤  LESS-THAN OR EQUAL TO
+  "\u2A7D": "<=",  // ⩽  SLANTED LESS-THAN OR EQUAL TO
+  "\u2260": "!=",  // ≠  NOT EQUAL TO
+  "\u2261": "==",  // ≡  IDENTICAL TO
+  "\u00D7": "*",   // ×  MULTIPLICATION SIGN
+  "\u2715": "*",   // ✕  MULTIPLICATION X
+  "\u22C5": "*",   // ⋅  DOT OPERATOR (scalar multiply)
+  "\u00F7": "/",   // ÷  DIVISION SIGN
+  "\u2215": "/",   // ∕  DIVISION SLASH
+  "\u2011": "-",   // ‑  NON-BREAKING HYPHEN
+  "\u2212": "-",   // −  MINUS SIGN
+  "\u2013": "-",   // –  EN DASH (often typed as minus)
+  "\u2014": "-",   // —  EM DASH
+  "\u2190": "=",   // ←  LEFTWARDS ARROW (assignment)
+  "\u2254": "=",   // ≔  COLON EQUALS (assignment)
+  "\u2192": "->",  // →  RIGHTWARDS ARROW
+  "\u2227": "AND", // ∧  LOGICAL AND
+  "\u2228": "OR",  // ∨  LOGICAL OR
+  "\u00AC": "NOT"  // ¬  NOT
+});
+
+// Math symbols with no direct Python operator equivalent. The lexer explains
+// them with a friendly hint instead of a generic "unsupported character".
+const UNICODE_HINTS = Object.freeze({
+  "\u221A": { name: "square root", help: "There is no square-root operator; compute it as exponentiation, e.g. x ^ 0.5." },
+  "\u03C0": { name: "pi", help: "Pi has no literal form; use a numeric value such as 3.14159." },
+  "\u00B1": { name: "plus-minus", help: "Write the intended operation explicitly, e.g. + or -." },
+  "\u2248": { name: "approximately equal", help: "Use == for an exact comparison, or a tolerance such as ABS(a - b) < 0.001." }
+});
+
+const LANGUAGE_SPEC = Object.freeze({
+  name: "PseudoPy",
+  description: "Pseudocode subset accepted by the current PseudoPy pipeline.",
+  program: { syntax: "BEGIN ... END", required: true, notes: "Code after the final END is rejected." },
+  lineHandling: { leadingNumbersStripped: true, spacesTabsSkipped: true, newlines: "preserve-as-tokens" },
+  keywordsCaseInsensitive: true,
+  comments: { hashOutsideStrings: true, doubleSlash: "before-token only (floor-division inside expressions)", notes: "Strings are protected from hash stripping." },
+  types: Object.freeze(["INTEGER", "FLOAT", "REAL", "STRING", "CHAR", "CHARACTER", "BOOLEAN", "BOOL", "ARRAY"]),
+  operators: Object.freeze([
+    "+ - * / DIV MOD ^ ~ << >> & | ** //",
+    "== != <> = > < >= <= IS NOT IN AND OR NOT"
+  ]),
+  unicodeNormalizations: SYMBOL_MAP,
+  unicodeHints: UNICODE_HINTS,
+  declarations: { forms: ["DECLARE name AS TYPE"] },
+  assignment: { forms: [
+    "SET name TO expression",
+    "SET name = expression",
+    "name = expression",
+    "SET name[index...] TO expression",
+    "name[index...] = expression"
+  ] },
+  io: {
+    input: ["INPUT name", "READ name", "INPUT WITH PROMPT name"],
+    output: ["DISPLAY expression", "PRINT expression", "OUTPUT expression"]
+  },
+  selection: { forms: ["IF condition THEN ... [ELSE IF condition THEN ...] [ELSE ...] END IF"] },
+  loops: {
+    while: ["WHILE condition DO ... END WHILE"],
+    for: ["FOR name FROM start TO stop [STEP step] DO ... END FOR"],
+    forEach: ["FOR EACH name IN expression DO ... END FOR EACH"]
+  },
+  functions: {
+    forms: [
+      "FUNCTION name([param[, param...]]) ... [RETURN expression] END FUNCTION",
+      "PROCEDURE name([param[, param...]]) ... [RETURN [expression]] END PROCEDURE",
+      "CALL name([arg[, arg...]])",
+      "CALL name arg[, arg...]",
+      "name(arg[, arg...])"
+    ],
+    notes: "Recursive calls are supported; arity/signature checks are incomplete."
+  },
+  arrays: { supported: true, notes: "Indexing supported; slices/indexing chains are subset of expression grammar." },
+  expressionHighlights: Object.freeze(["lists/tuples", "membership/identity", "chained comparisons", "Boolean short-circuit"]),
+  unsupported: Object.freeze(["dictionaries/sets/comprehensions", "keyword arguments/lambdas", "augmented assignment", "exceptions/imports", "arbitrary field access in all cases"]),
+  limitations: Object.freeze([
+    "Input conversion retries depend on declared type",
+    "Function signature validation incomplete",
+    "Expression column mapping not preserved to original source",
+    "Runtime behavior limited to Skulpt environment"
+  ])
+});
+if (typeof module !== "undefined" && module.exports) { module.exports = { LANGUAGE_SPEC, SYMBOL_MAP, UNICODE_HINTS }; }
+if (typeof window !== "undefined") { window.LANGUAGE_SPEC = LANGUAGE_SPEC; window.SYMBOL_MAP = SYMBOL_MAP; window.UNICODE_HINTS = UNICODE_HINTS; }
+/* ============================================================
+   PSEUDOPY — PSEUDOCODE FORMATTER (single source of truth)
+
+   The formatter is a pure, dependency-free transform used by:
+     - the "Format" toolbar button (student editor)
+     - the Developer Options -> Normalize/Format panel (preview/diff/apply)
+     - the student Settings toggle for output-text symbols
+   It is bundled into app.js (see src/bundles.json) and also exported for
+   Node property tests.
+
+   Guarantees (property-tested in tests/formatter.test.js):
+     - idempotent: format(format(x)) === format(x)
+     - semantics-preserving: the compiled Python and stdout are unchanged for
+       every input the compiler accepts (string/comment text aside, see below)
+     - tabs, CRLF, BOM, NBSP and trailing spaces are normalized
+     - keyword casing, indentation, operator spacing, one statement per line
+       and END-block alignment are enforced
+     - text INSIDE string literals and comments is never rewritten for code
+       purposes, except the explicit output-symbol conversion below
+
+   Output-symbol conversion (setting: "Use Python operators in output text",
+   default ON): symbols a student typed INSIDE a string literal are converted
+   to their Python-operator ASCII (e.g. "≥" -> ">=") so every console output
+   shows Python operators. When the setting is OFF, string contents are left
+   byte-identical.
+   ============================================================ */
+
+(function (global) {
+    'use strict';
+
+    // The single shared symbol table lives in language-spec.js (bundled ahead
+    // of this file as part of compiler.js, and exposed on window.SYMBOL_MAP).
+    // Fall back to a small inline map only when that global is absent (bare
+    // Node require in tests) so the formatter never carries a second copy.
+    function sharedSymbolMap() {
+        if (global && global.SYMBOL_MAP) return global.SYMBOL_MAP;
+        if (global && global.LANGUAGE_SPEC && global.LANGUAGE_SPEC.unicodeNormalizations) return global.LANGUAGE_SPEC.unicodeNormalizations;
+        if (typeof require === 'function') {
+            try { return require('./language-spec.js').SYMBOL_MAP; } catch (e) { /* not available */ }
+        }
+        return null;
+    }
+
+    // Symbols that only make sense as operators, never as readable output
+    // text. Output conversion therefore leaves readable math glyphs that have
+    // a Python equivalent out of strings unchanged EXCEPT the operator set
+    // below, which is the set the owner asked to surface as Python operators.
+    var OUTPUT_CONVERTIBLE = ['\u2265', '\u2A7E', '\u2264', '\u2A7D', '\u2260', '\u2261', '\u2261', '\u00D7', '\u2715', '\u22C5', '\u00F7', '\u2215', '\u2212', '\u2227', '\u2228', '\u00AC'];
+
+    var KEYWORDS_UPPER = ['BEGIN', 'END', 'IF', 'THEN', 'ELSE', 'ELSEIF', 'ELSE IF', 'WHILE', 'DO',
+        'FOR', 'EACH', 'FROM', 'TO', 'STEP', 'IN', 'REPEAT', 'UNTIL', 'CASE', 'OF', 'OTHERWISE',
+        'FUNCTION', 'PROCEDURE', 'CALL', 'RETURN', 'DECLARE', 'AS', 'SET', 'DISPLAY', 'PRINT',
+        'OUTPUT', 'INPUT', 'READ', 'WITH', 'PROMPT', 'AND', 'OR', 'NOT', 'MOD', 'DIV', 'IS'];
+
+    var DEDENT_KEYWORDS = /^(END\b|ELSE\b|ELSEIF\b|ELSE\s+IF\b|NEXT\b|UNTIL\b|OTHERWISE\b|CASE\s+ELSE\b|END\b)/i;
+    var INDENT_KEYWORDS = /^(BEGIN\b|IF\b|WHILE\b|FOR\b|REPEAT\b|ELSE\b|ELSEIF\b|ELSE\s+IF\b|FUNCTION\b|PROCEDURE\b|CASE\b)/i;
+
+    // One binary/word operator spacing pass, applied only outside strings and
+    // comments. Word operators use single spaces; the rest use tight spacing.
+    var BINARY_SYMBOLS = ['>=', '<=', '==', '!=', '<>', ':=', '<-', '->', '**', '//', '<<', '>>',
+        '+', '-', '*', '/', '%', '=', '>', '<', '^', '&', '|', '~'];
+    var WORD_OPERATORS = ['MOD', 'DIV', 'AND', 'OR', 'NOT', 'IS', 'IN'];
+
+    // ── helpers ────────────────────────────────────────────────
+    function normalizeWhitespace(text) {
+        return text
+            .replace(/^\uFEFF/, '')          // strip BOM
+            .replace(/\r\n?/g, '\n')          // CRLF and bare CR -> LF
+            .replace(/\u00A0/g, ' ')          // NBSP -> space
+            .replace(/\t/g, '    ')           // tabs -> 4 spaces
+            .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '') // zero-width chars
+            .replace(/[ ]+$/gm, '');          // trailing spaces per line
+    }
+
+    // Tokenize a single line into an ordered list of typed segments so the
+    // formatter can rewrite code without ever touching the inside of a string
+    // literal or comment. Kinds: 'code' | 'string' | 'comment'.
+    function splitLine(line) {
+        var segments = [];
+        var i = 0;
+        while (i < line.length) {
+            var ch = line[i];
+            if (ch === '"' || ch === "'") {
+                var quote = ch;
+                var lit = ch;
+                i++;
+                while (i < line.length) {
+                    var c = line[i];
+                    lit += c;
+                    i++;
+                    if (c === '\\' && i < line.length) { lit += line[i]; i++; continue; }
+                    if (c === quote) break;
+                }
+                segments.push({ kind: 'string', text: lit });
+                continue;
+            }
+            if (ch === '#') { segments.push({ kind: 'comment', text: line.slice(i) }); i = line.length; break; }
+            if (ch === '/' && line[i + 1] === '/' && (segments.length === 0 || segments[segments.length - 1].text.trim() === '')) {
+                segments.push({ kind: 'comment', text: line.slice(i) }); i = line.length; break;
+            }
+            var start = i;
+            while (i < line.length && line[i] !== '"' && line[i] !== "'" && line[i] !== '#') {
+                if (line[i] === '/' && line[i + 1] === '/') break;
+                i++;
+            }
+            segments.push({ kind: 'code', text: line.slice(start, i) });
+        }
+        if (!segments.length) segments.push({ kind: 'code', text: '' });
+        return segments;
+    }
+
+    function collapseSpaces(code) {
+        return code.replace(/[ ]{2,}/g, ' ');
+    }
+
+    // Spacing is applied to a CODE segment only. Runs of whitespace between
+    // tokens are normalized; operators get single spaces, but never split a
+    // multi-character operator and never detach punctuation from its operand.
+    function spaceOperators(code) {
+        // Protect multi-char operators and parentheses/commas with sentinels so
+        // the space pass cannot split them.
+        var prot = [];
+        function stash(re, text) {
+            return text.replace(re, function (m) { prot.push(m); return '\u0000' + (prot.length - 1) + '\u0000'; });
+        }
+        var out = code;
+        // Multi-char operators first (longest match wins via ordering).
+        out = stash(/>=|<=|==|!=|<>|:=|<-|->|\*\*|\/\/|<<|>>/g, out);
+        // Then single-char operators, but keep a leading unary sign attached.
+        out = out.replace(/\s*([+\-*\/%^=<>&|~])\s*/g, ' $1 ');
+        // Parentheses and commas hug their operands.
+        out = out.replace(/\s*\(\s*/g, '(').replace(/\s*\)\s*/g, ')');
+        out = out.replace(/\s*,\s*/g, ', ');
+        // Restore the protected multi-char operators with single spaces.
+        out = out.replace(/\u0000(\d+)\u0000/g, function (m, n) { return prot[Number(n)]; });
+        out = out.replace(/[ ]{2,}/g, ' ').trim();
+        return out;
+    }
+
+    // Merge code segments back with their strings, but re-derive spacing on the
+    // joined text so a keyword is not glued to the following literal.
+    function formatSegments(segments, pythonInOutput, symbolMap, changes, lineNumber) {
+        // Build the code-only view and the placeholder map.
+        var placeholders = [];
+        var skeleton = '';
+        for (var s = 0; s < segments.length; s++) {
+            var part = segments[s];
+            if (part.kind === 'code') {
+                skeleton += part.text;
+            } else {
+                skeleton += '\u0001' + placeholders.length + '\u0001';
+                placeholders.push(part);
+            }
+        }
+        skeleton = collapseSpaces(skeleton);
+        skeleton = uppercaseKeywords(skeleton);
+        skeleton = spaceOperators(skeleton);
+
+        var out = '';
+        var re = /\u0001(\d+)\u0001/g;
+        var last = 0;
+        var m;
+        while ((m = re.exec(skeleton)) !== null) {
+            out += skeleton.slice(last, m.index);
+            var part = placeholders[Number(m[1])];
+            var text = part.text;
+            if (part.kind === 'string' && pythonInOutput) {
+                var converted = convertOutputSymbols(text, symbolMap);
+                if (converted !== text) changes.push({ line: lineNumber, type: 'output-symbol', message: 'Output text: symbols shown as Python operators' });
+                text = converted;
+            }
+            // A code segment ending in an identifier/keyword needs one space
+            // before a following string literal.
+            out += text;
+            last = re.lastIndex;
+        }
+        out += skeleton.slice(last);
+        return out.trim();
+    }
+
+    function uppercaseKeywords(code) {
+        // Uppercase the statement keywords, leaving identifiers and literals
+        // alone. Word-boundary + keyword list only.
+        var re = new RegExp('\\b(' + KEYWORDS_UPPER.map(function (k) { return k.replace(/ /g, '\\s+'); }).join('|') + ')\\b', 'gi');
+        return code.replace(re, function (m) { return m.toUpperCase().replace(/\s+/g, ' '); });
+    }
+
+    function convertOutputSymbols(literal, map) {
+        if (!map || literal.length < 2) return literal;
+        var quote = literal[0];
+        var inner = literal.slice(1, literal.length - 1);
+        var out = '';
+        for (var i = 0; i < inner.length; i++) {
+            var ch = inner[i];
+            if (ch === '\\' && i + 1 < inner.length) { out += ch + inner[i + 1]; i++; continue; }
+            if (OUTPUT_CONVERTIBLE.indexOf(ch) !== -1 && map[ch]) out += map[ch];
+            else out += ch;
+        }
+        return quote + out + quote;
+    }
+
+    /* ── main entry ────────────────────────────────────────────
+       formatPseudocode(source, options) -> { text, changes[] }
+       options.pythonOperatorsInOutput: boolean (default true)
+    */
+    function formatPseudocode(source, options) {
+        options = options || {};
+        var pythonInOutput = options.pythonOperatorsInOutput !== false;
+        if (source == null) return { text: '', changes: [] };
+        var symbolMap = sharedSymbolMap();
+        var raw = normalizeWhitespace(String(source));
+        var lines = raw.split('\n');
+        var out = [];
+        var changes = [];
+        var indentLevel = 0;
+        var indentSize = (typeof options.indentSize === 'number') ? options.indentSize : 2;
+
+        for (var i = 0; i < lines.length; i++) {
+            var originalLine = lines[i];
+            var trimmed = originalLine.trim();
+            if (!trimmed) { out.push(''); continue; }
+
+            var segments = splitLine(trimmed);
+            var rebuilt = formatSegments(segments, pythonInOutput, symbolMap, changes, i + 1);
+            if (!rebuilt) { out.push(''); continue; }
+
+            if (DEDENT_KEYWORDS.test(rebuilt)) indentLevel = Math.max(0, indentLevel - 1);
+            var result = ' '.repeat(indentLevel * indentSize) + rebuilt;
+
+            if (INDENT_KEYWORDS.test(rebuilt)) {
+                var inline = /THEN\b.*\bEND\s+IF\b/i.test(rebuilt) || /DO\b.*\b(END\s+WHILE|END\s+FOR|DONE|END\s+LOOP)\b/i.test(rebuilt);
+                if (!inline) indentLevel++;
+            }
+
+            if (result !== originalLine) {
+                changes.push({ line: i + 1, type: 'whitespace', message: 'Re-indented / normalized spacing' });
+            }
+            out.push(result);
+        }
+
+        var text = out.join('\n');
+        if (text !== String(source)) {
+            // One aggregate change record so the UI always has something to show.
+            if (!changes.length) changes.push({ line: null, type: 'normalize', message: 'Normalized line endings and whitespace' });
+        }
+        return { text: text, changes: changes };
+    }
+
+    var api = {
+        formatPseudocode: formatPseudocode,
+        FORMATTER_OUTPUT_SYMBOLS: OUTPUT_CONVERTIBLE.slice(),
+        _internal: { normalizeWhitespace: normalizeWhitespace, splitLine: splitLine }
+    };
+
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+    if (global) global.PseudocodeFormatter = api;
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
 class Lexer {
     constructor(input) {
         this.input = input;
@@ -409,27 +759,13 @@ class Lexer {
         return ch;
     }
 
-    // ── Unicode → ASCII Operator Normalization Map ──
-    // Maps common Unicode mathematical symbols to strict Python-compatible ASCII.
-    // Applied at the lexer level so the parser and code generator only ever see
-    // standard operators, preventing SyntaxErrors in Skulpt at runtime.
-    static UNICODE_OPERATOR_MAP = {
-        '\u2265': '>=',   // ≥  GREATER-THAN OR EQUAL TO
-        '\u2264': '<=',   // ≤  LESS-THAN OR EQUAL TO
-        '\u2260': '!=',   // ≠  NOT EQUAL TO
-        '\u2254': '=',    // ≔  COLON EQUALS (assignment)
-        '\u00D7': '*',    // ×  MULTIPLICATION SIGN
-        '\u2715': '*',    // ✕  MULTIPLICATION X
-        '\u22C5': '*',    // ⋅  DOT OPERATOR (scalar multiply)
-        '\u00F7': '/',    // ÷  DIVISION SIGN
-        '\u2190': '=',    // ←  LEFTWARDS ARROW (assignment)
-        '\u2192': '->',   // →  RIGHTWARDS ARROW
-        '\u2261': '==',   // ≡  IDENTICAL TO
-        '\u2011': '-',    // ‑  NON-BREAKING HYPHEN
-        '\u2212': '-',    // −  MINUS SIGN
-        '\u2013': '-',    // –  EN DASH (often typed as minus)
-        '\u2014': '-',    // —  EM DASH
-    };
+    // ── Unicode → ASCII Operator Normalization ──
+    // Single source of truth: LANGUAGE_SPEC.unicodeNormalizations (the shared
+    // SYMBOL_MAP). language-spec.js is bundled ahead of the lexer, so this
+    // static field aliases the same frozen object the rest of the system
+    // uses; a regression test asserts the identity. Word-valued entries
+    // (AND/OR/NOT) are emitted as keyword tokens.
+    static UNICODE_OPERATOR_MAP = LANGUAGE_SPEC.unicodeNormalizations;
 
     peek() {
         return this.pos < this.input.length ? this.input[this.pos] : null;
@@ -527,10 +863,24 @@ class Lexer {
             // ── Unicode Operator Normalization ──
             // Intercept Unicode math symbols BEFORE the unknown-char fallthrough.
             // The normalized ASCII value is emitted so the parser/code generator
-            // never encounters raw Unicode operators.
+            // never encounters raw Unicode operators. Word-valued targets
+            // (∧ ∨ ¬ → AND OR NOT) become keyword tokens.
             if (Lexer.UNICODE_OPERATOR_MAP[ch]) {
                 const normalized = Lexer.UNICODE_OPERATOR_MAP[ch];
-                this.push(TOKEN_TYPES.OPERATOR, normalized, this.line, this.column);
+                if (/^[A-Z]+$/.test(normalized)) {
+                    this.push(TOKEN_TYPES.KEYWORD, normalized, this.line, this.column);
+                } else {
+                    this.push(TOKEN_TYPES.OPERATOR, normalized, this.line, this.column);
+                }
+                this.advance();
+                continue;
+            }
+
+            // Symbols with no Python equivalent get a friendly, specific hint
+            // instead of the generic unsupported-character message.
+            const unicodeHint = LANGUAGE_SPEC.unicodeHints && LANGUAGE_SPEC.unicodeHints[ch];
+            if (unicodeHint) {
+                this.fail('Unsupported symbol: ' + ch + ' (' + unicodeHint.name + ')', unicodeHint.help);
                 this.advance();
                 continue;
             }
@@ -2131,21 +2481,10 @@ analyze(ast) {
 //
 // The generated code is compatible with Skulpt's print() capture.
 // ══════════════════════════════════════════════════════════════
-const PYTHON_OPERATOR_MAP = {
-    '\u2265': '>=',
-    '\u2264': '<=',
-    '\u2260': '!=',
-    '==': '==',
-    '\u2261': '==',
-    '\u00D7': '*',
-    '\u2715': '*',
-    '\u22C5': '*',
-    '\u00F7': '/',
-    '\u2011': '-',
-    '\u2212': '-',
-    '\u2013': '-',
-    '\u2014': '-'
-};
+// Aliases the single shared SYMBOL_MAP (language-spec.js, bundled first).
+// Kept as an intermediate constant so a regression test can assert no second
+// table is ever reintroduced here.
+const PYTHON_OPERATOR_MAP = LANGUAGE_SPEC.unicodeNormalizations;
 
 class CodeGenerator {
     constructor(symbolTable) {

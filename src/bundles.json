@@ -15,6 +15,7 @@
     "src/app/connection-status.js",
     "src/app/session.js",
     "src/app/navigation.js",
+    "src/app/overlay-history.js",
     "src/app/mobile-navigation.js",
     "src/app/translation-activity.js",
     "src/app/translation.js",
@@ -70,6 +71,8 @@
   "compiler.js": [
     "src/compiler/simulation-tracer.js",
     "src/compiler/tokens-and-trace.js",
+    "src/compiler/language-spec.js",
+    "src/compiler/formatter.js",
     "src/compiler/lexer.js",
     "src/compiler/expressions.js",
     "src/compiler/parser.js",
@@ -96,6 +99,8 @@
     "src/database/facade.js"
   ],
   "devtools.js": [
+    "src/devtools/implementation-data.js",
+    "src/devtools/implementation-panel.js",
     "src/devtools/runtime-console.js",
     "src/devtools/pipeline-controls.js",
     "src/devtools/pipeline-view.js",

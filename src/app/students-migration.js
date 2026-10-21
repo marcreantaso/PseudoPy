@@ -107,12 +107,12 @@ async function openStudentNumberMigration() {
                   <div class="avatar-sm">{{ui:UserRound}}</div>
                   <div>
                     <div style="font-weight:600;color:var(--text-primary)">${row.user.fullName || ''}</div>
-                    <div style="font-size:0.75rem;color:var(--text-muted);font-family:monospace">@${row.user.username || ''}</div>
+                    <div style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0">@${row.user.username || ''}</div>
                   </div>
                 </div>
               </td>
-              <td style="font-family:monospace;font-size:0.85rem;color:var(--text-muted)">${row.current}</td>
-              <td style="font-family:monospace;font-size:0.85rem;color:var(--text-accent)">${row.proposed}</td>
+              <td style="font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;font-size:0.85rem;color:var(--text-muted)">${row.current}</td>
+              <td style="font-family:var(--font-mono);font-variant-ligatures:none;font-feature-settings:'liga' 0,'calt' 0;font-size:0.85rem;color:var(--text-accent)">${row.proposed}</td>
               <td><span class="badge badge-active">READY</span></td>
             </tr>`).join('');
         $id('sn-migration-total').textContent = String(rows.length) + ' student(s)';

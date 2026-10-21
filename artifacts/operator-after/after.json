@@ -1,0 +1,150 @@
+{
+  "environment": {
+    "node": "v24.18.1",
+    "port": 8798
+  },
+  "fonts": {
+    "nlLoaded": true,
+    "faces": [
+      "Inter 300 unloaded",
+      "Inter 300 unloaded",
+      "Inter 300 unloaded",
+      "Inter 300 unloaded",
+      "Inter 300 unloaded",
+      "Inter 300 unloaded",
+      "Inter 300 unloaded",
+      "Inter 400 unloaded",
+      "Inter 400 unloaded",
+      "Inter 400 unloaded",
+      "Inter 400 unloaded",
+      "Inter 400 unloaded",
+      "Inter 400 unloaded",
+      "Inter 400 loaded",
+      "Inter 500 unloaded",
+      "Inter 500 unloaded",
+      "Inter 500 unloaded",
+      "Inter 500 unloaded",
+      "Inter 500 unloaded",
+      "Inter 500 unloaded",
+      "Inter 500 loaded",
+      "Inter 600 unloaded",
+      "Inter 600 unloaded",
+      "Inter 600 unloaded",
+      "Inter 600 unloaded",
+      "Inter 600 unloaded",
+      "Inter 600 unloaded",
+      "Inter 600 loaded",
+      "Inter 700 unloaded",
+      "Inter 700 unloaded",
+      "Inter 700 unloaded",
+      "Inter 700 unloaded",
+      "Inter 700 unloaded",
+      "Inter 700 unloaded",
+      "Inter 700 loaded",
+      "Inter 800 unloaded",
+      "Inter 800 unloaded",
+      "Inter 800 unloaded",
+      "Inter 800 unloaded",
+      "Inter 800 unloaded",
+      "Inter 800 unloaded",
+      "Inter 800 loaded",
+      "Inter 900 unloaded",
+      "Inter 900 unloaded",
+      "Inter 900 unloaded",
+      "Inter 900 unloaded",
+      "Inter 900 unloaded",
+      "Inter 900 unloaded",
+      "Inter 900 loaded",
+      "JetBrains Mono 400 unloaded",
+      "JetBrains Mono 400 unloaded",
+      "JetBrains Mono 400 unloaded",
+      "JetBrains Mono 400 unloaded",
+      "JetBrains Mono 400 unloaded",
+      "JetBrains Mono 400 unloaded",
+      "JetBrains Mono 500 unloaded",
+      "JetBrains Mono 500 unloaded",
+      "JetBrains Mono 500 unloaded",
+      "JetBrains Mono 500 unloaded",
+      "JetBrains Mono 500 unloaded",
+      "JetBrains Mono 500 unloaded",
+      "JetBrains Mono 600 unloaded",
+      "JetBrains Mono 600 unloaded",
+      "JetBrains Mono 600 unloaded",
+      "JetBrains Mono 600 unloaded",
+      "JetBrains Mono 600 unloaded",
+      "JetBrains Mono 600 unloaded",
+      "JetBrains Mono 700 unloaded",
+      "JetBrains Mono 700 unloaded",
+      "JetBrains Mono 700 unloaded",
+      "JetBrains Mono 700 unloaded",
+      "JetBrains Mono 700 unloaded",
+      "JetBrains Mono 700 unloaded",
+      "JetBrains Mono NL 400 loaded",
+      "JetBrains Mono NL 700 unloaded"
+    ]
+  },
+  "cases": [
+    {
+      "label": "grades-ascii",
+      "consoleText": "Remarks:  PASSED\n",
+      "computedFamily": "\"JetBrains Mono NL\", \"JetBrains Mono\", ui-monospace, SFMono-Regular, \"Cascadia Mono\", Consolas, \"Liberation Mono\", monospace",
+      "ligatureVariant": "none",
+      "featureSettings": "\"calt\" 0, \"liga\" 0",
+      "renderedFonts": [
+        {
+          "family": "JetBrains Mono NL",
+          "glyphCount": 16
+        }
+      ]
+    },
+    {
+      "label": "grades-slanted",
+      "consoleText": "Remarks:  PASSED\n",
+      "computedFamily": "\"JetBrains Mono NL\", \"JetBrains Mono\", ui-monospace, SFMono-Regular, \"Cascadia Mono\", Consolas, \"Liberation Mono\", monospace",
+      "ligatureVariant": "none",
+      "featureSettings": "\"calt\" 0, \"liga\" 0",
+      "renderedFonts": [
+        {
+          "family": "JetBrains Mono NL",
+          "glyphCount": 16
+        }
+      ]
+    },
+    {
+      "label": "string-literal-ascii",
+      "consoleText": "Score >= 75 ok\n",
+      "computedFamily": "\"JetBrains Mono NL\", \"JetBrains Mono\", ui-monospace, SFMono-Regular, \"Cascadia Mono\", Consolas, \"Liberation Mono\", monospace",
+      "ligatureVariant": "none",
+      "featureSettings": "\"calt\" 0, \"liga\" 0",
+      "renderedFonts": [
+        {
+          "family": "JetBrains Mono NL",
+          "glyphCount": 14
+        }
+      ]
+    },
+    {
+      "label": "string-literal-unicode",
+      "consoleText": "Score ⩾ 75 ok\n",
+      "computedFamily": "\"JetBrains Mono NL\", \"JetBrains Mono\", ui-monospace, SFMono-Regular, \"Cascadia Mono\", Consolas, \"Liberation Mono\", monospace",
+      "ligatureVariant": "none",
+      "featureSettings": "\"calt\" 0, \"liga\" 0",
+      "renderedFonts": [
+        {
+          "family": "JetBrains Mono NL",
+          "glyphCount": 12
+        },
+        {
+          "family": "Cambria Math",
+          "glyphCount": 1
+        }
+      ]
+    }
+  ],
+  "verdict": {
+    "noLigatureFontInUse": true,
+    "slantedCompiled": true,
+    "ligatureDisabled": true,
+    "featureSettingsOff": true
+  }
+}
