@@ -5,8 +5,9 @@
 
    Version is substituted at build time from package.json.
    Organization and team were prefilled from the project's
-   thesis manuscript (see PSEUDO_MANUSCRIPT (1).md). Fields that
-   the system owner still must provide are empty:
+   thesis manuscript (the now-removed draft
+   docs/PSEUDO_MANUSCRIPT (1).md). Fields that the system owner
+   still must provide are empty:
    - contactEmail
    - privacyEffectiveDate
    - termsEffectiveDate
