@@ -1744,6 +1744,137 @@ body:has(#login-page:not(.hidden)) {
   font-size: max(12px, 0.8rem);
 }
 
+.login-footer-text .legal-links a {
+  color: var(--auth-accent);
+  font-size: max(12px, 0.8rem);
+  text-decoration: none;
+}
+
+.login-footer-text .legal-links a:hover {
+  text-decoration: underline;
+}
+
+.research-paper {
+  width: min(100%, 620px);
+  margin-top: 2rem;
+  padding: 1.5rem;
+  color: var(--auth-text);
+  background: color-mix(in srgb, var(--auth-surface) 92%, transparent);
+  border: 1px solid var(--auth-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--auth-card-shadow);
+  scroll-margin-top: 1rem;
+}
+
+.research-paper-header,
+.research-paper-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.research-paper-eyebrow,
+.citation-label {
+  color: var(--auth-accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.doi-badge {
+  padding: 0.3rem 0.55rem;
+  color: var(--auth-hero-heading);
+  background: var(--auth-surface-2);
+  border: 1px solid var(--auth-border);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
+.research-paper h2 {
+  margin: 1rem 0 0.6rem;
+  color: var(--auth-hero-heading);
+  font-size: clamp(1.2rem, 2vw, 1.5rem);
+  line-height: 1.25;
+}
+
+.research-paper-authors,
+.research-paper-affiliation,
+.research-paper-summary {
+  margin: 0.45rem 0;
+  line-height: 1.55;
+}
+
+.research-paper-authors {
+  font-weight: 600;
+}
+
+.research-paper-affiliation,
+.research-paper-license {
+  color: var(--auth-muted);
+  font-size: 0.82rem;
+}
+
+.research-paper-summary {
+  color: var(--auth-text);
+  font-size: 0.9rem;
+}
+
+.research-paper-actions {
+  margin-top: 1.1rem;
+}
+
+.research-paper-actions .btn {
+  margin-top: 0;
+}
+
+.citation-block {
+  margin-top: 1.35rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--auth-border);
+}
+
+.citation-block h3 {
+  margin: 0 0 0.8rem;
+  color: var(--auth-hero-heading);
+  font-size: 1rem;
+}
+
+.citation-item {
+  position: relative;
+  margin-top: 0.75rem;
+  padding: 0.8rem 3.8rem 0.8rem 0.85rem;
+  background: var(--auth-input-bg);
+  border: 1px solid var(--auth-border);
+  border-radius: var(--radius-md);
+}
+
+.citation-item p,
+.citation-item pre {
+  margin: 0.35rem 0 0;
+  color: var(--auth-text);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.citation-copy {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.55rem;
+  min-height: 34px;
+  color: var(--auth-accent);
+}
+
+.citation-copy.is-copied {
+  color: var(--auth-success);
+}
+
 #login-version {
   font-size: max(12px, 0.8rem);
   color: var(--auth-muted);
@@ -1809,6 +1940,11 @@ body:has(#login-page:not(.hidden)) {
   .auth-card {
     inline-size: 100%;
     padding: 1.75rem 1.5rem;
+  }
+
+  .research-paper {
+    width: 100%;
+    padding: 1.25rem;
   }
 
   .login-card-header h2 {

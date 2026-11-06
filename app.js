@@ -9884,6 +9884,36 @@ function copyText(text) {
     });
 }
 
+async function copyResearchCitation(elementId, button) {
+    const source = document.getElementById(elementId);
+    if (!source || !button) return;
+    const text = source.textContent.trim();
+    const originalLabel = button.textContent;
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch (error) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (!copied) {
+            showToast('Could not copy citation.', 'error');
+            return;
+        }
+    }
+    button.textContent = 'Copied!';
+    button.classList.add('is-copied');
+    window.setTimeout(() => {
+        button.textContent = originalLabel;
+        button.classList.remove('is-copied');
+    }, 1800);
+}
+
 /* ============================================================
    UNSAVED EDITOR DRAFT — preserved across refresh / PWA update
    ============================================================ */
@@ -9992,7 +10022,6 @@ function downloadPython() {
     URL.revokeObjectURL(url);
     showToast('Python file downloaded!', 'success');
 }
-
 
 /* Local, opt-in source assistance. Suggestions never execute student code.
  *
