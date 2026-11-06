@@ -3,10 +3,10 @@
    Offline-first caching strategy
    ============================================================ */
 
-const CACHE_NAME = 'pseudopy-shell-20261106-v39';
+const CACHE_NAME = 'pseudopy-shell-20261106-v41';
 // Vendor cache name is versioned so the old-worker cleanup below can prune
 // superseded PDF worker generations instead of accumulating them.
-const VENDOR_CACHE_NAME = 'pseudopy-vendor-20261106-v39';
+const VENDOR_CACHE_NAME = 'pseudopy-vendor-20261106-v41';
 
 const LOCAL_ASSETS = [
     './',
@@ -193,6 +193,10 @@ self.addEventListener('fetch', (event) => {
                     // uncached and left for the server to report as missing.
                     const wantsAsset = isScriptOrStyleRequest(event.request);
                     const isHtml = /^text\/html\b/i.test(networkResponse.headers.get('content-type') || '');
+                    // External navigations, including the Research Paper DOI
+                    // link, are deliberately left to the network: the
+                    // same-origin guard below keeps them out of the offline
+                    // cache, so a DOI click always resolves live.
                     if (isSameOrigin && event.request.method === 'GET'
                         && networkResponse.status === 200
                         && !(wantsAsset && isHtml)) {

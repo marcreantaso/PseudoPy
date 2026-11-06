@@ -51,6 +51,12 @@ function copyText(text) {
 async function copyResearchCitation(elementId, button) {
     const source = document.getElementById(elementId);
     if (!source || !button) return;
+
+    // Ignore repeat clicks while the confirmation is showing. Without this,
+    // a second click would capture "Copied!" as the original label and the
+    // button would never return to "Copy".
+    if (button.dataset.copying === 'true') return;
+
     const text = source.textContent.trim();
     const originalLabel = button.textContent;
     try {
@@ -70,11 +76,22 @@ async function copyResearchCitation(elementId, button) {
             return;
         }
     }
+    button.dataset.copying = 'true';
     button.textContent = 'Copied!';
     button.classList.add('is-copied');
+
+    const status = document.getElementById('citation-copy-status');
+    if (status) {
+        const label = button.getAttribute('aria-label') || '';
+        status.textContent = label
+            ? label.replace(/^Copy /, '') + ' copied to clipboard.'
+            : 'Citation copied to clipboard.';
+    }
+
     window.setTimeout(() => {
         button.textContent = originalLabel;
         button.classList.remove('is-copied');
+        delete button.dataset.copying;
     }, 1800);
 }
 

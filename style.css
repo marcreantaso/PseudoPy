@@ -1435,8 +1435,10 @@ body:has(#login-page:not(.hidden)) {
 /* ── Right Form Panel ── */
 .login-form-section {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 1.5rem;
   padding: max(3rem, env(safe-area-inset-top)) 2rem max(3rem, env(safe-area-inset-bottom));
   position: relative;
 }
@@ -1756,7 +1758,7 @@ body:has(#login-page:not(.hidden)) {
 
 .research-paper {
   width: min(100%, 620px);
-  margin-top: 2rem;
+  margin-top: 0;
   padding: 1.5rem;
   color: var(--auth-text);
   background: color-mix(in srgb, var(--auth-surface) 92%, transparent);
@@ -1791,7 +1793,14 @@ body:has(#login-page:not(.hidden)) {
   border: 1px solid var(--auth-border);
   border-radius: var(--radius-full);
   font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.68rem;
+  text-decoration: none;
+}
+
+.doi-badge:hover {
+  text-decoration: underline;
 }
 
 .research-paper h2 {
@@ -1857,6 +1866,8 @@ body:has(#login-page:not(.hidden)) {
   margin: 0.35rem 0 0;
   color: var(--auth-text);
   font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   font-size: 0.72rem;
   line-height: 1.55;
   white-space: pre-wrap;
