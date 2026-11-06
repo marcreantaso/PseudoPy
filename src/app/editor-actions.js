@@ -48,6 +48,53 @@ function copyText(text) {
     });
 }
 
+async function copyResearchCitation(elementId, button) {
+    const source = document.getElementById(elementId);
+    if (!source || !button) return;
+
+    // Ignore repeat clicks while the confirmation is showing. Without this,
+    // a second click would capture "Copied!" as the original label and the
+    // button would never return to "Copy".
+    if (button.dataset.copying === 'true') return;
+
+    const text = source.textContent.trim();
+    const originalLabel = button.textContent;
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch (error) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (!copied) {
+            showToast('Could not copy citation.', 'error');
+            return;
+        }
+    }
+    button.dataset.copying = 'true';
+    button.textContent = 'Copied!';
+    button.classList.add('is-copied');
+
+    const status = document.getElementById('citation-copy-status');
+    if (status) {
+        const label = button.getAttribute('aria-label') || '';
+        status.textContent = label
+            ? label.replace(/^Copy /, '') + ' copied to clipboard.'
+            : 'Citation copied to clipboard.';
+    }
+
+    window.setTimeout(() => {
+        button.textContent = originalLabel;
+        button.classList.remove('is-copied');
+        delete button.dataset.copying;
+    }, 1800);
+}
+
 /* ============================================================
    UNSAVED EDITOR DRAFT — preserved across refresh / PWA update
    ============================================================ */
@@ -84,6 +131,22 @@ function maybeSaveEditorDraft() {
     } catch (e) {
         return false;
     }
+}
+
+/**
+ * Debounced draft autosave (mobile comfort Phase 1). Typing schedules a
+ * single save per quiet window so the localStorage draft stays current
+ * during a long editing session; the beforeunload / visibilitychange
+ * flushes keep the final value. A crash or forced PWA update can now lose
+ * at most the last debounce window instead of the whole session's work.
+ */
+let editorDraftSaveTimer = null;
+function scheduleEditorDraftSave(delay) {
+    if (editorDraftSaveTimer) clearTimeout(editorDraftSaveTimer);
+    editorDraftSaveTimer = setTimeout(() => {
+        editorDraftSaveTimer = null;
+        maybeSaveEditorDraft();
+    }, delay || 800);
 }
 
 function clearEditorDraft() {
@@ -140,5 +203,4 @@ function downloadPython() {
     URL.revokeObjectURL(url);
     showToast('Python file downloaded!', 'success');
 }
-
 

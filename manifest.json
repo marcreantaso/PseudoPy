@@ -5,7 +5,7 @@
     "start_url": "/index.html",
     "display": "standalone",
     "background_color": "#06060b",
-    "theme_color": "#3b82f6",
+    "theme_color": "#0d0d14",
     "orientation": "any",
     "categories": [
         "education",

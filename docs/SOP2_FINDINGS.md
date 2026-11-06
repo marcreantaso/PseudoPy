@@ -67,7 +67,10 @@ something falsifiable and reports results exactly as measured.
 
 ## Conflicting thesis sentences and what happened to them
 
-Line numbers refer to `PseudoPyCSC10.md` **before** this revision.
+Line numbers refer to the thesis manuscript draft `PseudoPyCSC10.md`
+**before** this revision. That draft has since been removed from the
+repository; the line numbers are retained only to keep the audit record
+traceable to the original text.
 
 | Line(s) | Original claim | Status |
 | --- | --- | --- |

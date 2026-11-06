@@ -73,6 +73,12 @@ async function loadStudentSettings() {
         studentNumberEl.textContent = sn === '\u2014' ? 'Not yet assigned' : sn;
     }
     setText('settings-role', currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1));
+
+    // Editor formatting preference (default ON).
+    const outputSymbolsToggle = $id('settings-python-output-symbols');
+    if (outputSymbolsToggle && typeof pythonOperatorsInOutputEnabled === 'function') {
+        outputSymbolsToggle.checked = pythonOperatorsInOutputEnabled();
+    }
         const status = (currentUser.status || 'active').toLowerCase();
         const statusEl = $id('settings-status');
         if (statusEl) {

@@ -51,27 +51,13 @@ class Lexer {
         return ch;
     }
 
-    // ── Unicode → ASCII Operator Normalization Map ──
-    // Maps common Unicode mathematical symbols to strict Python-compatible ASCII.
-    // Applied at the lexer level so the parser and code generator only ever see
-    // standard operators, preventing SyntaxErrors in Skulpt at runtime.
-    static UNICODE_OPERATOR_MAP = {
-        '\u2265': '>=',   // ≥  GREATER-THAN OR EQUAL TO
-        '\u2264': '<=',   // ≤  LESS-THAN OR EQUAL TO
-        '\u2260': '!=',   // ≠  NOT EQUAL TO
-        '\u2254': '=',    // ≔  COLON EQUALS (assignment)
-        '\u00D7': '*',    // ×  MULTIPLICATION SIGN
-        '\u2715': '*',    // ✕  MULTIPLICATION X
-        '\u22C5': '*',    // ⋅  DOT OPERATOR (scalar multiply)
-        '\u00F7': '/',    // ÷  DIVISION SIGN
-        '\u2190': '=',    // ←  LEFTWARDS ARROW (assignment)
-        '\u2192': '->',   // →  RIGHTWARDS ARROW
-        '\u2261': '==',   // ≡  IDENTICAL TO
-        '\u2011': '-',    // ‑  NON-BREAKING HYPHEN
-        '\u2212': '-',    // −  MINUS SIGN
-        '\u2013': '-',    // –  EN DASH (often typed as minus)
-        '\u2014': '-',    // —  EM DASH
-    };
+    // ── Unicode → ASCII Operator Normalization ──
+    // Single source of truth: LANGUAGE_SPEC.unicodeNormalizations (the shared
+    // SYMBOL_MAP). language-spec.js is bundled ahead of the lexer, so this
+    // static field aliases the same frozen object the rest of the system
+    // uses; a regression test asserts the identity. Word-valued entries
+    // (AND/OR/NOT) are emitted as keyword tokens.
+    static UNICODE_OPERATOR_MAP = LANGUAGE_SPEC.unicodeNormalizations;
 
     peek() {
         return this.pos < this.input.length ? this.input[this.pos] : null;
@@ -169,10 +155,24 @@ class Lexer {
             // ── Unicode Operator Normalization ──
             // Intercept Unicode math symbols BEFORE the unknown-char fallthrough.
             // The normalized ASCII value is emitted so the parser/code generator
-            // never encounters raw Unicode operators.
+            // never encounters raw Unicode operators. Word-valued targets
+            // (∧ ∨ ¬ → AND OR NOT) become keyword tokens.
             if (Lexer.UNICODE_OPERATOR_MAP[ch]) {
                 const normalized = Lexer.UNICODE_OPERATOR_MAP[ch];
-                this.push(TOKEN_TYPES.OPERATOR, normalized, this.line, this.column);
+                if (/^[A-Z]+$/.test(normalized)) {
+                    this.push(TOKEN_TYPES.KEYWORD, normalized, this.line, this.column);
+                } else {
+                    this.push(TOKEN_TYPES.OPERATOR, normalized, this.line, this.column);
+                }
+                this.advance();
+                continue;
+            }
+
+            // Symbols with no Python equivalent get a friendly, specific hint
+            // instead of the generic unsupported-character message.
+            const unicodeHint = LANGUAGE_SPEC.unicodeHints && LANGUAGE_SPEC.unicodeHints[ch];
+            if (unicodeHint) {
+                this.fail('Unsupported symbol: ' + ch + ' (' + unicodeHint.name + ')', unicodeHint.help);
                 this.advance();
                 continue;
             }

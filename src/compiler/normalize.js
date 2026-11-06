@@ -1,23 +1,19 @@
+// Research/devtools normalizer. Reuses the single shared SYMBOL_MAP
+// (LANGUAGE_SPEC.unicodeNormalizations) instead of carrying its own copy. This
+// file is not part of any bundle; it is loaded directly by tests and any
+// standalone research page.
+function _symbolMap() {
+  if (typeof LANGUAGE_SPEC !== 'undefined' && LANGUAGE_SPEC.unicodeNormalizations) return LANGUAGE_SPEC.unicodeNormalizations;
+  if (typeof require === 'function') {
+    try { return require('./language-spec.js').SYMBOL_MAP; } catch (e) { /* fall through */ }
+  }
+  return null;
+}
 function normalizeUnicodeOperators(source) {
   if (source == null) return source;
   let s = String(source);
-  const map = {
-    '\u2265': '>=',
-    '\u2264': '<=',
-    '\u2260': '!=',
-    '\u2261': '==',
-    '\u00D7': '*',
-    '\u2715': '*',
-    '\u22C5': '*',
-    '\u00F7': '/',
-    '\u2011': '-',
-    '\u2212': '-',
-    '\u2013': '-',
-    '\u2014': '-',
-    '\u2190': '=',
-    '\u2254': '=',
-    '\u2192': '->'
-  };
+  const map = _symbolMap();
+  if (!map) return s;
   for (const k of Object.keys(map)) {
     if (s.indexOf(k) !== -1) s = s.split(k).join(map[k]);
   }
@@ -41,7 +37,7 @@ function normalizeLineNumbers(source) {
   return out;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { normalizeUnicodeOperators, normalizeLineNumbers };
+  module.exports = { normalizeUnicodeOperators, normalizeLineNumbers, symbolMap: _symbolMap };
 }
 if (typeof window !== 'undefined') {
   window.normalizeUnicodeOperators = normalizeUnicodeOperators;

@@ -10,6 +10,8 @@
     "audit:mobile": "node scripts/mobile-audit.js",
     "build": "node scripts/build.js",
     "build:check": "node scripts/build.js --check",
+    "docs:implementation": "node scripts/docs-implementation.js",
+    "test:visual": "node scripts/qa/operator-after.cjs",
     "sop2": "node src/research/sop2-comparison.js",
     "prestart": "npm run build",
     "predev": "npm run build",

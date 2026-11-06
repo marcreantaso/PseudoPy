@@ -8,6 +8,7 @@ const root = path.join(__dirname, '..');
 
 function loadSimulation() {
     const files = [
+        'src/compiler/language-spec.js',
         'src/compiler/tokens-and-trace.js',
         'src/compiler/expressions.js',
         'src/compiler/code-generator.js',
