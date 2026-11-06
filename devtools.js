@@ -773,7 +773,7 @@
       "name": "JetBrains Mono NL",
       "version": "vendored",
       "kind": "Bundled no-ligature monospace font (OFL 1.1)",
-      "source": "vendor/fonts/jetbrains-mono-nl-400.woff2, vendor/fonts/jetbrains-mono-nl-700.woff2, vendor/fonts/LICENSE-OFL.txt"
+      "source": "vendor/fonts/LICENSE-OFL.txt, vendor/fonts/jetbrains-mono-nl-400.woff2, vendor/fonts/jetbrains-mono-nl-700.woff2"
     }
   ],
   "external": [

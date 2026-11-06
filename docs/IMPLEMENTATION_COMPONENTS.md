@@ -140,7 +140,7 @@ dataset is what the Developer Options › Implementation panel renders._
 | express ^4.19.2 | Third-party | package.json |
 | Skulpt vendored | Third-party | vendor/skulpt/skulpt-stdlib.js, vendor/skulpt/skulpt.min.js |
 | PDF.js vendored | Third-party | vendor/pdfjs/pdf.min.js, vendor/pdfjs/pdf.worker.min.js |
-| JetBrains Mono NL vendored | Third-party | vendor/fonts/jetbrains-mono-nl-400.woff2, vendor/fonts/jetbrains-mono-nl-700.woff2, vendor/fonts/LICENSE-OFL.txt |
+| JetBrains Mono NL vendored | Third-party | vendor/fonts/LICENSE-OFL.txt, vendor/fonts/jetbrains-mono-nl-400.woff2, vendor/fonts/jetbrains-mono-nl-700.woff2 |
 | www.gstatic.com | External / platform | index.html |
 | Firebase | External / platform | index.html script tags |
 | Service Worker / PWA | External / platform | sw.js |
