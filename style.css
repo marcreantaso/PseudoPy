@@ -5624,6 +5624,11 @@ select.form-input {
 #legal-section-about .about-row:last-child { border-bottom: none; }
 #legal-section-about .about-row .detail-label { line-height: 1.55; }
 #legal-section-about .about-row .detail-value { min-width: 0; line-height: 1.55; overflow-wrap: break-word; }
+#legal-section-about .about-research-paper {
+  width: auto;
+  max-width: none;
+  margin: 1.5rem 0 0;
+}
 #legal-section-about .about-team-subgrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
